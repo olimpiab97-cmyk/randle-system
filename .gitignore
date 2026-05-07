@@ -1,0 +1,107 @@
+# Local secrets and environment
+.env
+.env.*
+!.env.example
+*.env
+credentials/
+credential*/
+*credential*
+*credentials*
+*secret*
+*token*
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Broker / Rithmic private runtime files
+Rithmic API/
+rithmic_phase_a_output.txt
+rithmic_live_listener_phase_a.log*
+rithmic_symbol_discovery.log*
+*rithmic*password*
+*RITHMIC_PASSWORD*
+
+# Local public tunnel URLs / private webhook wiring
+tv_entry_panel.py
+*ngrok*
+Prompts.txt
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*.pyc.*
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and dependencies
+venv/
+.venv/
+env/
+.env/
+node_modules/
+tv-panel/node_modules/
+
+# Logs and process output
+logs/
+EntryAgent/logs/
+*.log
+*.log.*
+*.out
+*.err
+tm_start*.log
+smd.log*
+
+# Databases and runtime journals
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Binary documents are kept local unless reviewed and sanitized separately.
+*.docx
+
+# Runtime/generated data
+Data/*
+!Data/
+!Data/entry_replay_audit_*.md
+!Data/entry_replay_regression_cases_*.json
+Data/*runtime*
+Data/*snapshot*
+Data/*state*
+Data/reset_backups/
+Data/executor_state.json
+Data/persistence_state.json
+Data/rithmic_atr_snapshot.json
+Data/rithmic_recent_bars.json
+Data/fill_audit_log.jsonl
+Data/entry_reasoning_*.jsonl
+
+# EntryAgent runtime state/context snapshots
+EntryAgent/entry_agent_state.json
+EntryAgent/levels.json
+EntryAgent/levels_by_symbol.json
+EntryAgent/tv_context.json
+EntryAgent/tv_context_by_symbol.json
+EntryAgent/tv_context_events.jsonl
+EntryAgent/signals.json
+
+# Runtime backup and scratch folders
+Backups/
+App Working Rollback Dates/
+Paper Trade/
+.pycache_codex/
+tmp*
+Data/tmp*
+/-Method
+/python
+
+# OS/editor local files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.lnk

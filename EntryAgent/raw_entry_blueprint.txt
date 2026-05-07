@@ -1,0 +1,2031 @@
+# Entry Agent Raw Blueprint - Final Locked First Pass
+
+This file is the source of truth for Entry Agent behavior.
+
+Rules:
+
+- Do not infer missing behavior.
+- Do not simplify locked rules.
+- Do not blend alternate paths unless a rule explicitly allows it.
+- Use completed candles where the rule requires candle closes.
+- Use tick-normalized comparisons for all "beyond" checks.
+- Price-only references to liquidity are invalid; use level name + price or stack name + components.
+- Each liquidity interaction is independent unless a locked re-entry rule explicitly permits reactivation.
+
+## Global Rules
+
+System architecture:
+
+- Pre-Market Engine = Map Builder.
+- Entry Engine = Live Decision Engine.
+- Trade Manager = Execution + Risk Engine.
+
+Core architecture law:
+
+- Pre-Market defines reality.
+- Entry Engine reacts to reality.
+- Trade Manager executes reality.
+
+Entry Engine must:
+
+- Use the Pre-Market Engine object as its only reference.
+- Execute Steps 2-6 using the pre-built structure.
+- Respect all Step rules already defined.
+- Read, react, execute.
+
+Entry Engine must not:
+
+- Rebuild Step 0.
+- Recalculate GH/GL.
+- Re-evaluate stacks.
+- Override boundaries.
+- Recalculate session levels.
+- Reinterpret stacks.
+- Infer structure.
+- Rebuild context.
+
+System states:
+
+- OFF: no active interaction.
+- ARMED: waiting for trigger into liquidity.
+- REJECTION MODE ON: interaction active, rejection pathways eligible.
+- PROVISIONAL: wick-based continuation pathway armed, awaiting Leg 1 / confirmation.
+- NEUTRAL RESET: interaction ended, waiting re-arm.
+
+Required inputs:
+
+- Active levels: PMH, PML, LH, LL, ONH, ONL, YH, YL.
+- Completed OHLC bars.
+- 1-minute ATR(14) at entry.
+- Daily ATR(14).
+- Premarket and overnight range context.
+- Session context.
+- Gateway map.
+- Stack boundaries.
+- Step Engine state.
+- Interaction constraints and flags.
+- Nearest newly relevant liquidity.
+
+Levels must be passed as level name + price and status.
+
+The Step Engine requires completed candles for:
+
+- Close into liquidity.
+- Candle A.
+- Candle B.
+- Leg 2 candle.
+- SC / SC2 / SC3.
+- Anchor Extreme.
+- Opposite-side close invalidation.
+- Wick probe and reclaim measurements.
+
+Rejection Engine purpose:
+
+- Allow multiple rejection pathways to be evaluated within a single liquidity interaction while preserving failure-driven logic and one-entry-per-interaction rule.
+
+Rejection Engine paths:
+
+- Normal Rejection Mode.
+- S/R Rejection Mode.
+- R/S Rejection Mode.
+
+These are parallel pathways, not separate systems.
+
+Core truth:
+
+- Rejection is a process, not a direction.
+- Attempt -> Failure -> Pullback -> Continuation.
+- Rejection Mode = failure-driven transition model.
+- Includes normal rejection attempts and pullback continuation pathways S/R and R/S.
+
+While active:
+
+- Allowed: participation, Leg 1 / Leg 2, pullback structure.
+- Not allowed: independent breakout trading, bypass logic.
+
+Global Routing Rule - Rejection Only:
+
+- After price closes into active liquidity, system activates Rejection Mode only.
+- Rejection Mode = ON.
+- System must resolve interaction through rejection logic only.
+- If rejection fails, invalidates, or terminates without valid rejection completion:
+  - Rejection Mode = OFF.
+  - System State = NEUTRAL RESET.
+  - No bypass setup may be evaluated.
+
+Directional Control Law:
+
+- Only one directional premise may remain valid within an interaction.
+- Opposing structure = immediate override.
+
+Final one-liner:
+
+- Test -> Fail -> Pullback -> Continue.
+
+STEP 0  Level Validation (FINAL)
+
+Definition  ACTIVE Level:
+A level is ACTIVE if:
+- It is past its session lock time
+- It has not been fully consumed in the current interaction cycle
+
+Note:
+"Consumed" refers to completion of an interaction cycle as defined in later steps.
+Step 0 does not determine consumption, only reads current state.
+
+0.1 Read table
+- Use ACTIVE levels only.
+
+0.2 Check for static stacks
+- If levels are within 10% ATR, treat as ONE stack.
+
+If multiple levels fall within 10% ATR:
+- Treat all as a single stack
+- Close Boundary = closest level to price
+- Extreme Boundary = furthest level from price within the stack
+
+0.3 Define boundaries
+- Close Boundary = closest level to price.
+- Extreme Boundary = furthest level from price.
+
+0.4 Verify against chart
+- Table must match drawn levels.
+- If mismatch, STOP.
+
+0.5 Output requirement
+Must define:
+- active level or stack
+- close boundary
+- extreme boundary
+- nearest newly relevant liquidity
+- whether next level is final in ladder
+
+Definition  Final in ladder:
+No further official liquidity levels exist in the direction of expansion.
+
+Definition  Nearest Newly Relevant Liquidity:
+The next official liquidity level in the direction of price expansion,
+outside the current active level/stack,
+that has not been consumed in the current interaction cycle.
+
+0.6 Session-Built Liquidity Lock Rule
+
+Lock time is defined per session as specified in system configuration.
+
+Applies to:
+- PMH
+- PML
+- ONH
+- ONL
+
+Forming State (Pre-Lock):
+Before lock time, these levels are still developing.
+
+Any touch before lock is considered formation only.
+
+Formation does NOT count as:
+- actionable interaction
+- activation
+- consumption
+
+These levels are NOT eligible for:
+- Gateway (GH/GL)
+- Trade Mode
+- Rejection logic
+
+Locked State (Post-Lock):
+After lock time, the level becomes official liquidity.
+
+From that point forward:
+- Not yet touched post-lock = Actionable
+- Wick touch post-lock = Tagged
+- Close into post-lock = Activated
+- Completed interaction cycle = Consumed
+
+Core Rule:
+Pre-lock interaction does not matter for trading logic.
+Only post-lock interaction counts.
+
+STEP 1  Gateway Rule (FINAL)
+
+1.1 Define Gateway (from Step 0)
+
+Gateway is:
+- GH (Gateway High) = closest meaningful liquidity above price
+- GL (Gateway Low) = closest meaningful liquidity below price
+
+Important Rules:
+- GH / GL are NOT fixed to PMH / PML.
+- They are selected from the liquidity ladder.
+- GH and GL must be defined using level names or stack names with associated prices  never raw price values.
+- They can be:
+  - PMH / PML
+  - YH / YL
+  - ONH / ONL
+  - LH / LL
+
+Session-Level Constraint:
+- PMH, PML, ONH, and ONL can ONLY be used as GH/GL AFTER they are locked.
+
+Stack Handling:
+- If price is inside a stack, treat the stack as one liquidity zone.
+- GH/GL must be defined outside the stack boundaries.
+
+1.2 Gateway Condition
+
+Question:
+- Is price between GH and GL?
+
+YES  Inside Gateway:
+- System State = OFF
+- Rejection Mode = OFF
+- STOP
+
+NO  Outside Gateway:
+- System State = ARMED
+- Proceed to Step 2
+
+🔥 FINAL SYSTEM TRUTH (LOCK THIS IN)
+
+- Step 0 defines reality: what levels exist and their state.
+- Step 1 defines permission: whether the system is allowed to engage.
+
+## Step 2 - Trade Mode Trigger + Rejection Mode Activation
+
+2.1 Trigger.
+
+- Did price close into active liquidity?
+- If no, wait.
+- If yes, proceed.
+
+Active liquidity must be referenced using:
+
+- Level name + price.
+- Stack name + component levels.
+- Never price alone.
+
+Stack rule:
+
+- If active liquidity is a stack, valid close into liquidity requires a candle to close beyond the Close Boundary into the stack.
+- Wick-only interaction is invalid.
+- A close that does not break the Close Boundary is invalid.
+
+### 2.1A Pre-Activation Liquidity Probe Level Rule - Locked
+
+State Variable:
+
+pre_activation_probe_boundary:
+
+- active: true/false
+- side: "upper" or "lower"
+- source_level: level name or stack name
+- boundary_price: float
+
+Detection Logic:
+
+If:
+
+- wick crosses active liquidity boundary
+- AND candle does NOT close into liquidity
+- AND Step 2 not yet activated
+
+Then:
+
+- set pre_activation_probe_boundary.active = true
+- set boundary_price = wick extreme
+- update boundary_price if a more extreme wick forms
+
+Step 2 Override Logic:
+
+If pre_activation_probe_boundary.active = true:
+
+- ignore original level price for activation
+- use boundary_price as trigger
+
+Activation requires:
+
+- close beyond boundary_price
+
+On activation:
+
+- Candle A = that closing candle
+- pre_activation_probe_boundary.active = false
+
+Priority Rule:
+
+Pre-Activation Probe Boundary overrides:
+
+- original level trigger (Step 2.1)
+- stack close boundary trigger
+
+Until:
+
+- Step 2 activates OR
+- any Reset condition listed below occurs
+
+Logging Requirement:
+
+Log event:
+
+- "pre_activation_probe_detected"
+
+Include:
+
+- level name
+- side (upper/lower)
+- boundary_price
+- timestamp
+
+Log event:
+
+- "pre_activation_probe_consumed" when Step 2 activates
+
+Core Law (Execution Form):
+
+- If probe exists: Activation = close beyond probe
+- Else: Activation = close beyond level
+
+Candle Source Clarification:
+
+- All probe detection and activation logic must use the SAME candle source as Step 2.
+- If Step 2 uses 1-minute closes, probe detection must use 1-minute wick extremes.
+- No mixing of timeframes is allowed.
+- Using different timeframe for wick vs close = INVALID behavior.
+
+Same-Candle Constraint:
+
+A single candle may NOT simultaneously:
+
+- create a pre-activation probe
+- AND activate Step 2
+
+Rule:
+
+If a candle wicks beyond liquidity AND closes beyond the required Step 2 activation boundary:
+
+- This candle is treated ONLY as Step 2 activation.
+- No probe state is recorded.
+
+Interpretation:
+
+- Probe must exist BEFORE the activation candle.
+
+Level Association Rule:
+
+- Each pre_activation_probe_boundary must be tied to EXACTLY ONE level or stack.
+
+If price transitions to a new nearest liquidity level:
+
+- Existing probe MUST be discarded.
+- New probe detection begins for the new level.
+
+No cross-level carryover allowed.
+
+Safety Guard:
+
+If boundary_price is not set AND pre_activation_probe_boundary.active = true:
+
+- Block Step 2 activation.
+- Log error: "probe_state_invalid_missing_boundary".
+- Do NOT proceed.
+
+Equality / Tick Precision Rule:
+
+- All comparisons for probe detection and activation must respect tick size.
+- "beyond boundary" requires 1 tick past the level.
+- Equality, touching the level exactly, is NOT sufficient.
+- Floating point comparisons must be normalized to tick precision.
+
+Examples:
+
+- Upper side: close >= boundary_price + 1 tick = valid activation.
+- Upper side: close == boundary_price = INVALID.
+- Lower side: close <= boundary_price - 1 tick = valid activation.
+- Lower side: close == boundary_price = INVALID.
+
+Gap Handling Rule:
+
+If price gaps beyond a level or probe boundary:
+
+- Treat the candle that opens after the gap as the evaluation candle.
+- If that candle CLOSES beyond the required boundary:
+  - Step 2 activates normally.
+  - Candle A = that candle.
+- Do NOT create a probe from gap-only movement.
+- Probe requires an actual wick within a formed candle.
+
+Ordering Priority Rule:
+
+Evaluation order within each candle MUST be:
+
+1. Check for Step 2 activation.
+2. If not activated, check for probe detection.
+3. Update probe boundary if needed.
+
+This prevents:
+
+- probe overriding a valid activation
+- incorrect state transitions
+
+Rule:
+
+- Activation always has priority over probe detection within the same candle.
+
+Debug Snapshot Requirement:
+
+At every candle close, log:
+
+- current active level / stack
+- probe active state
+- boundary_price
+- whether activation condition was evaluated as true/false
+- reason for pass/fail
+
+Purpose:
+
+- Allows full reconstruction of Step 2 decisions during replay and debugging.
+
+Probe Expiration Rule:
+
+- A pre_activation_probe_boundary may NOT persist indefinitely.
+
+Expiration Condition:
+
+If N completed candle closes occur after the detection candle without Step 2 activation:
+
+- pre_activation_probe_boundary.active = false
+- boundary_price = null
+- log: "probe_expired_timeout"
+
+Default:
+
+- N = 5 candles (configurable)
+
+Purpose:
+
+- Prevents stale probe levels from blocking valid future activations.
+
+Re-Entry Protection Rule:
+
+If a probe was previously consumed, meaning Step 2 activated and failed later:
+
+- The system must NOT reuse the same probe boundary on re-approach.
+
+Rule:
+
+On Step 7 termination:
+
+- All probe state must be cleared.
+- New approach must form a NEW probe or clean activation.
+
+No historical probe reuse allowed.
+
+Multi-Probe Conflict Rule:
+
+If probes form on BOTH sides within the same approach sequence:
+
+- System must prioritize the side of the current active liquidity target.
+
+Rule:
+
+- If targeting upper liquidity, ignore lower-side probe.
+- If targeting lower liquidity, ignore upper-side probe.
+
+No dual-boundary state allowed.
+
+Safety Halt Condition:
+
+If conflicting states occur:
+
+- probe active = true
+- AND Step 2 activates on original level instead of probe boundary
+
+Then:
+
+- BLOCK activation.
+- log: "probe_override_violation".
+- do NOT proceed.
+
+Purpose:
+
+- Prevents silent logic corruption.
+
+Once activated:
+
+- Candle B must show valid participation.
+- Leg 1 forms normally from Candle A + Candle B.
+- Leg 2 follows Step 5.
+- Entry follows Step 6.
+- No shortcut or bypass is created.
+
+Scope:
+
+- Applies only to the current active liquidity level/stack and current approach sequence.
+- It is not a permanent level.
+- It is not added to the liquidity ladder.
+
+Reset:
+
+Clear the probe boundary when:
+
+- A different level becomes Nearest Newly Relevant Liquidity.
+- Step 1 Gateway recalculates after price transitions away.
+- Step 7 Interaction Termination occurs.
+- A valid Step 2 activation occurs and the probe is consumed into Candle A.
+
+Core Law:
+
+- A wick before activation does not create structure; it becomes the temporary trigger boundary required for activation.
+
+2.2 Activation.
+
+First candle that closes into active liquidity:
+
+- Trade Mode = ON.
+- Rejection Mode = ON.
+- New interaction cycle begins.
+- This candle = initial Candle A for Normal Rejection Mode.
+Final Candle A assignment may be redefined by Step 2.5 for S/R or R/S pathways.
+
+Candle A must be defined using:
+
+- Level name + price.
+- Stack name + component levels.
+- Never price alone.
+
+Mode enforcement:
+
+- Upon activation of Rejection Mode, continuation logic is disabled.
+- Bypass retest logic is disabled.
+- No continuation or bypass retest evaluation may occur while Rejection Mode is active.
+
+2.3 State rule while active.
+
+Allowed:
+
+- Participation tracking.
+- Leg 1 / Leg 2 validation.
+- Timing rules.
+- Sweep logic.
+
+Not allowed:
+
+- Independent continuation logic.
+- Breakout / trend continuation.
+- Bypass retest search.
+- Reuse of prior structure.
+
+2.4 Rejection Engine initialization.
+
+Upon activation:
+
+- Normal Rejection Mode = ON.
+- S/R Rejection Mode = OFF.
+- R/S Rejection Mode = OFF.
+- Controlling Mode = NONE.
+
+During the active interaction, S/R or R/S may activate.
+
+Activation of S/R or R/S:
+
+- Does not override Normal Rejection Mode.
+- Does not trigger entry by itself.
+- Does not bypass Step 5 structure requirements.
+
+Entry may occur only after:
+
+- A mode becomes the Controlling Mode.
+- Valid Step 5 structure is confirmed.
+
+If multiple modes are active:
+
+- The first mode to complete valid Step 5 structure becomes Controlling Mode.
+- All other modes are immediately frozen.
+- Only the Controlling Mode may proceed to Step 6.
+
+If one mode invalidates while another remains valid:
+
+- The interaction stays active under the remaining valid mode.
+
+If all active modes invalidate:
+
+- Proceed to Step 7, Interaction Termination.
+
+System lock:
+
+- Stacks require commitment.
+- Commitment = close beyond the Close Boundary.
+- All references to liquidity in Step 2 must use level name + price or stack name + components.
+- Price-only references are invalid.
+
+Step 2 Boundary Clarification:
+
+- Step 2 ends at Rejection Mode activation only.
+- All pathway selection is handled in Step 2.5 (Rejection Pathway Selector).
+- Step 2 does NOT:
+  - activate S/R or R/S independently
+  - create new interaction cycles
+  - bypass Step 2 trigger conditions.
+
+## Step 2.5 Rejection Pathway Selector
+
+Mental Model:
+
+- Failure candle starts condition.
+- Reclaim candle activates pathway.
+- Candle A = reclaim candle.
+- Candle B = participation.
+- Steps 4-6 handle all structure and entry.
+
+Purpose:
+
+After Step 2 activates Rejection Mode, determine which pathway is active:
+
+- Normal Rejection Mode
+- S/R Pullback Continuation
+- R/S Pullback Continuation
+
+Core Law:
+
+- Mode changes the lane.
+- Steps 4-6 still drive the car.
+
+Normal Rejection Mode:
+
+- Default pathway if no S/R or R/S activation condition exists.
+- Uses Step 4 Leg 1, Step 5 Leg 2, and Step 6 Entry.
+
+S/R Mode:
+
+Purpose:
+
+- Select the S/R pullback continuation pathway.
+
+Direction:
+
+- Direction = SHORT only.
+
+Condition:
+
+- Condition = failed support breakdown / S/R pullback condition.
+
+Activation:
+
+- Activation can occur by:
+  1. Wick below level, then reclaim back above.
+  2. Close below level, then close back above.
+
+Candle assignment:
+
+- Failure candle starts the condition.
+- Reclaim candle activates the pathway.
+- Reclaim candle becomes Candle A (Step 4).
+- Candle B forms after Candle A and must remain above the level (no closes below).
+
+Rule:
+
+- Candle A MUST be the reclaim candle for close-based activation.
+- The failure candle can never be used as Candle A.
+
+Structure requirements:
+
+- Structure must form ABOVE the level.
+- Uses HH structure.
+
+State:
+
+- candidate_modes includes S/R.
+- pathway_activation_type = wick or close.
+- pathway_level = active level.
+- reclaim_candle_a is assigned for close-based activation.
+- provisional_candle_a is assigned only if wick-based activation applies.
+- structure_side_requirement = ABOVE_LEVEL.
+
+R/S Mode:
+
+Purpose:
+
+- Select the R/S pullback continuation pathway.
+
+Direction:
+
+- Direction = LONG only.
+
+Condition:
+
+- Condition = failed resistance breakout / R/S pullback condition.
+
+Activation:
+
+- Activation can occur by:
+  1. Wick above level, then reclaim back below.
+  2. Close above level, then close back below.
+- Step 2 activation: price interacts with resistance (touch or wick sufficient).
+
+Candle assignment:
+
+- Failure candle starts the condition.
+- Reclaim candle activates the pathway.
+- Reclaim candle becomes Candle A (Step 4).
+- Candle B forms after Candle A and must remain below the level (no closes above).
+
+Rule:
+
+- Candle A MUST be the reclaim candle for close-based activation.
+- The failure candle can never be used as Candle A.
+
+Structure requirements:
+
+- Structure must form BELOW the level.
+- Uses LL structure.
+- Leg 2 must confirm within BELOW-level structure context.
+- Any close back above the level invalidates the pathway.
+
+State:
+
+- candidate_modes includes R/S.
+- pathway_activation_type = wick or close.
+- pathway_level = active level.
+- reclaim_candle_a is assigned for close-based activation.
+- provisional_candle_a is assigned only if wick-based activation applies.
+- structure_side_requirement = BELOW_LEVEL.
+
+State:
+
+- candidate_modes
+- controlling_mode
+- structure_side_requirement
+- pathway_level
+- pathway_activation_type: wick / close / normal
+- reclaim_candle_a (close-based)
+- provisional_candle_a (wick-based)
+- first_opportunity_used
+- sr_pathway_closed / rs_pathway_closed
+
+Clarifications:
+
+- S/R and R/S are pathway selectors only.
+- They do NOT define new Step 4, Step 5, or Step 6 logic.
+- All structure and entry logic is handled by Steps 4-6.
+- Trade eligibility requires completion of Step 4, Step 5, and Step 6.
+- If multiple pathways are active, the first pathway to complete valid Step 5 structure becomes controlling_mode.
+- Once controlling_mode is assigned, all other pathways freeze.
+- One interaction still allows only one entry.
+
+## Step 3 - Liquidity Type
+
+Only valid if Rejection Mode = ON.
+
+3A Normal Level:
+
+- Start participation immediately.
+- Up to 3 candles allowed in liquidity.
+- 4th candle must show participation.
+- If no participation, Step 7.
+- If valid, Step 4A.
+
+3B Static Stack:
+
+- Trade Mode already ON.
+- No participation timer yet.
+- Requirement: has price swept Extreme Boundary?
+- If no, wait.
+- If yes, start 1-2-3 rule after sweep.
+- Up to 3 candles allowed after sweep.
+- 4th candle must show participation.
+- If no participation, Step 7.
+- If valid, Step 4B.
+
+3C Pre-Interaction Rotation Filter:
+
+Purpose:
+
+- Prevent stacked logic from activating when price forms rotational structure before reaching liquidity.
+
+Activation condition:
+
+- Before sweeping the Extreme Boundary of a stack, price forms any of:
+  - 3+ alternating candles.
+  - Overlapping bodies.
+  - Micro HH/LL sequence.
+  - Visible consolidation cluster.
+
+Then:
+
+- Stack Logic = INVALID.
+- Step 3B is disabled.
+- System must route to Normal Level Logic Step 3A or wait for clean extreme interaction.
+
+Routing rule:
+
+- Ignore stack boundaries for entry logic.
+- Wait for clean HH/LL beyond the Extreme Boundary.
+
+One-liner:
+
+- If price balances before a stack, the stack is no longer valid for entry; wait for the break.
+
+## Step 4 - Participation / Leg 1
+
+Precondition:
+
+- Rejection Mode = ON.
+- Interaction = ACTIVE.
+
+4A Normal Level Leg 1:
+
+- Candle A must close into liquidity.
+- Candle B is the Participation Candle.
+
+4A.1 Participation Timing Window:
+
+- After Step 2 activates and Candle A is assigned, the system may wait through Candle 2 and Candle 3 for valid opposite participation.
+- Candle 4 is the final decision candle.
+- If valid participation appears on Candle 2, Candle 3, or Candle 4:
+  - Leg 1 = COMPLETE.
+  - Proceed normally.
+- If Candle 4 closes continuing in the break direction and does not meet valid wick-based participation:
+  - Opposite participation = NOT PRESENT.
+  - Level = GATEWAY.
+  - No Leg 1.
+  - No setup.
+  - No trade.
+
+Participation is valid if either condition is true:
+
+- Close-Based Participation:
+  - SHORT: Candle B does not close above Candle A high.
+  - LONG: Candle B does not close below Candle A low.
+- Wick-Based Participation, 34% Rule:
+  - Measure full candle range high to low.
+  - Measure opposing wick.
+  - SHORT: upper wick.
+  - LONG: lower wick.
+  - Opposing wick must be at least 34% of total range.
+
+Validation law:
+
+- If Close-Based OR Wick-Based, valid.
+- Else invalid.
+
+If valid:
+
+- Leg 1 COMPLETE.
+- Leg 1 Extreme = most extreme price of Candle A + B.
+
+Anchor Assignment Rule:
+
+- Upon completion of Leg 1, assign the Anchor Extreme.
+- Anchor Extreme becomes the structural invalidation boundary for the setup.
+- Anchor Extreme becomes the reference for Step 5 and Step 6 protection rules.
+
+4A.0 Mandatory Proximity Filter:
+
+- Immediately after Leg 1, measure distance to nearest liquidity level.
+- If distance <= 5% ATR:
+  - HARD BYPASS.
+  - Skip setup entirely.
+  - Proceed to Step 7 reset.
+- If distance > 5% ATR:
+  - Proceed to Step 5.
+- No continuation allowed without this check.
+
+4B Static Stack Leg 1:
+
+- Still valid because it is intentional stacking, not proximity noise.
+
+4D Participation Gate:
+
+- No valid participation = no Leg 1 = no trade.
+
+Core law:
+
+- 34% wick confirms participation.
+- Close rules confirm structure.
+
+Final bank line:
+
+- Participation shows two ways: hold by close or rejection by wick. Either completes Leg 1.
+
+## Step 5 - Leg 2 Confirmation
+
+Precondition:
+
+- Rejection Mode = ON.
+- Leg 1 valid.
+- Interaction active.
+
+Step 5 priority order:
+
+- Evaluate 5.3B first, then 5.3A, then 5.1.
+- Highest active override always controls.
+- Only one Step 5 confirmation path may be active at a time.
+
+5.1 Core Requirement:
+
+A single candle, Leg 2, must:
+
+- Close beyond the active Leg 1 reference.
+- Sweep the active Leg 1 extreme.
+
+5.2 Leg 1 Definitions:
+
+- Leg 1 reference = Candle A close by default.
+- Leg 1 extreme = most extreme price of Candle A + B.
+- These values are fixed once Leg 1 completes, except for the Candle B Reference Upgrade Rule in 5.2A.
+
+5.2A Candle B Reference Upgrade Rule:
+
+Activation:
+
+- Candle B trades beyond Candle A close in the active rejection direction.
+- Trade means wick or close.
+
+SHORT, S/R:
+
+- If Candle B high > Candle A close:
+  - Candle B becomes the reference candle.
+  - Active Leg 1 reference = Candle B close.
+
+LONG, R/S:
+
+- If Candle B low < Candle A close:
+  - Candle B becomes the reference candle.
+  - Active Leg 1 reference = Candle B close.
+
+Important:
+
+- Candle B does not need to own the extreme.
+- Leg 1 extreme remains unchanged unless Candle B actually exceeds Candle A extreme.
+- Candle A may still own the extreme while Candle B owns the reference.
+- Active path remains Standard 5.1 unless another override activates.
+
+5.3 Extreme Ownership:
+
+- Leg 1 is Candle A plus Candle B.
+
+Case 1, Candle A owns the Leg 1 extreme:
+
+- Candle A remains the most extreme price.
+- Candle B does not exceed Candle A extreme.
+- Apply standard Leg 2 logic.
+- Leg 2 must close beyond active Leg 1 reference and sweep active Leg 1 extreme.
+
+Case 2, Candle B owns the Leg 1 extreme:
+
+- Candle B extends beyond Candle A and becomes the new extreme.
+- Still apply standard Leg 2 logic unless override applies.
+- Leg 2 must close beyond active Leg 1 reference and sweep Candle B extreme.
+
+Critical clarification:
+
+- Leg 1 reference may only change through 5.2A.
+- Reference = Candle A close by default, Candle B close if 5.2A activates.
+- Extreme = most extreme of A + B.
+
+5.3A Participation Candle Extreme Override:
+
+If Candle B establishes the Leg 1 extreme, standard Leg 2 sweep logic is overridden.
+
+SHORT, S/R:
+
+- If Candle A owns the extreme: Leg 2 must close beyond active Leg 1 reference and sweep active Leg 1 extreme.
+- If Candle B owns the extreme: Leg 2 must close above Candle B high.
+- This close alone becomes required confirmation for Leg 2.
+
+LONG, R/S:
+
+- If Candle A owns the extreme: Leg 2 must close beyond active Leg 1 reference and sweep active Leg 1 extreme.
+- If Candle B owns the extreme: Leg 2 must close below Candle B low.
+- This close alone becomes required confirmation for Leg 2.
+
+Override Priority Rule:
+
+- 5.3A overrides 5.1 whenever its activation condition is met.
+- If Candle B establishes the Leg 1 extreme, 5.1 standard Leg 2 logic is disabled.
+- Only 5.3A confirmation logic may be used.
+- 5.1 may not be blended with 5.3A in the same evaluation cycle.
+
+5.3B Wick Probe Override:
+
+If after Leg 1 is valid, but before a valid Leg 2 close occurs, price wicks beyond the active Leg 1 extreme:
+
+- That wick becomes the new confirmation threshold for Leg 2.
+- Wick beyond Leg 1 extreme does not validate Leg 2 by itself.
+- It creates a Wick Probe that must later be accepted by close.
+
+LONG, R/S:
+
+- If price wicks below active Leg 1 extreme but does not close below active Leg 1 reference:
+  - Leg 2 = NOT VALID.
+  - Wick Probe = ACTIVE.
+  - Lowest wick beyond Leg 1 extreme becomes Probe Low.
+  - Valid Leg 2 then requires close beyond active Leg 1 reference and close below lowest active Probe Low.
+
+SHORT, S/R:
+
+- If price wicks above active Leg 1 extreme but does not close beyond active Leg 1 reference:
+  - Leg 2 = NOT VALID.
+  - Wick Probe = ACTIVE.
+  - Highest wick beyond Leg 1 extreme becomes Probe High.
+  - Valid Leg 2 then requires close beyond active Leg 1 reference and close above highest active Probe High.
+
+Probe update rule:
+
+- Additional LONG probes use the lowest Probe Low.
+- Additional SHORT probes use the highest Probe High.
+- Active probe threshold must always represent the most extreme failed wick probe.
+
+Override Priority Rule:
+
+- 5.3B overrides both 5.1 and 5.3A whenever its activation condition is met.
+- If valid Wick Probe forms after Leg 1 completion and before valid Leg 2 confirmation, all prior Leg 2 confirmation logic is suspended.
+- Only 5.3B confirmation logic may be used until Leg 2 confirms or the interaction terminates.
+- 5.3B may not be blended with 5.1 or 5.3A.
+
+5.4 Dynamic Stack Routing:
+
+- If dynamic stacking becomes active after Leg 1 validation, Leg 2 confirmation must include standard Leg 2 requirements plus sweep of next liquidity Extreme Boundary.
+- Failure to sweep that boundary makes Leg 2 invalid.
+
+5.5 Outcome:
+
+- If all conditions are met, 2-Leg Structure = CONFIRMED and proceed to Step 6.
+- If any condition fails, Structure = INVALID and proceed to Step 7.
+
+5.6 Anchor Extreme + Opposite-Side Close Invalidation:
+
+Anchor Extreme:
+
+- High or low of the displacement candle that establishes rejection setup.
+- Final aggressive push into liquidity before opposing side begins to take control.
+
+For SHORT, S/R:
+
+- Anchor Extreme = HIGH of final bullish displacement candle into liquidity.
+
+For LONG, R/S:
+
+- Anchor Extreme = LOW of final bearish displacement candle into liquidity.
+
+Qualification:
+
+- Anchor Extreme candle must be part of a displacement move, not chop.
+- It must be the final push into liquidity.
+- It must represent the point where continuation fails.
+
+Invalidation:
+
+- Once Anchor Extreme is established, price must not close beyond that extreme on the opposite side before Step 6 entry completes.
+- If price closes beyond Anchor Extreme:
+  - Structure = INVALID.
+  - Rejection Mode = OFF.
+  - Proceed to Step 7.
+
+Interpretation:
+
+- Wicks beyond Anchor Extreme are allowed.
+- Only a close beyond Anchor Extreme invalidates setup.
+- Closes within liquidity or Leg 1 structure do not invalidate.
+
+Invalidation priority:
+
+- Anchor Extreme Close always takes priority.
+- Opposing Setup Override is evaluated only if Anchor Extreme has not been violated.
+
+5.6A Failed Leg 2 Resolution:
+
+If price sweeps active Leg 1 extreme but does not close beyond active Leg 1 reference:
+
+- Leg 2 is invalid.
+
+If after failed Leg 2 attempt, price closes back through liquidity in the opposite direction of the rejection attempt:
+
+- Rejection Mode = OFF.
+- Current rejection sequence = TERMINATED.
+- Proceed to Step 7.
+
+5.7 Active Reference Rule:
+
+- Step 5 must use only one active structural reference.
+- Candle A close by default.
+- Candle B close if 5.2A activates.
+- The active Leg 1 reference may not be redefined, blended, or replaced after Leg 1 completes.
+- Leg 1 extreme remains separate from Leg 1 reference.
+- Leg 2 always confirms beyond Leg 1.
+
+Anchor Stability Rule:
+
+- Once assigned, Anchor Extreme may not be changed, updated, or reassigned within the same interaction.
+- All validation, invalidation, and entry protection must reference original Anchor Extreme only.
+- No recalculation or reinterpretation allowed.
+
+## Step 6 - Entry Types
+
+First valid trigger wins.
+
+6.1 Opposing Setup Override:
+
+If a valid opposing rejection setup forms before the current setup completes, original setup is immediately invalidated.
+
+Condition:
+
+- During active rejection sequence, opposing S/R or R/S setup completes Leg 1 and begins to resolve price in opposite direction.
+
+Then:
+
+- Original setup is invalidated.
+- All Leg 1 / Leg 2 structures tied to original setup are discarded.
+- System immediately abandons original setup.
+- Control transfers to opposing setup.
+- Opposing setup becomes only valid pathway.
+
+Core law:
+
+- Only one directional premise may remain valid within an interaction.
+
+6.2 SC Progression + Entry Re-Evaluation:
+
+- Initial Signal Candle, SC, is Leg 2 candle.
+- If SC does not trigger entry, subsequent candle closing beyond SC close in setup direction may become SC2.
+- If SC2 does not trigger entry, subsequent candle closing beyond SC2 close in setup direction may become SC3.
+- The next candle after SC3 must trigger valid entry.
+- If it does not, Structure = INVALID and proceed to Step 7.
+
+Direction:
+
+- LONG: close above current SC close.
+- SHORT: close below current SC close.
+
+SC reassignment applies only to Step 6 entry logic.
+
+SC-Based Entry Re-Evaluation:
+
+- Each SC, SC2, SC3 is evaluated independently.
+- When SC updates, all entry models are re-evaluated from scratch.
+- Prior eliminations are discarded.
+
+Hard boundary:
+
+- Applies only to Step 6 entry logic.
+- Does not affect Step 5 structure, Leg 1 / Leg 2, timing window, or interaction state.
+
+Active reference:
+
+- Only current SC is used for wick measurement, body reclaim levels, and displacement calculations.
+- Previous SCs are not referenced, blended, or reused.
+
+6.3 SC Decision Pass:
+
+Before evaluating next candle, classify all allowed entry models for the active SC.
+
+Step 1, Wick Classification:
+
+- Measure SC wick as percentage of total SC range.
+- If SC wick >= 20%:
+  - Sweep Entry = Large Wick path.
+  - Double Wick = ACTIVE.
+- If SC wick < 20%:
+  - Sweep Entry = Small Wick path.
+  - Double Wick = ELIMINATED.
+
+Step 2, Active Model Output:
+
+Must state:
+
+- Sweep Entry path = Large Wick or Small Wick.
+- Double Wick = ACTIVE or ELIMINATED.
+
+Reset rule:
+
+- Whenever SC updates, all prior model eligibility is discarded.
+- Full SC Decision Pass recomputed from scratch using new SC only.
+
+Enforcement:
+
+- No entry evaluation may occur until SC Decision Pass output is explicitly defined.
+
+6.3X Required Leg-In Liquidity Sweep Gate, S/R and R/S only:
+
+Applies only to:
+
+- S/R continuation setups.
+- R/S continuation setups.
+
+Does not apply to:
+
+- Standard rejection setups.
+- Any non S/R / R/S pathway.
+
+Required leg-in liquidity exists only when:
+
+- Controlling Mode = S/R or R/S.
+- The same leg that qualified the setup, wick or close beyond level, also created internal liquidity before reaching the level.
+
+S/R, SHORT:
+
+- If the leg that wicked into LL or closed below LL also created a Higher High before reaching LL, that HH = required liquidity.
+
+R/S, LONG:
+
+- If the leg that wicked into LH or closed above LH also created a Lower Low before reaching LH, that LL = required liquidity.
+
+Rule:
+
+- If controlling_mode is S/R or R/S and required leg-in liquidity exists, entry evaluation is blocked until that liquidity is swept.
+
+If not swept:
+
+- Step 6 = WAIT.
+- Interaction = ACTIVE.
+- Structure = VALID.
+- SC progression continues.
+- No entry model may trigger.
+
+If swept:
+
+- Continue to 6.3A / 6.3B entry evaluation.
+
+Failure:
+
+- If SC progression expires before sweep, Entry Failure and proceed to Step 7.
+
+Important:
+
+- This rule only gates Step 6.
+- It does not invalidate Step 4 or Step 5.
+- It does not reset interaction.
+- This rule is active only when controlling_mode = S/R or R/S.
+- Otherwise, ignore completely.
+
+Entry Model 1, Sweep Entry:
+
+Large Wick Sweep:
+
+- Condition: SC wick >= 20% total SC range.
+- SHORT wick = SC high to SC body high.
+- LONG wick = SC body low to SC low.
+- Reclaim measured across wick only.
+
+Requirements:
+
+- Entry candle sweeps SC extreme by at least 1 tick.
+- Reclaims at least 60% of SC wick range.
+- Reclaim level exceeded by at least 1 tick.
+- Only first valid reclaim after sweep may trigger entry.
+
+SHORT trigger:
+
+- Wick Range = SC high to SC body high.
+- 60% level = 60% of wick measured down from SC high.
+- Price trades back below 60% reclaim level by at least 1 tick.
+
+LONG trigger:
+
+- Wick Range = SC body low to SC low.
+- 60% level = 60% of wick measured up from SC low.
+- Price trades back above 60% reclaim level by at least 1 tick.
+
+Execution:
+
+- Intrabar valid.
+- No close required.
+- First valid touch through reclaim level = trigger.
+
+Invalidation:
+
+- If sweep occurs but reclaim does not reach required wick level cleanly, no Large Wick Sweep entry exists.
+- Repeated reclaim attempts on same SC are invalid.
+
+Small Wick Sweep:
+
+- Condition: SC wick < 20% total SC range.
+
+Requirements:
+
+- Sweep SC extreme by at least 1 tick.
+- Reclaim SC body level by at least 1 tick.
+- Occurs within SC progression window.
+- Only first valid reclaim after sweep may trigger entry.
+
+SC body:
+
+- BODY LOW = lowest open/close.
+- BODY HIGH = highest open/close.
+
+LONG:
+
+- Sweep below SC low.
+- Trigger when price trades above BODY LOW by at least 1 tick.
+
+SHORT:
+
+- Sweep above SC high.
+- Trigger when price trades below BODY HIGH by at least 1 tick.
+
+Execution:
+
+- Intrabar valid.
+- No close required.
+- First valid touch through body reclaim level = trigger.
+
+Invalidation:
+
+- If sweep occurs but reclaim does not exceed body level by at least 1 tick, no Small Wick Sweep entry exists.
+- Repeated reclaim attempts on same SC are invalid.
+
+Entry Model 2, Double Wick Rejection:
+
+- SC = candle immediately before entry.
+- SC wick >= 20% of total SC range.
+- Entry penetrates at least 50% of SC wick.
+- Entry reclaims.
+
+SHORT:
+
+- Penetrate above.
+- Reclaim below.
+
+LONG:
+
+- Penetrate below.
+- Reclaim above.
+
+Execution:
+
+- Intrabar valid.
+- No close required.
+
+6.3A Model Enforcement:
+
+- Uses SC Decision Pass output.
+- No independent classification occurs.
+- Per current SC only.
+- Elimination logic applied fresh using active SC.
+- Sweep Entry always remains if conditions possible.
+- When SC updates, all elimination logic is cleared and recomputed.
+- If 2 models eliminated, remaining model is active.
+
+6.4 Entry Confirmation + Routing:
+
+If any model triggers:
+
+- ENTRY CONFIRMED.
+- EXECUTE IMMEDIATELY.
+- Interaction = CONSUMED.
+
+State changes:
+
+- Rejection Mode = OFF.
+- Trade Mode = OFF.
+- Structure = LOCKED.
+
+Structure lock:
+
+- No changes to Leg 1, Leg 2, or SC.
+
+Single Entry Rule:
+
+- Only one entry allowed.
+
+System transition:
+
+- ACTIVE TRADE STATE.
+- Proceed to Step 10.
+
+Post entry:
+
+- No new evaluation.
+- No continuation.
+- No new interactions.
+
+After trade resolution:
+
+- NEUTRAL.
+
+Core law:
+
+- Entry consumes interaction.
+
+6.4a Entry Time Priority:
+
+- All active entry models must be evaluated simultaneously.
+- Execute first model that becomes valid in time.
+- No later-valid model may override or delay earlier-valid trigger.
+- If multiple models qualify within same candle, earliest intrabar trigger takes precedence.
+
+6.5 Invalidation:
+
+Structure invalid if:
+
+- No entry within SC -> SC2 -> SC3 -> next candle.
+- No valid trigger.
+- Sweep without reclaim.
+
+Then proceed to Step 7.
+
+6.6 Global Invalidation:
+
+- No trigger.
+- Timing fails.
+- Structure breaks.
+- No trade.
+
+6.7 Mode Failure:
+
+- If price closes beyond Anchor Extreme before entry is triggered:
+  - Structure = INVALID.
+  - Proceed to Step 7.
+- Closes within liquidity or Leg 1 structure do not count as failure.
+- Only Anchor Extreme violation defines true opposite-side failure.
+
+6.8 System Truth:
+
+- Step 4 = Participation.
+- Step 5 = Structure Confirmation.
+- Step 6 = Entry.
+
+6.9 Core Interpretation:
+
+- SC is active anchor.
+- SC may update to SC2 / SC3.
+- Only current SC is used.
+- Entry models re-evaluated per SC.
+
+6.10 Rejection Completion:
+
+- Rejection sequence Steps 3-6 must fully complete for a trade to be valid.
+- If any part fails, becomes invalid, or does not produce valid entry:
+  - Rejection attempt is FAILED.
+  - No trade may be taken from that interaction.
+  - Interaction is complete or terminated per global rules.
+
+Final bank line:
+
+- Structure stays fixed. SC adapts. Entry must happen immediately or setup is dead.
+
+6.11 Leg 2 Re-Attempt Model, BE-Based:
+
+Activation requires all:
+
+- Trade was executed from Step 6.
+- Trade reached Break Even.
+- Structure has not been invalidated.
+- No opposite-side close has occurred.
+- Interaction is still active.
+- Step 7 has not triggered.
+- Rule 4A.0 does not apply here.
+
+Transformation:
+
+- Once BE is triggered, New Leg 1 close = original entry price.
+- New Leg 1 extreme = original entry extreme used for stop.
+- No new participation is created.
+- No new Step 4 is evaluated.
+
+New Leg 2 requirement:
+
+- Sweep new Leg 1 extreme.
+- Close beyond new Leg 1 close.
+
+Entry:
+
+- Same Step 6 rules apply.
+- SC progression active.
+
+Timing:
+
+- Must complete within 3 candles from BE trigger.
+- If not, invalid and proceed to Step 7.
+
+Hard limits:
+
+- Maximum one re-attempt per interaction.
+- If re-attempt fails, interaction is complete.
+- Cannot occur if full stop was hit, structure breaks, or opposite-side close occurs.
+
+Risk:
+
+- Treated as new trade.
+- Must respect 10% max risk.
+- No overlapping exposure allowed.
+
+Core law:
+
+- If the market defends your entry at BE, it may offer a cleaner Leg 2, but it must confirm structure again.
+
+## Step 7 - Interaction Termination
+
+Trigger if any:
+
+- Participation fails.
+- Structure fails.
+- Timing fails.
+- Sweep fails.
+- Opposite-side close occurs.
+
+On termination:
+
+- Rejection Mode OFF.
+- Trade Mode OFF.
+- Delete all structure.
+- Delete Leg 1.
+- Delete Leg 2.
+- Delete timing.
+- Delete sweep logic.
+- Clear all pre_activation_probe_boundary state.
+- System State = NEUTRAL RESET.
+
+Rule:
+
+- Once dead, cannot reuse.
+
+Mode Transition Rule:
+
+- Rejection Mode = OFF.
+- System State = NEUTRAL RESET.
+- No continuation or bypass retest state is carried forward.
+- New setup requires fresh valid liquidity interaction.
+
+Global interaction termination:
+
+- If price exits active liquidity zone without initiating or progressing valid structural development, interaction is dead/invalid.
+- Immediately terminate current 0-6 cycle.
+- Reset system state.
+- Return to Step 1 Gateway Rule.
+
+Exit definition:
+
+- Price closes outside active liquidity zone and no valid participation or structural development has occurred.
+- OR structure has clearly failed or been invalidated.
+
+Structural Exit Exception:
+
+- If price exits liquidity zone after valid participation has occurred, movement may represent Leg 1 or ongoing structural development, and interaction remains active.
+
+Termination conditions before structure completion:
+
+- Price leaves liquidity zone without required sweep for stack.
+- No participation within allowed candle window.
+- Structure begins but fails and price exits zone.
+- Clean continuation away from level without forming structure.
+- Opposite-side break before setup completes.
+
+After termination:
+
+- Current interaction discarded completely.
+- No structure carries forward.
+- No bias retained.
+- Return to neutral evaluation state.
+- Return to Step 1.
+- Re-evaluate current location.
+- Wait for next valid close into liquidity.
+- Begin new 0-6 cycle.
+
+Key principle:
+
+- Each liquidity interaction is independent.
+- If it does not complete required behavior, it is void and has no impact on future setups.
+
+## Step 8 - Rejection Mode Re-Activation
+
+8.1 New Liquidity:
+
+- Close into new level.
+- Rejection Mode ON.
+
+8.2 Same Liquidity Re-Entry:
+
+Same-liquidity rejection may reactivate only if price closes beyond the most extreme close printed during the immediately prior terminated interaction at that same liquidity.
+
+- LONG: above that interaction's highest close.
+- SHORT: below that interaction's lowest close.
+- Else: no re-activation.
+
+8.3 System Routing:
+
+If same-liquidity re-entry qualifies:
+
+- Rejection Mode = ON.
+- Treat as new interaction.
+- Proceed to Step 3.
+- Start fresh Step 4 participation / Leg 1 evaluation.
+- Prior structure may not be reused.
+- Prior pre_activation_probe_boundary may not be reused.
+
+## Step 10 - Trade Management
+
+10.1 Risk Model:
+
+- Maximum risk per trade = 10%.
+- ATR source = 1-minute ATR(14) at moment of entry.
+- Stop distance = greater of 1-minute ATR(14) or distance required to clear structure extreme by at least 2 ticks.
+- Long stop below structure extreme + 2 ticks.
+- Short stop above structure extreme + 2 ticks.
+- If stop > ATR, reduce position size.
+- Total trade risk must remain <= 10%.
+- Stop is defined at entry.
+- No discretionary widening after entry.
+
+10.2 Order Placement:
+
+- Immediately upon entry, place bracket order.
+- Initial stop loss from 10.1.
+- Primary target = +1 ATR from entry.
+- Orders must function as one unified management set.
+
+10.3 Early Protection:
+
+Move stop to BE when first of:
+
+- Price reaches +0.5 ATR intrabar.
+- 3 candles pass after entry.
+
+BE = entry price.
+
+10.4 Break Even:
+
+- BE is intermediate state, not final outcome.
+- Trade remains active after BE.
+- Trade continues toward TP1 or stop.
+
+10.5 Primary Target:
+
+- At +1 ATR from entry, close 50% position.
+- Remaining 50% becomes Runner.
+- After TP1, move stop on remaining 50% from BE back to original ATR-based stop.
+- 50% locked at +1 ATR.
+- Remaining 50% has full ATR room.
+- Net trade risk = neutral.
+
+10.6 Runner:
+
+- Remaining 50% = Runner.
+- Runner remains open until stop is hit or 12:00 PM hard cutoff.
+- No trailing stop.
+- No discretionary adjustment.
+- No additional targets.
+
+10.7 Time-Based Exit:
+
+At 12:00 PM:
+
+- Close all open positions immediately.
+- Cancel all working orders.
+- No new trades allowed.
+
+10.8 Management Priority:
+
+If multiple events occur within same candle, evaluate confirmed events only:
+
+- BE trigger.
+- TP1 fill +1 ATR.
+- Stop execution.
+
+10.9 Trade Completion Outcomes:
+
+- Full Stop: initial stop hit before BE or TP1.
+- Break Even: BE triggered and price returns to entry.
+- Partial + Runner: 50% taken at +1 ATR, remaining 50% managed until stop or time exit.
+- Time Exit: runner still open at 12:00 PM, position closed at cutoff.
+
+10.10 Mandatory Session Close:
+
+- No positions held past session.
+- No swing holds.
+- No overnight exposure.
+- No exceptions.
+
+10.11 State Freeze / Evidence:
+
+System may record only confirmed events:
+
+- Level touched.
+- Order triggered.
+- Target filled.
+- Stop filled.
+- Time cutoff reached.
+
+Not allowed:
+
+- Assuming future candle path.
+- Assuming continuation.
+- Assuming stop/target hit without confirmation.
+- Projecting outcome.
+
+Core law:
+
+- Once a new state is reached, stop evaluation until next event is visibly confirmed.
+
+Step 10 summary:
+
+- Risk = 10% max.
+- Stop = max(ATR, structure + 2 ticks).
+- BE = first of +0.5 ATR or 3 candles.
+- TP1 = +1 ATR, take 50%.
+- After TP1, stop returns to original ATR stop.
+- Runner = stop or 12:00 PM.
+- 12:00 PM = flat, done.
+
+## Pullback Continuation Pathways
+
+Pullback continuation pathways are pathway selectors only.
+
+They do NOT define new Step 4, Step 5, or Step 6 logic.
+All structure and entry logic is handled by Steps 4-6.
+
+Core Law:
+
+- Mode changes the lane.
+- Steps 4-6 still drive the car.
+
+### S/R Pullback Continuation
+
+Purpose:
+
+- Convert failed support breakdown / S/R pullback condition into SHORT pullback continuation.
+- Not a reversal model.
+
+Direction:
+
+- Direction = SHORT only.
+
+Condition:
+
+- Condition starts with a failure candle below the level.
+
+Activation:
+
+- Pathway activates when a reclaim candle returns above the level.
+- pathway_activation_type = wick or close.
+
+Candle assignment:
+
+- Failure candle starts the condition.
+- Reclaim candle activates the pathway.
+- Reclaim candle becomes Candle A (Step 4).
+- Candle B forms after Candle A and must remain above the level (no closes below).
+
+Rule:
+
+- Candle A MUST be the reclaim candle for close-based activation.
+- The failure candle can never be used as Candle A.
+
+Structure requirements:
+
+- Structure must form above the level.
+- Uses HH structure.
+- structure_side_requirement = ABOVE_LEVEL.
+
+State:
+
+- candidate_modes includes S/R.
+- pathway_level = active level.
+- reclaim_candle_a is assigned for close-based activation.
+- provisional_candle_a is assigned only if wick-based activation applies.
+- sr_pathway_closed tracks pathway closure.
+
+### R/S Pullback Continuation
+
+Purpose:
+
+- Convert failed resistance breakout / R/S pullback condition into LONG pullback continuation.
+- Not a reversal model.
+
+Direction:
+
+- Direction = LONG only.
+
+Condition:
+
+- Condition starts with a failure candle above the level.
+
+Activation:
+
+- Pathway activates when a reclaim candle returns below the level.
+- Step 2 activation: price interacts with resistance (touch or wick sufficient).
+- pathway_activation_type = wick or close.
+
+Candle assignment:
+
+- Failure candle starts the condition.
+- Reclaim candle activates the pathway.
+- Reclaim candle becomes Candle A (Step 4).
+- Candle B forms after Candle A and must remain below the level (no closes above).
+
+Rule:
+
+- Candle A MUST be the reclaim candle for close-based activation.
+- The failure candle can never be used as Candle A.
+
+Structure requirements:
+
+- Structure must form below the level.
+- Uses LL structure.
+- structure_side_requirement = BELOW_LEVEL.
+- Leg 2 must confirm within BELOW-level structure context.
+- Any close back above the level invalidates the pathway.
+
+State:
+
+- candidate_modes includes R/S.
+- pathway_level = active level.
+- reclaim_candle_a is assigned for close-based activation.
+- provisional_candle_a is assigned only if wick-based activation applies.
+- rs_pathway_closed tracks pathway closure.
+
+### Pathway Control
+
+Pathway Lifecycle:
+
+- Candidate -> Active (after Step 4) -> Consumed (after Step 6) -> Closed (if structure fails).
+
+- Normal Rejection Mode remains default if no S/R or R/S activation condition exists.
+- Trade eligibility requires completion of Step 4, Step 5, and Step 6.
+- First opportunity only.
+- If structure fails, the active pathway is closed.
+- No re-attempt.
+- No reinterpretation.
+- If multiple pathways are active, the first pathway to complete valid Step 5 structure becomes controlling_mode.
+- Once controlling_mode is assigned, all other pathways freeze.
+- One interaction still allows only one entry.
+
+## State Variables Needed In Code
+
+Global / Session:
+
+- system_state
+- trade_mode
+- rejection_mode
+- interaction_state
+- premarket_locked
+- london_dst_adjusted
+- symbol
+- date
+- timezone
+
+Levels / Context:
+
+- levels
+- level status
+- active level
+- active stack
+- close boundary
+- extreme boundary
+- nearest newly relevant liquidity
+- next level final in ladder
+- gateway GH
+- gateway GL
+- gateway state
+- high_side context
+- low_side context
+- stack type
+- target_name
+- next_outside
+- encroachment_line
+- pre_activation_probe_boundary
+
+Rejection Modes:
+
+- normal_rejection_mode
+- sr_rejection_mode
+- rs_rejection_mode
+- controlling_mode
+- provisional_state
+- provisional_candle_a
+- active_liquidity
+- interaction_cycle_id
+- consumed levels
+- inactive levels
+
+Step 3:
+
+- liquidity_type
+- participation_timer
+- sweep_extreme_boundary_seen
+- rotation_filter_active
+- stack_logic_valid
+
+Leg 1:
+
+- candle_a
+- candle_b
+- leg1_status
+- leg1_close
+- leg1_extreme
+- leg1_extreme_owner
+- anchor_extreme
+- proximity_distance
+- proximity_atr_threshold
+
+Leg 2:
+
+- leg2_status
+- leg2_candle
+- active_step5_path
+- wick_probe_active
+- probe_high
+- probe_low
+- dynamic_stack_active
+- step5_confirmed
+
+Entry:
+
+- sc
+- sc2
+- sc3
+- current_sc
+- sc_progression_count
+- sc_decision_pass_output
+- sweep_entry_path
+- double_wick_state
+- entry_triggered
+- entry_model_triggered
+- entry_price
+- entry_time
+- structure_locked
+
+Trade Management:
+
+- atr_1m_14_at_entry
+- daily_atr_14
+- stop_distance
+- initial_stop
+- structure_extreme_stop_reference
+- position_size
+- risk_percent
+- primary_target
+- be_trigger
+- be_state
+- tp1_state
+- runner_state
+- runner_stop
+- time_cutoff
+- management_event_state
+
+## Master System Flow
+
+Pre-Market Engine:
+
+1. Build session_context.
+2. Build finalized levels with price and status.
+3. Detect static stacks within 10% ATR.
+4. Define close_boundary and extreme_boundary.
+5. Verify table levels against chart/drawn levels.
+6. Apply session-built liquidity lock rule.
+7. Build high_side and low_side contexts.
+8. Build gateway GH/GL.
+9. Build step_engine initial state.
+10. Build ATR and range context.
+11. Build interaction constraints.
+12. Build next_liquidity.
+13. Output premarket_context object.
+
+Entry Engine:
+
+1. Read premarket_context only.
+2. Evaluate Step 1 Gateway state.
+3. Detect Step 2 close into active liquidity.
+4. Apply Step 2.1A pre-activation probe logic.
+5. Initialize Rejection Mode.
+6. Initialize Normal, S/R, and R/S mode states.
+7. Enforce rejection-only routing.
+8. Evaluate Step 2.5 Rejection Pathway Selector.
+9. Classify liquidity type Step 3.
+10. Enforce pre-interaction rotation filter.
+11. Track participation windows.
+12. Build Leg 1.
+13. Assign Anchor Extreme.
+14. Apply Step 4 proximity filter.
+15. Confirm Leg 2 by Step 5 priority order.
+16. Track Wick Probe overrides.
+17. Apply Dynamic Stack Routing.
+18. Apply Anchor Extreme invalidation.
+19. Apply opposing setup override.
+20. Run SC progression.
+21. Run SC Decision Pass.
+22. Evaluate entry models simultaneously.
+23. Enforce first valid trigger wins.
+24. Lock structure on entry.
+25. Terminate/reset interaction on failure.
+26. Support same-liquidity re-entry rule.
+27. Maintain nearest newly relevant liquidity.
+
+Trade Manager:
+
+1. Receive confirmed Step 6 entry.
+2. Calculate 10% max risk.
+3. Use max of 1-minute ATR(14) or structure extreme clearance by at least 2 ticks for stop distance.
+4. Place bracket order immediately.
+5. Move stop to BE on first of +0.5 ATR intrabar or 3 candles after entry.
+6. Close 50% at +1 ATR.
+7. After TP1, move runner stop from BE back to original ATR-based stop.
+8. Manage runner until stop or 12:00 PM hard cutoff.
+9. Close all open positions and cancel working orders at 12:00 PM.
+10. Record only confirmed events.
+
+Final bank line:
+
+- Pre-Market defines reality.
+- Entry Engine reacts to reality.
+- Trade Manager executes reality.

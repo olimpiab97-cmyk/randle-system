@@ -1,0 +1,2898 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Trade Manager Command Center</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 20px 16px 32px;
+      background: #0b1016;
+      color: #e8edf5;
+    }
+    h1, h2 { margin-bottom: 8px; }
+    h1 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.1;
+    }
+    h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .command-layout {
+      display: grid;
+      grid-template-columns: minmax(680px, 2fr) minmax(360px, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .main-column {
+      display: grid;
+      gap: 16px;
+    }
+    .side-column {
+      display: grid;
+      gap: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: #111826;
+      border: 1px solid #263244;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    input, select, button, textarea {
+      width: 100%;
+      margin-top: 4px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f1724;
+      color: #e8edf5;
+      box-sizing: border-box;
+    }
+    button {
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    pre {
+      background: #0a0f18;
+      border: 1px solid #243041;
+      border-radius: 8px;
+      padding: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 180px;
+    }
+    .snapshot-card {
+      position: sticky;
+      top: 16px;
+    }
+    .snapshot-card pre {
+      min-height: 620px;
+      max-height: calc(100vh - 150px);
+    }
+    .ok { color: #7CFC92; }
+    .bad { color: #ff8f8f; }
+    .small { font-size: 13px; color: #bbb; }
+    .muted { color: #94a3b8; }
+    .dashboard-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.9fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .hero-panel {
+      background: linear-gradient(180deg, #111a28 0%, #0d1522 100%);
+      border: 1px solid #243041;
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+    }
+    .hero-subtitle {
+      color: #9fb0c7;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: #101a2b;
+      border: 1px solid #2d3a4f;
+      font-size: 13px;
+      color: #dbe7f5;
+    }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .metric-card {
+      background: #111826;
+      border: 1px solid #263244;
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 88px;
+    }
+    .metric-label {
+      font-size: 11px;
+      color: #8ea0b8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .metric-value {
+      margin-top: 8px;
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .metric-subtext {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #90a1b8;
+    }
+    .risk-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .risk-item {
+      background: #0c1320;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .feed-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .feed-item {
+      background: #0c1320;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .feed-item.warning {
+      border-color: #75581d;
+    }
+    .feed-item.critical,
+    .feed-item.error {
+      border-color: #7f1d1d;
+    }
+    .feed-topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      color: #9fb0c7;
+    }
+    .feed-message {
+      margin-top: 6px;
+      font-size: 14px;
+      color: #e5edf8;
+    }
+    .atr-status-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .atr-status-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: #0c1320;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .atr-status-item .label {
+      font-size: 12px;
+      color: #9aa4b2;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .atr-status-item .value {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .debug {
+      font-size: 12px;
+      color: #9ecbff;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    .build-banner {
+      background: #102f1d;
+      border: 1px solid #2d7f4f;
+      color: #d7ffd9;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .orphan-exposure-banner {
+      display: none;
+      margin-bottom: 14px;
+      border: 2px solid #ff4d4d;
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: #330b0b;
+      color: #fff5f5;
+      box-shadow: 0 0 22px rgba(255, 77, 77, 0.22);
+    }
+    .orphan-exposure-banner.visible {
+      display: block;
+    }
+    .orphan-exposure-title {
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #ffd1d1;
+    }
+    .orphan-exposure-detail {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #ffe4e4;
+    }
+    .trade-list {
+      display: grid;
+      gap: 12px;
+    }
+    .active-trade-layout {
+      display: grid;
+      grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.35fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .visual-panel {
+      background: #0c1320;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 340px;
+    }
+    .demo-live-map {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding: 12px;
+      border: 1px solid #0e7490;
+      border-radius: 8px;
+      background: #082f3a;
+    }
+    .demo-live-map-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+    .demo-live-map-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: #a5f3fc;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .demo-live-map-status {
+      min-height: 26px;
+      padding: 5px 9px;
+      border: 1px solid rgba(165, 243, 252, 0.4);
+      border-radius: 999px;
+      color: #e0fbff;
+      background: rgba(8, 47, 58, 0.9);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .demo-live-map-controls {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .demo-live-map-controls input,
+    .demo-live-map-controls button {
+      margin-top: 0;
+    }
+    .demo-live-map button {
+      white-space: nowrap;
+    }
+    .map-trade-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+      min-height: 32px;
+    }
+    .map-trade-chip {
+      width: auto;
+      margin-top: 0;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid #334155;
+      background: #101a2b;
+      color: #dbe7f5;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .map-trade-chip.selected {
+      border-color: #22d3ee;
+      color: #eaffff;
+      box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.25), 0 0 14px rgba(34, 211, 238, 0.18);
+    }
+    .map-trade-chip.orphan {
+      border-color: #ff4d4d;
+      background: #2a0b0b;
+      color: #ffe4e4;
+      box-shadow: 0 0 14px rgba(255, 77, 77, 0.18);
+    }
+    .map-trade-empty {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      color: #94a3b8;
+      font-size: 12px;
+    }
+    .visual-empty {
+      min-height: 280px;
+      display: grid;
+      place-items: center;
+      color: #8ea0b8;
+      font-size: 15px;
+      border: 1px dashed #2d3a4f;
+      border-radius: 8px;
+      background: #0a111b;
+    }
+    .visual-warning {
+      margin-bottom: 10px;
+      border: 1px solid #92400e;
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: #2d1b08;
+      color: #fed7aa;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .diagnostic-overlay {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    .diagnostic-item {
+      border: 1px solid #2d3a4f;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #0c1320;
+      color: #dbe7f5;
+    }
+    .source-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      margin: 8px 0 10px;
+      font-size: 12px;
+      color: #9fb0c7;
+    }
+    .visual-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 12px;
+    }
+    .visual-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .visual-subtitle {
+      font-size: 12px;
+      color: #8ea0b8;
+    }
+    .level-chart {
+      position: relative;
+      min-height: 420px;
+      border-radius: 8px;
+      border: 1px solid #223047;
+      background:
+        linear-gradient(180deg, rgba(148, 163, 184, 0.06) 0%, rgba(148, 163, 184, 0) 100%),
+        repeating-linear-gradient(
+          to bottom,
+          rgba(90, 104, 125, 0.22) 0,
+          rgba(90, 104, 125, 0.22) 1px,
+          transparent 1px,
+          transparent 38px
+        ),
+        #0a111b;
+      overflow: hidden;
+    }
+    .chart-axis {
+      position: absolute;
+      inset: 56px 16px 56px 16px;
+    }
+    .level-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      border-top: 2px solid currentColor;
+      opacity: 0.95;
+      z-index: 2;
+    }
+    .level-line::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: -4px;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+    .level-line.level-live::before {
+      left: auto;
+      right: 0;
+    }
+    .level-pill {
+      position: absolute;
+      top: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: rgba(10, 17, 27, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      color: #e5edf8;
+    }
+    .level-pill-left {
+      left: 0;
+    }
+    .level-pill-right {
+      right: 0;
+    }
+    .level-pill .price {
+      color: inherit;
+      opacity: 0.92;
+    }
+    .level-pill.live-pill {
+      min-height: 38px;
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 2px;
+      border-color: rgba(34, 211, 238, 0.55);
+      box-shadow: 0 0 16px rgba(34, 211, 238, 0.22);
+    }
+    .level-pill .live-updated {
+      font-size: 11px;
+      font-weight: 500;
+      color: #b6f7ff;
+      opacity: 0.86;
+    }
+    .live-waiting-pill {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: inline-flex;
+      flex-direction: column;
+      gap: 2px;
+      min-height: 38px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(34, 211, 238, 0.45);
+      background: rgba(10, 17, 27, 0.92);
+      color: #eaffff;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 0 16px rgba(34, 211, 238, 0.16);
+    }
+    .live-waiting-pill .live-updated {
+      font-size: 11px;
+      font-weight: 500;
+      color: #b6f7ff;
+      opacity: 0.86;
+    }
+    .level-entry { color: #60a5fa; }
+    .level-live {
+      color: #eaffff;
+      border-top-width: 3px;
+      text-shadow: 0 0 10px rgba(34, 211, 238, 0.95);
+      filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.55));
+    }
+    .level-live.live-price-up {
+      animation: livePulseUp 650ms ease-out;
+    }
+    .level-live.live-price-down {
+      animation: livePulseDown 650ms ease-out;
+    }
+    .level-stop { color: #f87171; }
+    .level-be {
+      color: #22d3ee;
+      border-top-width: 3px;
+      border-top-style: dashed;
+      filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.65));
+      opacity: 1;
+      z-index: 30;
+    }
+    .level-be::before,
+    .level-be-active::before {
+      top: -5px;
+      width: 10px;
+      height: 10px;
+      box-shadow: 0 0 10px currentColor;
+    }
+    .level-be-active {
+      color: #22d3ee;
+      border-top-width: 3px;
+      border-top-style: dashed;
+      filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.65));
+      opacity: 1;
+      z-index: 30;
+    }
+    .level-be-hit {
+      color: #22d3ee;
+      border-top-width: 3px;
+      border-top-style: dashed;
+      filter: none;
+      opacity: 0.25;
+      z-index: 30;
+    }
+    .level-tp1 { color: #34d399; }
+    @keyframes livePulseUp {
+      0% { color: #34d399; filter: drop-shadow(0 0 14px rgba(52, 211, 153, 0.95)); }
+      100% { color: #eaffff; filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.55)); }
+    }
+    @keyframes livePulseDown {
+      0% { color: #f87171; filter: drop-shadow(0 0 14px rgba(248, 113, 113, 0.95)); }
+      100% { color: #eaffff; filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.55)); }
+    }
+    .visual-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      margin-top: 12px;
+    }
+    .visual-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 12px 0 0;
+    }
+    .visual-stat {
+      background: #111826;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .visual-stat-label {
+      font-size: 11px;
+      color: #8ea0b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .visual-stat-value {
+      margin-top: 6px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .visual-stat-sub {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #90a1b8;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #9fb0c7;
+    }
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+    .trade-card {
+      background: #0c1320;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .trade-card.active {
+      border-color: #2f855a;
+    }
+    .trade-card.selected {
+      border-color: #60a5fa;
+      box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
+    }
+    .trade-card.closed {
+      border-color: #744210;
+    }
+    .trade-card.error {
+      border-color: #742a2a;
+    }
+    .trade-card.orphan {
+      border-color: #ff4d4d;
+      background: #1f0a0d;
+      box-shadow: inset 0 0 0 1px rgba(255, 77, 77, 0.3);
+    }
+    .trade-card h3 {
+      margin: 0 0 10px;
+      font-size: 17px;
+    }
+    .trade-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 14px;
+    }
+    .trade-field {
+      background: #111826;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .trade-label {
+      font-size: 11px;
+      color: #9aa4b2;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .trade-value {
+      font-size: 15px;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+    .entry-agent-health {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid #334155;
+      background: #0c1320;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .entry-agent-health.online {
+      border-color: #166534;
+      color: #86efac;
+      background: #052e16;
+    }
+    .entry-agent-health.offline {
+      border-color: #7f1d1d;
+      color: #fecaca;
+      background: #330b0b;
+    }
+    .entry-agent-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .entry-agent-card {
+      background: #0c1320;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .entry-agent-card.entry-candidate {
+      border-color: #22d3ee;
+      box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.28), 0 0 18px rgba(34, 211, 238, 0.12);
+    }
+    .entry-agent-topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .entry-agent-symbol {
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+    }
+    .entry-agent-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .entry-agent-field {
+      background: #111826;
+      border-radius: 8px;
+      padding: 8px 10px;
+      min-width: 0;
+    }
+    .entry-agent-field.wide {
+      grid-column: 1 / -1;
+    }
+    .entry-agent-label {
+      font-size: 10px;
+      color: #9aa4b2;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .entry-agent-value {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+    .entry-agent-token {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid #334155;
+      background: #101a2b;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .entry-agent-token.wait {
+      border-color: #75581d;
+      color: #fde68a;
+      background: #2d1b08;
+    }
+    .entry-agent-token.complete {
+      border-color: #166534;
+      color: #86efac;
+      background: #052e16;
+    }
+    .entry-agent-token.invalidate {
+      border-color: #7f1d1d;
+      color: #fecaca;
+      background: #330b0b;
+    }
+    .entry-agent-token.candidate {
+      border-color: #0e7490;
+      color: #a5f3fc;
+      background: #083344;
+      box-shadow: 0 0 12px rgba(34, 211, 238, 0.2);
+    }
+    .entry-agent-offline {
+      margin-top: 12px;
+      border: 1px solid #7f1d1d;
+      border-radius: 8px;
+      padding: 12px;
+      background: #330b0b;
+      color: #fecaca;
+      font-weight: 800;
+    }
+    .status-green { color: #7CFC92; }
+    .status-red { color: #ff8f8f; }
+    .status-amber { color: #f6c86b; }
+    .muted { color: #94a3b8; }
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    details {
+      margin-top: 12px;
+    }
+    summary {
+      cursor: pointer;
+      color: #9ecbff;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    @media (max-width: 1120px) {
+      .dashboard-hero,
+      .command-layout {
+        grid-template-columns: 1fr;
+      }
+      .active-trade-layout {
+        grid-template-columns: 1fr;
+      }
+      .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .snapshot-card {
+        position: static;
+      }
+      .snapshot-card pre {
+        min-height: 260px;
+        max-height: 520px;
+      }
+    }
+    @media (max-width: 760px) {
+      .metric-grid,
+      .grid,
+      .row,
+      .actions,
+      .risk-grid,
+      .visual-stats,
+      .trade-grid,
+      .entry-agent-grid,
+      .demo-live-map-controls {
+        grid-template-columns: 1fr;
+      }
+      .diagnostic-overlay {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="build-banner" id="buildBanner">COMMAND CENTER POLLING BUILD ACTIVE</div>
+
+  <section class="dashboard-hero">
+    <div class="hero-panel">
+      <div class="section-title">
+        <div>
+          <h1>Trade Manager Command Center</h1>
+          <div class="hero-subtitle">Operator dashboard for live trade state, risk posture, execution visibility, and QA signals.</div>
+          <div class="small">Rithmic live contract ticks, not TradingView price. Exact charts: NQM6/NQM2026 and RTYM6/RTYM2026. Continuous symbols NQ1!/RTY1! are visual reference only.</div>
+        </div>
+        <div class="small" id="dashboardClock">--</div>
+      </div>
+      <div class="hero-badges">
+        <div class="badge" id="heroModeBadge">Mode: --</div>
+        <div class="badge" id="heroEngineBadge">Engine: --</div>
+        <div class="badge" id="heroTvAtrBadge">TV ATR: --</div>
+        <div class="badge" id="heroNoonBadge">Noon Runner Flatten: --</div>
+      </div>
+    </div>
+    <div class="hero-panel">
+      <div class="section-title">
+        <h2>Session Summary</h2>
+        <span class="small" id="sessionSummaryMeta">Waiting for data</span>
+      </div>
+      <div class="risk-grid" id="sessionSummaryGrid"></div>
+    </div>
+  </section>
+
+  <section class="metric-grid" id="metricGrid">
+    <div class="metric-card">
+      <div class="metric-label">Active Trades</div>
+      <div class="metric-value" id="metricActiveTrades">--</div>
+      <div class="metric-subtext" id="metricActiveTradesSub">Waiting for data</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Open Runners</div>
+      <div class="metric-value" id="metricOpenRunners">--</div>
+      <div class="metric-subtext" id="metricOpenRunnersSub">Waiting for data</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Daily Trade Count</div>
+      <div class="metric-value" id="metricDailyTrades">--</div>
+      <div class="metric-subtext" id="metricDailyTradesSub">Waiting for data</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Working Orders</div>
+      <div class="metric-value" id="metricWorkingOrders">--</div>
+      <div class="metric-subtext" id="metricWorkingOrdersSub">Waiting for data</div>
+    </div>
+  </section>
+
+  <div class="command-layout">
+    <main class="main-column">
+      <div class="grid">
+        <div class="card">
+          <h2>Enter Trade</h2>
+
+          <label>Symbol
+            <select id="symbol">
+              <option value="NQ">NQ</option>
+              <option value="YM">YM</option>
+            </select>
+          </label>
+
+          <div class="row">
+            <label>Direction
+              <select id="direction">
+                <option value="long">long</option>
+                <option value="short">short</option>
+              </select>
+            </label>
+
+            <label>Position Size
+              <input id="position_size" type="number" step="1" value="2" />
+            </label>
+          </div>
+
+          <p class="small" style="margin-top:14px;">
+            Entry fills in the executor. Trade Manager derives stop, TP1, and breakeven trigger from the executor fill plus the latest completed live 1-minute ATR(14) snapshot for the selected symbol.
+          </p>
+
+          <div class="actions">
+            <button id="submitTradeBtn">Submit Trade</button>
+            <button id="flattenBtn">Flatten Symbol</button>
+          </div>
+
+          <label style="margin-top:14px;">Last Response</label>
+          <pre id="submitResult"></pre>
+        </div>
+
+        <div class="card">
+          <h2>Utilities</h2>
+
+          <div class="actions">
+            <button id="refreshSnapshotBtn">Refresh Executor Snapshot</button>
+            <button id="refreshTradesBtn">Refresh Trade Manager Trades</button>
+          </div>
+
+          <details>
+            <summary>Operator Debug</summary>
+            <div class="actions">
+              <button id="price102Btn">Send 102</button>
+              <button id="price105Btn">Send 105</button>
+            </div>
+
+            <div class="actions">
+              <button id="price110Btn">Send 110</button>
+              <button id="price100Btn">Send 100</button>
+            </div>
+
+            <p class="small" style="margin-top:14px;">
+              Quick price buttons are for testing only.
+            </p>
+          </details>
+
+          <div class="atr-status-list" id="tvAtrStatusBox"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">
+          <h2>Active Trades</h2>
+          <span id="tradesRenderMeta" class="small">Polling active</span>
+        </div>
+        <div id="orphanExposureBanner" class="orphan-exposure-banner"></div>
+        <div class="active-trade-layout">
+          <div class="visual-panel">
+            <div class="section-title">
+              <h2>Live Trade Visual</h2>
+              <span class="small" id="tradeVisualMeta">Read-only</span>
+            </div>
+            <div class="diagnostic-overlay">
+              <div class="diagnostic-item">Price Issue -> Listener</div>
+              <div class="diagnostic-item">Order Issue -> Executor</div>
+              <div class="diagnostic-item">Visual Issue -> Command Center</div>
+            </div>
+            <div id="activeTradeMapSelector" class="map-trade-selector"></div>
+            <div class="demo-live-map">
+              <div class="demo-live-map-header">
+                <div class="demo-live-map-title">DEMO - READ ONLY</div>
+                <div class="demo-live-map-status" id="demoLiveMapStatus">disabled</div>
+              </div>
+              <div class="demo-live-map-controls">
+                <input id="demoLivePriceInput" type="number" step="0.25" placeholder="27402" />
+                <button id="demoLivePriceBtn" type="button">Set Demo Price</button>
+                <button id="demoLiveMapToggle" type="button">Demo Live Map</button>
+              </div>
+            </div>
+            <div id="tradeVisualBox"></div>
+          </div>
+          <div id="activeTradeBox" class="trade-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">
+          <h2>Trade History</h2>
+          <span id="closedTradeCount" class="small"></span>
+        </div>
+        <div style="margin-top:14px;">
+          <div id="closedTradesBox" class="trade-list"></div>
+        </div>
+        <details>
+          <summary>Hidden Error Trades</summary>
+          <div id="errorTradesBox" class="trade-list"></div>
+        </details>
+        <details>
+          <summary>Debug Logs</summary>
+          <div id="tradesDebug" class="debug"></div>
+        </details>
+      </div>
+    </main>
+
+    <aside class="side-column">
+      <div class="card">
+        <div class="section-title">
+          <h2>Entry Agent — Read Only</h2>
+          <span class="entry-agent-health offline" id="entryAgentHealth">Offline</span>
+        </div>
+        <div class="small" id="entryAgentMeta">Waiting for Entry Agent</div>
+        <div id="entryAgentBox" class="entry-agent-list">
+          <div class="entry-agent-offline">Entry Agent offline</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">
+          <h2>Risk State</h2>
+          <span class="small" id="riskStateMeta">Polling active</span>
+        </div>
+        <div class="risk-grid" id="riskStateGrid"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">
+          <h2>QA Feed</h2>
+          <span class="small" id="qaFeedMeta">Polling active</span>
+        </div>
+        <div class="feed-list" id="qaFeedBox"></div>
+      </div>
+
+      <div class="card snapshot-card">
+        <h2>Executor Snapshot</h2>
+        <pre id="snapshotBox"></pre>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const TM_BASE = "http://127.0.0.1:7001";
+    const EX_BASE = "http://127.0.0.1:6001";
+    const ENTRY_AGENT_BASE = "http://127.0.0.1:7002";
+    const POLL_INTERVAL_MS = 1000;
+
+    const $ = (id) => document.getElementById(id);
+    let tradesPollHandle = null;
+    let snapshotPollHandle = null;
+    let entryAgentPollHandle = null;
+    let tradesRefreshInFlight = false;
+    let snapshotRefreshInFlight = false;
+    let submitInFlight = false;
+    let latestSnapshot = null;
+    let latestSnapshotFetchedAt = null;
+    let tradesRequestSequence = 0;
+    let latestAppliedTradesSequence = 0;
+    let tvAtrStatusInFlight = false;
+    let riskStateInFlight = false;
+    let qaFeedInFlight = false;
+    let entryAgentInFlight = false;
+    let previousTvAtrStatusBySymbol = {};
+    let latestTvAtrStatusBySymbol = {};
+    let latestRiskPayload = null;
+    let latestTradesPayload = null;
+    let latestEventsPayload = null;
+    const latestLivePriceBySymbol = {};
+    const livePriceReceivedAtBySymbol = {};
+    let selectedActiveTradeId = null;
+    let demoLiveMapEnabled = false;
+    let selectedDemoTradeId = "DEMO-NQ";
+    const demoLivePrices = {};
+    const demoLivePriceUpdatedAtByTrade = {};
+    const demoLiveLifecycleByTrade = {};
+    const previousLivePriceBySymbol = {};
+    const livePulseBySymbol = {};
+    const DEMO_LIVE_MAP_TRADES = [
+      {
+        trade_id: "DEMO-NQ",
+        symbol: "NQM6",
+        execution_symbol: "NQM6",
+        requested_symbol: "NQ",
+        direction: "long",
+        entry_price: 27400,
+        current_stop: 27390,
+        original_stop: 27390,
+        be_trigger: 27405,
+        tp1_price: 27410,
+        remaining_size: 2,
+        position_size: 2,
+        status: "active",
+        stop_state: "original",
+        is_demo_live_map: true
+      },
+      {
+        trade_id: "DEMO-YM",
+        symbol: "YMM6",
+        execution_symbol: "YMM6",
+        requested_symbol: "YM",
+        direction: "long",
+        entry_price: 49400,
+        current_stop: 49390,
+        original_stop: 49390,
+        be_trigger: 49405,
+        tp1_price: 49410,
+        remaining_size: 2,
+        position_size: 2,
+        status: "active",
+        stop_state: "original",
+        is_demo_live_map: true
+      }
+    ];
+
+    function pretty(data) {
+      return JSON.stringify(data, null, 2);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function formatValue(value) {
+      if (value === null || value === undefined || value === "") {
+        return "n/a";
+      }
+      return String(value);
+    }
+
+    function normalizeSymbolRoot(symbol) {
+      const raw = String(symbol ?? "").trim().toUpperCase();
+      if (!raw) return "";
+      const cleaned = raw.replace("!", "").replace(/[^A-Z0-9]/g, "");
+      if (!cleaned) return "";
+      return cleaned.replace(/[FGHJKMNQUVXZ]\d+$/, "");
+    }
+
+    function resolveSnapshotSymbolForInput(symbol) {
+      const raw = String(symbol ?? "").trim().toUpperCase();
+      if (!raw) return raw;
+
+      const snapshotSymbols = Object.keys((latestSnapshot && latestSnapshot.symbols) || {});
+      if (snapshotSymbols.includes(raw)) {
+        return raw;
+      }
+
+      const inputRoot = normalizeSymbolRoot(raw);
+      const matched = snapshotSymbols.find((candidate) => normalizeSymbolRoot(candidate) === inputRoot);
+      return matched || raw;
+    }
+
+    function resolveSnapshotSymbolForTrade(trade) {
+      const snapshotSymbols = Object.keys((latestSnapshot && latestSnapshot.symbols) || {});
+      const candidates = [
+        trade && trade.execution_symbol,
+        trade && trade.symbol,
+        trade && trade.requested_symbol
+      ]
+        .map((value) => String(value ?? "").trim().toUpperCase())
+        .filter(Boolean);
+
+      for (const candidate of candidates) {
+        if (snapshotSymbols.includes(candidate)) {
+          return candidate;
+        }
+      }
+
+      for (const candidate of candidates) {
+        const candidateRoot = normalizeSymbolRoot(candidate);
+        const matched = snapshotSymbols.find((symbol) => normalizeSymbolRoot(symbol) === candidateRoot);
+        if (matched) {
+          return matched;
+        }
+      }
+
+      return candidates[0] || "";
+    }
+
+    function getKnownTradeSymbol(trade) {
+      return String((trade && (trade.execution_symbol || trade.symbol || trade.requested_symbol)) || "").trim().toUpperCase();
+    }
+
+    function getLivePriceEntry(symbol) {
+      const raw = String(symbol || "").toUpperCase();
+      const root = normalizeSymbolRoot(raw);
+      const symbols = Object.keys(latestLivePriceBySymbol);
+      const matched = latestLivePriceBySymbol[raw] !== undefined
+        ? raw
+        : symbols.find((candidate) => normalizeSymbolRoot(candidate) === root);
+      if (!matched) {
+        return null;
+      }
+      return {
+        symbol: matched,
+        price: latestLivePriceBySymbol[matched],
+        receivedAt: livePriceReceivedAtBySymbol[matched]
+      };
+    }
+
+    // Compatibility marker for regression coverage: function getSelectedListenerStatus()
+    function getSelectedListenerStatus() {
+      const symbol = String($("symbol").value || "").toUpperCase();
+      const entry = getLivePriceEntry(symbol);
+      if (!entry) {
+        return { status: "missing", reason: "LISTENER_MISSING", message: "Listener Missing" };
+      }
+      const age = (Date.now() - entry.receivedAt.getTime()) / 1000;
+      if (age < 5) {
+        return { status: "active", reason: "OK", message: "Listener Active", entry, age };
+      }
+      if (age <= 15) {
+        return { status: "quiet", reason: "LISTENER_QUIET", message: "Listener Quiet", entry, age };
+      }
+      return {
+        status: "stale",
+        reason: "LISTENER_STALE",
+        message: "Listener Stale",
+        entry,
+        age
+      };
+    }
+
+    function getMarketDataState(priceEntry) {
+      const entry = priceEntry || {};
+      const price = toFiniteNumber(entry.price);
+      const age = entry.receivedAt instanceof Date ? (Date.now() - entry.receivedAt.getTime()) / 1000 : NaN;
+      const status = !entry.receivedAt ? "MISSING" : (age < 5 ? "ACTIVE" : (age <= 15 ? "QUIET" : "STALE"));
+      const marketDataUsable = Number.isFinite(price) && status !== "STALE" && status !== "MISSING";
+      return {
+        price,
+        status,
+        age: Number.isFinite(age) ? Math.round(age) : NaN,
+        tickTimestamp: entry.receivedAt ? entry.receivedAt.toISOString() : null,
+        marketDataUsable,
+        label: marketDataUsable ? "MARKET DATA" : status
+      };
+    }
+
+    function getTradeVisualSymbol(trade, resolvedSymbol) {
+      const snapshotSymbols = Object.keys((latestSnapshot && latestSnapshot.symbols) || {});
+      if (!latestSnapshot) {
+        return getKnownTradeSymbol(trade) || resolvedSymbol || "";
+      }
+      if (resolvedSymbol && snapshotSymbols.includes(resolvedSymbol)) {
+        return resolvedSymbol;
+      }
+      const knownSymbol = getKnownTradeSymbol(trade) || resolvedSymbol || "";
+      return normalizeSymbolRoot(knownSymbol) || knownSymbol;
+    }
+
+    function getBreakEvenStatus(trade) {
+      if (!trade || toPositivePrice(trade.be_trigger) === null) {
+        return "Missing";
+      }
+      if (trade.be_hit_at) {
+        return "Hit";
+      }
+      const stopState = String(trade.stop_state || "").toLowerCase();
+      if (trade.moved_to_be || stopState === "break_even") {
+        return "Active";
+      }
+      return "Pending";
+    }
+
+    function statusClass(status) {
+      if (status === "active") return "status-green";
+      if (status === "closed") return "status-red";
+      if (status === "error") return "status-amber";
+      if (status === "orphan") return "status-red";
+      return "muted";
+    }
+
+    function cardField(label, value, extraClass = "") {
+      return `
+        <div class="trade-field">
+          <div class="trade-label">${escapeHtml(label)}</div>
+          <div class="trade-value ${extraClass}">${escapeHtml(formatValue(value))}</div>
+        </div>
+      `;
+    }
+
+    function computePnl(trade) {
+      const total = Number(trade.total_pnl);
+      if (Number.isFinite(total)) {
+        return total;
+      }
+      const realized = Number(trade.realized_pnl);
+      const unrealized = Number(trade.unrealized_pnl);
+      if (Number.isFinite(realized) || Number.isFinite(unrealized)) {
+        return (Number.isFinite(realized) ? realized : 0) + (Number.isFinite(unrealized) ? unrealized : 0);
+      }
+      return null;
+    }
+
+    function getTradePointValue(symbol) {
+      const root = normalizeSymbolRoot(symbol);
+      if (root === "RTY") return 50;
+      if (root === "YM") return 5;
+      if (root === "NQ") return 20;
+      return 1;
+    }
+
+    function getRealizedPnl(trade) {
+      const realized = Number(trade.realized_pnl);
+      return Number.isFinite(realized) ? realized : null;
+    }
+
+    function computeUnrealizedPnl(trade, preferServerValue = true) {
+      const serverValue = Number(trade.unrealized_pnl);
+      if (preferServerValue && Number.isFinite(serverValue)) {
+        return serverValue;
+      }
+      const entry = Number(trade.entry_price);
+      const last = Number(trade.last_price);
+      const remaining = Number(trade.remaining_size);
+      if (!Number.isFinite(entry) || !Number.isFinite(last) || !Number.isFinite(remaining) || remaining <= 0) {
+        return null;
+      }
+
+      const direction = String(trade.direction || "").toLowerCase();
+      const pointValue = getTradePointValue(trade.symbol);
+      const move = direction === "short" ? (entry - last) : (last - entry);
+      return move * remaining * pointValue;
+    }
+
+    function getDisplayPnlForTrade(trade, kind) {
+      const realizedPnl = getRealizedPnl(trade);
+      const isActive = kind === "active" && String(trade.status || "").toLowerCase() !== "closed";
+      const livePriceInfo = isActive ? getLivePriceForTrade(trade) : { price: trade.last_price };
+      const currentPrice = Number.isFinite(livePriceInfo.price) ? livePriceInfo.price : trade.last_price;
+      const unrealizedPnl = isActive
+        ? computeUnrealizedPnl({ ...trade, last_price: currentPrice }, false)
+        : computeUnrealizedPnl(trade);
+      const totalPnl = computePnl({ ...trade, unrealized_pnl: unrealizedPnl });
+      return { realizedPnl, unrealizedPnl, totalPnl };
+    }
+
+    function computeDistance(current, target, direction, mode) {
+      const currentValue = Number(current);
+      const targetValue = Number(target);
+      if (!Number.isFinite(currentValue) || !Number.isFinite(targetValue)) {
+        return null;
+      }
+
+      const normalizedDirection = String(direction || "").toLowerCase();
+      if (mode === "target") {
+        return normalizedDirection === "short" ? (currentValue - targetValue) : (targetValue - currentValue);
+      }
+      return normalizedDirection === "short" ? (targetValue - currentValue) : (currentValue - targetValue);
+    }
+
+    function formatPrice(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return "n/a";
+      return numeric.toFixed(2);
+    }
+
+    function toFiniteNumber(value) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    function toPositivePrice(value) {
+      const numeric = toFiniteNumber(value);
+      return numeric !== null && numeric > 0 ? numeric : null;
+    }
+
+    function formatTradePriceField(value) {
+      const numeric = toPositivePrice(value);
+      return numeric === null ? "n/a" : formatPrice(numeric);
+    }
+
+    function formatClockTime(value) {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return "n/a";
+      return date.toLocaleTimeString([], {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+
+    function formatNumber(value, digits = 0) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return "n/a";
+      return numeric.toFixed(digits);
+    }
+
+    function getTradeTimestamp(trade) {
+      return trade.closed_at || trade.created_at || trade.last_price_at || "";
+    }
+
+    function getOrphanExposureItems(payload = latestTradesPayload) {
+      const exposure = (payload && payload.orphan_exposure) || {};
+      return Array.isArray(exposure.items) ? exposure.items : [];
+    }
+
+    function hasCurrentExposureWarning(payload = latestTradesPayload) {
+      const exposure = (payload && payload.orphan_exposure) || {};
+      return Boolean(exposure.has_orphans || exposure.has_manager_state_issue);
+    }
+
+    function buildOrphanExposureTrades(payload = latestTradesPayload) {
+      return getOrphanExposureItems(payload).map((item) => {
+        const symbol = String(item.symbol || "").toUpperCase();
+        const qty = Number(item.position_qty || 0);
+        const stopOrder = item.stop_order || (Array.isArray(item.working_orders)
+          ? item.working_orders.find((order) => order && order.type === "stop")
+          : null) || {};
+        const executorTradeIds = Array.isArray(item.executor_trade_ids) ? item.executor_trade_ids : [];
+        const activeOrderIds = Array.isArray(item.active_order_ids) ? item.active_order_ids : [];
+        return {
+          trade_id: `ORPHAN-${symbol || executorTradeIds[0] || activeOrderIds[0] || "EXECUTOR"}`,
+          status: "orphan",
+          symbol,
+          execution_symbol: symbol,
+          direction: qty < 0 ? "short" : "long",
+          entry_price: item.avg_entry_price,
+          original_stop: stopOrder.stop_price,
+          current_stop: stopOrder.stop_price,
+          stop_state: "orphan_executor",
+          be_trigger: null,
+          tp1_price: null,
+          tp1_hit: false,
+          moved_to_be: false,
+          be_hit_at: null,
+          remaining_size: Math.abs(qty) || Number(stopOrder.qty || 0),
+          position_size: Math.abs(qty) || Number(stopOrder.qty || 0),
+          last_price: item.last_price,
+          exit_reason: "CRITICAL UNSUPERVISED EXPOSURE",
+          orphan_exposure: true,
+          executor_trade_ids: executorTradeIds,
+          active_order_ids: activeOrderIds
+        };
+      });
+    }
+
+    function isExecutorFlatNoOrdersForTrade(trade) {
+      const symbol = resolveSnapshotSymbolForTrade(trade);
+      const state = ((latestSnapshot && latestSnapshot.symbols) || {})[symbol] || null;
+      if (!state) return false;
+      return Boolean(state.is_flat) && !((state.working_orders || []).length);
+    }
+
+    function filterExecutorLiveActiveTrades(trades) {
+      return trades.filter((trade) => {
+        if (isExecutorFlatNoOrdersForTrade(trade)) {
+          logTradesDebug(`stale_ui_trade_cleared trade_id=${trade.trade_id || "unknown"}`);
+          return false;
+        }
+        return true;
+      });
+    }
+
+    function getLatestSelectableTrades() {
+      return [
+        ...getLatestActiveTrades(),
+        ...buildOrphanExposureTrades()
+      ];
+    }
+
+    function renderOrphanExposureBanner(orphanTrades) {
+      const banner = $("orphanExposureBanner");
+      if (!orphanTrades.length) {
+        banner.className = "orphan-exposure-banner";
+        banner.replaceChildren();
+        return;
+      }
+
+      const detail = orphanTrades.map((trade) => {
+        const orders = (trade.active_order_ids || []).join(", ") || "none";
+        return `${trade.symbol || "UNKNOWN"} qty ${formatValue(trade.remaining_size)} ${trade.direction || ""} | orders ${orders}`;
+      }).join(" | ");
+      banner.className = "orphan-exposure-banner visible";
+      banner.innerHTML = `
+          <div class="orphan-exposure-title">CRITICAL ORPHAN EXPOSURE</div>
+        <div class="orphan-exposure-detail">CRITICAL HALT: Executor has live exposure with no matching active Trade Manager record or unprotected_position_no_stop. Flatten all before further testing. ${escapeHtml(detail)}</div>
+      `;
+    }
+
+    function setMetric(id, value, subtext) {
+      $(id).textContent = value;
+      $(`${id}Sub`).textContent = subtext;
+    }
+
+    function renderSessionSummary(summaryItems) {
+      const container = $("sessionSummaryGrid");
+      const fragment = document.createDocumentFragment();
+      for (const item of summaryItems) {
+        const node = document.createElement("div");
+        node.className = "risk-item";
+        node.innerHTML = `
+          <div class="trade-label">${escapeHtml(item.label)}</div>
+          <div class="trade-value ${item.className || ""}">${escapeHtml(formatValue(item.value))}</div>
+        `;
+        fragment.appendChild(node);
+      }
+      container.replaceChildren(fragment);
+    }
+
+    function updateDashboardSummary() {
+      const now = new Date();
+      $("dashboardClock").textContent = now.toLocaleString();
+
+      const trades = Object.values((latestTradesPayload && latestTradesPayload.trades) || {});
+      const riskPayload = latestRiskPayload || {};
+      const riskState = riskPayload.risk_state || {};
+      const failureState = riskPayload.failure_state || {};
+      const noonStatus = riskPayload.noon_runner_flatten || {};
+      const snapshotSymbols = (latestSnapshot && latestSnapshot.symbols) || {};
+      const tvStatuses = Object.values(latestTvAtrStatusBySymbol || {});
+      const activeTrades = trades.filter((trade) => trade.status === "active");
+      const orphanTrades = buildOrphanExposureTrades();
+      const closedTrades = trades.filter((trade) => trade.status === "closed");
+      const openRunners = activeTrades.filter((trade) => Number(trade.remaining_size) > 0 && Number(trade.position_size) > Number(trade.remaining_size || 0));
+      const workingOrders = Object.values(snapshotSymbols).reduce((sum, symbolState) => {
+        return sum + ((symbolState.working_orders || []).length);
+      }, 0);
+      const freshTvCount = tvStatuses.filter((item) => item.status === "fresh").length;
+      const staleTvCount = tvStatuses.filter((item) => item.status !== "fresh").length;
+
+      $("heroModeBadge").textContent = `Mode: ${formatValue(riskPayload.operating_mode)}`;
+      $("heroEngineBadge").textContent = `Engine: ${riskState.trading_halted ? "halted" : "running"}`;
+      $("heroTvAtrBadge").textContent = `TV ATR: ${freshTvCount} fresh / ${staleTvCount} warned`;
+      $("heroNoonBadge").textContent = `Noon Runner Flatten: ${noonStatus.enabled ? "enabled" : "disabled"}`;
+
+      $("sessionSummaryMeta").textContent = `${activeTrades.length} active | ${closedTrades.length} closed | ${orphanTrades.length} orphan`;
+      renderSessionSummary([
+        { label: "Kill Switch", value: riskState.kill_switch_active ? "ACTIVE" : "OFF", className: riskState.kill_switch_active ? "status-red" : "status-green" },
+        { label: "Trading Halted", value: riskState.trading_halted ? "YES" : "NO", className: riskState.trading_halted ? "status-red" : "status-green" },
+        { label: "QA Critical Count", value: formatValue(failureState.qa_critical_count), className: Number(failureState.qa_critical_count) > 0 ? "status-amber" : "" },
+        { label: "Exec Failures", value: formatValue(failureState.execution_failure_count), className: Number(failureState.execution_failure_count) > 0 ? "status-amber" : "" },
+      ]);
+
+      setMetric(
+        "metricActiveTrades",
+        orphanTrades.length ? `${activeTrades.length} + ${orphanTrades.length}` : String(activeTrades.length),
+        orphanTrades.length
+          ? `CRITICAL orphan exposure: ${orphanTrades.map((trade) => trade.symbol).join(", ")}`
+          : (activeTrades.length ? activeTrades.map((trade) => trade.trade_id).join(", ") : "No active trades")
+      );
+      setMetric("metricOpenRunners", String(openRunners.length), openRunners.length ? `${openRunners[0].trade_id}${openRunners.length > 1 ? ` +${openRunners.length - 1}` : ""}` : "No active runners");
+      setMetric("metricDailyTrades", formatValue(riskState.daily_trade_count), `Max ${formatValue(riskState.max_daily_trades)}`);
+      setMetric("metricWorkingOrders", String(workingOrders), `${Object.keys(snapshotSymbols).length} symbols in snapshot`);
+    }
+
+    function getLivePriceForTrade(trade) {
+      const resolvedSymbol = resolveSnapshotSymbolForTrade(trade);
+      const livePriceEntry = getLivePriceEntry(resolvedSymbol || getKnownTradeSymbol(trade));
+      const marketData = getMarketDataState(livePriceEntry);
+      const manualDemoPrice = trade && trade.is_demo_live_map ? toFiniteNumber(demoLivePrices[trade.trade_id]) : null;
+
+      if (manualDemoPrice !== null) {
+        return {
+          price: manualDemoPrice,
+          resolvedSymbol,
+          source: "demo.manual_price",
+          updatedText: demoLivePriceUpdatedAtByTrade[trade.trade_id] ? formatClockTime(demoLivePriceUpdatedAtByTrade[trade.trade_id]) : "n/a",
+          pulseKey: trade.trade_id
+        };
+      }
+
+      if (marketData.marketDataUsable) {
+        return {
+          price: marketData.price,
+          resolvedSymbol,
+          source: "snapshot.last_price",
+          updatedText: `${formatClockTime(marketData.tickTimestamp)} | age ${Number.isFinite(marketData.age) ? `${marketData.age}s` : "n/a"}`,
+          pulseKey: resolvedSymbol
+        };
+      }
+
+      if (trade && trade.is_demo_live_map) {
+        return {
+          price: Number(trade.entry_price),
+          resolvedSymbol,
+          source: "demo.entry_price",
+          updatedText: "demo",
+          pulseKey: trade.trade_id
+        };
+      }
+
+      return {
+        price: null,
+        resolvedSymbol,
+        source: "snapshot.last_price",
+        updatedText: livePriceEntry ? `STALE | age ${formatValue(marketData.age)}s` : "Listener Missing",
+        pulseKey: trade && trade.is_demo_live_map ? trade.trade_id : (resolvedSymbol || getKnownTradeSymbol(trade))
+      };
+    }
+
+    function deriveVisualLevels(trade, livePriceInfo) {
+      const entryPrice = toPositivePrice(trade.entry_price);
+      const currentStop = toPositivePrice(trade.current_stop);
+      const originalStop = toPositivePrice(trade.original_stop);
+      const stopPrice = currentStop !== null ? currentStop : originalStop;
+      const beTrigger = toPositivePrice(trade.be_trigger);
+      const tp1Price = toPositivePrice(trade.tp1_price);
+      const beStatus = getBreakEvenStatus(trade);
+
+      const levels = [
+        { key: "entry_price", label: "Entry", value: entryPrice, className: "level-entry" },
+        { key: "stop", label: currentStop !== null ? "STOP" : "STOP (orig)", value: stopPrice, className: "level-stop" },
+        {
+          key: "be_trigger",
+          label: "BE",
+          value: beTrigger,
+          className: beStatus === "Hit" ? "level-be-hit" : "level-be"
+        },
+        { key: "tp1_price", label: "TP1", value: tp1Price, className: "level-tp1" }
+      ].filter((item) => item && Number.isFinite(item.value));
+
+      if (livePriceInfo && Number.isFinite(livePriceInfo.price)) {
+        levels.unshift({
+          key: "live_price",
+          label: "LIVE",
+          value: livePriceInfo.price,
+          className: `level-live ${livePriceInfo.pulseClass || ""}`.trim(),
+          isLive: true,
+          updatedText: livePriceInfo.updatedText
+        });
+      }
+
+      if (!levels.length) {
+        return { levels: [], min: 0, max: 0 };
+      }
+
+      let min = Math.min(...levels.map((item) => item.value));
+      let max = Math.max(...levels.map((item) => item.value));
+      if (min === max) {
+        min -= 1;
+        max += 1;
+      }
+
+      const padding = Math.max((max - min) * 0.28, 2);
+      return {
+        levels,
+        min: min - padding,
+        max: max + padding
+      };
+    }
+
+    function getVisualValidationWarnings(trade) {
+      const direction = String(trade && trade.direction || "").toLowerCase();
+      const entryPrice = toPositivePrice(trade && trade.entry_price);
+      const tp1Price = toPositivePrice(trade && trade.tp1_price);
+      const currentStop = toPositivePrice(trade && trade.current_stop);
+      const originalStop = toPositivePrice(trade && trade.original_stop);
+      const stopPrice = currentStop !== null ? currentStop : originalStop;
+      const warnings = [];
+
+      if (!Number.isFinite(entryPrice)) return warnings;
+
+      if (direction === "long") {
+        if (Number.isFinite(tp1Price) && tp1Price <= entryPrice) {
+          warnings.push(`LONG validation: TP1 ${formatPrice(tp1Price)} is not above entry ${formatPrice(entryPrice)}`);
+        }
+        if (Number.isFinite(stopPrice) && stopPrice >= entryPrice) {
+          warnings.push(`LONG validation: STOP ${formatPrice(stopPrice)} is not below entry ${formatPrice(entryPrice)}`);
+        }
+      } else if (direction === "short") {
+        if (Number.isFinite(tp1Price) && tp1Price >= entryPrice) {
+          warnings.push(`SHORT validation: TP1 ${formatPrice(tp1Price)} is not below entry ${formatPrice(entryPrice)}`);
+        }
+        if (Number.isFinite(stopPrice) && stopPrice <= entryPrice) {
+          warnings.push(`SHORT validation: STOP ${formatPrice(stopPrice)} is not above entry ${formatPrice(entryPrice)}`);
+        }
+      }
+
+      return warnings;
+    }
+
+    function computeLevelLayout(levels, min, max) {
+      const range = max - min || 1;
+      const sorted = levels
+        .map((level, index) => ({
+          level,
+          index,
+          position: Math.min(Math.max(((max - level.value) / range) * 100, 0), 100)
+        }))
+        .sort((a, b) => a.position - b.position);
+      const minSeparationPct = 9;
+      const labelOffsets = new Map();
+      let cluster = [];
+
+      const flushCluster = () => {
+        if (!cluster.length) return;
+        const offsets = cluster.length === 1
+          ? [0]
+          : cluster.map((_, index) => (index - (cluster.length - 1) / 2) * 20);
+        cluster.forEach((item, index) => {
+          labelOffsets.set(item.index, offsets[index]);
+        });
+        cluster = [];
+      };
+
+      for (const item of sorted) {
+        const previous = cluster[cluster.length - 1];
+        if (!previous || Math.abs(item.position - previous.position) <= minSeparationPct) {
+          cluster.push(item);
+        } else {
+          flushCluster();
+          cluster.push(item);
+        }
+      }
+      flushCluster();
+
+      return levels.map((level, index) => ({
+        ...level,
+        position: Math.min(Math.max(((max - level.value) / range) * 100, 3), 97),
+        labelOffset: labelOffsets.get(index) || 0
+      }));
+    }
+
+    function renderTradeVisual(trade) {
+      const container = $("tradeVisualBox");
+
+      if (!trade) {
+        container.innerHTML = `<div class="visual-empty">No active trade selected.</div>`;
+        $("tradeVisualMeta").textContent = "Read-only";
+        return;
+      }
+
+      const livePriceInfo = getLivePriceForTrade(trade);
+      if (trade.is_demo_live_map && Number.isFinite(livePriceInfo.price)) {
+        applyDemoLifecycleForPrice(livePriceInfo.price, trade.trade_id);
+        Object.assign(trade, buildDemoLiveMapTrade(trade.trade_id));
+        updateDemoLiveMapControls();
+      }
+      if (Number.isFinite(livePriceInfo.price)) {
+        const livePriceKey = livePriceInfo.pulseKey || livePriceInfo.resolvedSymbol || trade.trade_id || "selected";
+        const previousLivePrice = previousLivePriceBySymbol[livePriceKey];
+        const nowMs = Date.now();
+        if (Number.isFinite(previousLivePrice)) {
+          if (livePriceInfo.price > previousLivePrice) {
+            livePriceInfo.pulseClass = "live-price-up";
+            livePulseBySymbol[livePriceKey] = { className: livePriceInfo.pulseClass, expiresAt: nowMs + 700 };
+          } else if (livePriceInfo.price < previousLivePrice) {
+            livePriceInfo.pulseClass = "live-price-down";
+            livePulseBySymbol[livePriceKey] = { className: livePriceInfo.pulseClass, expiresAt: nowMs + 700 };
+          }
+        }
+        if (!livePriceInfo.pulseClass && livePulseBySymbol[livePriceKey] && livePulseBySymbol[livePriceKey].expiresAt > nowMs) {
+          livePriceInfo.pulseClass = livePulseBySymbol[livePriceKey].className;
+        }
+        previousLivePriceBySymbol[livePriceKey] = livePriceInfo.price;
+      }
+
+      const { levels, min, max } = deriveVisualLevels(trade, livePriceInfo);
+      const validationWarnings = getVisualValidationWarnings(trade);
+      if (validationWarnings.length) {
+        console.warn("[CommandCenter] trade visual validation warning", {
+          trade_id: trade.trade_id,
+          direction: trade.direction,
+          entry_price: trade.entry_price,
+          current_stop: trade.current_stop,
+          original_stop: trade.original_stop,
+          tp1_price: trade.tp1_price,
+          warnings: validationWarnings
+        });
+      }
+      const layoutLevels = computeLevelLayout(levels, min, max);
+      const currentPriceForStats = Number.isFinite(livePriceInfo.price) ? livePriceInfo.price : trade.last_price;
+      const unrealizedPnl = computeUnrealizedPnl({ ...trade, last_price: currentPriceForStats });
+      const distanceToTp1 = computeDistance(currentPriceForStats, trade.tp1_price, trade.direction, "target");
+      const distanceToStop = computeDistance(currentPriceForStats, trade.current_stop, trade.direction, "stop");
+      const visualSymbol = getTradeVisualSymbol(trade, livePriceInfo.resolvedSymbol);
+      const visualMarketData = getMarketDataState(getLivePriceEntry(visualSymbol));
+      const beLevel = layoutLevels.find((level) => level.key === "be_trigger") || null;
+      console.log("[CommandCenter] rendered trade visual levels", {
+        trade_id: trade.trade_id,
+        symbol: trade.symbol,
+        be_trigger: trade.be_trigger,
+        be_level_included: Boolean(beLevel),
+        min,
+        max,
+        levels: layoutLevels.map((level) => ({
+          key: level.key,
+          label: level.label,
+          value: level.value,
+          position_pct: Number(level.position.toFixed(2)),
+          label_offset_px: level.labelOffset
+        }))
+      });
+      const levelMarkup = layoutLevels.map((level) => {
+        const pillMarkup = level.isLive
+          ? `
+            <div class="level-pill level-pill-right live-pill" style="transform: translateY(calc(-50% + ${level.labelOffset}px));">
+              <span>Price Source: Listener ${escapeHtml(formatPrice(level.value))}</span>
+              <span class="live-updated">updated ${escapeHtml(level.updatedText || "n/a")}</span>
+            </div>
+          `
+          : level.key === "be_trigger"
+            ? `
+            <div class="level-pill level-pill-left" style="transform: translateY(calc(-50% + ${level.labelOffset}px));">
+              <span>BE ${escapeHtml(formatPrice(level.value))}</span>
+            </div>
+          `
+          : `
+            <div class="level-pill level-pill-left" style="transform: translateY(calc(-50% + ${level.labelOffset}px));">
+              <span>${escapeHtml(level.label)}</span>
+              <span class="price">${escapeHtml(formatPrice(level.value))}</span>
+            </div>
+          `;
+        return `
+          <div class="level-line ${level.className}" style="top:${level.position}%;">
+            ${pillMarkup}
+          </div>
+        `;
+      }).join("");
+      const legendMarkup = layoutLevels.map((level) => `
+        <div class="legend-item ${level.className}">
+          <span class="legend-swatch"></span>
+          <span>${escapeHtml(level.label)}</span>
+        </div>
+      `).join("");
+      const liveWaitingMarkup = Number.isFinite(livePriceInfo.price)
+        ? ""
+        : `
+          <div class="live-waiting-pill">
+            <span>LIVE n/a</span>
+            <span class="live-updated">${escapeHtml(livePriceInfo.updatedText || "waiting for snapshot")}</span>
+          </div>
+        `;
+
+      container.innerHTML = `
+        <div class="visual-header">
+          <div>
+            <div class="visual-title">${escapeHtml(trade.is_demo_live_map ? "DEMO - READ ONLY" : (trade.trade_id || "Active Trade"))}</div>
+            <div class="visual-subtitle">${escapeHtml(formatValue(getKnownTradeSymbol(trade) || trade.symbol))} ${escapeHtml(formatValue(trade.direction))} | remaining ${escapeHtml(formatValue(trade.remaining_size))} | live ${escapeHtml(formatValue(visualSymbol))}</div>
+          </div>
+          <div class="small">${escapeHtml(trade.is_demo_live_map ? "frontend only" : formatValue(trade.stop_state))}</div>
+        </div>
+        ${validationWarnings.length ? `<div class="visual-warning">${validationWarnings.map(escapeHtml).join("<br>")}</div>` : ""}
+        <div class="source-strip">
+          <span>Price Source: Listener</span>
+          <span>Order Source: Executor</span>
+          <span>Listener ${escapeHtml(formatValue(visualMarketData.status))}</span>
+          <span>Price Age ${escapeHtml(formatValue(visualMarketData.age))}s</span>
+          <span>Market Data Age ${escapeHtml(formatValue(visualMarketData.age))}s</span>
+          <span>Last price ${escapeHtml(formatValue(visualMarketData.tickTimestamp))}</span>
+        </div>
+        <div class="level-chart">
+          <div class="chart-axis">
+            ${levelMarkup}
+            ${liveWaitingMarkup}
+          </div>
+        </div>
+        <div class="visual-stats">
+          <div class="visual-stat">
+            <div class="visual-stat-label">Unrealized P/L</div>
+            <div class="visual-stat-value ${unrealizedPnl === null ? "" : (unrealizedPnl >= 0 ? "status-green" : "status-red")}">${escapeHtml(unrealizedPnl === null ? "n/a" : formatNumber(unrealizedPnl, 2))}</div>
+            <div class="visual-stat-sub">Based on live snapshot price and remaining size</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-label">Distance To TP1</div>
+            <div class="visual-stat-value ${distanceToTp1 === null ? "" : (distanceToTp1 >= 0 ? "status-green" : "status-red")}">${escapeHtml(distanceToTp1 === null ? "n/a" : formatPrice(distanceToTp1))}</div>
+            <div class="visual-stat-sub">Positive means TP1 remains ahead</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-label">Distance To Stop</div>
+            <div class="visual-stat-value ${distanceToStop === null ? "" : (distanceToStop >= 0 ? "status-red" : "status-green")}">${escapeHtml(distanceToStop === null ? "n/a" : formatPrice(distanceToStop))}</div>
+            <div class="visual-stat-sub">Positive means stop remains above price</div>
+          </div>
+        </div>
+        <div class="visual-legend">${legendMarkup}</div>
+      `;
+      console.log("[CommandCenter] BE DOM verification", {
+        trade_id: trade.trade_id,
+        be_trigger_exists: toFiniteNumber(trade.be_trigger) !== null,
+        be_level_included: Boolean(beLevel),
+        be_dom_node_count: container.querySelectorAll('.level-be, .level-be-hit').length,
+        rendered_level_keys: layoutLevels.map((level) => level.key)
+      });
+      $("tradeVisualMeta").textContent = trade.is_demo_live_map
+        ? "DEMO - READ ONLY"
+        : `selected ${trade.trade_id || "trade"}`;
+    }
+
+    function formatTvAtrStatus(item) {
+      if (!item) {
+        return "ATR missing";
+      }
+      if (item.status === "fresh") {
+        return `${item.symbol} TV ATR fresh`;
+      }
+      if (item.status === "stale") {
+        return `${item.symbol} TV ATR STALE  ${formatValue(item.age_seconds)}s old`;
+      }
+      return `${item.symbol} TV ATR MISSING`;
+    }
+
+    function getSelectedTvAtrStatus() {
+      const symbol = String($("symbol").value || "").toUpperCase();
+      return latestTvAtrStatusBySymbol[symbol] || null;
+    }
+
+    function updateSubmitAvailability() {
+      const selected = getSelectedTvAtrStatus();
+      const selectedListener = getSelectedListenerStatus();
+      const staleOrMissing = !selected || selected.status !== "fresh";
+      const blockedByListener = selectedListener.status !== "active";
+      const blockedByAtr = staleOrMissing && !submitInFlight;
+
+      $("submitTradeBtn").disabled = submitInFlight || blockedByAtr || blockedByListener;
+      if (submitInFlight) {
+        $("submitTradeBtn").textContent = "Submitting...";
+        return;
+      }
+
+      if (blockedByListener) {
+        $("submitTradeBtn").textContent = selectedListener.message;
+        return;
+      }
+
+      if (!selected) {
+        $("submitTradeBtn").textContent = "Submit Blocked";
+        return;
+      }
+
+      if (selected.status === "fresh") {
+        $("submitTradeBtn").textContent = "Submit Trade";
+        return;
+      }
+
+      $("submitTradeBtn").textContent = selected.status === "stale" ? "TV ATR Stale" : "TV ATR Missing";
+    }
+
+    function renderTvAtrStatuses(data) {
+      const container = $("tvAtrStatusBox");
+      const statuses = Array.isArray(data && data.symbols) ? data.symbols : [];
+      const fragment = document.createDocumentFragment();
+      const nextStatusBySymbol = {};
+
+      if (!statuses.length) {
+        const empty = document.createElement("div");
+        empty.className = "atr-status-item";
+        empty.innerHTML = `<span class="label">ATR Relay</span><span class="value status-red">No data</span>`;
+        fragment.appendChild(empty);
+        container.replaceChildren(fragment);
+        previousTvAtrStatusBySymbol = {};
+        return;
+      }
+
+      for (const item of statuses) {
+        const symbol = String(item.symbol || "").toUpperCase();
+        const status = String(item.status || "missing").toLowerCase();
+        const valueClass = status === "fresh" ? "" : "status-red";
+        nextStatusBySymbol[symbol] = item;
+
+        if (previousTvAtrStatusBySymbol[symbol] === "fresh" && status === "stale") {
+          const message = formatTvAtrStatus(item);
+          logTradesDebug(message);
+          window.alert(message);
+        }
+
+        const node = document.createElement("div");
+        node.className = "atr-status-item";
+        node.innerHTML = `
+          <span class="label">${escapeHtml(symbol || "ATR")}</span>
+          <span class="value ${valueClass}">${escapeHtml(formatTvAtrStatus(item))}</span>
+        `;
+        fragment.appendChild(node);
+      }
+
+      container.replaceChildren(fragment);
+      latestTvAtrStatusBySymbol = nextStatusBySymbol;
+      previousTvAtrStatusBySymbol = Object.fromEntries(
+        Object.entries(nextStatusBySymbol).map(([symbol, item]) => [symbol, item.status])
+      );
+      updateSubmitAvailability();
+    }
+
+    function renderTradeCard(trade, kind) {
+      const { realizedPnl, unrealizedPnl, totalPnl } = getDisplayPnlForTrade(trade, kind);
+      const selectedClass = kind === "active" && trade.trade_id === selectedActiveTradeId ? "selected" : "";
+      const cardKind = trade.orphan_exposure ? "orphan" : kind;
+      const title = trade.orphan_exposure ? "CRITICAL ORPHAN EXPOSURE" : (trade.trade_id || "Trade");
+      const beStatus = getBreakEvenStatus(trade);
+      return `
+        <div class="trade-card ${cardKind} ${selectedClass}" data-trade-id="${escapeHtml(trade.trade_id || "")}">
+          <h3>${escapeHtml(title)} <span class="${statusClass(trade.status)}">${escapeHtml(formatValue(trade.status))}</span></h3>
+          <div class="trade-grid">
+            ${cardField("Symbol", trade.symbol)}
+            ${cardField("Direction", trade.direction, trade.direction === "long" ? "status-green" : "status-red")}
+            ${cardField("Entry", formatTradePriceField(trade.entry_price))}
+            ${cardField("BE Trigger", formatTradePriceField(trade.be_trigger), beStatus === "Pending" ? "" : "status-green")}
+            ${cardField("BE Status", beStatus, beStatus === "Pending" ? "" : (beStatus === "Missing" ? "status-amber" : "status-green"))}
+            ${cardField("Stop", formatTradePriceField(trade.current_stop))}
+            ${cardField("TP1", formatTradePriceField(trade.tp1_price))}
+            ${cardField("Status", trade.status, statusClass(trade.status))}
+            ${cardField("Remaining Size", trade.remaining_size)}
+            ${cardField("Last Price", trade.last_price)}
+            ${cardField("Stop State", trade.stop_state)}
+            ${cardField("Exit Reason", trade.exit_reason)}
+            ${trade.orphan_exposure ? cardField("Executor Trade IDs", (trade.executor_trade_ids || []).join(", ") || "n/a", "status-red") : ""}
+            ${trade.orphan_exposure ? cardField("Active Order IDs", (trade.active_order_ids || []).join(", ") || "n/a", "status-red") : ""}
+            ${cardField("Realized P/L", realizedPnl === null ? "n/a" : realizedPnl.toFixed(2), realizedPnl === null ? "" : (realizedPnl >= 0 ? "status-green" : "status-red"))}
+            ${cardField("Unrealized P/L", unrealizedPnl === null ? "n/a" : unrealizedPnl.toFixed(2), unrealizedPnl === null ? "" : (unrealizedPnl >= 0 ? "status-green" : "status-red"))}
+            ${cardField("Total P/L", totalPnl === null ? "n/a" : totalPnl.toFixed(2), totalPnl === null ? "" : (totalPnl >= 0 ? "status-green" : "status-red"))}
+            ${cardField("Created", trade.created_at)}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTradeList(containerId, trades, kind, emptyMessage) {
+      const container = $(containerId);
+      const fragment = document.createDocumentFragment();
+
+      if (!trades.length) {
+        const empty = document.createElement("div");
+        empty.className = "trade-card";
+        empty.innerHTML = `<div class="muted">${escapeHtml(emptyMessage)}</div>`;
+        fragment.appendChild(empty);
+        container.replaceChildren(fragment);
+        return;
+      }
+
+      for (const trade of trades) {
+        const template = document.createElement("template");
+        template.innerHTML = renderTradeCard(trade, kind).trim();
+        fragment.appendChild(template.content.firstElementChild);
+      }
+
+      container.replaceChildren(fragment);
+    }
+
+    function getLatestActiveTrades() {
+      return Object.entries((latestTradesPayload && latestTradesPayload.trades) || {}).map(([tradeId, trade]) => ({
+        ...trade,
+        trade_id: trade.trade_id || tradeId
+      }))
+        .filter((trade) => trade.status === "active")
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    }
+
+    function formatMapTradeState(trade) {
+      const stopState = String(trade.stop_state || "").toLowerCase();
+      if (stopState === "stopped" || trade.status === "closed") {
+        return "stopped";
+      }
+      if (trade.orphan_exposure || trade.status === "orphan") {
+        return "ORPHAN";
+      }
+      if (Number(trade.remaining_size) > 0 && Number(trade.position_size) > Number(trade.remaining_size || 0)) {
+        return stopState === "runner_original" ? "runner" : "runner";
+      }
+      if (stopState === "break_even" || trade.moved_to_be) {
+        return "BE";
+      }
+      if (stopState === "runner_original") {
+        return "runner";
+      }
+      return "original";
+    }
+
+    function getDemoTradeTemplate(tradeId) {
+      return DEMO_LIVE_MAP_TRADES.find((trade) => trade.trade_id === tradeId) || DEMO_LIVE_MAP_TRADES[0];
+    }
+
+    function renderActiveTradeMapSelector(activeTrades) {
+      const container = $("activeTradeMapSelector");
+      const fragment = document.createDocumentFragment();
+      const selectorTrades = demoLiveMapEnabled
+        ? DEMO_LIVE_MAP_TRADES.map((trade) => buildDemoLiveMapTrade(trade.trade_id))
+        : activeTrades;
+
+      if (!selectorTrades.length) {
+        const empty = document.createElement("div");
+        empty.className = "map-trade-empty";
+        empty.textContent = "No active positions";
+        fragment.appendChild(empty);
+        container.replaceChildren(fragment);
+        return;
+      }
+
+      for (const trade of selectorTrades) {
+        const button = document.createElement("button");
+        const symbol = normalizeSymbolRoot(trade.symbol || trade.execution_symbol || trade.requested_symbol) || formatValue(trade.symbol);
+        const direction = String(trade.direction || "").toLowerCase();
+        const remaining = formatValue(trade.remaining_size);
+        const state = formatMapTradeState(trade);
+        button.type = "button";
+        const selectedId = demoLiveMapEnabled ? selectedDemoTradeId : selectedActiveTradeId;
+        button.className = `map-trade-chip ${trade.orphan_exposure ? "orphan" : ""} ${trade.trade_id === selectedId ? "selected" : ""}`;
+        button.dataset.tradeId = trade.trade_id || "";
+        button.dataset.demoTrade = trade.is_demo_live_map ? "true" : "false";
+        button.textContent = `${symbol} ${direction} x${remaining} ${state}`;
+        fragment.appendChild(button);
+      }
+
+      container.replaceChildren(fragment);
+    }
+
+    function createDemoLifecycleState(trade) {
+      return {
+        current_stop: trade.current_stop,
+        remaining_size: trade.remaining_size,
+        moved_to_be: false,
+        be_hit_at: null,
+        tp1_hit: false,
+        status: trade.status,
+        stop_state: trade.stop_state
+      };
+    }
+
+    function getDemoLifecycleState(tradeId = selectedDemoTradeId) {
+      const trade = getDemoTradeTemplate(tradeId);
+      if (!demoLiveLifecycleByTrade[trade.trade_id]) {
+        demoLiveLifecycleByTrade[trade.trade_id] = createDemoLifecycleState(trade);
+      }
+      return demoLiveLifecycleByTrade[trade.trade_id];
+    }
+
+    function demoLifecycleLabel() {
+      const state = getDemoLifecycleState(selectedDemoTradeId);
+      if (state.stop_state === "stopped" || state.status === "closed") return "STOPPED OUT";
+      if (state.tp1_hit) return "RUNNER ORIGINAL";
+      if (state.moved_to_be) return "BREAK EVEN ARMED";
+      return "ORIGINAL STOP";
+    }
+
+    function updateDemoLiveMapControls() {
+      $("demoLiveMapStatus").textContent = demoLiveMapEnabled ? demoLifecycleLabel() : "disabled";
+      $("demoLiveMapToggle").textContent = demoLiveMapEnabled ? "Hide Demo Map" : "Demo Live Map";
+    }
+
+    function applyDemoLifecycleForPrice(price, tradeId = selectedDemoTradeId) {
+      const numericPrice = toFiniteNumber(price);
+      if (numericPrice === null) {
+        return;
+      }
+
+      const trade = getDemoTradeTemplate(tradeId);
+      const state = getDemoLifecycleState(trade.trade_id);
+      const direction = String(trade.direction || "").toLowerCase();
+      const entry = Number(trade.entry_price);
+      const beTrigger = Number(trade.be_trigger);
+      const tp1Price = Number(trade.tp1_price);
+      const stopPrice = Number(state.current_stop);
+      const stopHit = direction === "short"
+        ? numericPrice >= stopPrice
+        : numericPrice <= stopPrice;
+
+      if (state.stop_state === "stopped" || state.status === "closed") {
+        return;
+      }
+
+      if (Number.isFinite(stopPrice) && stopHit) {
+        state.remaining_size = 0;
+        state.status = "closed";
+        state.stop_state = "stopped";
+        return;
+      }
+
+      const beReached = direction === "short"
+        ? numericPrice <= beTrigger
+        : numericPrice >= beTrigger;
+      if (!state.tp1_hit && beReached) {
+        state.current_stop = entry;
+        state.moved_to_be = true;
+        state.be_hit_at = state.be_hit_at || new Date().toISOString();
+        state.stop_state = "break_even";
+      }
+
+      const tp1Reached = direction === "short"
+        ? numericPrice <= tp1Price
+        : numericPrice >= tp1Price;
+      if (!state.tp1_hit && tp1Reached) {
+        state.tp1_hit = true;
+        state.remaining_size = 1;
+        state.current_stop = trade.original_stop;
+        state.stop_state = "runner_original";
+      }
+    }
+
+    function buildDemoLiveMapTrade(tradeId = selectedDemoTradeId) {
+      const trade = getDemoTradeTemplate(tradeId);
+      const state = getDemoLifecycleState(trade.trade_id);
+      return {
+        ...trade,
+        current_stop: state.current_stop,
+        remaining_size: state.remaining_size,
+        moved_to_be: state.moved_to_be,
+        be_hit_at: state.be_hit_at,
+        tp1_hit: state.tp1_hit,
+        status: state.status,
+        stop_state: state.stop_state
+      };
+    }
+
+    function getSelectedActiveTrade() {
+      if (demoLiveMapEnabled) {
+        return buildDemoLiveMapTrade();
+      }
+
+      const trades = Object.entries((latestTradesPayload && latestTradesPayload.trades) || {}).map(([tradeId, trade]) => ({
+        ...trade,
+        trade_id: trade.trade_id || tradeId
+      }));
+      const selectableTrades = [
+        ...trades.filter((trade) => trade.status === "active"),
+        ...buildOrphanExposureTrades()
+      ];
+      return selectableTrades.find((trade) => trade.trade_id === selectedActiveTradeId) || null;
+    }
+
+    function renderSelectedActiveTradeVisual() {
+      renderTradeVisual(getSelectedActiveTrade());
+    }
+
+    function setDemoLiveMapEnabled(enabled) {
+      if (enabled && !demoLiveMapEnabled) {
+        selectedDemoTradeId = "DEMO-NQ";
+        for (const trade of DEMO_LIVE_MAP_TRADES) {
+          demoLiveLifecycleByTrade[trade.trade_id] = createDemoLifecycleState(trade);
+          delete demoLivePrices[trade.trade_id];
+          delete demoLivePriceUpdatedAtByTrade[trade.trade_id];
+        }
+        $("demoLivePriceInput").value = "";
+      }
+      demoLiveMapEnabled = Boolean(enabled);
+      updateDemoLiveMapControls();
+      renderActiveTradeMapSelector(getLatestSelectableTrades());
+      renderSelectedActiveTradeVisual();
+    }
+
+    function setDemoLivePriceFromInput() {
+      const nextPrice = toFiniteNumber($("demoLivePriceInput").value);
+      if (nextPrice === null) {
+        $("demoLiveMapStatus").textContent = "enter a valid price";
+        return;
+      }
+
+      const targetTradeId = selectedDemoTradeId || "DEMO-NQ";
+      demoLivePrices[targetTradeId] = nextPrice;
+      demoLivePriceUpdatedAtByTrade[targetTradeId] = new Date();
+      if (!demoLiveMapEnabled) {
+        selectedDemoTradeId = targetTradeId;
+        for (const trade of DEMO_LIVE_MAP_TRADES) {
+          if (!demoLiveLifecycleByTrade[trade.trade_id]) {
+            demoLiveLifecycleByTrade[trade.trade_id] = createDemoLifecycleState(trade);
+          }
+        }
+        demoLiveMapEnabled = true;
+      }
+      applyDemoLifecycleForPrice(nextPrice, targetTradeId);
+      updateDemoLiveMapControls();
+      renderActiveTradeMapSelector([]);
+      renderSelectedActiveTradeVisual();
+    }
+
+    function renderTradesPanel(data, metadata = {}) {
+      latestTradesPayload = data;
+      const trades = Object.entries((data && data.trades) || {}).map(([tradeId, trade]) => ({
+        ...trade,
+        trade_id: trade.trade_id || tradeId
+      }));
+      const activeTrades = trades
+        .filter((trade) => trade.status === "active")
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+      const orphanTrades = buildOrphanExposureTrades(data);
+      const selectableTrades = [...filterExecutorLiveActiveTrades(activeTrades), ...orphanTrades];
+      const closedTrades = trades
+        .filter((trade) => trade.status === "closed")
+        .sort((a, b) => String(b.closed_at || b.created_at || "").localeCompare(String(a.closed_at || a.created_at || "")));
+      const errorTrades = trades
+        .filter((trade) => trade.status === "error")
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+
+      if (!selectableTrades.some((trade) => trade.trade_id === selectedActiveTradeId)) {
+        selectedActiveTradeId = selectableTrades.length ? selectableTrades[0].trade_id : null;
+      }
+
+      renderOrphanExposureBanner(orphanTrades);
+      renderTradeList(
+        "activeTradeBox",
+        selectableTrades,
+        "active",
+        orphanTrades.length ? "CRITICAL ORPHAN EXPOSURE" : "No active trades."
+      );
+      renderActiveTradeMapSelector(selectableTrades);
+      renderTradeList("closedTradesBox", closedTrades, "closed", "No closed trades yet.");
+      $("closedTradeCount").textContent = `${closedTrades.length} shown`;
+      renderTradeList("errorTradesBox", errorTrades, "error", "No hidden error trades.");
+      renderSelectedActiveTradeVisual();
+
+      const renderedAt = metadata.renderedAt || new Date().toISOString();
+      const payloadSize = metadata.tradeCount ?? trades.length;
+      const sequence = metadata.sequence ?? "n/a";
+      $("tradesRenderMeta").textContent = `Polling active | last render ${renderedAt} | payload ${payloadSize} trades | ${orphanTrades.length} orphan | seq ${sequence}`;
+      updateDashboardSummary();
+    }
+
+    function renderRiskStatePanel(data) {
+      latestRiskPayload = data;
+      const riskState = (data && data.risk_state) || {};
+      const failureState = (data && data.failure_state) || {};
+      const noonState = (data && data.noon_runner_flatten) || {};
+      const items = [
+        ["Daily Trades", `${formatValue(riskState.daily_trade_count)} / ${formatValue(riskState.max_daily_trades)}`],
+        ["Daily Losses", `${formatValue(riskState.daily_loss_count)} / ${formatValue(riskState.max_daily_losses)}`],
+        ["Trading Halted", riskState.trading_halted ? "true" : "false", riskState.trading_halted ? "status-red" : "status-green"],
+        ["Kill Switch", riskState.kill_switch_active ? "true" : "false", riskState.kill_switch_active ? "status-red" : "status-green"],
+        ["Kill Reason", formatValue(riskState.kill_switch_reason)],
+        ["Halt Reason", formatValue(failureState.halt_reason)],
+        ["Execution Failures", formatValue(failureState.execution_failure_count), Number(failureState.execution_failure_count) > 0 ? "status-amber" : ""],
+        ["QA Critical", formatValue(failureState.qa_critical_count), Number(failureState.qa_critical_count) > 0 ? "status-amber" : ""],
+        ["Noon Flatten", noonState.enabled ? "enabled" : "disabled", noonState.enabled ? "status-amber" : ""],
+        ["Last Noon Run", formatValue(noonState.last_run_at)]
+      ];
+
+      const fragment = document.createDocumentFragment();
+      for (const [label, value, className] of items) {
+        const node = document.createElement("div");
+        node.className = "risk-item";
+        node.innerHTML = `
+          <div class="trade-label">${escapeHtml(label)}</div>
+          <div class="trade-value ${className || ""}">${escapeHtml(value)}</div>
+        `;
+        fragment.appendChild(node);
+      }
+
+      $("riskStateGrid").replaceChildren(fragment);
+      $("riskStateMeta").textContent = `last update ${new Date().toISOString()}`;
+      updateDashboardSummary();
+    }
+
+    function classifyEvent(event) {
+      const joined = `${event.event_type || ""} ${event.message || ""}`.toLowerCase();
+      if (joined.includes("critical") || joined.includes("error")) return "critical";
+      if (joined.includes("warning") || joined.includes("fail")) return "warning";
+      return "info";
+    }
+
+    function renderQaFeed(data) {
+      latestEventsPayload = data;
+      const events = Array.isArray(data && data.events) ? data.events : [];
+      const prioritized = events
+        .filter((event) => {
+          const text = `${event.event_type || ""} ${event.message || ""}`.toLowerCase();
+          if (
+            !hasCurrentExposureWarning()
+            && (
+              text.includes("orphan")
+              || text.includes("orphan exposure")
+              || text.includes("orphan_executor_exposure")
+              || text.includes("manager trade state desync")
+              || text.includes("manager_trade_state_desync")
+              || text.includes("unsupervised exposure")
+            )
+          ) {
+            return false;
+          }
+          return text.includes("qa") || text.includes("warning") || text.includes("critical") || text.includes("error") || text.includes("flatten");
+        })
+        .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))
+        .slice(0, 10);
+
+      const fragment = document.createDocumentFragment();
+      if (!prioritized.length) {
+        const empty = document.createElement("div");
+        empty.className = "feed-item";
+        empty.innerHTML = `<div class="muted">No recent QA or operator events.</div>`;
+        fragment.appendChild(empty);
+      } else {
+        for (const event of prioritized) {
+          const severity = classifyEvent(event);
+          const node = document.createElement("div");
+          node.className = `feed-item ${severity}`;
+          node.innerHTML = `
+            <div class="feed-topline">
+              <span>${escapeHtml(formatValue(event.event_type))}</span>
+              <span>${escapeHtml(formatValue(event.timestamp))}</span>
+            </div>
+            <div class="feed-message">${escapeHtml(formatValue(event.message || event.trade_id || "Event"))}</div>
+            <div class="small muted">${escapeHtml(formatValue(event.trade_id || "system"))}</div>
+          `;
+          fragment.appendChild(node);
+        }
+      }
+
+      $("qaFeedBox").replaceChildren(fragment);
+      $("qaFeedMeta").textContent = `${prioritized.length} events shown`;
+    }
+
+    function entryAgentTokenClass(value) {
+      const text = String(value || "").toUpperCase();
+      if (text.includes("STEP 6") || text.includes("ENTRY")) return "candidate";
+      if (text.includes("INVALIDATE") || text.includes("INVALID") || text.includes("TERMINATED") || text.includes("BLOCKED")) return "invalidate";
+      if (text.includes("COMPLETE") || text.includes("CONFIRM") || text.includes("READY") || text.includes("ALLOW")) return "complete";
+      if (text.includes("WAIT") || text.includes("STEP 2") || text.includes("STEP 3") || text.includes("STEP 4") || text.includes("STEP 5")) return "wait";
+      return "";
+    }
+
+    function entryAgentField(label, value, options = {}) {
+      const wide = options.wide ? " wide" : "";
+      const tokenClass = options.token ? entryAgentTokenClass(value) : "";
+      const valueMarkup = options.token
+        ? `<span class="entry-agent-token ${tokenClass}">${escapeHtml(formatValue(value))}</span>`
+        : escapeHtml(formatValue(value));
+      return `
+        <div class="entry-agent-field${wide}">
+          <div class="entry-agent-label">${escapeHtml(label)}</div>
+          <div class="entry-agent-value">${valueMarkup}</div>
+        </div>
+      `;
+    }
+
+    function renderEntryAgentOffline() {
+      const health = $("entryAgentHealth");
+      health.textContent = "Offline";
+      health.className = "entry-agent-health offline";
+      $("entryAgentMeta").textContent = "Entry Agent offline";
+      $("entryAgentBox").innerHTML = `<div class="entry-agent-offline">Entry Agent offline</div>`;
+    }
+
+    function renderEntryAgentStatus(data) {
+      const health = $("entryAgentHealth");
+      const symbols = Array.isArray(data && data.symbols) ? data.symbols : [];
+      health.textContent = "Online";
+      health.className = "entry-agent-health online";
+      $("entryAgentMeta").textContent = `${symbols.length} symbols updated ${new Date().toLocaleTimeString()}`;
+
+      if (!symbols.length) {
+        $("entryAgentBox").innerHTML = `<div class="entry-agent-offline">Entry Agent offline</div>`;
+        return;
+      }
+
+      $("entryAgentBox").innerHTML = symbols.map((item) => {
+        const group = item && item.active_liquidity_group;
+        const groupName = group && typeof group === "object" ? group.name : null;
+        const currentStep = item && item.current_step;
+        const currentStepDisplay = item && (item.current_step_label || item.current_step);
+        const entryStatus = item && item.entry_status;
+        const candidateClass = entryAgentTokenClass(currentStep) === "candidate" || entryAgentTokenClass(entryStatus) === "candidate"
+          ? " entry-candidate"
+          : "";
+        return `
+          <div class="entry-agent-card${candidateClass}">
+            <div class="entry-agent-topline">
+              <div class="entry-agent-symbol">${escapeHtml(item && item.symbol)}</div>
+              <span class="entry-agent-token ${entryAgentTokenClass(entryStatus)}">${escapeHtml(formatValue(entryStatus))}</span>
+            </div>
+            <div class="entry-agent-grid">
+              ${entryAgentField("Current Step", currentStepDisplay, { token: true })}
+              ${entryAgentField("Setup Direction", item && item.setup_direction)}
+              ${entryAgentField("Active Liquidity", item && item.active_liquidity_name)}
+              ${entryAgentField("Liquidity Price", item && item.active_liquidity_price)}
+              ${entryAgentField("Liquidity Group", groupName)}
+              ${entryAgentField("Leg 1", item && item.leg1_status, { token: true })}
+              ${entryAgentField("Leg 2", item && item.leg2_status, { token: true })}
+              ${entryAgentField("Timestamp", item && item.timestamp)}
+              ${entryAgentField("Wait Reason", item && item.wait_reason, { wide: true })}
+              ${entryAgentField("Invalidation", item && item.invalidation_reason, { wide: true })}
+              ${entryAgentField("Last Decision", item && item.last_decision, { wide: true })}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function logTradesDebug(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      $("tradesDebug").textContent = `[${timestamp}] ${message}\n${$("tradesDebug").textContent}`.slice(0, 4000);
+      console.log(`[CommandCenter] ${message}`);
+    }
+
+    function showStartupMarker(message) {
+      const banner = $("buildBanner");
+      banner.textContent = `COMMAND CENTER POLLING BUILD ACTIVE | ${message}`;
+      console.log(`[CommandCenter] ${message}`);
+      window.alert(`COMMAND CENTER POLLING BUILD ACTIVE\n${message}`);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const res = await fetch(url, {
+        cache: "no-store",
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+          "Cache-Control": "no-cache"
+        }
+      });
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { ok: false, raw: text, status: res.status };
+      }
+    }
+
+    function buildTradePacket() {
+      return {
+        event: "enter_trade",
+        symbol: $("symbol").value.trim().toUpperCase(),
+        direction: $("direction").value,
+        position_size: Number($("position_size").value)
+      };
+    }
+
+    document.addEventListener("click", (event) => {
+      const mapTradeChip = event.target.closest("#activeTradeMapSelector .map-trade-chip[data-trade-id]");
+      if (mapTradeChip) {
+        const tradeId = mapTradeChip.dataset.tradeId || null;
+        if (mapTradeChip.dataset.demoTrade === "true") {
+          selectedDemoTradeId = tradeId || "DEMO-NQ";
+          demoLiveMapEnabled = true;
+          const currentDemoPrice = demoLivePrices[selectedDemoTradeId];
+          $("demoLivePriceInput").value = Number.isFinite(Number(currentDemoPrice)) ? currentDemoPrice : "";
+          updateDemoLiveMapControls();
+          renderActiveTradeMapSelector([]);
+          renderSelectedActiveTradeVisual();
+          return;
+        }
+
+        selectedActiveTradeId = tradeId;
+        demoLiveMapEnabled = false;
+        updateDemoLiveMapControls();
+        if (latestTradesPayload) {
+          renderTradesPanel(latestTradesPayload, {
+            renderedAt: new Date().toISOString(),
+            tradeCount: Object.keys(latestTradesPayload.trades || {}).length,
+            sequence: latestAppliedTradesSequence
+          });
+        }
+        return;
+      }
+
+      const tradeCard = event.target.closest("#activeTradeBox .trade-card[data-trade-id]");
+      if (!tradeCard) return;
+      selectedActiveTradeId = tradeCard.dataset.tradeId || null;
+      demoLiveMapEnabled = false;
+      updateDemoLiveMapControls();
+      if (latestTradesPayload) {
+        renderTradesPanel(latestTradesPayload, {
+          renderedAt: new Date().toISOString(),
+          tradeCount: Object.keys(latestTradesPayload.trades || {}).length,
+          sequence: latestAppliedTradesSequence
+        });
+      }
+    });
+
+    async function loadInstrumentOptions() {
+      const select = $("symbol");
+      const data = await fetchJson(`${TM_BASE}/debug/instruments`);
+      const instruments = Array.isArray(data && data.instruments) ? data.instruments : [];
+      const currentValue = String(select.value || "NQ").toUpperCase();
+
+      if (!instruments.length) {
+        select.innerHTML = `<option value="NQ">NQ</option><option value="YM">YM</option>`;
+        select.value = currentValue === "YM" ? "YM" : "NQ";
+        updateSubmitAvailability();
+        return;
+      }
+
+      const mergedSymbols = Array.from(new Set([
+        "NQ",
+        "YM",
+        ...instruments.map((instrument) => String(instrument.root_symbol || "").toUpperCase()).filter(Boolean)
+      ]));
+      select.innerHTML = mergedSymbols
+        .map((symbol) => `<option value="${escapeHtml(symbol)}">${escapeHtml(symbol)}</option>`)
+        .join("");
+
+      const nextValue = mergedSymbols.includes(currentValue)
+        ? currentValue
+        : "NQ";
+      select.value = nextValue;
+      updateSubmitAvailability();
+    }
+
+    async function submitTrade() {
+      if (submitInFlight) {
+        logTradesDebug("submit ignored: previous submit still in flight");
+        return;
+      }
+      const selectedTvAtr = getSelectedTvAtrStatus();
+      const selectedListener = getSelectedListenerStatus();
+      if (selectedListener.status !== "active") {
+        $("submitResult").textContent = pretty({ ok: false, error: selectedListener.reason });
+        logTradesDebug(`submit blocked client_side error=${selectedListener.reason}`);
+        updateSubmitAvailability();
+        return;
+      }
+      if (!selectedTvAtr || selectedTvAtr.status !== "fresh") {
+        const error = selectedTvAtr && selectedTvAtr.status === "stale" ? "TV_ATR_STALE" : "TV_ATR_MISSING";
+        $("submitResult").textContent = pretty({ ok: false, error });
+        logTradesDebug(`submit blocked client_side error=${error}`);
+        updateSubmitAvailability();
+        return;
+      }
+      submitInFlight = true;
+      updateSubmitAvailability();
+      const payload = buildTradePacket();
+      try {
+        const data = await fetchJson(`${TM_BASE}/submit_trade`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        $("submitResult").textContent = pretty(data);
+        await forceRefreshAll("submit");
+      } finally {
+        submitInFlight = false;
+        updateSubmitAvailability();
+      }
+    }
+
+    async function flattenSymbol() {
+      const symbol = resolveSnapshotSymbolForInput($("symbol").value);
+      const data = await fetchJson(`${EX_BASE}/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "flatten_symbol",
+          symbol
+        })
+      });
+      $("submitResult").textContent = pretty(data);
+      await forceRefreshAll("flatten");
+    }
+
+    async function sendPrice(price) {
+      const symbol = resolveSnapshotSymbolForInput($("symbol").value);
+      const data = await fetchJson(`${EX_BASE}/price`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, price })
+      });
+      $("submitResult").textContent = pretty(data);
+      await forceRefreshAll(`send_price_${price}`);
+    }
+
+    async function refreshSnapshot() {
+      if (snapshotRefreshInFlight) {
+        return;
+      }
+      snapshotRefreshInFlight = true;
+      const data = await fetchJson(`${EX_BASE}/sync_snapshot`);
+      try {
+        latestSnapshot = data;
+        latestSnapshotFetchedAt = new Date();
+        for (const [symbol, symbolState] of Object.entries((data && data.symbols) || {})) {
+          const price = toFiniteNumber(symbolState && symbolState.last_price);
+          if (price !== null) {
+            const normalizedSymbol = String(symbol || "").toUpperCase();
+            latestLivePriceBySymbol[normalizedSymbol] = price;
+            livePriceReceivedAtBySymbol[normalizedSymbol] = latestSnapshotFetchedAt;
+          }
+        }
+        $("snapshotBox").textContent = pretty(data);
+        renderSelectedActiveTradeVisual();
+        updateSubmitAvailability();
+        updateDashboardSummary();
+      } finally {
+        snapshotRefreshInFlight = false;
+      }
+    }
+
+    async function refreshTrades() {
+      if (tradesRefreshInFlight) {
+        logTradesDebug("trades fetch skipped: previous request still in flight");
+        return;
+      }
+
+      tradesRefreshInFlight = true;
+      const requestSequence = ++tradesRequestSequence;
+      logTradesDebug("trades fetch start");
+
+      try {
+        const data = await fetchJson(`${TM_BASE}/trades`);
+        const trades = Object.entries((data && data.trades) || {}).map(([tradeId, trade]) => ({
+          ...trade,
+          trade_id: trade.trade_id || tradeId
+        }));
+
+        if (requestSequence < latestAppliedTradesSequence) {
+          logTradesDebug(`trades fetch ignored stale payload seq=${requestSequence} latest_applied=${latestAppliedTradesSequence}`);
+          return;
+        }
+
+        latestAppliedTradesSequence = requestSequence;
+        renderTradesPanel(data, {
+          renderedAt: new Date().toISOString(),
+          tradeCount: trades.length,
+          sequence: requestSequence
+        });
+
+        const activeTrades = trades.filter((trade) => trade.status === "active");
+        const closedTrades = trades.filter((trade) => trade.status === "closed");
+        const activeTradeIds = activeTrades.map((trade) => trade.trade_id);
+        const closedTradeIds = closedTrades.map((trade) => trade.trade_id);
+
+        logTradesDebug(
+          `trades fetch success ok=${Boolean(data && data.ok)} count=${trades.length}`
+        );
+        logTradesDebug(`number of trades returned=${trades.length}`);
+        logTradesDebug(`active trade ids=${activeTradeIds.length ? activeTradeIds.join(",") : "none"}`);
+        logTradesDebug(`closed trade ids=${closedTradeIds.length ? closedTradeIds.join(",") : "none"}`);
+      } catch (error) {
+        logTradesDebug(`trades fetch failure error=${error}`);
+      } finally {
+        tradesRefreshInFlight = false;
+      }
+    }
+
+    async function refreshTvAtrStatuses() {
+      if (tvAtrStatusInFlight) {
+        return;
+      }
+
+      tvAtrStatusInFlight = true;
+      try {
+        const data = await fetchJson(`${TM_BASE}/debug/tradingview/atr_status`);
+        renderTvAtrStatuses(data);
+        updateDashboardSummary();
+      } catch (error) {
+        logTradesDebug(`tv atr status fetch failure error=${error}`);
+      } finally {
+        tvAtrStatusInFlight = false;
+      }
+    }
+
+    async function refreshRiskState() {
+      if (riskStateInFlight) {
+        return;
+      }
+      riskStateInFlight = true;
+      try {
+        const data = await fetchJson(`${TM_BASE}/debug/risk_state`);
+        renderRiskStatePanel(data);
+      } catch (error) {
+        logTradesDebug(`risk state fetch failure error=${error}`);
+      } finally {
+        riskStateInFlight = false;
+      }
+    }
+
+    async function refreshQaFeed() {
+      if (qaFeedInFlight) {
+        return;
+      }
+      qaFeedInFlight = true;
+      try {
+        const data = await fetchJson(`${TM_BASE}/events`);
+        renderQaFeed(data);
+      } catch (error) {
+        logTradesDebug(`qa feed fetch failure error=${error}`);
+      } finally {
+        qaFeedInFlight = false;
+      }
+    }
+
+    async function refreshEntryAgentStatus() {
+      if (entryAgentInFlight) {
+        return;
+      }
+      entryAgentInFlight = true;
+      try {
+        const response = await fetch(`${ENTRY_AGENT_BASE}/entry/status?symbols=NQ,YM,RTY`, {
+          method: "GET",
+          mode: "cors"
+        });
+        const data = await response.json();
+        if (!data || data.ok !== true) {
+          renderEntryAgentOffline();
+          return;
+        }
+        renderEntryAgentStatus(data);
+      } catch (error) {
+        renderEntryAgentOffline();
+      } finally {
+        entryAgentInFlight = false;
+      }
+    }
+
+    async function forceRefreshAll(reason) {
+      logTradesDebug(`force refresh triggered reason=${reason}`);
+      await Promise.all([
+        refreshSnapshot(),
+        refreshTrades(),
+        refreshTvAtrStatuses(),
+        refreshRiskState(),
+        refreshQaFeed(),
+        refreshEntryAgentStatus()
+      ]);
+    }
+
+    function startPolling() {
+      if (tradesPollHandle === null) {
+        tradesPollHandle = setInterval(() => {
+          refreshTrades();
+        }, POLL_INTERVAL_MS);
+      }
+
+      if (snapshotPollHandle === null) {
+        snapshotPollHandle = setInterval(() => {
+          refreshSnapshot();
+        }, POLL_INTERVAL_MS);
+      }
+
+      if (entryAgentPollHandle === null) {
+        entryAgentPollHandle = setInterval(() => {
+          refreshEntryAgentStatus();
+        }, POLL_INTERVAL_MS);
+      }
+
+      if ($("tvAtrStatusBox").dataset.polling !== "true") {
+        $("tvAtrStatusBox").dataset.polling = "true";
+        setInterval(() => {
+          refreshTvAtrStatuses();
+        }, POLL_INTERVAL_MS);
+      }
+      if ($("riskStateGrid").dataset.polling !== "true") {
+        $("riskStateGrid").dataset.polling = "true";
+        setInterval(() => {
+          refreshRiskState();
+          refreshQaFeed();
+        }, POLL_INTERVAL_MS);
+      }
+
+      logTradesDebug(`polling started interval_ms=${POLL_INTERVAL_MS}`);
+      showStartupMarker(`polling started interval_ms=${POLL_INTERVAL_MS}`);
+    }
+
+    $("submitTradeBtn").onclick = submitTrade;
+    $("symbol").onchange = updateSubmitAvailability;
+    $("flattenBtn").onclick = flattenSymbol;
+    $("refreshSnapshotBtn").onclick = refreshSnapshot;
+    $("refreshTradesBtn").onclick = refreshTrades;
+    $("demoLiveMapToggle").onclick = () => setDemoLiveMapEnabled(!demoLiveMapEnabled);
+    $("demoLivePriceBtn").onclick = setDemoLivePriceFromInput;
+    $("demoLivePriceInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        setDemoLivePriceFromInput();
+      }
+    });
+    renderActiveTradeMapSelector([]);
+    $("price102Btn").onclick = () => sendPrice(102);
+    $("price105Btn").onclick = () => sendPrice(105);
+    $("price110Btn").onclick = () => sendPrice(110);
+    $("price100Btn").onclick = () => sendPrice(100);
+
+    loadInstrumentOptions()
+      .catch((error) => {
+        const select = $("symbol");
+        const currentValue = String(select.value || "NQ").toUpperCase();
+        select.innerHTML = `<option value="NQ">NQ</option><option value="YM">YM</option>`;
+        select.value = currentValue === "YM" ? "YM" : "NQ";
+        updateSubmitAvailability();
+        logTradesDebug(`instrument load failure fallback=NQ,YM error=${error}`);
+      })
+      .finally(async () => {
+        await forceRefreshAll("startup");
+        startPolling();
+      });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1114 @@
+import os
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+import zipfile
+import json
+from collections import deque
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+RITHMIC_ZIP_PATH = BASE_DIR / "Rithmic API" / "RApiPlus.NET.13.7.0.0.zip"
+RITHMIC_CACHE_DIR = Path(tempfile.gettempdir()) / "rithmic_phase_a"
+RITHMIC_RUNTIME_DIR = RITHMIC_CACHE_DIR / "runtime"
+RAPIPLUS_DLL_PATH = RITHMIC_RUNTIME_DIR / "rapiplus.dll"
+POWERSHELL_BRIDGE_PATH = RITHMIC_CACHE_DIR / "rithmic_phase_a_login.ps1"
+ENGINE_CREATION_TIMEOUT_SECONDS = 20
+RITHMIC_TEST_EXCHANGE = "CME"
+RITHMIC_TEST_SYMBOL = "NQM6"
+ATR_SNAPSHOT_PATH = BASE_DIR / "Data" / "rithmic_atr_snapshot.json"
+RECENT_BARS_PATH = BASE_DIR / "Data" / "rithmic_recent_bars.json"
+MAX_PERSISTED_BARS = 30
+ATR_PERIOD = 14
+ATR_SEED_BAR_COUNT = ATR_PERIOD + 1
+HISTORICAL_SEED_LOOKBACK_MINUTES = 30
+RECONNECT_BASE_DELAY_SECONDS = 2
+RECONNECT_MAX_DELAY_SECONDS = 30
+
+RITHMIC_USER = os.getenv("RITHMIC_USER", "").strip()
+RITHMIC_PASSWORD = os.getenv("RITHMIC_PASSWORD", "").strip()
+RITHMIC_MD_CONNECTION_POINT = os.getenv("RITHMIC_MD_CONNECTION_POINT", "login_agent_tp_paper_sumc").strip() or "login_agent_tp_paper_sumc"
+RITHMIC_TS_CONNECTION_POINT = os.getenv("RITHMIC_TS_CONNECTION_POINT", "login_agent_op_paperc").strip() or "login_agent_op_paperc"
+RITHMIC_REPOSITORY_CONNECTION_POINT = os.getenv("RITHMIC_REPOSITORY_CONNECTION_POINT", "login_agent_repositoryc").strip() or "login_agent_repositoryc"
+
+
+def ensure_runtime_files():
+    if not RITHMIC_ZIP_PATH.exists():
+        raise FileNotFoundError(f"Missing Rithmic API zip: {RITHMIC_ZIP_PATH}")
+
+    RITHMIC_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not RAPIPLUS_DLL_PATH.exists():
+        with zipfile.ZipFile(RITHMIC_ZIP_PATH) as archive:
+            runtime_prefix = "13.7.0.0/win10/lib_472/"
+            for member in archive.infolist():
+                if not member.filename.startswith(runtime_prefix) or member.is_dir():
+                    continue
+
+                relative_path = member.filename[len(runtime_prefix):]
+                target_path = RITHMIC_RUNTIME_DIR / relative_path
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+
+                with archive.open(member) as src, target_path.open("wb") as dst:
+                    dst.write(src.read())
+
+    return RAPIPLUS_DLL_PATH
+
+
+def normalize_root_symbol(symbol):
+    normalized_symbol = str(symbol or "").upper()
+    if not normalized_symbol:
+        return ""
+
+    idx = len(normalized_symbol)
+    while idx > 0 and normalized_symbol[idx - 1].isdigit():
+        idx -= 1
+
+    month_codes = set("FGHJKMNQUVXZ")
+    if idx > 0 and normalized_symbol[idx - 1] in month_codes:
+        root_symbol = normalized_symbol[:idx - 1]
+        if root_symbol:
+            return root_symbol
+
+    return normalized_symbol
+
+
+def build_snapshot_symbol_aliases(symbol):
+    normalized_symbol = str(symbol or "").upper()
+    root_symbol = normalize_root_symbol(normalized_symbol)
+    aliases = []
+
+    if normalized_symbol:
+        aliases.append(normalized_symbol)
+
+    if root_symbol and root_symbol not in aliases:
+        aliases.append(root_symbol)
+
+    return aliases
+
+
+def atomic_write_json(path, payload):
+    target_path = Path(path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=target_path.parent,
+        delete=False,
+    ) as tmp_file:
+        json.dump(payload, tmp_file, indent=2)
+        tmp_file.flush()
+        os.fsync(tmp_file.fileno())
+        temp_path = Path(tmp_file.name)
+
+    os.replace(temp_path, target_path)
+
+
+def write_atr_snapshot(symbol, atr_bar_timestamp, atr_value):
+    snapshot_entry = {
+        "atr_value": float(atr_value),
+        "atr_bar_timestamp": str(atr_bar_timestamp),
+        "atr_source": "rithmic_live_listener_1m14",
+    }
+
+    payload = {"symbols": {}}
+    for alias in build_snapshot_symbol_aliases(symbol):
+        payload["symbols"][alias] = snapshot_entry.copy()
+
+    atomic_write_json(ATR_SNAPSHOT_PATH, payload)
+
+
+def read_json_file(path, default):
+    target_path = Path(path)
+    if not target_path.exists():
+        return default
+
+    try:
+        return json.loads(target_path.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def load_recent_bars():
+    payload = read_json_file(RECENT_BARS_PATH, {"symbols": {}})
+    loaded = {}
+
+    for symbol, entries in payload.get("symbols", {}).items():
+        bars = deque(maxlen=MAX_PERSISTED_BARS)
+        for entry in entries:
+            try:
+                bars.append(
+                    {
+                        "timestamp": str(entry["timestamp"]),
+                        "symbol": str(entry["symbol"]).upper(),
+                        "open": float(entry["open"]),
+                        "high": float(entry["high"]),
+                        "low": float(entry["low"]),
+                        "close": float(entry["close"]),
+                    }
+                )
+            except Exception:
+                continue
+
+        if bars:
+            loaded[str(symbol).upper()] = bars
+
+    return loaded
+
+
+def get_symbol_bar_count(bar_cache, symbol):
+    return len(bar_cache.get(str(symbol).upper(), ()))
+
+
+def persist_recent_bars(bar_cache):
+    payload = {"symbols": {}}
+    for symbol, bars in bar_cache.items():
+        payload["symbols"][symbol] = list(bars)
+    atomic_write_json(RECENT_BARS_PATH, payload)
+
+
+def parse_key_value_field(field):
+    key, value = field.split("=", 1)
+    return key, float(value)
+
+
+def parse_completed_bar_line(line):
+    _, bar_timestamp, symbol, open_field, high_field, low_field, close_field = line.split("|", 6)
+    parsed = dict(
+        parse_key_value_field(field)
+        for field in (open_field, high_field, low_field, close_field)
+    )
+    return {
+        "timestamp": bar_timestamp,
+        "symbol": symbol.upper(),
+        "open": parsed["O"],
+        "high": parsed["H"],
+        "low": parsed["L"],
+        "close": parsed["C"],
+    }
+
+
+def compute_atr(bars, period=ATR_PERIOD):
+    if len(bars) < period + 1:
+        return None
+
+    relevant_bars = list(bars)[-(period + 1):]
+    tr_values = []
+
+    for index in range(1, len(relevant_bars)):
+        bar = relevant_bars[index]
+        prev_close = relevant_bars[index - 1]["close"]
+        tr_values.append(
+            max(
+                bar["high"] - bar["low"],
+                abs(bar["high"] - prev_close),
+                abs(bar["low"] - prev_close),
+            )
+        )
+
+    return sum(tr_values) / float(period)
+
+
+def build_atr_line(symbol, bar_timestamp, atr_value):
+    return (
+        "ATR|"
+        f"{bar_timestamp}|"
+        f"{symbol}|"
+        f"{ATR_PERIOD}|"
+        f"{atr_value}"
+    )
+
+
+def replace_recent_bars_for_symbol(bar_cache, symbol, bars):
+    normalized_symbol = str(symbol).upper()
+    deduped = {}
+    for bar in bars:
+        deduped[bar["timestamp"]] = {
+            "timestamp": str(bar["timestamp"]),
+            "symbol": normalized_symbol,
+            "open": float(bar["open"]),
+            "high": float(bar["high"]),
+            "low": float(bar["low"]),
+            "close": float(bar["close"]),
+        }
+
+    ordered_bars = [deduped[timestamp] for timestamp in sorted(deduped.keys())]
+    bar_cache[normalized_symbol] = deque(ordered_bars[-MAX_PERSISTED_BARS:], maxlen=MAX_PERSISTED_BARS)
+    persist_recent_bars(bar_cache)
+
+
+def seed_atr_from_historical_bars(bar_cache, symbol, historical_bars):
+    normalized_symbol = str(symbol).upper()
+    bars = [
+        {
+            "timestamp": str(bar["timestamp"]),
+            "symbol": normalized_symbol,
+            "open": float(bar["open"]),
+            "high": float(bar["high"]),
+            "low": float(bar["low"]),
+            "close": float(bar["close"]),
+        }
+        for bar in historical_bars
+        if str(bar.get("symbol", "")).upper() == normalized_symbol
+    ]
+
+    if len(bars) < ATR_SEED_BAR_COUNT:
+        return None
+
+    replace_recent_bars_for_symbol(bar_cache, normalized_symbol, bars)
+    restored_bars = list(bar_cache[normalized_symbol])
+    atr_value = compute_atr(restored_bars)
+    if atr_value is None:
+        return None
+
+    atr_bar_timestamp = restored_bars[-1]["timestamp"]
+    write_atr_snapshot(normalized_symbol, atr_bar_timestamp, atr_value)
+    return {
+        "count": len(restored_bars),
+        "bar_timestamp": atr_bar_timestamp,
+        "atr_value": atr_value,
+        "atr_line": build_atr_line(normalized_symbol, atr_bar_timestamp, atr_value),
+    }
+
+
+def seed_atr_from_persisted_bars(bar_cache, symbol):
+    normalized_symbol = str(symbol).upper()
+    bars = list(bar_cache.get(normalized_symbol, ()))
+    bar_count = len(bars)
+    log_lines = [f"STATUS|recent_bars_loaded|{normalized_symbol}|count={bar_count}"]
+
+    if bar_count < ATR_SEED_BAR_COUNT:
+        log_lines.append(
+            f"STATUS|recent_bars_insufficient|{normalized_symbol}|required={ATR_SEED_BAR_COUNT}|available={bar_count}"
+        )
+        return log_lines, None
+
+    atr_value = compute_atr(bars)
+    if atr_value is None:
+        log_lines.append(
+            f"STATUS|recent_bars_insufficient|{normalized_symbol}|required={ATR_SEED_BAR_COUNT}|available={bar_count}"
+        )
+        return log_lines, None
+
+    atr_bar_timestamp = bars[-1]["timestamp"]
+    write_atr_snapshot(normalized_symbol, atr_bar_timestamp, atr_value)
+    log_lines.append(f"STATUS|recent_bars_ready|{normalized_symbol}|count={bar_count}")
+    log_lines.append(f"STATUS|atr_seeded_from_persisted_bars|{normalized_symbol}|bar_timestamp={atr_bar_timestamp}")
+    log_lines.append(f"STATUS|atr_seed_value|{normalized_symbol}|value={atr_value}")
+    return log_lines, build_atr_line(normalized_symbol, atr_bar_timestamp, atr_value)
+
+
+def update_recent_bars(bar_cache, completed_bar):
+    symbol = completed_bar["symbol"]
+    bars = bar_cache.setdefault(symbol, deque(maxlen=MAX_PERSISTED_BARS))
+
+    if bars and bars[-1]["timestamp"] == completed_bar["timestamp"]:
+        bars[-1] = completed_bar
+    elif bars and completed_bar["timestamp"] < bars[-1]["timestamp"]:
+        return None
+    else:
+        bars.append(completed_bar)
+
+    persist_recent_bars(bar_cache)
+    persisted_count = len(bars)
+    atr_value = compute_atr(list(bars))
+    if atr_value is None:
+        return None, persisted_count
+
+    write_atr_snapshot(symbol, completed_bar["timestamp"], atr_value)
+    return build_atr_line(symbol, completed_bar["timestamp"], atr_value), persisted_count
+
+
+def build_powershell_bridge():
+    return textwrap.dedent(
+        r"""
+        param(
+            [string]$DllPath,
+            [string]$UserName,
+            [string]$Password,
+            [string]$MdConnectionPoint,
+            [string]$TsConnectionPoint,
+            [string]$RepositoryConnectionPoint,
+            [string]$ExchangeCode,
+            [string]$SymbolCode
+        )
+
+        $ErrorActionPreference = "Stop"
+
+        Add-Type -Path $DllPath
+
+        Add-Type -ReferencedAssemblies @($DllPath) -TypeDefinition @"
+        using System;
+        using System.Collections.Generic;
+        using System.Text;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using com.omnesys.omne.om;
+        using com.omnesys.rapi;
+
+        public enum BridgeLoginStatus
+        {
+            NotLoggedIn,
+            LoginInProgress,
+            LoginFailed,
+            LoggedIn
+        }
+
+        public class BridgeAdmCallbacks : AdmCallbacks
+        {
+            public override void Alert(AlertInfo info)
+            {
+                var sb = new StringBuilder();
+                info.Dump(sb);
+                Console.WriteLine("ADM|" + sb.ToString().Replace("\r", " ").Replace("\n", " "));
+            }
+        }
+
+        public class BridgeCallbacks : RCallbacks
+        {
+            private class OneMinuteBar
+            {
+                public DateTime Timestamp;
+                public string Symbol;
+                public double Open;
+                public double High;
+                public double Low;
+                public double Close;
+            }
+
+            public BridgeLoginStatus RepositoryLoginStatus = BridgeLoginStatus.NotLoggedIn;
+            public bool ReceivedAgreementList = false;
+            public int UnacceptedMandatoryAgreementCount = 0;
+            public bool LoggedIntoMd = false;
+            public bool LoggedIntoTs = false;
+            public bool MarketDataClosedUnexpectedly = false;
+            public bool TradingSystemClosedUnexpectedly = false;
+            public bool ShutdownRequested = false;
+            public bool HistoricalReplayRequested = false;
+            public bool HistoricalReplayStarted = false;
+            public bool HistoricalReplayTimedOut = false;
+            public int HistoricalBarsReceived = 0;
+            public DateTime LastHistoricalReplayEventUtc = DateTime.MinValue;
+            private OneMinuteBar CurrentBar = null;
+
+            private static DateTime FloorToMinute(DateTime timestamp)
+            {
+                return new DateTime(
+                    timestamp.Year,
+                    timestamp.Month,
+                    timestamp.Day,
+                    timestamp.Hour,
+                    timestamp.Minute,
+                    0,
+                    DateTimeKind.Utc
+                );
+            }
+
+            private void PrintCompletedBar(OneMinuteBar bar)
+            {
+                Console.WriteLine(
+                    "BAR|" +
+                    bar.Timestamp.ToString("yyyy-MM-ddTHH:mm:00Z") + "|" +
+                    bar.Symbol + "|" +
+                    "O=" + bar.Open.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" +
+                    "H=" + bar.High.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" +
+                    "L=" + bar.Low.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" +
+                    "C=" + bar.Close.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                );
+            }
+
+            private static DateTime BuildBarTimestamp(BarInfo info)
+            {
+                DateTime baseDate;
+                if (!String.IsNullOrWhiteSpace(info.SpecifiedDate) &&
+                    DateTime.TryParseExact(
+                        info.SpecifiedDate,
+                        "yyyyMMdd",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                        out baseDate))
+                {
+                    return baseDate.Date.AddSeconds(info.StartSsboe);
+                }
+
+                return DateTimeOffset.FromUnixTimeSeconds(info.StartSsboe).UtcDateTime;
+            }
+
+            private static void PrintHistoricalBar(BarInfo info)
+            {
+                DateTime timestamp = BuildBarTimestamp(info);
+                Console.WriteLine(
+                    "HISTBAR|" +
+                    timestamp.ToString("yyyy-MM-ddTHH:mm:00Z") + "|" +
+                    (String.IsNullOrWhiteSpace(info.Symbol) ? String.Empty : info.Symbol.Trim().ToUpperInvariant()) + "|" +
+                    "O=" + info.OpenPrice.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" +
+                    "H=" + info.HighPrice.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" +
+                    "L=" + info.LowPrice.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" +
+                    "C=" + info.ClosePrice.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                );
+            }
+
+            public void FinalizeCurrentBar()
+            {
+                if (CurrentBar == null)
+                {
+                    return;
+                }
+
+                PrintCompletedBar(CurrentBar);
+                CurrentBar = null;
+            }
+
+            public void RequestShutdown()
+            {
+                ShutdownRequested = true;
+            }
+
+            public void ResetHistoricalReplayState()
+            {
+                HistoricalReplayRequested = false;
+                HistoricalReplayStarted = false;
+                HistoricalReplayTimedOut = false;
+                HistoricalBarsReceived = 0;
+                LastHistoricalReplayEventUtc = DateTime.MinValue;
+            }
+
+            private void UpdateBar(string symbol, double price, DateTime timestamp)
+            {
+                DateTime barTimestamp = FloorToMinute(timestamp);
+
+                if (CurrentBar == null)
+                {
+                    CurrentBar = new OneMinuteBar
+                    {
+                        Timestamp = barTimestamp,
+                        Symbol = symbol,
+                        Open = price,
+                        High = price,
+                        Low = price,
+                        Close = price
+                    };
+                    return;
+                }
+
+                if (CurrentBar.Timestamp == barTimestamp)
+                {
+                    CurrentBar.High = Math.Max(CurrentBar.High, price);
+                    CurrentBar.Low = Math.Min(CurrentBar.Low, price);
+                    CurrentBar.Close = price;
+                    return;
+                }
+
+                if (CurrentBar.Timestamp < barTimestamp)
+                {
+                    FinalizeCurrentBar();
+                    CurrentBar = new OneMinuteBar
+                    {
+                        Timestamp = barTimestamp,
+                        Symbol = symbol,
+                        Open = price,
+                        High = price,
+                        Low = price,
+                        Close = price
+                    };
+                }
+            }
+
+            public override void TradePrint(TradeInfo info)
+            {
+                if (Double.IsNaN(info.Price))
+                {
+                    return;
+                }
+
+                string symbol = String.IsNullOrWhiteSpace(info.Symbol) ? String.Empty : info.Symbol.Trim().ToUpperInvariant();
+                string timestamp = DateTime.UtcNow.ToString("o");
+                Console.WriteLine("TICK|" + timestamp + "|" + symbol + "|" + info.Price.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                UpdateBar(symbol, info.Price, DateTime.UtcNow);
+            }
+
+            public override void Alert(AlertInfo info)
+            {
+                var sb = new StringBuilder();
+                info.Dump(sb);
+                string alertText = sb.ToString().Replace("\r", " ").Replace("\n", " ");
+                Console.WriteLine("ALERT|" + alertText);
+
+                if (info.ConnectionId == ConnectionId.Repository)
+                {
+                    if (info.AlertType == AlertType.LoginComplete)
+                    {
+                        RepositoryLoginStatus = BridgeLoginStatus.LoggedIn;
+                        Console.WriteLine("STATUS|repository_login_complete");
+                    }
+                    else if (info.AlertType == AlertType.LoginFailed)
+                    {
+                        RepositoryLoginStatus = BridgeLoginStatus.LoginFailed;
+                        Console.WriteLine("STATUS|repository_login_failed");
+                    }
+                }
+
+                if (info.ConnectionId == ConnectionId.MarketData &&
+                    info.AlertType == AlertType.LoginComplete)
+                {
+                    LoggedIntoMd = true;
+                    Console.WriteLine("STATUS|market_data_login_complete");
+                    Console.WriteLine("STATUS|market_data_connected");
+                }
+
+                if (info.ConnectionId == ConnectionId.TradingSystem &&
+                    info.AlertType == AlertType.LoginComplete)
+                {
+                    LoggedIntoTs = true;
+                    Console.WriteLine("STATUS|trading_system_login_complete");
+                    Console.WriteLine("STATUS|trading_system_connected");
+                }
+
+                if (!ShutdownRequested && alertText.IndexOf("Market Data Connection Closed", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    MarketDataClosedUnexpectedly = true;
+                    Console.WriteLine("STATUS|market_data_connection_closed_unexpected");
+                }
+
+                if (!ShutdownRequested && alertText.IndexOf("Trading System Connection Closed", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    TradingSystemClosedUnexpectedly = true;
+                    Console.WriteLine("STATUS|trading_system_connection_closed_unexpected");
+                }
+            }
+
+            public override void AgreementList(AgreementListInfo info)
+            {
+                foreach (AgreementInfo agreement in info.Agreements)
+                {
+                    if (agreement.Mandatory && agreement.Status == "active")
+                    {
+                        UnacceptedMandatoryAgreementCount++;
+                    }
+                }
+
+                ReceivedAgreementList = true;
+                Console.WriteLine("STATUS|agreement_list_received|" + UnacceptedMandatoryAgreementCount);
+            }
+
+            public override void Bar(BarInfo info)
+            {
+                if (info.Type != BarType.Minute || info.SpecifiedMinutes != 1)
+                {
+                    return;
+                }
+
+                HistoricalReplayStarted = true;
+                HistoricalBarsReceived++;
+                LastHistoricalReplayEventUtc = DateTime.UtcNow;
+                PrintHistoricalBar(info);
+            }
+
+            public override void BarReplay(BarReplayInfo info)
+            {
+                HistoricalReplayStarted = true;
+                LastHistoricalReplayEventUtc = DateTime.UtcNow;
+                Console.WriteLine("STATUS|historical_replay_event|rp_code=" + info.RpCode.ToString());
+            }
+        }
+
+        public static class BridgeRunner
+        {
+            public static int Run(
+                string userName,
+                string password,
+                string mdConnectionPoint,
+                string tsConnectionPoint,
+                string repositoryConnectionPoint,
+                string exchangeCode,
+                string symbolCode)
+            {
+                BridgeCallbacks callbacks = new BridgeCallbacks();
+                REngineParams engineParams = new REngineParams();
+                REngine engine = null;
+
+                engineParams.AppName = "RithmicLiveListenerPhaseA";
+                engineParams.AppVersion = "1.0.0.0";
+                engineParams.AdmCallbacks = new BridgeAdmCallbacks();
+                engineParams.DmnSrvrAddr = "ritpz01004.01.rithmic.com:65000~ritpz04063.04.rithmic.com:65000~ritpz01004.01.rithmic.net:65000~ritpz04063.04.rithmic.net:65000~ritpz01004.01.theomne.net:65000~ritpz04063.04.theomne.net:65000~ritpz01004.01.theomne.com:65000~ritpz04063.04.theomne.com:65000";
+                engineParams.DomainName = "rithmic_paper_prod_domain";
+                engineParams.LicSrvrAddr = "ritpz04063.04.rithmic.com:56000~ritpz01004.01.rithmic.com:56000~ritpz04063.04.rithmic.net:56000~ritpz04063.04.theomne.net:56000~ritpz04063.04.theomne.com:56000~ritpz01000.01.rithmic.com:56000~ritpz01001.01.rithmic.com:56000~ritpz01000.01.rithmic.net:56000~ritpz01001.01.rithmic.net:56000~ritpz01000.01.theomne.net:56000~ritpz01001.01.theomne.net:56000~ritpz01000.01.theomne.com:56000~ritpz01001.01.theomne.com:56000~ritpz24050.rithmic.com:56000~ritpz24050.rithmic.net:56000~ritpz24050.theomne.net:56000~ritpz24050.theomne.com:56000~ritpz23010.rithmic.com:56000~ritpz23010.rithmic.net:56000~ritpz23010.theomne.net:56000~ritpz23010.theomne.com:56000~ritpz23011.rithmic.com:56000~ritpz23011.rithmic.net:56000~ritpz23011.theomne.net:56000~ritpz23011.theomne.com:56000~ritpz24013.rithmic.com:56000~ritpz24013.rithmic.net:56000~ritpz24013.theomne.net:56000~ritpz24013.theomne.com:56000";
+                engineParams.LocBrokAddr = "ritpz04063.04.rithmic.com:64100";
+                engineParams.LoggerAddr = "ritpz04063.04.rithmic.com:45454~ritpz01004.01.rithmic.com:45454~ritpz04063.04.rithmic.net:45454~ritpz01004.01.rithmic.net:45454~ritpz04063.04.theomne.net:45454~ritpz01004.01.theomne.net:45454~ritpz04063.04.theomne.com:45454~ritpz01004.01.theomne.com:45454";
+                engineParams.LogFilePath = "rithmic_live_listener_phase_a.log";
+
+                try
+                {
+                    int historicalSeedLookbackMinutes = """ + str(HISTORICAL_SEED_LOOKBACK_MINUTES) + r""";
+                    int historicalSeedTimeoutSeconds = 10;
+
+                    Console.CancelKeyPress += (sender, args) =>
+                    {
+                        args.Cancel = true;
+                        callbacks.RequestShutdown();
+                        Console.WriteLine("STATUS|manual_shutdown_requested");
+                    };
+
+                    Console.WriteLine("STATUS|creating_engine");
+                    var engineTask = Task.Run(() => new REngine(engineParams));
+                    if (!engineTask.Wait(TimeSpan.FromSeconds(""" + str(ENGINE_CREATION_TIMEOUT_SECONDS) + r""")))
+                    {
+                        Console.WriteLine("ERROR|engine_creation_timeout");
+                        return 12;
+                    }
+
+                    engine = engineTask.Result;
+                    Console.WriteLine("STATUS|dll_loaded");
+
+                    callbacks.RepositoryLoginStatus = BridgeLoginStatus.LoginInProgress;
+                    Console.WriteLine("STATUS|repository_login_start");
+                    engine.loginRepository(
+                        callbacks,
+                        String.Empty,
+                        userName,
+                        password,
+                        repositoryConnectionPoint
+                    );
+
+                    while (callbacks.RepositoryLoginStatus != BridgeLoginStatus.LoggedIn &&
+                           callbacks.RepositoryLoginStatus != BridgeLoginStatus.LoginFailed)
+                    {
+                        if (callbacks.ShutdownRequested)
+                        {
+                            return 0;
+                        }
+                        Thread.Sleep(1000);
+                    }
+
+                    if (callbacks.RepositoryLoginStatus == BridgeLoginStatus.LoginFailed)
+                    {
+                        Console.WriteLine("ERROR|repository_login_failed");
+                        engine.shutdown();
+                        return 2;
+                    }
+
+                    Console.WriteLine("STATUS|requesting_agreements");
+                    engine.listAgreements(false, null);
+
+                    while (!callbacks.ReceivedAgreementList)
+                    {
+                        if (callbacks.ShutdownRequested)
+                        {
+                            return 0;
+                        }
+                        Thread.Sleep(1000);
+                    }
+
+                    if (callbacks.UnacceptedMandatoryAgreementCount > 0)
+                    {
+                        Console.WriteLine("ERROR|mandatory_agreements_unaccepted");
+                        engine.logoutRepository();
+                        engine.shutdown();
+                        return 3;
+                    }
+
+                    Console.WriteLine("STATUS|repository_logout");
+                    engine.logoutRepository();
+
+                    Console.WriteLine("STATUS|market_data_login_start");
+                    engine.login(
+                        callbacks,
+                        String.Empty,
+                        userName,
+                        password,
+                        mdConnectionPoint,
+                        Constants.DEFAULT_ENVIRONMENT_KEY,
+                        userName,
+                        password,
+                        tsConnectionPoint,
+                        String.Empty,
+                        String.Empty,
+                        String.Empty,
+                        String.Empty,
+                        String.Empty
+                    );
+
+                    while (!callbacks.LoggedIntoMd || !callbacks.LoggedIntoTs)
+                    {
+                        if (callbacks.ShutdownRequested)
+                        {
+                            return 0;
+                        }
+                        Thread.Sleep(1000);
+                    }
+
+                    Console.WriteLine("STATUS|phase_b_login_success");
+                    callbacks.ResetHistoricalReplayState();
+                    callbacks.HistoricalReplayRequested = true;
+                    Console.WriteLine("STATUS|historical_replay_request_start|" + exchangeCode + "|" + symbolCode);
+
+                    try
+                    {
+                        DateTime replayEnd = DateTime.UtcNow;
+                        DateTime replayStart = replayEnd.AddMinutes(-historicalSeedLookbackMinutes);
+                        ReplayBarParams replayParams = new ReplayBarParams();
+                        replayParams.Exchange = exchangeCode;
+                        replayParams.Symbol = symbolCode;
+                        replayParams.Type = BarType.Minute;
+                        replayParams.SpecifiedMinutes = 1;
+                        replayParams.StartCcyymmdd = replayStart.ToString("yyyyMMdd");
+                        replayParams.StartSsboe = (int)(replayStart - replayStart.Date).TotalSeconds;
+                        replayParams.StartUsecs = 0;
+                        replayParams.EndCcyymmdd = replayEnd.ToString("yyyyMMdd");
+                        replayParams.EndSsboe = (int)(replayEnd - replayEnd.Date).TotalSeconds;
+                        replayParams.EndUsecs = 0;
+                        replayParams.Context = "historical_seed";
+
+                        engine.replayBars(replayParams);
+
+                        DateTime replayDeadline = DateTime.UtcNow.AddSeconds(historicalSeedTimeoutSeconds);
+                        while (DateTime.UtcNow < replayDeadline)
+                        {
+                            if (callbacks.ShutdownRequested)
+                            {
+                                return 0;
+                            }
+
+                            if (callbacks.HistoricalReplayStarted &&
+                                callbacks.LastHistoricalReplayEventUtc != DateTime.MinValue &&
+                                DateTime.UtcNow.Subtract(callbacks.LastHistoricalReplayEventUtc).TotalMilliseconds >= 1500)
+                            {
+                                break;
+                            }
+
+                            Thread.Sleep(200);
+                        }
+
+                        if (callbacks.HistoricalBarsReceived > 0)
+                        {
+                            Console.WriteLine("STATUS|historical_replay_request_complete|bars_received=" + callbacks.HistoricalBarsReceived.ToString());
+                        }
+                        else
+                        {
+                            callbacks.HistoricalReplayTimedOut = true;
+                            Console.WriteLine("STATUS|historical_replay_request_timeout|bars_received=0");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("STATUS|historical_replay_request_failed|" + ex.Message.Replace("\r", " ").Replace("\n", " "));
+                    }
+
+                    Console.WriteLine("STATUS|subscribing|" + exchangeCode + "|" + symbolCode);
+                    engine.subscribe(
+                        exchangeCode,
+                        symbolCode,
+                        SubscriptionFlags.Prints,
+                        null
+                    );
+
+                    Console.WriteLine("STATUS|listener_service_running");
+                    while (!callbacks.ShutdownRequested &&
+                           !callbacks.MarketDataClosedUnexpectedly &&
+                           !callbacks.TradingSystemClosedUnexpectedly)
+                    {
+                        Thread.Sleep(500);
+                    }
+
+                    callbacks.FinalizeCurrentBar();
+
+                    if (callbacks.ShutdownRequested)
+                    {
+                        Console.WriteLine("STATUS|manual_shutdown");
+                        return 0;
+                    }
+
+                    Console.WriteLine("STATUS|connection_closed_unexpected");
+                    return 20;
+                }
+                catch (OMException ex)
+                {
+                    Console.WriteLine("ERROR|" + ex.Message.Replace("\r", " ").Replace("\n", " "));
+                    return 10;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("ERROR|" + ex.Message.Replace("\r", " ").Replace("\n", " "));
+                    return 11;
+                }
+                finally
+                {
+                    if (engine != null)
+                    {
+                        try
+                        {
+                            engine.logout();
+                        }
+                        catch
+                        {
+                        }
+
+                        try
+                        {
+                            engine.shutdown();
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            }
+        }
+"@
+
+        $exitCode = [BridgeRunner]::Run(
+            $UserName,
+            $Password,
+            $MdConnectionPoint,
+            $TsConnectionPoint,
+            $RepositoryConnectionPoint,
+            $ExchangeCode,
+            $SymbolCode
+        )
+
+        exit $exitCode
+        """
+    ).strip()
+
+
+def write_powershell_bridge():
+    RITHMIC_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    POWERSHELL_BRIDGE_PATH.write_text(
+        build_powershell_bridge(),
+        encoding="utf-8",
+    )
+    return POWERSHELL_BRIDGE_PATH
+
+
+def validate_env():
+    missing = []
+    if not RITHMIC_USER:
+        missing.append("RITHMIC_USER")
+    if not RITHMIC_PASSWORD:
+        missing.append("RITHMIC_PASSWORD")
+    if missing:
+        raise RuntimeError(
+            "Missing required environment variables: " + ", ".join(missing)
+        )
+
+
+def build_command():
+    dll_path = ensure_runtime_files()
+    bridge_path = write_powershell_bridge()
+
+    return [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(bridge_path),
+        "-DllPath",
+        str(dll_path),
+        "-UserName",
+        RITHMIC_USER,
+        "-Password",
+        RITHMIC_PASSWORD,
+        "-MdConnectionPoint",
+        RITHMIC_MD_CONNECTION_POINT,
+        "-TsConnectionPoint",
+        RITHMIC_TS_CONNECTION_POINT,
+        "-RepositoryConnectionPoint",
+        RITHMIC_REPOSITORY_CONNECTION_POINT,
+        "-ExchangeCode",
+        RITHMIC_TEST_EXCHANGE,
+        "-SymbolCode",
+        RITHMIC_TEST_SYMBOL,
+    ]
+
+
+def terminate_process(process):
+    if process.poll() is not None:
+        return
+
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def main():
+    validate_env()
+    command = build_command()
+    bar_cache = load_recent_bars()
+    persisted_bar_count = sum(len(bars) for bars in bar_cache.values())
+    subscribed_symbol = RITHMIC_TEST_SYMBOL.upper()
+    reconnect_attempt = 0
+
+    print("RITHMIC STATUS|startup_begin")
+    print(f"RITHMIC STATUS|dll_path|{RAPIPLUS_DLL_PATH}")
+    print(f"RITHMIC STATUS|md_connection_point|{RITHMIC_MD_CONNECTION_POINT}")
+    print(f"RITHMIC STATUS|ts_connection_point|{RITHMIC_TS_CONNECTION_POINT}")
+    print(f"RITHMIC STATUS|subscribed_symbol|{RITHMIC_TEST_EXCHANGE}|{RITHMIC_TEST_SYMBOL}")
+    print(f"RITHMIC STATUS|atr_seed_bars_loaded_total|{persisted_bar_count}")
+
+    while True:
+        if reconnect_attempt > 0:
+            print(f"RITHMIC STATUS|reconnect_attempt|{reconnect_attempt}")
+
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+            cwd=str(RITHMIC_RUNTIME_DIR),
+        )
+
+        assert process.stdout is not None
+        manual_shutdown_seen = False
+        reconnect_success_logged = False
+        service_running_seen = False
+        historical_seed_bars = []
+        historical_fallback_reason = "historical_replay_unavailable"
+
+        try:
+            for raw_line in process.stdout:
+                line = raw_line.strip()
+                if not line:
+                    continue
+
+                print(f"RITHMIC {line}")
+
+                if line == "STATUS|manual_shutdown":
+                    manual_shutdown_seen = True
+
+                if (
+                    reconnect_attempt > 0
+                    and not reconnect_success_logged
+                    and line == "STATUS|listener_service_running"
+                ):
+                    print("RITHMIC STATUS|reconnect_success")
+                    reconnect_success_logged = True
+
+                if line == "STATUS|listener_service_running":
+                    service_running_seen = True
+                    historical_seed = seed_atr_from_historical_bars(
+                        bar_cache,
+                        subscribed_symbol,
+                        historical_seed_bars,
+                    )
+                    if historical_seed is not None:
+                        print(
+                            "RITHMIC STATUS|historical_bars_loaded|"
+                            f"{subscribed_symbol}|count={historical_seed['count']}"
+                        )
+                        print(
+                            "RITHMIC STATUS|atr_seeded_from_historical_bars|"
+                            f"{subscribed_symbol}|bar_timestamp={historical_seed['bar_timestamp']}"
+                        )
+                        print(
+                            "RITHMIC STATUS|atr_seed_value|"
+                            f"{subscribed_symbol}|value={historical_seed['atr_value']}"
+                        )
+                        print(f"RITHMIC {historical_seed['atr_line']}")
+                    else:
+                        if len(historical_seed_bars) > 0 and len(historical_seed_bars) < ATR_SEED_BAR_COUNT:
+                            historical_fallback_reason = (
+                                f"historical_replay_insufficient_{len(historical_seed_bars)}"
+                            )
+                        print(
+                            "RITHMIC STATUS|fallback_to_persisted_bars|"
+                            f"{subscribed_symbol}|reason={historical_fallback_reason}"
+                        )
+                        seed_logs, atr_line = seed_atr_from_persisted_bars(bar_cache, subscribed_symbol)
+                        for seed_log in seed_logs:
+                            print(f"RITHMIC {seed_log}")
+                        if atr_line is not None:
+                            print(f"RITHMIC {atr_line}")
+
+                if line.startswith("HISTBAR|"):
+                    try:
+                        historical_seed_bars.append(
+                            parse_completed_bar_line(line.replace("HISTBAR|", "BAR|", 1))
+                        )
+                    except Exception as exc:
+                        print(f"RITHMIC ERROR|historical_bar_processing_failed|{exc}")
+                    continue
+
+                if line.startswith("STATUS|historical_replay_request_failed|"):
+                    historical_fallback_reason = "historical_replay_failed"
+                elif line.startswith("STATUS|historical_replay_request_timeout|"):
+                    historical_fallback_reason = "historical_replay_timeout"
+                elif line.startswith("STATUS|historical_replay_request_complete|bars_received="):
+                    try:
+                        bar_count = int(line.rsplit("=", 1)[1])
+                    except Exception:
+                        bar_count = 0
+                    if bar_count < ATR_SEED_BAR_COUNT:
+                        historical_fallback_reason = f"historical_replay_insufficient_{bar_count}"
+
+                if line.startswith("BAR|"):
+                    try:
+                        completed_bar = parse_completed_bar_line(line)
+                        print(
+                            "RITHMIC STATUS|completed_1m_bar|"
+                            f"{completed_bar['timestamp']}|{completed_bar['symbol']}"
+                        )
+                        atr_line, persisted_count = update_recent_bars(bar_cache, completed_bar)
+                        print(
+                            "RITHMIC STATUS|recent_bars_persisted|"
+                            f"{completed_bar['symbol']}|count={persisted_count}"
+                        )
+                        if atr_line is not None:
+                            print(f"RITHMIC {atr_line}")
+                            print(
+                                "RITHMIC STATUS|atr_published|"
+                                f"{completed_bar['timestamp']}|{completed_bar['symbol']}"
+                            )
+                    except Exception as exc:
+                        print(f"RITHMIC ERROR|bar_processing_failed|{exc}")
+        except KeyboardInterrupt:
+            print("RITHMIC STATUS|manual_shutdown")
+            terminate_process(process)
+            return
+
+        return_code = process.wait()
+        if manual_shutdown_seen:
+            print("RITHMIC STATUS|manual_shutdown")
+            return
+
+        if not service_running_seen:
+            current_bar_count = get_symbol_bar_count(bar_cache, subscribed_symbol)
+            print(f"RITHMIC STATUS|recent_bars_loaded|{subscribed_symbol}|count={current_bar_count}")
+            if current_bar_count < ATR_SEED_BAR_COUNT:
+                print(
+                    "RITHMIC STATUS|recent_bars_insufficient|"
+                    f"{subscribed_symbol}|required={ATR_SEED_BAR_COUNT}|available={current_bar_count}"
+                )
+
+        reconnect_attempt += 1
+
+        if return_code == 0:
+            print("RITHMIC STATUS|bridge_stopped")
+        else:
+            print(f"RITHMIC STATUS|bridge_exit_code|{return_code}")
+
+        delay_seconds = min(
+            RECONNECT_BASE_DELAY_SECONDS * (2 ** max(reconnect_attempt - 1, 0)),
+            RECONNECT_MAX_DELAY_SECONDS,
+        )
+        print(f"RITHMIC STATUS|reconnect_backoff|attempt={reconnect_attempt}|delay_seconds={delay_seconds}")
+        time.sleep(delay_seconds)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("RITHMIC STATUS|manual_shutdown")
+    except Exception as exc:
+        print(f"RITHMIC listener failed: {exc}")
+        sys.exit(1)

@@ -1,0 +1,300 @@
+🧠 RandleSystem – Trade Lifecycle Rules v1
+1. GLOBAL RULES
+RULE 1.1 — Single State Enforcement
+
+A trade must always exist in exactly one state:
+
+created
+active
+runner_active
+closed
+cancelled
+
+No overlap allowed.
+
+RULE 1.2 — Closed State Finality
+
+IF status IN [closed, cancelled]
+THEN:
+
+deny all management actions
+deny all executor commands
+allow read/log only
+RULE 1.3 — Protective Stop Requirement
+
+IF status IN [active, runner_active]
+THEN:
+
+a valid stop MUST exist
+
+IF no stop exists:
+→ raise CRITICAL INTEGRITY ERROR
+
+RULE 1.4 — Remaining Size Consistency
+
+IF status == closed
+THEN:
+
+remaining_size MUST equal 0
+
+IF NOT:
+→ integrity error
+
+RULE 1.5 — TP1 Uniqueness
+
+IF tp1_hit == True
+THEN:
+
+TP1 logic CANNOT execute again
+RULE 1.6 — BE Uniqueness
+
+IF moved_to_be == True
+THEN:
+
+BE logic CANNOT execute again
+(unless explicitly runner-specific logic)
+2. STATE TRANSITION RULES
+2.1 CREATED STATE
+Allowed Events:
+ENTRY_FILLED
+ENTRY_CANCELLED
+RULE 2.1.1 — Entry Fill
+
+IF status == created
+AND event == ENTRY_FILLED
+THEN:
+
+status = active
+entry_filled = True
+filled_at = timestamp
+RULE 2.1.2 — Entry Cancel
+
+IF status == created
+AND event == ENTRY_CANCELLED
+THEN:
+
+status = cancelled
+closed_at = timestamp
+exit_reason = entry_cancelled
+Forbidden:
+BE logic
+TP1 logic
+stop handling
+flatten commands (unless position exists)
+2.2 ACTIVE STATE
+Event Priority Order (MANDATORY)
+
+When processing a price update:
+
+STOP HIT
+BE + TP1 SAME UPDATE
+TP1 ONLY
+BE ONLY
+NO ACTION
+2.2.1 STOP HIT
+
+IF status == active
+AND stop condition met
+THEN:
+
+close full position
+remaining_size = 0
+status = closed
+exit_reason = stop_loss
+2.2.2 BE + TP1 SAME UPDATE
+
+IF:
+
+TP1 level touched
+BE trigger touched
+AND both occur within same update
+
+THEN:
+
+set be_then_tp1_same_update = True
+process TP1 FIRST
+THEN process BE logic correctly for runner
+2.2.3 TP1 HIT
+
+IF status == active
+AND tp1_hit == False
+AND TP1 condition met
+THEN:
+
+execute partial exit
+update remaining_size
+set tp1_hit = True
+set tp1_hit_at = timestamp
+transition → runner_active
+2.2.4 BE TRIGGER
+
+IF status == active
+AND moved_to_be == False
+AND BE condition met
+THEN:
+
+cancel original stop
+place BE stop
+set:
+current_stop = entry_price
+moved_to_be = True
+be_hit_at = timestamp
+stop_state = break_even
+2.2.5 MANUAL FLATTEN
+
+IF status == active
+AND event == MANUAL_FLATTEN
+THEN:
+
+cancel all orders
+flatten position
+remaining_size = 0
+status = closed
+exit_reason = manual_flatten
+2.3 RUNNER_ACTIVE STATE
+RULE 2.3.1 — Entry Requirement
+
+IF status == runner_active
+THEN:
+
+tp1_hit MUST be True
+remaining_size < position_size
+
+IF NOT:
+→ integrity error
+
+Allowed Events:
+RUNNER_STOP_HIT
+MANUAL_FLATTEN
+TIME_EXIT
+FINAL_TARGET
+2.3.2 RUNNER STOP HIT
+
+IF status == runner_active
+AND stop condition met
+THEN:
+
+close remaining position
+remaining_size = 0
+status = closed
+exit_reason = tp1_runner_stop
+2.3.3 MANUAL FLATTEN
+
+IF status == runner_active
+AND event == MANUAL_FLATTEN
+THEN:
+
+cancel orders
+flatten
+remaining_size = 0
+status = closed
+exit_reason = manual_flatten
+2.3.4 TIME EXIT
+
+IF status == runner_active
+AND time rule triggered
+THEN:
+
+flatten position
+remaining_size = 0
+status = closed
+exit_reason = time_exit
+3. ILLEGAL TRANSITIONS
+
+These must be BLOCKED:
+
+closed → active
+closed → runner_active
+cancelled → active
+created → runner_active
+runner_active → active
+
+IF attempted:
+→ log INVALID STATE TRANSITION ERROR
+
+4. STOP STATE RULES
+
+Allowed stop_state values:
+
+original
+break_even
+runner_original
+runner_break_even
+cancel_pending
+replace_pending
+none
+RULE 4.1
+
+IF status == active
+THEN:
+
+stop_state MUST be:
+original OR break_even
+RULE 4.2
+
+IF status == runner_active
+THEN:
+
+stop_state MUST be:
+runner_original OR runner_break_even
+5. EXECUTOR COMMAND RULES
+RULE 5.1 — Trade Manager Authority
+
+ONLY Trade Manager may issue:
+
+submit_stop
+cancel_order
+flatten_symbol
+submit_limit (TP1)
+
+Executor must NEVER:
+
+initiate logic
+make decisions
+RULE 5.2 — No Duplicate Commands
+
+IF:
+
+stop already at BE
+THEN:
+DO NOT resend BE stop
+RULE 5.3 — Cancel Before Replace
+
+IF replacing stop:
+
+cancel existing stop
+confirm cancel
+submit new stop
+6. LIFECYCLE INTEGRITY CHECK (RUN EVERY UPDATE)
+
+Each cycle validate:
+
+state is valid
+remaining_size consistent
+stop exists if active
+TP1 not duplicated
+BE not duplicated
+no illegal transitions occurred
+executor state matches internal state
+
+IF ANY FAIL:
+→ log error
+→ flag trade
+
+7. EXIT REASONS (STANDARDIZED)
+
+Allowed values:
+
+stop_loss
+break_even_stop
+tp1_runner_stop
+tp1_runner_break_even
+manual_flatten
+time_exit
+entry_cancelled
+final_target
+🔥 FINAL RULE
+
+State controls permissions.
+Flags control detail.
+Orders confirm reality.

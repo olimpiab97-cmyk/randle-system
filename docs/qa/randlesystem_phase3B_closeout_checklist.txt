@@ -1,0 +1,183 @@
+🧠 PURPOSE
+
+Confirm:
+
+system behaves correctly under all expected conditions
+no silent failures
+no logic leaks between Trade Manager and Executor
+
+👉 This is your last gate before Recovery phase
+
+✅ 1. ACTION VALIDATION
+TEST 1.1 — Invalid Action Rejection
+
+Send:
+
+submit_stop → Trade Manager
+
+Expected:
+
+❌ rejected
+❌ not executed
+✅ logged as invalid
+TEST 1.2 — Executor Only Executes Allowed Actions
+
+Send valid command:
+
+cancel_order
+
+Expected:
+
+✅ executed
+✅ logged
+❌ no logic performed inside executor
+✅ 2. ORDER TRACKING
+TEST 2.1 — Entry → Stop → TP1 Tracking
+
+Run a full trade and verify:
+
+entry order recorded
+stop order recorded
+TP1 order recorded
+all linked to same trade_id
+
+Expected:
+
+✅ all orders tracked
+✅ correct status transitions
+TEST 2.2 — Order State Changes
+
+Simulate:
+
+cancel stop
+replace stop
+
+Expected:
+
+old order → cancelled
+new order → active
+no orphan orders
+✅ 3. STOP REPLACEMENT
+TEST 3.1 — BE Move
+
+Trigger BE:
+
+Expected:
+
+cancel original stop
+confirm cancel
+place new stop at entry
+
+Verify:
+
+❌ no duplicate stops
+❌ no missing stop window
+✅ correct stop price
+✅ 4. TP1 + RUNNER FLOW
+TEST 4.1 — Standard TP1
+
+Expected:
+
+partial exit executed
+remaining_size reduced
+runner exists
+new stop applied to runner
+TEST 4.2 — TP1 Then STOP
+
+Expected:
+
+runner stop executes
+trade closes cleanly
+no extra orders left
+✅ 5. BE + TP1 SAME UPDATE (CRITICAL)
+TEST 5.1 — Same Tick Hit
+
+Simulate price hitting:
+
+TP1
+BE trigger
+
+Same update.
+
+Expected:
+
+TP1 executes FIRST
+BE applies to runner
+be_then_tp1_same_update = True
+correct remaining size
+correct stop placement
+✅ 6. STATE CONSISTENCY
+TEST 6.1 — Active Trade
+
+Verify:
+
+remaining_size == position_size
+stop exists
+TEST 6.2 — Runner Trade
+
+Verify:
+
+remaining_size < position_size
+tp1_hit == True
+TEST 6.3 — Closed Trade
+
+Verify:
+
+remaining_size == 0
+no active orders
+✅ 7. FLATTEN LOGIC
+TEST 7.1 — Manual Flatten
+
+Expected:
+
+all orders cancelled
+position flattened
+trade → closed
+✅ 8. ERROR HANDLING
+TEST 8.1 — Duplicate TP1
+
+Try to trigger TP1 twice.
+
+Expected:
+
+second attempt ignored
+logged
+TEST 8.2 — Duplicate BE
+
+Trigger BE twice.
+
+Expected:
+
+second attempt ignored
+no duplicate stop
+✅ 9. LOGGING VALIDATION
+
+Verify logs show:
+
+event received
+action executed
+order ID
+trade ID
+timestamps
+
+No silent failures allowed.
+
+🧾 PASS / FAIL TRACKING
+
+Create a simple table:
+
+Test ID | Result | Notes
+--------|--------|------
+1.1     | PASS   |
+1.2     | PASS   |
+...
+🚫 EXIT CONDITION (MANDATORY)
+
+Phase 3B is ONLY complete when:
+
+ALL tests pass
+NO mismatches
+NO orphan orders
+NO duplicate actions
+NO missing stops
+BE/TP1 same update behaves correctly

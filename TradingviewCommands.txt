@@ -1,0 +1,46 @@
+--------
+Enter
+-------
+
+
+$response = Invoke-RestMethod -Uri "http://127.0.0.1:5000/webhook" `
+-Method Post `
+-ContentType "application/json" `
+-Body '{
+  "event":"enter_trade",
+  "symbol":"NQ",
+  "direction":"long",
+  "entry_price":100,
+  "stop_price":90,
+  "tp1_price":110,
+  "be_trigger_price":105,
+  "position_size":2
+}'
+
+$response.trade | Format-List *
+
+
+-------------
+Price Update
+------------
+
+
+
+$response = Invoke-RestMethod -Uri "http://127.0.0.1:5000/webhook" `
+-Method Post `
+-ContentType "application/json" `
+-Body '{"event":"price_update","price":110}'
+
+$response.trade | Format-List *
+
+
+-------------
+Force Exit
+-------------
+
+$response = Invoke-RestMethod -Uri "http://127.0.0.1:5000/webhook" `
+-Method Post `
+-ContentType "application/json" `
+-Body '{"event":"force_time_exit"}'
+
+$response.trade | Format-List *
