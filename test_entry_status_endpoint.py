@@ -255,6 +255,224 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(result["last_interacted_liquidity"]["name"], "ONL")
         self.assertEqual(result["active_liquidity_group"]["name"], "LOW 1")
 
+    def test_nq_ll_exhaustion_rotates_to_onl_and_does_not_flip_back(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        original_state_path = entry_agent.STATE_PATH
+        original_context_path = entry_agent.TV_CONTEXT_PATH
+        original_by_symbol_path = entry_agent.TV_CONTEXT_BY_SYMBOL_PATH
+        original_atr_path = entry_agent.RITHMIC_ATR_SNAPSHOT_PATH
+        original_market_snapshot = entry_agent.get_latest_market_snapshot
+
+        market = {
+            "latest_price": 28655.5,
+            "latest_bar_time": "2026-05-07T16:15:00Z",
+            "ohlc_is_closed": True,
+            "ohlc": {"open": 28670.0, "high": 28670.25, "low": 28648.5, "close": 28655.5},
+        }
+
+        def fake_market_snapshot(_root):
+            return {
+                "source": "test",
+                "symbol": "NQM6",
+                "latest_price": market["latest_price"],
+                "latest_bar_time": market["latest_bar_time"],
+                "ohlc_is_closed": market["ohlc_is_closed"],
+                "ohlc": dict(market["ohlc"]),
+            }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            entry_agent.STATE_PATH = temp_path / "entry_agent_state.json"
+            entry_agent.TV_CONTEXT_PATH = temp_path / "tv_context.json"
+            entry_agent.TV_CONTEXT_BY_SYMBOL_PATH = temp_path / "tv_context_by_symbol.json"
+            entry_agent.RITHMIC_ATR_SNAPSHOT_PATH = temp_path / "rithmic_atr_snapshot.json"
+            entry_agent.get_latest_market_snapshot = fake_market_snapshot
+            entry_agent.TV_CONTEXT_BY_SYMBOL_PATH.write_text(
+                json.dumps(
+                    {
+                        "symbols": {
+                            "NQ": {
+                                "symbol": "NQ1!",
+                                "levels": {
+                                    "LL": {"price": 28690.25, "status": "ACTIVE", "stack_group": "LOW 1"},
+                                    "ONL": {"price": 28637.0, "status": "ACTIVE", "stack_group": "NONE"},
+                                    "PML": {"price": 28717.0, "status": "ACTIVE", "stack_group": "NONE"},
+                                },
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            ll_close = entry_agent.build_entry_status("NQM6")
+            self.assertEqual(ll_close["active_liquidity_name"], "LL")
+            self.assertEqual(ll_close["active_liquidity_price"], 28690.25)
+            self.assertNotEqual(ll_close["leg1_status"], "COMPLETE")
+
+            market.update(
+                {
+                    "latest_price": 28629.75,
+                    "latest_bar_time": "2026-05-07T16:18:00Z",
+                    "ohlc": {"open": 28644.75, "high": 28649.0, "low": 28625.0, "close": 28629.75},
+                }
+            )
+            onl_reached = entry_agent.build_entry_status("NQM6")
+            self.assertEqual(onl_reached["active_liquidity_name"], "ONL")
+            self.assertEqual(onl_reached["active_liquidity_price"], 28637.0)
+
+            state = json.loads(entry_agent.STATE_PATH.read_text(encoding="utf-8"))
+            consumed = ((state.get("state_by_symbol") or {}).get("NQ") or {}).get("consumed_liquidity_levels") or []
+            self.assertTrue(
+                any(
+                    record.get("name") == "LL"
+                    and record.get("price") == 28690.25
+                    and record.get("exhaustion_type")
+                    in {"same_side_next_liquidity_reached", "no_leg1_50_percent_exhaustion"}
+                    for record in consumed
+                )
+            )
+
+            market.update(
+                {
+                    "latest_price": 28658.5,
+                    "latest_bar_time": "2026-05-07T16:22:00Z",
+                    "ohlc": {"open": 28628.75, "high": 28660.0, "low": 28627.0, "close": 28658.5},
+                }
+            )
+            after_onl_touch = entry_agent.build_entry_status("NQM6")
+            self.assertEqual(after_onl_touch["active_liquidity_name"], "ONL")
+            self.assertEqual(after_onl_touch["active_liquidity_price"], 28637.0)
+            self.assertNotEqual(after_onl_touch["active_liquidity_name"], "LL")
+
+        entry_agent.STATE_PATH = original_state_path
+        entry_agent.TV_CONTEXT_PATH = original_context_path
+        entry_agent.TV_CONTEXT_BY_SYMBOL_PATH = original_by_symbol_path
+        entry_agent.RITHMIC_ATR_SNAPSHOT_PATH = original_atr_path
+        entry_agent.get_latest_market_snapshot = original_market_snapshot
+
+    def test_no_leg1_50_percent_exhaustion_rotates_to_next_same_side_target(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        persisted_liquidity = {"name": "LL", "price": 100.0, "side": "lower"}
+        persisted_state = {
+            "last_interacted_liquidity_by_symbol": {"NQ": persisted_liquidity},
+            "state_by_symbol": {
+                "NQ": {
+                    "last_interacted_liquidity": persisted_liquidity,
+                    "step4": {"status": "WAIT", "state": {}},
+                    "consumed_liquidity_levels": [],
+                }
+            },
+        }
+        snapshot = {
+            "symbol": "NQM6",
+            "normalized_symbol": "NQ",
+            "latest_price": 95.0,
+            "latest_bar_time": "2026-05-07T16:16:00Z",
+            "ohlc_is_closed": True,
+            "ohlc": {"open": 100.5, "high": 101.0, "low": 94.75, "close": 95.0},
+            "tv_context": {
+                "levels": {
+                    "LL": {"price": 100.0, "status": "ACTIVE", "stack_group": "NONE"},
+                    "ONL": {"price": 90.0, "status": "ACTIVE", "stack_group": "NONE"},
+                }
+            },
+        }
+
+        result = entry_agent.evaluate_live_step_2_1a(snapshot, {}, {"tick_size": 0.25}, persisted_state)
+
+        self.assertEqual(result["active_level"], "ONL")
+        self.assertEqual(result["level_price"], 90.0)
+        self.assertTrue(
+            any(
+                record.get("name") == "LL"
+                and record.get("exhaustion_type") == "no_leg1_50_percent_exhaustion"
+                and record.get("exhausted_by") == "ONL"
+                for record in result["consumed_liquidity_levels"]
+            )
+        )
+
+    def test_leg1_no_leg2_25_percent_exhaustion_rotates_to_next_same_side_target(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        candle_a = {"timestamp": "2026-05-07T16:18:00Z", "open": 101.0, "high": 101.5, "low": 99.0, "close": 99.5}
+        candle_b = {"timestamp": "2026-05-07T16:19:00Z", "open": 99.5, "high": 100.0, "low": 98.5, "close": 100.0}
+        persisted_liquidity = {"name": "LL", "price": 100.0, "side": "lower"}
+        step4_state = {
+            "leg1_state_locked": True,
+            "leg1_status": "COMPLETE",
+            "active_liquidity": persisted_liquidity,
+            "candle_a": candle_a,
+            "candle_b": candle_b,
+            "leg1_completed_at": candle_b["timestamp"],
+            "leg1_reference_price": candle_a["close"],
+            "leg1_reference_candle_time": candle_a["timestamp"],
+            "leg1_direction": "LONG",
+            "setup_direction": "LONG",
+            "current_active_sequence_started_at": candle_a["timestamp"],
+        }
+        persisted_state = {
+            "last_interacted_liquidity_by_symbol": {"NQ": persisted_liquidity},
+            "state_by_symbol": {
+                "NQ": {
+                    "last_interacted_liquidity": persisted_liquidity,
+                    "step4": {"status": "READY", "state": step4_state, "next_step": "Step 5"},
+                    "step5": {"status": "WAIT", "state": {"leg2_status": "WAIT"}, "next_step": "Step 5"},
+                    "consumed_liquidity_levels": [],
+                }
+            },
+        }
+        snapshot = {
+            "symbol": "NQM6",
+            "normalized_symbol": "NQ",
+            "latest_price": 96.0,
+            "latest_bar_time": "2026-05-07T16:20:00Z",
+            "ohlc_is_closed": True,
+            "ohlc": {"open": 99.0, "high": 99.25, "low": 92.5, "close": 96.0},
+            "tv_context": {
+                "levels": {
+                    "LL": {"price": 100.0, "status": "ACTIVE", "stack_group": "NONE"},
+                    "ONL": {"price": 90.0, "status": "ACTIVE", "stack_group": "NONE"},
+                }
+            },
+        }
+
+        result = entry_agent.evaluate_live_step_2_1a(snapshot, {}, {"tick_size": 0.25}, persisted_state)
+
+        self.assertEqual(result["active_level"], "ONL")
+        self.assertEqual(result["level_price"], 90.0)
+        self.assertTrue(
+            any(
+                record.get("name") == "LL"
+                and record.get("exhaustion_type") == "leg1_no_leg2_25_percent_exhaustion"
+                and record.get("exhausted_by") == "ONL"
+                for record in result["consumed_liquidity_levels"]
+            )
+        )
+
     def test_current_step_moves_to_step3_when_active_liquidity_selected(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:
@@ -1245,9 +1463,9 @@ class EntryStatusEndpointTests(unittest.TestCase):
 
         candle_a = {"open": 100.8, "high": 101.0, "low": 99.8, "close": 100.5, "timestamp": "2026-05-05T18:25:00Z"}
         candle_b = {"open": 100.2, "high": 100.7, "low": 99.5, "close": 100.1, "timestamp": "2026-05-05T18:26:00Z"}
-        invalidating_candle = {"open": 99.7, "high": 100.3, "low": 99.6, "close": 99.8, "timestamp": "2026-05-05T18:27:00Z"}
+        invalidating_candle = {"open": 99.7, "high": 100.3, "low": 98.8, "close": 99.0, "timestamp": "2026-05-05T18:27:00Z"}
         same_invalidating_snapshot = {
-            "latest_price": 99.8,
+            "latest_price": 99.0,
             "latest_bar_time": invalidating_candle["timestamp"],
             "ohlc": invalidating_candle,
             "liquidity": {

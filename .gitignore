@@ -96,6 +96,7 @@ App Working Rollback Dates/
 Paper Trade/
 .pycache_codex/
 tmp*
+*.tmp
 Data/tmp*
 /-Method
 /python

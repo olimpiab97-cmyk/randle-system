@@ -1772,6 +1772,53 @@ Key principle:
 - Each liquidity interaction is independent.
 - If it does not complete required behavior, it is void and has no impact on future setups.
 
+### Liquidity Spent / Exhaustion Rules
+
+Purpose:
+
+- Prevent stale liquidity from reactivating and interrupting the next valid same-side setup sequence.
+- Once a level is marked spent, it is inactive for the current sequence and must not be selected again unless a fresh independent context forms later.
+
+Rule 1 - No-Leg1 50% Exhaustion:
+
+- Applies when active liquidity has been accepted/broken but no valid Leg 1 has formed.
+- Measure from the active liquidity level or active zone boundary toward the next valid same-side liquidity target.
+- If a completed candle closes beyond 50% of that distance:
+  - Mark the original liquidity spent/inactive.
+  - Rotate active liquidity to the next same-side target.
+  - Do not allow the original liquidity to reactivate and interrupt that sequence.
+
+LOW-side example:
+
+- LL active.
+- Next LOW-side target = ONL.
+- Price closes at least halfway from LL toward ONL.
+- No valid Leg 1 exists at LL.
+- LL is spent; ONL becomes the active target.
+
+HIGH-side example:
+
+- LH active.
+- Next HIGH-side target = ONH.
+- Price closes at least halfway from LH toward ONH.
+- No valid Leg 1 exists at LH.
+- LH is spent; ONH becomes the active target.
+
+Rule 2 - Leg1-No-Leg2 25% Exhaustion:
+
+- Applies when a valid Leg 1 has formed but no valid Leg 2 has formed.
+- Measure from the original active liquidity level or active zone boundary toward the next valid same-side liquidity target.
+- If price reaches a point where 25% or less distance remains to the next same-side target:
+  - Mark the original liquidity spent/inactive.
+  - Rotate active liquidity to the next same-side target.
+  - Do not allow the original liquidity to reactivate and interrupt that sequence.
+
+Reach definition:
+
+- LOW side: candle low reaches the 25%-remaining threshold.
+- HIGH side: candle high reaches the 25%-remaining threshold.
+- The close does not need to be at the threshold for Rule 2; a reach is enough.
+
 ### Step 8 - Rejection Mode Re-Activation
 
 8.1 New Liquidity:

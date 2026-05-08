@@ -813,6 +813,8 @@ def evaluate_live_step_2_1a(
     symbol_state = symbol_scoped_persisted_state(persisted_state, symbol_key)
     persisted_candle_index = int(symbol_state.get("step_2_1a_candle_index") or 0)
     selected_liquidity = None
+    current_candle = build_current_candle(snapshot)
+    previous_liquidity = persisted_liquidity_candidate(persisted_state, symbol_key)
     if candle_close_confirmed(snapshot):
         selected_liquidity = selected_active_liquidity_from_context(
             snapshot.get("tv_context"),
@@ -823,23 +825,52 @@ def evaluate_live_step_2_1a(
         if not selected_liquidity:
             selected_liquidity = rotated_active_liquidity_after_inactive_acceptance(
                 snapshot.get("tv_context"),
-                persisted_liquidity_candidate(persisted_state, symbol_key),
+                previous_liquidity,
                 snapshot.get("ohlc") if isinstance(snapshot.get("ohlc"), dict) else None,
             )
-    current_candle = build_current_candle(snapshot)
-    if selected_liquidity and consumed_liquidity_blocks(
+    consumed_levels = list(consumed_liquidity_levels(symbol_state))
+    threshold_record, threshold_target = threshold_liquidity_exhaustion(
         symbol_state,
+        previous_liquidity,
+        snapshot.get("tv_context"),
+        current_candle,
+    )
+    if threshold_record:
+        consumed_levels = merge_consumed_liquidity_levels(consumed_levels, [threshold_record])
+        if threshold_target and (
+            not isinstance(selected_liquidity, dict)
+            or same_active_liquidity(selected_liquidity, previous_liquidity)
+            or consumed_liquidity_blocks(
+                {**symbol_state, "consumed_liquidity_levels": consumed_levels},
+                selected_liquidity.get("name"),
+                selected_liquidity.get("price"),
+                current_candle,
+            )
+        ):
+            selected_liquidity = threshold_target
+    symbol_state_with_consumed = {**symbol_state, "consumed_liquidity_levels": consumed_levels}
+    if selected_liquidity and consumed_liquidity_blocks(
+        symbol_state_with_consumed,
         selected_liquidity.get("name"),
         selected_liquidity.get("price"),
         current_candle,
     ):
         selected_liquidity = None
+    consumed_levels = merge_consumed_liquidity_levels(
+        consumed_levels,
+        record_exhausted_liquidity(
+            symbol_state_with_consumed,
+            previous_liquidity,
+            selected_liquidity,
+            current_candle,
+        ),
+    )
     active_level = selected_liquidity.get("name") if selected_liquidity else None
     level_price = selected_liquidity.get("price") if selected_liquidity else None
     if not selected_liquidity:
         persisted_liquidity = persisted_active_liquidity(persisted_state, symbol_key, snapshot.get("tv_context"))
         if persisted_liquidity and consumed_liquidity_blocks(
-            symbol_state,
+            {**symbol_state, "consumed_liquidity_levels": consumed_levels},
             persisted_liquidity.get("name"),
             persisted_liquidity.get("price"),
             current_candle,
@@ -896,6 +927,7 @@ def evaluate_live_step_2_1a(
         build_last_interacted_liquidity(selected_liquidity)
         or persisted_active_liquidity(persisted_state, symbol_key, snapshot.get("tv_context"))
     )
+    step_state["consumed_liquidity_levels"] = consumed_levels
     return step_state
 
 
@@ -1109,6 +1141,24 @@ def consumed_liquidity_levels(persisted_state: dict[str, Any]) -> list[dict[str,
     return consumed if isinstance(consumed, list) else []
 
 
+def merge_consumed_liquidity_levels(*sources: Any) -> list[dict[str, Any]]:
+    """Merge consumed liquidity records without dropping records from later steps."""
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for source in sources:
+        if not isinstance(source, list):
+            continue
+        for record in source:
+            if not isinstance(record, dict):
+                continue
+            key = record.get("key") or liquidity_key(record.get("name"), record.get("price"))
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            merged.append(record)
+    return merged
+
+
 def consumed_liquidity_blocks(
     persisted_state: dict[str, Any],
     name: Any,
@@ -1124,10 +1174,240 @@ def consumed_liquidity_blocks(
         if not isinstance(record, dict):
             continue
         record_key = record.get("key") or liquidity_key(record.get("name"), record.get("price"))
+        if record_key == key and record.get("exhaustion_type") in {
+            "next_liquidity_reached",
+            "same_side_next_liquidity_reached",
+            "no_leg1_50_percent_exhaustion",
+            "leg1_no_leg2_25_percent_exhaustion",
+        }:
+            return True
         source_time = record.get("invalidation_source_candle_time")
         if record_key == key and source_time and current_time <= str(source_time):
             return True
     return False
+
+
+def reached_next_same_side_liquidity(previous: dict[str, Any], selected: dict[str, Any]) -> bool:
+    """Return True when selection moves from a spent level to the next same-side target."""
+    previous_name = previous.get("name")
+    selected_name = selected.get("name")
+    previous_side = previous.get("side") or side_for_level(str(previous_name or ""))
+    selected_side = selected.get("side") or side_for_level(str(selected_name or ""))
+    previous_price = optional_float(previous.get("price"))
+    selected_price = optional_float(selected.get("price"))
+    if (
+        not previous_name
+        or not selected_name
+        or previous_name == selected_name
+        or previous_side not in {"lower", "upper"}
+        or selected_side != previous_side
+        or previous_price is None
+        or selected_price is None
+    ):
+        return False
+    if previous_side == "lower":
+        return selected_price < previous_price
+    return selected_price > previous_price
+
+
+def next_same_side_liquidity_target(
+    tv_context: dict[str, Any] | None,
+    previous: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Return the next active same-side target beyond the previous liquidity."""
+    if not isinstance(tv_context, dict) or not isinstance(tv_context.get("levels"), dict):
+        return None
+    if not isinstance(previous, dict):
+        return None
+    previous_name = str(previous.get("name") or "").strip()
+    previous_side = previous.get("side") or side_for_level(previous_name)
+    previous_price = optional_float(previous.get("price"))
+    if previous_side not in {"lower", "upper"} or previous_price is None:
+        return None
+
+    previous_details = tv_context["levels"].get(previous_name)
+    previous_stack_group = None
+    if isinstance(previous_details, dict):
+        stack_text = str(previous_details.get("stack_group") or "NONE").strip()
+        if stack_text and stack_text.upper() != "NONE":
+            previous_stack_group = stack_text
+
+    candidates: list[dict[str, Any]] = []
+    for name, details in tv_context["levels"].items():
+        if name not in ACTIVE_LIQUIDITY_PRIORITY or not isinstance(details, dict):
+            continue
+        if str(details.get("status") or "").upper() != "ACTIVE":
+            continue
+        if side_for_level(name) != previous_side:
+            continue
+        price = optional_float(details.get("price"))
+        if price is None:
+            continue
+        if previous_side == "lower" and price >= previous_price:
+            continue
+        if previous_side == "upper" and price <= previous_price:
+            continue
+        stack_text = str(details.get("stack_group") or "NONE").strip()
+        candidates.append(
+            {
+                "name": name,
+                "price": price,
+                "side": previous_side,
+                "priority": ACTIVE_LIQUIDITY_PRIORITY[name],
+                "distance": abs(price - previous_price),
+                "same_stack": bool(previous_stack_group and stack_text == previous_stack_group),
+            }
+        )
+    if not candidates:
+        return None
+    selected = min(candidates, key=lambda item: (not item["same_stack"], item["priority"], item["distance"], item["name"]))
+    return {
+        "name": selected["name"],
+        "price": selected["price"],
+        "side": selected["side"],
+        "group": active_stack_from_context(tv_context, str(selected["name"])),
+    }
+
+
+def has_valid_leg1_without_valid_leg2(persisted_state: dict[str, Any]) -> bool:
+    """Return True once Leg 1 is locked but Step 5 has not validated Leg 2."""
+    step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
+    step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    locked_ok, _reason = valid_participation_locked_leg1_state(step4_state)
+    if not locked_ok:
+        return False
+    step5 = persisted_state.get("step5") if isinstance(persisted_state.get("step5"), dict) else {}
+    step5_state = step5.get("state") if isinstance(step5.get("state"), dict) else {}
+    if step5.get("status") == "READY" or step5.get("next_step") == "Step 6":
+        return False
+    if step5_state.get("leg2_status") in {"VALIDATED", "COMPLETE"} or step5_state.get("step5_participation_validated") is True:
+        return False
+    return True
+
+
+def has_no_valid_leg1(persisted_state: dict[str, Any]) -> bool:
+    """Return True while the active liquidity has not produced a valid locked Leg 1."""
+    step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
+    step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    locked_ok, _reason = valid_participation_locked_leg1_state(step4_state)
+    return not locked_ok
+
+
+def liquidity_progression_fraction(
+    previous: dict[str, Any],
+    target: dict[str, Any],
+    candle: dict[str, Any] | None,
+    *,
+    use_reach: bool,
+) -> float | None:
+    """Return progress from previous liquidity toward the next same-side target."""
+    previous_side = previous.get("side") or side_for_level(str(previous.get("name") or ""))
+    previous_price = optional_float(previous.get("price"))
+    target_price = optional_float(target.get("price"))
+    if not isinstance(candle, dict) or previous_side not in {"lower", "upper"}:
+        return None
+    if previous_price is None or target_price is None or previous_price == target_price:
+        return None
+    if previous_side == "lower":
+        progress_price = optional_float(candle.get("low") if use_reach else candle.get("close"))
+        distance = previous_price - target_price
+        progressed = previous_price - progress_price if progress_price is not None else None
+    else:
+        progress_price = optional_float(candle.get("high") if use_reach else candle.get("close"))
+        distance = target_price - previous_price
+        progressed = progress_price - previous_price if progress_price is not None else None
+    if progress_price is None or progressed is None or distance <= 0:
+        return None
+    return progressed / distance
+
+
+def threshold_liquidity_exhaustion(
+    persisted_state: dict[str, Any],
+    previous: dict[str, Any] | None,
+    tv_context: dict[str, Any] | None,
+    current_candle: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Return a spent-liquidity record and rotation target when a threshold rule fires."""
+    if not isinstance(previous, dict):
+        return None, None
+    key = liquidity_key(previous.get("name"), previous.get("price"))
+    if not key or any(
+        isinstance(record, dict) and (record.get("key") or liquidity_key(record.get("name"), record.get("price"))) == key
+        for record in consumed_liquidity_levels(persisted_state)
+    ):
+        return None, None
+    target = next_same_side_liquidity_target(tv_context, previous)
+    if not target:
+        return None, None
+
+    exhaustion_type = None
+    threshold = None
+    progress = None
+    reason = None
+    if has_no_valid_leg1(persisted_state):
+        progress = liquidity_progression_fraction(previous, target, current_candle, use_reach=False)
+        threshold = 0.50
+        if progress is not None and progress >= threshold:
+            exhaustion_type = "no_leg1_50_percent_exhaustion"
+            reason = "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+    elif has_valid_leg1_without_valid_leg2(persisted_state):
+        progress = liquidity_progression_fraction(previous, target, current_candle, use_reach=True)
+        threshold = 0.75
+        if progress is not None and progress >= threshold:
+            exhaustion_type = "leg1_no_leg2_25_percent_exhaustion"
+            reason = "Valid Leg 1 formed without valid Leg 2 and price reached 25% or less remaining distance to the next same-side liquidity target."
+
+    if not exhaustion_type:
+        return None, None
+    return (
+        {
+            "key": key,
+            "name": previous.get("name"),
+            "price": previous.get("price"),
+            "side": previous.get("side") or side_for_level(str(previous.get("name") or "")),
+            "exhaustion_type": exhaustion_type,
+            "exhausted_by": target.get("name"),
+            "exhausted_by_price": target.get("price"),
+            "exhausted_at_candle_time": candle_timestamp(current_candle),
+            "progress_fraction": progress,
+            "threshold_fraction": threshold,
+            "reason": reason,
+        },
+        target,
+    )
+
+
+def record_exhausted_liquidity(
+    persisted_state: dict[str, Any],
+    previous: dict[str, Any] | None,
+    selected: dict[str, Any] | None,
+    current_candle: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Mark a prior same-stack liquidity level spent once the next target is reached."""
+    consumed = list(consumed_liquidity_levels(persisted_state))
+    if not isinstance(previous, dict) or not isinstance(selected, dict):
+        return consumed
+    if not reached_next_same_side_liquidity(previous, selected):
+        return consumed
+    key = liquidity_key(previous.get("name"), previous.get("price"))
+    if not key:
+        return consumed
+    if any(isinstance(record, dict) and (record.get("key") or liquidity_key(record.get("name"), record.get("price"))) == key for record in consumed):
+        return consumed
+    consumed.append(
+        {
+            "key": key,
+            "name": previous.get("name"),
+            "price": previous.get("price"),
+            "side": previous.get("side") or side_for_level(str(previous.get("name") or "")),
+            "exhaustion_type": "same_side_next_liquidity_reached",
+            "exhausted_by": selected.get("name"),
+            "exhausted_by_price": selected.get("price"),
+            "exhausted_at_candle_time": candle_timestamp(current_candle),
+            "reason": "Active liquidity progressed to the next same-side target; prior level is spent for this sequence.",
+        }
+    )
+    return consumed
 
 
 def active_stack_from_context(tv_context: dict[str, Any] | None, active_level: str | None) -> dict[str, Any] | None:
@@ -1557,13 +1837,22 @@ def build_step5_interaction(
     interaction = dict(step4_state)
     interaction.update(
         {
-            "leg2_candle": current_candle,
             "latest_candle": current_candle,
             "active_step5_path": previous_state.get("active_step5_path"),
-            "wick_probe_active": previous_state.get("wick_probe_active"),
-            "probe_high": previous_state.get("probe_high"),
-            "probe_low": previous_state.get("probe_low"),
-            "enforce_leg2_25_percent_rule": True,
+            "leg2_status": previous_state.get("leg2_status"),
+            "leg2_candle": previous_state.get("leg2_candle") or previous_state.get("leg2_candle_a") or current_candle,
+            "leg2_candle_a": previous_state.get("leg2_candle_a") or previous_state.get("leg2_candle"),
+            "leg2_candle_a_time": previous_state.get("leg2_candle_a_time"),
+            "step5_confirmed": previous_state.get("step5_confirmed"),
+            "step5_confirmation_window_active": previous_state.get("step5_confirmation_window_active"),
+            "step5_participation_window_active": previous_state.get("step5_participation_window_active"),
+            "step5_confirmation_candle_count": previous_state.get("step5_confirmation_candle_count"),
+            "step5_participation_candle_count": previous_state.get("step5_participation_candle_count"),
+            "anchor_extreme_swept": previous_state.get("anchor_extreme_swept"),
+            "anchor_extreme_sweep_candle": previous_state.get("anchor_extreme_sweep_candle"),
+            "step5_trigger_valid": previous_state.get("step5_trigger_valid"),
+            "step5_trigger_candle": previous_state.get("step5_trigger_candle"),
+            "step5_trigger_reason": previous_state.get("step5_trigger_reason"),
             "events": list(previous_step5.get("events") or step4.get("events") or []),
         }
     )
@@ -2063,6 +2352,12 @@ def persist_state(snapshot: dict[str, Any]) -> None:
         last_by_symbol[symbol_key] = last_interacted
     elif symbol_key:
         last_by_symbol.pop(symbol_key, None)
+    consumed_records = merge_consumed_liquidity_levels(
+        ((snapshot.get("step_2_1a") or {}).get("consumed_liquidity_levels")),
+        (((snapshot.get("step4") or {}).get("state") or {}).get("consumed_liquidity_levels")),
+        (((snapshot.get("step5") or {}).get("state") or {}).get("consumed_liquidity_levels")),
+        consumed_liquidity_levels(symbol_scoped_persisted_state(previous_state, symbol_key)),
+    )
     symbol_state = {
         "symbol": snapshot.get("symbol"),
         "normalized_symbol": snapshot.get("normalized_symbol"),
@@ -2073,11 +2368,7 @@ def persist_state(snapshot: dict[str, Any]) -> None:
         "step_2_1a": snapshot.get("step_2_1a"),
         "last_interacted_liquidity": last_interacted,
         "last_interacted_liquidity_by_symbol": last_by_symbol,
-        "consumed_liquidity_levels": (
-            ((snapshot.get("step4") or {}).get("state") or {}).get("consumed_liquidity_levels")
-            or ((snapshot.get("step5") or {}).get("state") or {}).get("consumed_liquidity_levels")
-            or consumed_liquidity_levels(symbol_scoped_persisted_state(previous_state, symbol_key))
-        ),
+        "consumed_liquidity_levels": consumed_records,
         "consumed_entry_setups": consumed_entry_setups(symbol_scoped_persisted_state(previous_state, symbol_key)),
         "step_2_1a_last_evaluated_bar_time": (snapshot.get("step_2_1a") or {}).get("last_evaluated_bar_time"),
         "step_2_1a_candle_index": (snapshot.get("step_2_1a") or {}).get("next_candle_index", 0),
