@@ -1383,6 +1383,139 @@ class OfflineReplayTests(unittest.TestCase):
         self.assertTrue(recovered["moved_to_be"])
         self.assertEqual(recovered["symbol"], "NQM6")
 
+    def test_refresh_recovers_tp1_runner_divergence_from_executor_truth(self):
+        self._save_clean_manager_state()
+        state = self.manager.load_state()
+        trade = self.manager.create_trade_state(
+            {
+                "event": "enter_trade",
+                "symbol": "YM",
+                "direction": "short",
+                "position_size": 2,
+            },
+            {
+                "atr_value": 13.0,
+                "atr_source": "tradingview_atr_relay",
+                "atr_bar_timestamp": "2026-01-01T09:29:00Z",
+            },
+            requested_symbol="YM",
+            execution_symbol="YMM6",
+        )
+        trade.update({
+            "trade_id": "T-80d66481",
+            "symbol": "YMM6",
+            "execution_symbol": "YMM6",
+            "requested_symbol": "YM",
+            "direction": "short",
+            "status": "error",
+            "entry_price": 49684.0,
+            "tp1_price": 49671.0,
+            "original_stop": 49697.0,
+            "current_stop": 49697.0,
+            "be_trigger": 49677.5,
+            "remaining_size": 2,
+            "tp1_hit": False,
+            "tp1_filled_qty": None,
+            "stop_order_id": "STOP-5a579192",
+            "error_reason": "runner_reconcile_divergence",
+        })
+        state["trades"][trade["trade_id"]] = self.manager.serialize_trade(trade)
+        self.manager.save_state(state)
+
+        self.executor.POSITIONS["YMM6"] = {
+            "symbol": "YMM6",
+            "qty": -1.0,
+            "avg_entry_price": 49684.0,
+        }
+        self.executor.ORDERS["STOP-5a579192"] = {
+            "order_id": "STOP-5a579192",
+            "trade_id": "T-80d66481",
+            "symbol": "YMM6",
+            "type": "stop",
+            "status": "active",
+            "qty": 1.0,
+            "stop_price": 49697.0,
+            "tag": "runner_reset",
+            "oco_parent_group": "OCO-T-80d66481-PROTECTIVE",
+        }
+
+        payload = self.manager.app.test_client().get("/trades").get_json()
+        recovered = payload["trades"]["T-80d66481"]
+        persisted = self.manager.get_trade("T-80d66481")
+
+        self.assertFalse(payload["orphan_exposure"]["has_orphans"])
+        self.assertFalse(payload["orphan_exposure"]["has_manager_state_issue"])
+        self.assertEqual(recovered["status"], "active")
+        self.assertEqual(recovered["remaining_size"], 1.0)
+        self.assertEqual(persisted["stop_order_id"], "STOP-5a579192")
+        self.assertEqual(persisted["current_stop"], 49697.0)
+        self.assertTrue(persisted["tp1_hit"])
+        self.assertEqual(persisted["tp1_filled_qty"], 1.0)
+        self.assertEqual(persisted["recovery_status"], "reconciled_from_executor_truth")
+        self.assertIsNone(persisted.get("error_reason"))
+
+    def test_matching_active_trade_with_protective_stop_is_not_orphan_exposure(self):
+        self._save_clean_manager_state()
+        state = self.manager.load_state()
+        trade = self.manager.create_trade_state(
+            {
+                "event": "enter_trade",
+                "symbol": "YM",
+                "direction": "short",
+                "position_size": 2,
+            },
+            {
+                "atr_value": 13.0,
+                "atr_source": "tradingview_atr_relay",
+                "atr_bar_timestamp": "2026-01-01T09:29:00Z",
+            },
+            requested_symbol="YM",
+            execution_symbol="YMM6",
+        )
+        trade.update({
+            "trade_id": "T-managed-runner",
+            "symbol": "YMM6",
+            "execution_symbol": "YMM6",
+            "requested_symbol": "YM",
+            "status": "active",
+            "entry_price": 49684.0,
+            "original_stop": 49697.0,
+            "current_stop": 49697.0,
+            "tp1_price": 49671.0,
+            "tp1_hit": True,
+            "tp1_filled_qty": 1.0,
+            "remaining_size": 2,
+            "stop_order_id": "STOP-managed-runner",
+        })
+        state["trades"][trade["trade_id"]] = self.manager.serialize_trade(trade)
+        self.manager.save_state(state)
+
+        self.executor.POSITIONS["YMM6"] = {
+            "symbol": "YMM6",
+            "qty": -1.0,
+            "avg_entry_price": 49684.0,
+        }
+        self.executor.ORDERS["STOP-managed-runner"] = {
+            "order_id": "STOP-managed-runner",
+            "trade_id": "T-managed-runner",
+            "symbol": "YMM6",
+            "type": "stop",
+            "status": "active",
+            "qty": 1.0,
+            "stop_price": 49697.0,
+            "tag": "runner_reset",
+        }
+
+        payload = self.manager.app.test_client().get("/trades").get_json()
+        recovered = payload["trades"]["T-managed-runner"]
+        persisted = self.manager.get_trade("T-managed-runner")
+
+        self.assertFalse(payload["orphan_exposure"]["has_orphans"])
+        self.assertFalse(payload["orphan_exposure"]["has_manager_state_issue"])
+        self.assertEqual(recovered["status"], "active")
+        self.assertEqual(recovered["remaining_size"], 1.0)
+        self.assertEqual(persisted["recovery_status"], "reconciled_from_executor_truth")
+
     def test_refresh_flags_orphan_executor_exposure_when_manager_trades_missing(self):
         self._save_clean_manager_state()
         self.executor.POSITIONS["NQM6"] = {

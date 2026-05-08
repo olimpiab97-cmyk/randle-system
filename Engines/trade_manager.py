@@ -2417,6 +2417,22 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
             update_stop_state_from_active_stop(trade)
             return trade
 
+    if trade.get("status") == "error":
+        symbol_snapshot = executor_snapshot.get(trade.get("symbol"), {}) if trade.get("symbol") else {}
+        live_qty = float(symbol_snapshot.get("position_qty", 0) or 0)
+        active_orders = find_executor_active_orders_for_trade(executor_orders, trade["trade_id"])
+        active_stop = next((order for order in active_orders if order.get("type") == "stop"), None)
+        if live_qty != 0 and active_stop:
+            trade["stop_order_id"] = active_stop.get("order_id")
+            trade["current_stop"] = active_stop.get("stop_price")
+            if active_stop.get("oco_group"):
+                trade["oco_group"] = active_stop.get("oco_group")
+            elif active_stop.get("oco_parent_group") and not trade.get("oco_group"):
+                trade["oco_group"] = active_stop.get("oco_parent_group")
+            reconcile_tp1_runner_from_executor_truth(trade, active_stop, live_qty)
+            update_stop_state_from_active_stop(trade)
+        return trade
+
     if trade.get("status") != "active":
         return trade
 
@@ -2446,6 +2462,7 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
             trade["remaining_size"] = active_stop_qty
         if position_size > 0 and active_stop_qty > 0 and active_stop_qty < position_size:
             trade["tp1_hit"] = True
+        reconcile_tp1_runner_from_executor_truth(trade, active_stop, live_qty)
         update_stop_state_from_active_stop(trade)
     if active_tp1 and not trade.get("tp1_hit"):
         trade["tp1_order_id"] = active_tp1.get("order_id")
@@ -2466,6 +2483,51 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
     return trade
 
 
+def reconcile_tp1_runner_from_executor_truth(trade, active_stop, live_qty):
+    if not active_stop:
+        return False
+
+    live_abs_qty = abs(float(live_qty or 0))
+    stop_qty = float(active_stop.get("qty", 0) or 0)
+    protected_qty = stop_qty if stop_qty > 0 else live_abs_qty
+    position_size = float(trade.get("position_size", 0) or 0)
+
+    if protected_qty <= 0:
+        return False
+
+    changed = False
+    if live_abs_qty > 0 and abs(protected_qty - live_abs_qty) > 1e-9:
+        protected_qty = live_abs_qty
+
+    if position_size > 0 and protected_qty < position_size:
+        filled_qty = max(position_size - protected_qty, 0)
+        if not trade.get("tp1_hit"):
+            trade["tp1_hit"] = True
+            changed = True
+        if trade.get("tp1_filled_qty") in (None, ""):
+            trade["tp1_filled_qty"] = filled_qty
+            changed = True
+        if not trade.get("tp1_hit_at"):
+            trade["tp1_hit_at"] = active_stop.get("updated_at") or active_stop.get("created_at") or datetime.now().isoformat()
+            changed = True
+
+    if trade.get("remaining_size") != protected_qty:
+        trade["remaining_size"] = protected_qty
+        changed = True
+
+    if trade.get("status") != "active":
+        trade["status"] = "active"
+        changed = True
+
+    if trade.get("error_reason") is not None:
+        trade["error_reason"] = None
+        changed = True
+
+    if changed:
+        trade["recovery_status"] = "reconciled_from_executor_truth"
+    return changed
+
+
 def sync_trade_protection(trade, executor_orders, executor_snapshot):
     symbol_snapshot = executor_snapshot.get(trade["symbol"], {})
     live_qty = float(symbol_snapshot.get("position_qty", 0))
@@ -2475,6 +2537,26 @@ def sync_trade_protection(trade, executor_orders, executor_snapshot):
             executor_orders,
             trade["trade_id"],
         )
+        active_stops = [
+            order for order in active_executor_orders
+            if order.get("type") == "stop"
+        ]
+        if live_qty != 0 and active_stops:
+            stop_order = active_stops[0]
+            trade["stop_order_id"] = stop_order.get("order_id")
+            trade["current_stop"] = stop_order.get("stop_price")
+            if stop_order.get("oco_group"):
+                trade["oco_group"] = stop_order.get("oco_group")
+            elif stop_order.get("oco_parent_group") and not trade.get("oco_group"):
+                trade["oco_group"] = stop_order.get("oco_parent_group")
+            reconcile_tp1_runner_from_executor_truth(trade, stop_order, live_qty)
+            update_stop_state_from_active_stop(trade)
+            print(
+                f"SYNC: error trade recovered from protected executor state "
+                f"[{trade['trade_id']}] symbol={trade['symbol']} "
+                f"qty={trade.get('remaining_size')} stop_id={trade.get('stop_order_id')}"
+            )
+            return trade
         if live_qty == 0 and not active_executor_orders:
             trade["status"] = "closed"
             trade["remaining_size"] = 0
@@ -2535,8 +2617,14 @@ def sync_trade_protection(trade, executor_orders, executor_snapshot):
         stop_order = active_stops[0]
         trade["stop_order_id"] = stop_order.get("order_id")
         trade["current_stop"] = stop_order.get("stop_price")
+        if stop_order.get("oco_group"):
+            trade["oco_group"] = stop_order.get("oco_group")
+        elif stop_order.get("oco_parent_group") and not trade.get("oco_group"):
+            trade["oco_group"] = stop_order.get("oco_parent_group")
+        reconcile_tp1_runner_from_executor_truth(trade, stop_order, live_qty)
         update_stop_state_from_active_stop(trade)
-        trade["recovery_status"] = "protection_synced"
+        if trade.get("recovery_status") != "reconciled_from_executor_truth":
+            trade["recovery_status"] = "protection_synced"
         print(
             f"SYNC: stop linked [{trade['trade_id']}] "
             f"stop_id={trade['stop_order_id']} stop={trade['current_stop']}"
