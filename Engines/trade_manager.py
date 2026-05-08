@@ -1243,17 +1243,56 @@ def reconcile_on_startup():
     set_engine_status("restarting")
 
     state = load_state()
+    executor_orders = fetch_executor_orders()
+    executor_snapshot = fetch_executor_snapshot()
     recovered = []
 
     for trade_id, trade in state["trades"].items():
         updated_trade = recover_trade_state(trade)
+        updated_trade = reconcile_trade_with_executor_activity(
+            updated_trade,
+            executor_orders,
+            executor_snapshot,
+        )
         state["trades"][trade_id] = serialize_trade(updated_trade)
         recovered.append({
             "trade_id": trade_id,
             "status": updated_trade.get("status"),
             "recovery_status": updated_trade.get("recovery_status"),
-            "locked": updated_trade.get("locked")
+            "locked": updated_trade.get("locked"),
+            "stop_order_id": updated_trade.get("stop_order_id"),
+            "tp1_order_id": updated_trade.get("tp1_order_id"),
+            "current_stop": updated_trade.get("current_stop"),
         })
+
+    known_trade_ids = set(state["trades"].keys())
+    executor_trade_ids = {
+        order.get("trade_id")
+        for order in executor_orders
+        if order.get("trade_id") and order.get("status") == "active"
+    }
+    for trade_id in sorted(executor_trade_ids - known_trade_ids):
+        recovered_trade = recover_missing_trade_from_executor_activity(
+            state,
+            trade_id,
+            executor_orders,
+            executor_snapshot,
+        )
+        if recovered_trade:
+            state["trades"][trade_id] = serialize_trade(recovered_trade)
+            recovered.append({
+                "trade_id": trade_id,
+                "status": recovered_trade.get("status"),
+                "recovery_status": recovered_trade.get("recovery_status"),
+                "locked": recovered_trade.get("locked"),
+                "stop_order_id": recovered_trade.get("stop_order_id"),
+                "tp1_order_id": recovered_trade.get("tp1_order_id"),
+                "current_stop": recovered_trade.get("current_stop"),
+            })
+
+    orphan_exposure = build_orphan_executor_exposure(state, executor_orders, executor_snapshot)
+    persist_orphan_exposure_event_if_needed(state, orphan_exposure)
+    state["orphan_exposure"] = orphan_exposure
 
     state["system"]["engine_status"] = "running"
     state["system"]["last_update_at"] = datetime.now().isoformat()
@@ -2350,6 +2389,8 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
                 trade["stop_order_id"] = active_stop.get("order_id")
                 trade["original_stop"] = active_stop.get("stop_price")
                 trade["current_stop"] = active_stop.get("stop_price")
+                if active_stop.get("oco_group"):
+                    trade["oco_group"] = active_stop.get("oco_group")
                 trade["remaining_size"] = float(active_stop.get("qty", 0) or live_qty or trade.get("remaining_size", 0))
             elif live_qty > 0:
                 trade["remaining_size"] = live_qty
@@ -2357,6 +2398,8 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
             if active_tp1:
                 trade["tp1_order_id"] = active_tp1.get("order_id")
                 trade["tp1_price"] = active_tp1.get("limit_price")
+                if active_tp1.get("oco_group"):
+                    trade["oco_group"] = active_tp1.get("oco_group")
 
             if trade.get("entry_price") is not None and trade.get("original_stop") is not None and trade.get("tp1_price") is not None:
                 try:
@@ -2393,6 +2436,10 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
         active_stop = active_stops[0]
         trade["stop_order_id"] = active_stop.get("order_id")
         trade["current_stop"] = active_stop.get("stop_price")
+        if active_stop.get("oco_group"):
+            trade["oco_group"] = active_stop.get("oco_group")
+        elif active_stop.get("oco_parent_group") and not trade.get("oco_group"):
+            trade["oco_group"] = active_stop.get("oco_parent_group")
         active_stop_qty = float(active_stop.get("qty", 0) or 0)
         position_size = float(trade.get("position_size", 0) or 0)
         if active_stop_qty > 0:
@@ -2402,6 +2449,8 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
         update_stop_state_from_active_stop(trade)
     if active_tp1 and not trade.get("tp1_hit"):
         trade["tp1_order_id"] = active_tp1.get("order_id")
+        if active_tp1.get("oco_group"):
+            trade["oco_group"] = active_tp1.get("oco_group")
         if trade.get("tp1_price") in (None, ""):
             trade["tp1_price"] = active_tp1.get("limit_price")
         repair_missing_be_trigger(trade)
@@ -3336,25 +3385,36 @@ def dispatch_execution(action, payload, watch_failures=True):
         return failure
 
 
-def place_stop_order(trade_id, symbol, stop_price, qty, watch_failures=True):
+def protective_oco_group(trade):
+    if isinstance(trade, dict) and trade.get("oco_group"):
+        return trade.get("oco_group")
+    trade_id = trade.get("trade_id") if isinstance(trade, dict) else trade
+    return f"OCO-{trade_id}-PROTECTIVE" if trade_id else None
+
+
+def place_stop_order(trade_id, symbol, stop_price, qty, watch_failures=True, oco_group=None, oco_role="protective_stop"):
     return dispatch_execution(
         "submit_stop",
         {
             "trade_id": trade_id,
             "symbol": symbol,
             "stop_price": stop_price,
-            "qty": qty
+            "qty": qty,
+            "oco_group": oco_group or protective_oco_group(trade_id),
+            "oco_role": oco_role,
         },
         watch_failures=watch_failures,
     )
 
 
-def place_limit_order(trade_id, symbol, limit_price, qty, tag=None):
+def place_limit_order(trade_id, symbol, limit_price, qty, tag=None, oco_group=None, oco_role="tp1_limit"):
     payload = {
         "trade_id": trade_id,
         "symbol": symbol,
         "limit_price": round_to_nearest_tick(limit_price, symbol),
-        "qty": qty
+        "qty": qty,
+        "oco_group": oco_group or protective_oco_group(trade_id),
+        "oco_role": oco_role,
     }
     if tag:
         payload["tag"] = tag
@@ -3377,14 +3437,36 @@ def cancel_existing_order(trade_id, symbol, broker_order_id, watch_failures=True
     )
 
 
-def reset_stop_to_original(trade_id, symbol, stop_price, qty, watch_failures=True):
+def modify_stop_order(trade_id, symbol, broker_order_id, stop_price, qty, tag=None, watch_failures=True, oco_group=None, oco_role=None):
+    payload = {
+        "trade_id": trade_id,
+        "symbol": symbol,
+        "broker_order_id": broker_order_id,
+        "stop_price": stop_price,
+        "qty": qty,
+    }
+    if tag:
+        payload["tag"] = tag
+    if oco_group is not None:
+        payload["oco_group"] = oco_group
+    if oco_role is not None:
+        payload["oco_role"] = oco_role
+    return dispatch_execution(
+        "modify_stop",
+        payload,
+        watch_failures=watch_failures,
+    )
+
+
+def reset_stop_to_original(trade_id, symbol, stop_price, qty, watch_failures=True, oco_parent_group=None):
     return dispatch_execution(
         "reset_stop_to_original",
         {
             "trade_id": trade_id,
             "symbol": symbol,
             "stop_price": stop_price,
-            "qty": qty
+            "qty": qty,
+            "oco_parent_group": oco_parent_group,
         },
         watch_failures=watch_failures,
     )
@@ -3565,9 +3647,10 @@ def create_trade_state(packet, atr_snapshot, requested_symbol, execution_symbol)
         normalized_symbol,
         atr_snapshot["atr_value"]
     )
+    trade_id = f"T-{uuid.uuid4().hex[:8]}"
 
     return {
-        "trade_id": f"T-{uuid.uuid4().hex[:8]}",
+        "trade_id": trade_id,
         "symbol": normalized_symbol,
         "requested_symbol": str(requested_symbol).upper(),
         "direction": packet["direction"],
@@ -3612,6 +3695,7 @@ def create_trade_state(packet, atr_snapshot, requested_symbol, execution_symbol)
         "total_profit": None,
         "stop_order_id": None,
         "tp1_order_id": None,
+        "oco_group": f"OCO-{trade_id}-PROTECTIVE",
         "error_reason": None,
         "recovery_status": None,
         "locked": False,
@@ -3967,9 +4051,61 @@ def process_price_update(trade, price, timestamp):
         unlock_trade(trade)
 
 
-def on_price(symbol, price):
+def trade_created_before_timestamp(trade, timestamp):
+    created_at = trade.get("created_at")
+    if not created_at or not timestamp:
+        return True
+    try:
+        return as_los_angeles_time(created_at) <= as_los_angeles_time(timestamp)
+    except Exception:
+        return True
+
+
+def be_probe_price_from_bar(trade, bar):
+    if not isinstance(bar, dict) or is_be_state_locked(trade):
+        return None
+    if trade.get("be_trigger") is None:
+        return None
+    try:
+        if trade.get("direction") == "short" and bar.get("low") is not None:
+            low = float(bar.get("low"))
+            return low if be_trigger_crossed(trade, low) else None
+        if trade.get("direction") == "long" and bar.get("high") is not None:
+            high = float(bar.get("high"))
+            return high if be_trigger_crossed(trade, high) else None
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def process_be_probe_update(trade, price, timestamp):
+    if price is None or is_be_state_locked(trade) or not be_trigger_crossed(trade, price):
+        return trade
+    if not lock_trade(trade):
+        return trade
+    try:
+        backfill_be_lock_fields(trade)
+        if is_be_state_locked(trade):
+            suppress_duplicate_be_trigger(trade, timestamp)
+            return trade
+        log_trade_event(
+            trade["trade_id"],
+            "be_trigger_hit",
+            "BE trigger matched from live bar extreme",
+            {"price": price, "be_trigger": trade["be_trigger"], "source": "bar_extreme"},
+            snapshot=trade,
+            timestamp=timestamp,
+        )
+        handle_be_trigger(trade, timestamp)
+        return trade
+    finally:
+        unlock_trade(trade)
+
+
+def on_price(symbol, price, timestamp=None, bar=None):
     run_noon_runner_flatten_if_due()
     state = load_state()
+    timestamp = normalize_timestamp(timestamp) or datetime.now().isoformat()
     resolved_symbol, resolution_source = resolve_execution_symbol(symbol)
     print(
         f"ON_PRICE RECEIVED: symbol={symbol} resolved_symbol={resolved_symbol} "
@@ -3981,6 +4117,16 @@ def on_price(symbol, price):
             trade.get("execution_symbol") or trade.get("symbol") or trade.get("requested_symbol")
         )
         if resolved_symbol in trade_candidates and trade.get("status") == "active":
+            if not trade_created_before_timestamp(trade, timestamp):
+                log_trade_event(
+                    trade_id,
+                    "price_update_ignored_before_trade_creation",
+                    "Price update timestamp precedes trade creation",
+                    {"price": price, "price_timestamp": timestamp, "created_at": trade.get("created_at")},
+                    snapshot=trade,
+                    timestamp=timestamp,
+                )
+                continue
             if trade.get("locked"):
                 print(f"STALE LOCK CLEARED: {trade_id}")
                 trade["locked"] = False
@@ -3992,8 +4138,12 @@ def on_price(symbol, price):
             updated_trade = process_price_update(
                 trade,
                 price,
-                datetime.now()
+                timestamp
             )
+            if updated_trade.get("status") == "active":
+                be_probe_price = be_probe_price_from_bar(updated_trade, bar)
+                if be_probe_price is not None:
+                    updated_trade = process_be_probe_update(updated_trade, be_probe_price, timestamp)
 
             print(
                 f"UPDATED TRADE: trade_id={trade_id} "
@@ -4236,8 +4386,10 @@ def receive_price():
 
         symbol = str(data.get("symbol", "")).upper()
         price = float(data.get("price"))
+        timestamp = data.get("tick_timestamp_utc") or data.get("timestamp")
+        bar = data.get("current_1m_bar") if isinstance(data, dict) else None
 
-        on_price(symbol, price)
+        on_price(symbol, price, timestamp=timestamp, bar=bar)
 
         return jsonify({"ok": True, "symbol": symbol, "price": price})
     except Exception as e:
@@ -4443,26 +4595,41 @@ def handle_be_trigger(trade, timestamp):
         )
         return
 
-    original_stop_order_id = trade["stop_order_id"]
-    cancel_response = cancel_existing_order(
+    response = modify_stop_order(
         trade_id=trade["trade_id"],
         symbol=trade["symbol"],
-        broker_order_id=original_stop_order_id,
+        broker_order_id=trade["stop_order_id"],
+        stop_price=trade["entry_price"],
+        qty=trade["remaining_size"],
+        tag="breakeven",
         watch_failures=False,
-    )
-    log_trade_event(
-        trade["trade_id"],
-        "original_stop_canceled",
-        "Original stop canceled before BE replacement",
-        {
-            "original_stop_order_id": original_stop_order_id,
-            "executor_ok": cancel_response.get("ok"),
-        },
-        snapshot=trade,
-        timestamp=timestamp,
+        oco_group=protective_oco_group(trade),
+        oco_role="protective_stop",
     )
 
-    if not cancel_response.get("ok"):
+    if response.get("ok"):
+        trade["stop_order_id"] = response.get("broker_order_id") or trade["stop_order_id"]
+        trade["current_stop"] = trade["entry_price"]
+        trade["moved_to_be"] = True
+        trade["stop_state"] = "break_even"
+        trade["be_hit_at"] = timestamp
+        lock_be_state(trade, timestamp)
+        log_trade_event(
+            trade["trade_id"],
+            "be_stop_modified",
+            "Break-even modified existing active stop",
+            {
+                "stop_order_id": trade["stop_order_id"],
+                "current_stop": trade["current_stop"],
+                "remaining_size": trade["remaining_size"],
+            },
+            snapshot=trade,
+            timestamp=timestamp,
+        )
+        persist_trade_state(trade)
+        return
+
+    else:
         active_be_stop = find_executor_be_stop_for_trade(fetch_executor_orders(), trade)
         if active_be_stop:
             trade["stop_order_id"] = active_be_stop.get("order_id")
@@ -4479,7 +4646,7 @@ def handle_be_trigger(trade, timestamp):
                 {
                     "stop_order_id": trade["stop_order_id"],
                     "current_stop": trade["current_stop"],
-                    "cancel_response": cancel_response.get("message") or cancel_response.get("error"),
+                    "modify_response": response.get("message") or response.get("error"),
                 },
                 snapshot=trade,
                 timestamp=timestamp,
@@ -4487,72 +4654,19 @@ def handle_be_trigger(trade, timestamp):
             persist_trade_state(trade)
             return
 
-        register_execution_failure(cancel_response.get("error", cancel_response.get("message", "cancel_order_failed")))
-        execution_watcher(cancel_response, "cancel_order")
+        register_execution_failure(response.get("error", response.get("message", "modify_stop_failed")))
+        execution_watcher(response, "modify_stop")
         trade["status"] = "error"
-        trade["error_reason"] = cancel_response.get("error") or cancel_response.get("message") or "BE stop cancellation failed"
+        trade["error_reason"] = response.get("error") or response.get("message") or "BE stop modification failed"
         log_trade_event(
             trade["trade_id"],
             "be_stop_error",
-            "BE stop cancellation failed before replacement",
+            "BE stop modification failed",
             {"error_reason": trade["error_reason"]},
             snapshot=trade,
             timestamp=timestamp,
         )
         return
-
-    response = place_stop_order(
-        trade_id=trade["trade_id"],
-        symbol=trade["symbol"],
-        stop_price=trade["entry_price"],
-        qty=trade["remaining_size"],
-        watch_failures=False,
-    )
-
-    if response.get("ok"):
-        trade["stop_order_id"] = response.get("broker_order_id")
-        trade["current_stop"] = trade["entry_price"]
-        trade["moved_to_be"] = True
-        trade["stop_state"] = "break_even"
-        trade["be_hit_at"] = timestamp
-        lock_be_state(trade, timestamp)
-        log_trade_event(
-            trade["trade_id"],
-            "be_stop_placed",
-            "Break-even stop placed and persisted as active stop",
-            {
-                "stop_order_id": trade["stop_order_id"],
-                "current_stop": trade["current_stop"],
-                "remaining_size": trade["remaining_size"],
-            },
-            snapshot=trade,
-            timestamp=timestamp,
-        )
-        persist_trade_state(trade)
-    else:
-        active_be_stop = find_executor_be_stop_for_trade(fetch_executor_orders(), trade)
-        if active_be_stop and response.get("message") == "Active stop already exists for this trade":
-            trade["stop_order_id"] = active_be_stop.get("order_id")
-            trade["current_stop"] = trade["entry_price"]
-            trade["moved_to_be"] = True
-            trade["stop_state"] = "break_even"
-            trade["be_hit_at"] = timestamp
-            lock_be_state(trade, timestamp)
-            persist_trade_state(trade)
-            return
-
-        register_execution_failure(response.get("error", response.get("message", "submit_stop_failed")))
-        execution_watcher(response, "submit_stop")
-        trade["status"] = "error"
-        trade["error_reason"] = response.get("error") or response.get("message") or "BE stop placement failed"
-        log_trade_event(
-            trade["trade_id"],
-            "be_stop_error",
-            "BE stop placement failed",
-            {"error_reason": trade["error_reason"]},
-            snapshot=trade,
-            timestamp=timestamp,
-        )
 
 
 def handle_tp1_hit(trade, timestamp):
@@ -4661,6 +4775,7 @@ def handle_tp1_hit(trade, timestamp):
             stop_price=trade["original_stop"],
             qty=trade["remaining_size"],
             watch_failures=False,
+            oco_parent_group=protective_oco_group(trade),
         )
 
         if not reset_response.get("ok"):

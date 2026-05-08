@@ -293,6 +293,7 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         stop_price,
         stop_tag=None,
     ):
+        oco_group = f"OCO-{trade_id}-PROTECTIVE"
         self.executor.POSITIONS["NQM6"] = {
             "qty": float(position_qty),
             "avg_entry_price": float(avg_entry_price),
@@ -306,6 +307,8 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
             "qty": 1.0,
             "status": "active",
             "tag": "tp1",
+            "oco_group": oco_group,
+            "oco_role": "tp1_limit",
         }
         self.executor.ORDERS[f"STOP-{trade_id}"] = {
             "order_id": f"STOP-{trade_id}",
@@ -316,6 +319,8 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
             "qty": abs(float(position_qty)),
             "status": "active",
             "tag": stop_tag,
+            "oco_group": oco_group,
+            "oco_role": "protective_stop",
         }
 
     def _write_tradingview_atr_state(self, records):
@@ -396,6 +401,9 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], expected_position_qty)
         self.assertEqual(self.executor.ORDERS[stop_id]["status"], "active")
         self.assertEqual(self.executor.ORDERS[stop_id]["qty"], abs(expected_position_qty))
+        self.assertIsNone(self.executor.ORDERS[stop_id].get("oco_group"))
+        self.assertEqual(self.executor.ORDERS[stop_id].get("oco_parent_group"), f"OCO-{trade_id}-PROTECTIVE")
+        self.assertEqual(self.executor.ORDERS[stop_id].get("oco_role"), "runner_stop")
 
     def test_closed_limit_for_same_trade_does_not_block_new_limit(self):
         trade_id = "T-4bcb7c2f"
@@ -477,6 +485,52 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         self.assertEqual(self.executor.ORDERS["STOP-short"]["fill_trigger_price"], 26996.75)
         self.assertEqual(self.executor.ORDERS["LIMIT-short"]["status"], "closed")
         self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], 0.0)
+
+    def test_oco_stop_fill_cancels_tp1_limit_peer(self):
+        trade_id = "T-oco-stop-first"
+        oco_group = f"OCO-{trade_id}-PROTECTIVE"
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -2.0,
+            "avg_entry_price": 26975.75,
+        }
+        self.executor.ORDERS["STOP-oco"] = {
+            "order_id": "STOP-oco",
+            "trade_id": trade_id,
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 26980.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": oco_group,
+            "oco_role": "protective_stop",
+        }
+        self.executor.ORDERS["LIMIT-oco"] = {
+            "order_id": "LIMIT-oco",
+            "trade_id": trade_id,
+            "type": "limit",
+            "symbol": "NQM6",
+            "limit_price": 26960.0,
+            "qty": 1.0,
+            "status": "active",
+            "tag": "tp1",
+            "oco_group": oco_group,
+            "oco_role": "tp1_limit",
+        }
+
+        response = self.executor.app.test_client().post("/price", json=self._price_payload(
+            symbol="NQM6",
+            price=26981.0,
+        ))
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(data["ok"])
+        self.assertEqual(len(data["stop_fills"]), 1)
+        self.assertEqual(self.executor.ORDERS["STOP-oco"]["status"], "closed")
+        self.assertEqual(self.executor.ORDERS["LIMIT-oco"]["status"], "cancelled")
+        self.assertEqual(self.executor.ORDERS["LIMIT-oco"]["closed_reason"], "oco_cancel_after_stop_fill")
+        self.assertEqual(self.executor.ORDERS["LIMIT-oco"]["oco_cancelled_by"], "STOP-oco")
+        self.assertEqual(self.executor.active_orders_for_trade(trade_id, "limit"), [])
 
     def test_submit_stop_immediately_triggers_when_latest_price_already_beyond_short_stop(self):
         trade_id = "T-immediate-short"
@@ -1191,6 +1245,42 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["order"]["type"], "limit")
         self.assertEqual(data["order"]["status"], "active")
+
+    def test_modify_stop_updates_existing_active_stop_order(self):
+        self.executor.ORDERS["STOP-MODIFY"] = {
+            "order_id": "STOP-MODIFY",
+            "trade_id": "T-MODIFY",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 27010.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": "OCO-T-MODIFY-PROTECTIVE",
+            "oco_role": "protective_stop",
+            "created_at": datetime.now().isoformat(),
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "modify_stop",
+            "trade_id": "T-MODIFY",
+            "symbol": "NQM6",
+            "broker_order_id": "STOP-MODIFY",
+            "stop_price": 27000.0,
+            "qty": 2,
+            "tag": "breakeven",
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["broker_order_id"], "STOP-MODIFY")
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["stop_price"], 27000.0)
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["qty"], 2.0)
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["tag"], "breakeven")
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["oco_group"], "OCO-T-MODIFY-PROTECTIVE")
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["oco_role"], "protective_stop")
+        self.assertTrue(self.executor.ORDERS["STOP-MODIFY"]["modify_history"])
 
     def test_cancel_order_allowed_while_watchdog_stale(self):
         self.executor.ORDERS["LIMIT-CANCEL"] = {

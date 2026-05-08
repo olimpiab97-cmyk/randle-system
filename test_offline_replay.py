@@ -748,8 +748,7 @@ class OfflineReplayTests(unittest.TestCase):
             "original_stop_placed",
             "tp1_order_active",
             "be_trigger_hit",
-            "original_stop_canceled",
-            "be_stop_placed",
+            "be_stop_modified",
             "stop_hit_close",
             "final_trade_persistence_snapshot",
         ])
@@ -791,8 +790,7 @@ class OfflineReplayTests(unittest.TestCase):
             "original_stop_placed",
             "tp1_order_active",
             "be_trigger_hit",
-            "original_stop_canceled",
-            "be_stop_placed",
+            "be_stop_modified",
             "tp1_filled",
             "runner_stop_reset_to_original",
             "stop_hit_close",
@@ -861,10 +859,140 @@ class OfflineReplayTests(unittest.TestCase):
         self.assertEqual(after_be["current_stop"], after_be["entry_price"])
         self.assertEqual(after_be["remaining_size"], 2)
 
-        self.assertNotEqual(after_be["stop_order_id"], trade["stop_order_id"])
+        self.assertEqual(after_be["stop_order_id"], trade["stop_order_id"])
         replacement_stop = self.executor.ORDERS[after_be["stop_order_id"]]
         self.assertEqual(replacement_stop["qty"], 2.0)
         self.assertEqual(replacement_stop["stop_price"], after_be["entry_price"])
+        self.assertEqual(replacement_stop["tag"], "breakeven")
+        self.assertEqual(replacement_stop["oco_group"], trade["oco_group"])
+        self.assertEqual(replacement_stop["oco_role"], "protective_stop")
+        self.assertTrue(replacement_stop.get("modify_history"))
+
+    def test_entry_fill_creates_resting_stop_and_tp1_limit_immediately(self):
+        trade = self._new_short_trade()
+
+        active_stops = [
+            order for order in self.executor.ORDERS.values()
+            if order.get("trade_id") == trade["trade_id"]
+            and order.get("type") == "stop"
+            and order.get("status") == "active"
+        ]
+        active_limits = [
+            order for order in self.executor.ORDERS.values()
+            if order.get("trade_id") == trade["trade_id"]
+            and order.get("type") == "limit"
+            and order.get("tag") == "tp1"
+            and order.get("status") == "active"
+        ]
+
+        self.assertEqual(len(active_stops), 1)
+        self.assertEqual(active_stops[0]["order_id"], trade["stop_order_id"])
+        self.assertEqual(active_stops[0]["stop_price"], trade["original_stop"])
+        self.assertEqual(active_stops[0]["qty"], float(trade["position_size"]))
+        self.assertEqual(active_stops[0]["oco_group"], trade["oco_group"])
+        self.assertEqual(active_stops[0]["oco_role"], "protective_stop")
+        self.assertEqual(len(active_limits), 1)
+        self.assertEqual(active_limits[0]["order_id"], trade["tp1_order_id"])
+        self.assertEqual(active_limits[0]["limit_price"], trade["tp1_price"])
+        self.assertEqual(active_limits[0]["qty"], float(trade["position_size"]) / 2)
+        self.assertEqual(active_limits[0]["oco_group"], trade["oco_group"])
+        self.assertEqual(active_limits[0]["oco_role"], "tp1_limit")
+
+    def test_executor_keeps_stop_and_tp1_if_trade_manager_stops_polling_after_entry(self):
+        trade = self._new_short_trade()
+        manager_snapshot = dict(trade)
+
+        active_orders = [
+            order for order in self.executor.ORDERS.values()
+            if order.get("trade_id") == manager_snapshot["trade_id"]
+            and order.get("status") == "active"
+        ]
+
+        self.assertEqual(manager_snapshot["status"], "active")
+        self.assertCountEqual([order["type"] for order in active_orders], ["stop", "limit"])
+        self.assertTrue(any(order["order_id"] == manager_snapshot["stop_order_id"] for order in active_orders))
+        self.assertTrue(any(order["order_id"] == manager_snapshot["tp1_order_id"] for order in active_orders))
+
+    def test_restart_reconcile_preserves_existing_broker_native_protection(self):
+        trade = self._new_short_trade()
+        state = self.manager.load_state()
+        state["trades"][trade["trade_id"]]["stop_order_id"] = None
+        state["trades"][trade["trade_id"]]["tp1_order_id"] = None
+        state["trades"][trade["trade_id"]]["current_stop"] = None
+        self.manager.save_state(state)
+
+        recovered = self.manager.reconcile_on_startup()
+        persisted = self.manager.get_trade(trade["trade_id"])
+
+        self.assertEqual(persisted["status"], "active")
+        self.assertEqual(persisted["stop_order_id"], trade["stop_order_id"])
+        self.assertEqual(persisted["tp1_order_id"], trade["tp1_order_id"])
+        self.assertEqual(persisted["current_stop"], trade["original_stop"])
+        self.assertEqual(persisted["oco_group"], trade["oco_group"])
+        self.assertTrue(any(item["trade_id"] == trade["trade_id"] for item in recovered))
+
+    def test_noon_cutoff_contingency_is_documented(self):
+        doc = (ROOT / "docs" / "architecture" / "broker_native_protective_orders.md").read_text(encoding="utf-8")
+
+        self.assertIn("Noon cutoff fallback", doc)
+        self.assertIn("independent of Trade Manager", doc)
+        self.assertIn("Rithmic-native deployment", doc)
+
+    def test_nq_short_be_triggers_from_contract_price_tick_below_trigger(self):
+        trade = self._new_trade(symbol="NQM6", direction="short", position_size=2, price=28992.0)
+        trade.update(
+            {
+                "trade_id": "T-64adb60f",
+                "entry_price": 28992.0,
+                "original_stop": 29002.0,
+                "current_stop": 29002.0,
+                "be_trigger": 28981.0,
+                "tp1_price": 28960.0,
+                "symbol": "NQM6",
+                "requested_symbol": "NQ",
+                "execution_symbol": "NQM6",
+            }
+        )
+        self.manager.persist_trade_state(trade)
+
+        after_be = self.manager.process_price_update_by_id(
+            "T-64adb60f",
+            28970.25,
+            datetime.now() + timedelta(seconds=1),
+        )
+
+        self.assertEqual(after_be["current_stop"], 28992.0)
+        self.assertEqual(after_be["stop_state"], "break_even")
+        self.assertTrue(after_be["moved_to_be"])
+
+    def test_nq_short_be_triggers_from_live_bar_low_when_latest_tick_recovers(self):
+        trade = self._new_trade(symbol="NQM6", direction="short", position_size=2, price=28992.0)
+        trade.update(
+            {
+                "trade_id": "T-64adb60f",
+                "entry_price": 28992.0,
+                "original_stop": 29002.0,
+                "current_stop": 29002.0,
+                "be_trigger": 28981.0,
+                "tp1_price": 28960.0,
+                "symbol": "NQM6",
+                "requested_symbol": "NQ",
+                "execution_symbol": "NQM6",
+            }
+        )
+        self.manager.persist_trade_state(trade)
+
+        self.manager.on_price(
+            "NQ",
+            28990.0,
+            timestamp=datetime.now() + timedelta(seconds=1),
+            bar={"open": 28992.0, "high": 28994.0, "low": 28970.25, "close": 28990.0},
+        )
+        after_be = self.manager.get_trade("T-64adb60f")
+
+        self.assertEqual(after_be["current_stop"], 28992.0)
+        self.assertEqual(after_be["stop_state"], "break_even")
+        self.assertTrue(after_be["moved_to_be"])
 
     def test_long_trades_payload_preserves_tp1_and_be_levels_after_submit(self):
         trade = self._new_trade(symbol="NQ", direction="long", position_size=2, price=27458.25)
@@ -924,11 +1052,12 @@ class OfflineReplayTests(unittest.TestCase):
         self.assertFalse(after_be["tp1_hit"])
         self.assertEqual(after_be["current_stop"], after_be["entry_price"])
         self.assertEqual(after_be["remaining_size"], 2)
-        self.assertNotEqual(after_be["stop_order_id"], trade["stop_order_id"])
+        self.assertEqual(after_be["stop_order_id"], trade["stop_order_id"])
         be_stop = self.executor.ORDERS[after_be["stop_order_id"]]
         self.assertEqual(be_stop["status"], "active")
         self.assertEqual(be_stop["stop_price"], 100.0)
         self.assertEqual(be_stop["qty"], 2.0)
+        self.assertTrue(be_stop.get("modify_history"))
 
         self.executor.LAST_PRICES["NQM6"] = 100.0
         after_return = self.manager.process_price_update_by_id(
@@ -1002,7 +1131,7 @@ class OfflineReplayTests(unittest.TestCase):
         self.assertEqual(active_stops[0]["tag"], "runner_reset")
 
         self._assert_event_sequence(trade["trade_id"], [
-            "be_stop_placed",
+            "be_stop_modified",
             "tp1_filled",
             "runner_stop_reset_to_original",
         ])
@@ -1540,7 +1669,7 @@ class OfflineReplayTests(unittest.TestCase):
         self.assertTrue(payload["noon_runner_flatten"]["enabled"])
         self.assertEqual(payload["noon_runner_flatten"]["timezone"], "America/Los_Angeles")
 
-    def test_be_replacement_stop_fill_closes_trade_on_reconciliation(self):
+    def test_modified_be_stop_fill_closes_trade_on_reconciliation(self):
         trade = self._new_short_trade()
 
         after_be = self.manager.process_price_update_by_id(
@@ -1549,7 +1678,7 @@ class OfflineReplayTests(unittest.TestCase):
             self._timestamps(1)[0],
         )
         replacement_stop_id = after_be["stop_order_id"]
-        self.assertNotEqual(replacement_stop_id, trade["stop_order_id"])
+        self.assertEqual(replacement_stop_id, trade["stop_order_id"])
 
         replacement_stop = self.executor.ORDERS[replacement_stop_id]
         replacement_stop["status"] = "closed"
@@ -1627,7 +1756,7 @@ class OfflineReplayTests(unittest.TestCase):
         self.assertEqual(public_trade["be_trigger"], 95.0)
         self.assertEqual(self.manager.get_trade(trade["trade_id"])["be_trigger"], 95.0)
 
-    def test_be_replacement_stop_fill_does_not_close_concurrent_ym_trade(self):
+    def test_modified_be_stop_fill_does_not_close_concurrent_ym_trade(self):
         nq_trade = self._new_short_trade()
         ym_trade = self._new_trade(symbol="YMM6", price=40000.0)
 
