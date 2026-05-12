@@ -53,6 +53,14 @@ class TradeManagerTvContextProxyTests(unittest.TestCase):
         self.assertEqual(calls[0]["json"]["source"], "tradingview_level_helper")
         self.assertEqual(calls[0]["timeout"], 1.0)
 
+    def test_internal_service_urls_default_to_ipv4_loopback(self):
+        manager = self._load_manager()
+
+        self.assertEqual(manager.EXECUTOR_URL, "http://127.0.0.1:6001/execute")
+        self.assertEqual(manager.EXECUTOR_ORDERS_URL, "http://127.0.0.1:6001/orders")
+        self.assertEqual(manager.EXECUTOR_SNAPSHOT_URL, "http://127.0.0.1:6001/sync_snapshot")
+        self.assertEqual(manager.ENTRY_AGENT_TV_CONTEXT_URL, "http://127.0.0.1:7002/webhook/tv-context")
+
     def test_tv_context_proxy_debug_returns_last_state(self):
         manager = self._load_manager()
         manager.TV_CONTEXT_PROXY_STATE.update({

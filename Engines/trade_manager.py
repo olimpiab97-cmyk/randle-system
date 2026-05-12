@@ -45,8 +45,8 @@ RITHMIC_RECENT_BARS_FILE = os.path.join(BASE_DIR, "Data", "rithmic_recent_bars.j
 RITHMIC_ATR_SHADOW_COMPARISON_FILE = os.path.join(BASE_DIR, "Data", "rithmic_atr_shadow_comparison.json")
 ENTRY_AGENT_TV_CONTEXT_URL = os.getenv(
     "ENTRY_AGENT_TV_CONTEXT_URL",
-    "http://localhost:7002/webhook/tv-context",
-).strip() or "http://localhost:7002/webhook/tv-context"
+    "http://127.0.0.1:7002/webhook/tv-context",
+).strip() or "http://127.0.0.1:7002/webhook/tv-context"
 RITHMIC_ATR_SNAPSHOT_MAX_AGE_SECONDS = 180
 TRADINGVIEW_ATR_MAX_AGE_SECONDS = 180
 ATR_PERIOD = 14
@@ -134,9 +134,9 @@ def is_noon_runner_flatten_enabled():
 # =========================
 
 BROKER_NAME = "local_executor"
-EXECUTOR_URL = "http://localhost:6001/execute"
-EXECUTOR_ORDERS_URL = "http://localhost:6001/orders"
-EXECUTOR_SNAPSHOT_URL = "http://localhost:6001/sync_snapshot"
+EXECUTOR_URL = "http://127.0.0.1:6001/execute"
+EXECUTOR_ORDERS_URL = "http://127.0.0.1:6001/orders"
+EXECUTOR_SNAPSHOT_URL = "http://127.0.0.1:6001/sync_snapshot"
 
 # =========================
 # PHASE 7 CONNECTION PREP
@@ -805,6 +805,38 @@ def calculate_runner_profit(trade):
     return calculate_trade_leg_profit(trade, trade.get("exit_price"), runner_qty)
 
 
+def resolve_runner_flatten_exit_price(trade, evidence_order):
+    """Return the price to use for a runner closed by flatten evidence."""
+    for field in (
+        "filled_price",
+        "fill_price",
+        "avg_fill_price",
+        "average_fill_price",
+        "closed_price",
+        "exit_price",
+        "last_price",
+        "stop_price",
+        "limit_price",
+    ):
+        value = evidence_order.get(field)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+
+    for field in ("last_price", "exit_price", "current_stop"):
+        value = trade.get(field)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def update_profit_breakdown(trade, include_runner=False):
     tp1_profit = calculate_tp1_profit(trade)
     if tp1_profit is not None:
@@ -826,7 +858,7 @@ def update_profit_breakdown(trade, include_runner=False):
     return trade
 
 
-BE_LOCKED_STOP_STATES = {"break_even", "runner_original"}
+BE_LOCKED_STOP_STATES = {"break_even", "runner_entry", "runner_original"}
 
 
 def backfill_be_lock_fields(trade):
@@ -927,6 +959,16 @@ def public_trade_dict(trade):
     backfill_be_lock_fields(normalized)
     repair_missing_be_trigger(normalized)
     if (
+        normalized.get("tp1_hit")
+        and float(normalized.get("remaining_size", 0) or 0) > 0
+        and normalized.get("entry_price") is not None
+        and normalized.get("current_stop") is not None
+        and round_to_nearest_tick(normalized.get("current_stop"), normalized.get("symbol"))
+        == round_to_nearest_tick(normalized.get("entry_price"), normalized.get("symbol"))
+    ):
+        normalized["moved_to_be"] = True
+        normalized["stop_state"] = "runner_entry"
+    elif (
         normalized.get("tp1_hit")
         and float(normalized.get("remaining_size", 0) or 0) > 0
         and normalized.get("original_stop") is not None
@@ -1987,6 +2029,19 @@ def update_stop_state_from_active_stop(trade):
     if current_stop is None:
         return trade
 
+    if (
+        trade.get("tp1_hit")
+        and float(trade.get("remaining_size", 0) or 0) > 0
+        and entry_price is not None
+        and float(current_stop) == float(entry_price)
+    ):
+        trade["moved_to_be"] = True
+        trade["stop_state"] = "runner_entry"
+        if not trade.get("be_hit_at"):
+            trade["be_hit_at"] = datetime.now().isoformat()
+        lock_be_state(trade, trade.get("tp1_hit_at") or trade.get("be_hit_at"))
+        return trade
+
     if entry_price is not None and float(current_stop) == float(entry_price):
         trade["moved_to_be"] = True
         trade["stop_state"] = "break_even"
@@ -2066,7 +2121,11 @@ def close_trade_from_executor_flatten_evidence(trade, evidence_order):
         trade["exit_reason"] = "executor_flatten"
 
     if trade.get("exit_reason") == "target_filled":
-        trade["exit_price"] = trade.get("tp1_price")
+        trade["exit_price"] = resolve_runner_flatten_exit_price(trade, evidence_order) or trade.get("tp1_price")
+    else:
+        exit_price = resolve_runner_flatten_exit_price(trade, evidence_order)
+        if exit_price is not None:
+            trade["exit_price"] = exit_price
 
     update_profit_breakdown(trade, include_runner=trade.get("exit_price") is not None)
     print(
@@ -2226,12 +2285,12 @@ def build_orphan_executor_exposure(state, executor_orders, executor_snapshot):
             continue
 
         matched_by_trade_id = any(trade_id in active_trade_ids for trade_id in executor_trade_ids)
-        matched_by_symbol = symbol in active_trade_symbols
+        matched_by_symbol = not executor_trade_ids and symbol in active_trade_symbols
         if matched_by_trade_id or matched_by_symbol:
             continue
 
         managed_by_trade_id = any(trade_id in managed_open_trade_ids for trade_id in executor_trade_ids)
-        managed_by_symbol = symbol in managed_open_trade_symbols
+        managed_by_symbol = not executor_trade_ids and symbol in managed_open_trade_symbols
         if managed_by_trade_id or managed_by_symbol:
             matching_manager_trades = [
                 {
@@ -4827,28 +4886,29 @@ def handle_tp1_hit(trade, timestamp):
         timestamp=timestamp,
     )
 
-    if trade["remaining_size"] > 0 and trade.get("original_stop") is not None:
+    if trade["remaining_size"] > 0 and trade.get("entry_price") is not None:
         executor_orders = fetch_executor_orders()
         matching_runner_stop = find_matching_active_stop(
             executor_orders,
             trade["trade_id"],
             trade["symbol"],
-            trade["original_stop"],
+            trade["entry_price"],
             trade["remaining_size"],
         )
 
         if matching_runner_stop:
             trade["stop_order_id"] = matching_runner_stop.get("order_id")
-            trade["current_stop"] = trade["original_stop"]
-            trade["stop_state"] = "runner_original"
+            trade["current_stop"] = trade["entry_price"]
+            trade["moved_to_be"] = True
+            trade["stop_state"] = "runner_entry"
             lock_be_state(trade, timestamp)
             log_trade_event(
                 trade["trade_id"],
-                "runner_stop_reset_duplicate_noop",
-                "Runner stop already at original stop after TP1 fill",
+                "runner_stop_entry_duplicate_noop",
+                "Runner stop already at entry after TP1 fill",
                 {
                     "stop_order_id": trade["stop_order_id"],
-                    "original_stop": trade["original_stop"],
+                    "entry_price": trade["entry_price"],
                     "remaining_size": trade["remaining_size"],
                 },
                 snapshot=trade,
@@ -4857,13 +4917,16 @@ def handle_tp1_hit(trade, timestamp):
             persist_trade_state(trade)
             return
 
-        reset_response = reset_stop_to_original(
+        reset_response = modify_stop_order(
             trade_id=trade["trade_id"],
             symbol=trade["symbol"],
-            stop_price=trade["original_stop"],
+            broker_order_id=trade["stop_order_id"],
+            stop_price=trade["entry_price"],
             qty=trade["remaining_size"],
+            tag="runner_entry",
             watch_failures=False,
-            oco_parent_group=protective_oco_group(trade),
+            oco_group=protective_oco_group(trade),
+            oco_role="protective_stop",
         )
 
         if not reset_response.get("ok"):
@@ -4871,7 +4934,7 @@ def handle_tp1_hit(trade, timestamp):
                 fetch_executor_orders(),
                 trade["trade_id"],
                 trade["symbol"],
-                trade["original_stop"],
+                trade["entry_price"],
                 trade["remaining_size"],
             )
             if not matching_runner_stop and response_is_active_stop_exists(reset_response):
@@ -4880,22 +4943,28 @@ def handle_tp1_hit(trade, timestamp):
                     reset_response,
                     trade["trade_id"],
                     trade["symbol"],
-                    trade["original_stop"],
+                    trade["entry_price"],
                     trade["remaining_size"],
                 )
 
         if reset_response.get("ok") or matching_runner_stop:
-            trade["stop_order_id"] = reset_response.get("new_stop_id") or matching_runner_stop.get("order_id")
-            trade["current_stop"] = trade["original_stop"]
-            trade["stop_state"] = "runner_original"
+            trade["stop_order_id"] = (
+                reset_response.get("broker_order_id")
+                or reset_response.get("new_stop_id")
+                or (matching_runner_stop or {}).get("order_id")
+                or trade.get("stop_order_id")
+            )
+            trade["current_stop"] = trade["entry_price"]
+            trade["moved_to_be"] = True
+            trade["stop_state"] = "runner_entry"
             lock_be_state(trade, timestamp)
             log_trade_event(
                 trade["trade_id"],
-                "runner_stop_reset_to_original",
-                "Runner stop reset to original stop after TP1 fill",
+                "runner_stop_reset_to_entry",
+                "Runner stop reset to entry after TP1 fill",
                 {
                     "stop_order_id": trade["stop_order_id"],
-                    "original_stop": trade["original_stop"],
+                    "entry_price": trade["entry_price"],
                     "remaining_size": trade["remaining_size"],
                 },
                 snapshot=trade,
@@ -4903,14 +4972,14 @@ def handle_tp1_hit(trade, timestamp):
             )
             persist_trade_state(trade)
         else:
-            register_execution_failure(reset_response.get("error", reset_response.get("message", "reset_stop_to_original_failed")))
-            execution_watcher(reset_response, "reset_stop_to_original")
+            register_execution_failure(reset_response.get("error", reset_response.get("message", "runner_stop_entry_modify_failed")))
+            execution_watcher(reset_response, "modify_stop")
             trade["status"] = "error"
-            trade["error_reason"] = reset_response.get("error") or reset_response.get("message") or "runner stop reset failed"
+            trade["error_reason"] = reset_response.get("error") or reset_response.get("message") or "runner stop entry reset failed"
             log_trade_event(
                 trade["trade_id"],
                 "runner_stop_reset_error",
-                "Runner stop reset to original stop failed after TP1 fill",
+                "Runner stop reset to entry failed after TP1 fill",
                 {"error_reason": trade["error_reason"]},
                 snapshot=trade,
                 timestamp=timestamp,

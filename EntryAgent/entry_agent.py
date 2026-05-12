@@ -21,7 +21,7 @@ from blueprint_rules import (
 )
 from gateway_engine import evaluate_gateway
 from levels import classify_liquidity_location, root_symbol
-from market_feed import get_latest_market_snapshot
+from market_feed import get_latest_market_snapshot, recent_closed_bars
 from step25_engine import evaluate_step25
 from step3_engine import evaluate_step3
 from step4_engine import evaluate_step4
@@ -184,6 +184,25 @@ def selected_active_liquidity_from_context(
             return close is not None and close <= level_price
         return False
 
+    def stack_close_beyond_close_boundary(side: str | None, close_boundary: float) -> bool:
+        close = optional_float(ohlc.get("close"))
+        if close is None:
+            return False
+        if side == "upper":
+            return close >= close_boundary + tick_size
+        if side == "lower":
+            return close <= close_boundary - tick_size
+        return False
+
+    def combined_stack_name(components: list[dict[str, Any]], side: str | None) -> str:
+        if side == "lower":
+            ordered = sorted(components, key=lambda item: (-float(item["price"]), str(item["name"])))
+        elif side == "upper":
+            ordered = sorted(components, key=lambda item: (float(item["price"]), str(item["name"])))
+        else:
+            ordered = sorted(components, key=lambda item: (item["priority"], str(item["name"])))
+        return f"{'/'.join(str(component['name']) for component in ordered)} Liquidity"
+
     grouped: dict[str, dict[str, Any]] = {}
     for name, details in tv_context["levels"].items():
         if name not in ACTIVE_LIQUIDITY_PRIORITY or not isinstance(details, dict):
@@ -218,36 +237,50 @@ def selected_active_liquidity_from_context(
         components = sorted(group["components"], key=lambda item: (item["priority"], item["name"]))
         if not components:
             continue
-        interacted_components = [
-            component
-            for component in components
-            if level_interacted(str(component["name"]), float(component["price"]))
-        ]
-        if not interacted_components:
-            continue
         prices = [component["price"] for component in components]
         low = min(prices)
         high = max(prices)
-        distance = 0.0 if low <= current_price <= high else min(abs(current_price - low), abs(current_price - high))
-        closest_component = min(interacted_components, key=lambda item: (abs(item["price"] - current_price), item["priority"]))
         priority_component = components[0]
-        side = priority_component.get("side") or closest_component.get("side")
+        side = priority_component.get("side")
         group_payload = None
         if group.get("stack_group"):
+            extreme_boundary = high if side == "upper" else low
+            close_boundary = low if side == "upper" else high
+            if not stack_close_beyond_close_boundary(side, close_boundary):
+                continue
+            extreme_component = max(components, key=lambda item: item["price"]) if side == "upper" else min(components, key=lambda item: item["price"])
+            close_component = min(components, key=lambda item: item["price"]) if side == "upper" else max(components, key=lambda item: item["price"])
             group_payload = {
                 "name": group["stack_group"],
                 "components": [component["name"] for component in components],
                 "prices": {component["name"]: component["price"] for component in components},
                 "side": side,
-                "close_boundary": closest_component["price"],
-                "extreme_boundary": high if side == "upper" else low,
+                "display_name": combined_stack_name(components, side),
+                "close_boundary": close_boundary,
+                "extreme_boundary": extreme_boundary,
                 "low": low,
                 "high": high,
             }
+            group_payload["extreme_component"] = extreme_component["name"]
+            group_payload["close_component"] = close_component["name"]
+            closest_component = close_component
+            distance = 0.0 if low <= current_price <= high else abs(current_price - close_boundary)
+        else:
+            interacted_components = [
+                component
+                for component in components
+                if level_interacted(str(component["name"]), float(component["price"]))
+            ]
+            if not interacted_components:
+                continue
+            distance = 0.0 if low <= current_price <= high else min(abs(current_price - low), abs(current_price - high))
+            closest_component = min(interacted_components, key=lambda item: (abs(item["price"] - current_price), item["priority"]))
+            side = priority_component.get("side") or closest_component.get("side")
         candidates.append(
             {
                 "name": closest_component["name"],
                 "price": closest_component["price"],
+                "display_name": (group_payload or {}).get("display_name"),
                 "priority": priority_component["priority"],
                 "distance": distance,
                 "side": side,
@@ -261,6 +294,7 @@ def selected_active_liquidity_from_context(
     return {
         "name": selected["name"],
         "price": selected["price"],
+        "display_name": selected.get("display_name"),
         "side": selected["side"],
         "group": selected["group"],
     }
@@ -313,6 +347,8 @@ def rotated_active_liquidity_after_inactive_acceptance(
             continue
         stack_text = str(details.get("stack_group") or "NONE").strip()
         same_stack = bool(previous_stack_group and stack_text == previous_stack_group)
+        if same_stack:
+            continue
         candidates.append(
             {
                 "name": name,
@@ -326,7 +362,7 @@ def rotated_active_liquidity_after_inactive_acceptance(
 
     if not candidates:
         return None
-    selected = min(candidates, key=lambda item: (not item["same_stack"], item["priority"], item["distance"], item["name"]))
+    selected = min(candidates, key=lambda item: (item["priority"], item["distance"], item["name"]))
     selected["group"] = active_stack_from_context(tv_context, str(selected["name"]))
     selected.pop("priority", None)
     selected.pop("distance", None)
@@ -639,6 +675,122 @@ def persisted_liquidity_candidate(persisted_state: dict[str, Any], symbol: str |
     return liquidity if isinstance(liquidity, dict) else None
 
 
+def latest_terminated_interaction_snapshot(persisted_state: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the latest Step 7 terminated interaction snapshot persisted for a symbol."""
+    for step_name in ("step6", "step5", "step4", "step3"):
+        step = persisted_state.get(step_name) if isinstance(persisted_state.get(step_name), dict) else {}
+        state = step.get("state") if isinstance(step.get("state"), dict) else {}
+        snapshot = state.get("terminated_interaction_snapshot")
+        if isinstance(snapshot, dict):
+            return snapshot
+    return None
+
+
+def same_liquidity_reactivation_blocked(
+    selected_liquidity: dict[str, Any] | None,
+    persisted_state: dict[str, Any],
+    current_candle: dict[str, Any] | None,
+) -> bool:
+    """Implement Step 8 same-liquidity reactivation proof without reusing structure."""
+    if not isinstance(selected_liquidity, dict) or not isinstance(current_candle, dict):
+        return False
+    terminated = latest_terminated_interaction_snapshot(persisted_state)
+    if not isinstance(terminated, dict):
+        return False
+
+    selected_name = selected_liquidity.get("name")
+    selected_price = optional_float(selected_liquidity.get("price"))
+    terminated_name = terminated.get("terminated_liquidity_name")
+    terminated_price = optional_float(terminated.get("terminated_liquidity_price"))
+    if selected_name != terminated_name or selected_price is None or terminated_price != selected_price:
+        return False
+
+    close = optional_float(current_candle.get("close"))
+    highest_close = optional_float(terminated.get("prior_interaction_highest_close"))
+    lowest_close = optional_float(terminated.get("prior_interaction_lowest_close"))
+    direction = str(terminated.get("terminated_interaction_direction") or "").upper()
+    if close is None:
+        return True
+    if direction == "LONG" and highest_close is not None:
+        return close <= highest_close
+    if direction == "SHORT" and lowest_close is not None:
+        return close >= lowest_close
+    return highest_close is not None or lowest_close is not None
+
+
+def same_liquidity_reactivation_allowed(
+    selected_liquidity: dict[str, Any] | None,
+    persisted_state: dict[str, Any],
+    current_candle: dict[str, Any] | None,
+) -> bool:
+    """Return True only when Step 8 same-liquidity reactivation proof exists."""
+    if not isinstance(selected_liquidity, dict) or not isinstance(current_candle, dict):
+        return False
+    terminated = latest_terminated_interaction_snapshot(persisted_state)
+    if not isinstance(terminated, dict):
+        return False
+
+    selected_name = selected_liquidity.get("name")
+    selected_price = optional_float(selected_liquidity.get("price"))
+    terminated_name = terminated.get("terminated_liquidity_name")
+    terminated_price = optional_float(terminated.get("terminated_liquidity_price"))
+    if selected_name != terminated_name or selected_price is None or terminated_price != selected_price:
+        return False
+
+    close = optional_float(current_candle.get("close"))
+    highest_close = optional_float(terminated.get("prior_interaction_highest_close"))
+    lowest_close = optional_float(terminated.get("prior_interaction_lowest_close"))
+    direction = str(terminated.get("terminated_interaction_direction") or "").upper()
+    if close is None:
+        return False
+    if direction == "LONG" and highest_close is not None:
+        return close > highest_close
+    if direction == "SHORT" and lowest_close is not None:
+        return close < lowest_close
+    return False
+
+
+def liquidity_stack_group(tv_context: dict[str, Any] | None, level_name: Any) -> str | None:
+    if not isinstance(tv_context, dict) or not level_name:
+        return None
+    levels = tv_context.get("levels")
+    if not isinstance(levels, dict):
+        return None
+    details = levels.get(str(level_name))
+    if not isinstance(details, dict):
+        return None
+    stack_group = str(details.get("stack_group") or "NONE").strip()
+    return stack_group if stack_group and stack_group.upper() != "NONE" else None
+
+
+def same_stack_owner(
+    tv_context: dict[str, Any] | None,
+    left: dict[str, Any] | None,
+    right: dict[str, Any] | None,
+) -> bool:
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        return False
+    left_group = liquidity_stack_group(tv_context, left.get("name"))
+    right_group = liquidity_stack_group(tv_context, right.get("name"))
+    return bool(left_group and left_group == right_group)
+
+
+def current_candle_supports_persisted_liquidity(
+    persisted_liquidity: dict[str, Any] | None,
+    tv_context: dict[str, Any] | None,
+    latest_price: Any,
+    current_candle: dict[str, Any] | None,
+    tick_size: float,
+) -> bool:
+    """Require current closed-candle ownership proof before reusing persisted liquidity."""
+    if not isinstance(persisted_liquidity, dict) or not isinstance(current_candle, dict):
+        return False
+    selected = selected_active_liquidity_from_context(tv_context, latest_price, current_candle, tick_size)
+    if not isinstance(selected, dict):
+        return False
+    return same_active_liquidity(selected, persisted_liquidity) or same_stack_owner(tv_context, selected, persisted_liquidity)
+
+
 def normalized_signature_value(value: Any) -> str:
     if value is None:
         return ""
@@ -796,6 +948,7 @@ def build_last_interacted_liquidity(selected_liquidity: dict[str, Any] | None) -
     return {
         "name": selected_liquidity.get("name"),
         "price": selected_liquidity.get("price"),
+        "display_name": selected_liquidity.get("display_name") or (selected_liquidity.get("group") or {}).get("display_name"),
         "side": selected_liquidity.get("side"),
         "group": selected_liquidity.get("group"),
         "interacted_at": datetime.now(timezone.utc).isoformat(),
@@ -815,12 +968,13 @@ def evaluate_live_step_2_1a(
     selected_liquidity = None
     current_candle = build_current_candle(snapshot)
     previous_liquidity = persisted_liquidity_candidate(persisted_state, symbol_key)
+    tick_size = float(liquidity.get("tick_size") or 0.25)
     if candle_close_confirmed(snapshot):
         selected_liquidity = selected_active_liquidity_from_context(
             snapshot.get("tv_context"),
             snapshot.get("latest_price"),
             snapshot.get("ohlc") if isinstance(snapshot.get("ohlc"), dict) else None,
-            float((liquidity or {}).get("tick_size") or 0.25),
+            tick_size,
         )
         if not selected_liquidity:
             selected_liquidity = rotated_active_liquidity_after_inactive_acceptance(
@@ -856,6 +1010,8 @@ def evaluate_live_step_2_1a(
         current_candle,
     ):
         selected_liquidity = None
+    if same_liquidity_reactivation_blocked(selected_liquidity, symbol_state, current_candle):
+        selected_liquidity = None
     consumed_levels = merge_consumed_liquidity_levels(
         consumed_levels,
         record_exhausted_liquidity(
@@ -869,6 +1025,17 @@ def evaluate_live_step_2_1a(
     level_price = selected_liquidity.get("price") if selected_liquidity else None
     if not selected_liquidity:
         persisted_liquidity = persisted_active_liquidity(persisted_state, symbol_key, snapshot.get("tv_context"))
+        if persisted_liquidity and not (
+            current_candle_supports_persisted_liquidity(
+                persisted_liquidity,
+                snapshot.get("tv_context"),
+                snapshot.get("latest_price"),
+                current_candle,
+                tick_size,
+            )
+            or same_liquidity_reactivation_allowed(persisted_liquidity, symbol_state, current_candle)
+        ):
+            persisted_liquidity = None
         if persisted_liquidity and consumed_liquidity_blocks(
             {**symbol_state, "consumed_liquidity_levels": consumed_levels},
             persisted_liquidity.get("name"),
@@ -881,7 +1048,6 @@ def evaluate_live_step_2_1a(
             level_price = persisted_liquidity.get("price")
             selected_liquidity = persisted_liquidity
     side = side_for_level(active_level)
-    tick_size = float(liquidity.get("tick_size") or 0.25)
     if not active_level or level_price is None or side is None:
         return {
             "available": False,
@@ -1248,6 +1414,8 @@ def next_same_side_liquidity_target(
         if previous_side == "upper" and price <= previous_price:
             continue
         stack_text = str(details.get("stack_group") or "NONE").strip()
+        if previous_stack_group and stack_text == previous_stack_group:
+            continue
         candidates.append(
             {
                 "name": name,
@@ -1255,12 +1423,11 @@ def next_same_side_liquidity_target(
                 "side": previous_side,
                 "priority": ACTIVE_LIQUIDITY_PRIORITY[name],
                 "distance": abs(price - previous_price),
-                "same_stack": bool(previous_stack_group and stack_text == previous_stack_group),
             }
         )
     if not candidates:
         return None
-    selected = min(candidates, key=lambda item: (not item["same_stack"], item["priority"], item["distance"], item["name"]))
+    selected = min(candidates, key=lambda item: (item["priority"], item["distance"], item["name"]))
     return {
         "name": selected["name"],
         "price": selected["price"],
@@ -1468,6 +1635,33 @@ def active_stack_from_context(tv_context: dict[str, Any] | None, active_level: s
     return None
 
 
+def rejection_from_step2_activation(step_2_1a: dict[str, Any], symbol: str = "NQ") -> dict[str, Any]:
+    """Build Rejection ON only from the Step 2 interaction activation owner."""
+    if step_2_1a.get("step_2_activated") is not True:
+        return {
+            "rejection_mode": "OFF",
+            "reason_text": step_2_1a.get("reason") or "Step 2 has not activated a liquidity interaction.",
+        }
+    active_level = step_2_1a.get("active_level")
+    level_price = optional_float(step_2_1a.get("level_price"))
+    side = step_2_1a.get("side") or side_for_level(str(active_level or ""))
+    if active_level is None or level_price is None or side not in {"upper", "lower"}:
+        return {
+            "rejection_mode": "OFF",
+            "reason_text": "Step 2 activation missing active liquidity identity.",
+        }
+    watch_side = "SHORT" if side == "upper" else "LONG"
+    priority = ACTIVE_LIQUIDITY_PRIORITY.get(str(active_level), 999)
+    return {
+        "rejection_mode": "ON",
+        "watch_side": watch_side,
+        "trigger_level": active_level,
+        "trigger_price": level_price,
+        "trigger_priority": priority,
+        "reason_text": f"Step 2 activated {active_level} {level_price}; watching {watch_side} participation.",
+    }
+
+
 def build_step3_interaction(
     snapshot: dict[str, Any],
     rejection: dict[str, Any],
@@ -1530,25 +1724,49 @@ def build_step25_interaction(
         return None
 
     current_candle = build_current_candle(snapshot)
-    initial_candle_a = step_2_1a.get("candle_a") or current_candle
+    initial_candle_a = step_2_1a.get("candle_a")
+    active_group = step_2_1a.get("active_liquidity_group")
+    active_level = step_2_1a.get("active_level") or rejection.get("trigger_level")
+    level_price = step_2_1a.get("level_price") or rejection.get("trigger_price")
+    side = step_2_1a.get("side") or side_for_level(str(active_level or ""))
+    pathway_level_type = "LH" if side == "upper" else "LL" if side == "lower" else None
+    pathway_level = (active_group or {}).get("extreme_boundary") if isinstance(active_group, dict) else level_price
+    pathway_stack_extreme = (active_group or {}).get("extreme_boundary") if isinstance(active_group, dict) else None
+    bars = recent_closed_bars(str(snapshot.get("normalized_symbol") or snapshot.get("symbol") or "NQ"), 2)
     previous_step25 = persisted_state.get("step25") if isinstance(persisted_state.get("step25"), dict) else {}
     previous_state = previous_step25.get("state") if isinstance(previous_step25.get("state"), dict) else {}
+    previous_initial = previous_state.get("initial_candle_a") if isinstance(previous_state, dict) else None
+    previous_locked = (
+        previous_state.get("step25_pathway_selection_complete") is True
+        and same_candle_time((previous_initial or {}).get("timestamp") if isinstance(previous_initial, dict) else None, (initial_candle_a or {}).get("timestamp") if isinstance(initial_candle_a, dict) else None)
+    )
 
-    return {
+    interaction = {
         "system_state": "REJECTION MODE ON",
         "trade_mode": "ON",
         "rejection_mode": "ON",
         "interaction_state": "ACTIVE",
-        "initial_candle_a": previous_state.get("initial_candle_a") or initial_candle_a,
-        "candidate_modes": previous_state.get("candidate_modes"),
-        "controlling_mode": previous_state.get("controlling_mode"),
-        "structure_side_requirement": previous_state.get("structure_side_requirement"),
-        "reclaim_candle_a": previous_state.get("reclaim_candle_a"),
-        "provisional_candle_a": previous_state.get("provisional_candle_a"),
-        "pathway_level": previous_state.get("pathway_level"),
-        "pathway_activation_type": previous_state.get("pathway_activation_type"),
-        "events": list(previous_step25.get("events") or []),
+        "initial_candle_a": initial_candle_a,
+        "candidate_modes": previous_state.get("candidate_modes") if previous_locked else None,
+        "controlling_mode": previous_state.get("controlling_mode") if previous_locked else None,
+        "structure_side_requirement": previous_state.get("structure_side_requirement") if previous_locked else None,
+        "reclaim_candle_a": previous_state.get("reclaim_candle_a") if previous_locked else None,
+        "provisional_candle_a": previous_state.get("provisional_candle_a") if previous_locked else None,
+        "pathway_level": previous_state.get("pathway_level") if previous_locked else pathway_level,
+        "pathway_activation_type": previous_state.get("pathway_activation_type") if previous_locked else None,
+        "events": list(previous_step25.get("events") or []) if previous_locked else [],
     }
+    if len(bars) >= 2 and pathway_level is not None and pathway_level_type:
+        interaction.update(
+            {
+                "prev_candle": bars[-2],
+                "last_candle": bars[-1],
+                "level": pathway_level,
+                "level_type": pathway_level_type,
+                "stack_extreme": pathway_stack_extreme,
+            }
+        )
+    return interaction
 
 
 def evaluate_live_step25(
@@ -1601,6 +1819,16 @@ def nearest_opposing_liquidity(liquidity: dict[str, Any], setup_direction: str |
     if setup_direction == "LONG":
         return liquidity.get("nearest_level_above")
     return None
+
+
+def setup_direction_from_pathway(step25_state: dict[str, Any], rejection: dict[str, Any]) -> str | None:
+    """Return shared-engine direction after Step 2.5 pathway selection."""
+    mode = str(step25_state.get("controlling_mode") or "").strip().upper().replace(" ", "")
+    if mode in {"S/R", "SR", "S/RPULLBACKCONTINUATION"}:
+        return "SHORT"
+    if mode in {"R/S", "RS", "R/SPULLBACKCONTINUATION"}:
+        return "LONG"
+    return rejection.get("watch_side")
 
 
 def next_break_side_liquidity(liquidity: dict[str, Any], setup_direction: str | None) -> dict[str, Any] | None:
@@ -1717,7 +1945,7 @@ def build_step4_interaction(
 
     previous_step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
     previous_state = previous_step4.get("state") if isinstance(previous_step4.get("state"), dict) else {}
-    setup_direction = rejection.get("watch_side")
+    setup_direction = setup_direction_from_pathway(step25_state, rejection)
     active_liquidity = step3_state.get("active_liquidity") if isinstance(step3_state.get("active_liquidity"), dict) else {}
     if consumed_liquidity_blocks(
         persisted_state,
@@ -1743,6 +1971,21 @@ def build_step4_interaction(
             "events": list(previous_step4.get("events") or step3.get("events") or []),
         }
     )
+    if interaction.get("liquidity_type") == "STATIC_STACK":
+        previous_candle_a = previous_state.get("candle_a") if isinstance(previous_state.get("candle_a"), dict) else None
+        confirmation_candle = step3_state.get("stack_extreme_confirmation_candle") if isinstance(step3_state.get("stack_extreme_confirmation_candle"), dict) else None
+        if previous_state.get("stack_step4_candle_a_assigned") is True and previous_candle_a is not None:
+            interaction["candle_a"] = previous_candle_a
+            interaction["initial_candle_a"] = previous_candle_a
+            interaction["candle_a_source"] = previous_state.get("candle_a_source") or "step4_stack_post_extreme_candle_a"
+            interaction["stack_step4_candle_a_assigned"] = True
+        elif candle_is_after(current_candle, candle_timestamp(confirmation_candle)):
+            interaction["candle_a"] = current_candle
+            interaction["initial_candle_a"] = current_candle
+            interaction["candle_a_source"] = "step4_stack_post_extreme_candle_a"
+            interaction["stack_step4_candle_a_assigned"] = True
+            interaction["awaiting_stack_candle_b"] = True
+            interaction.pop("candle_b", None)
     return interaction
 
 
@@ -1789,6 +2032,19 @@ def evaluate_live_step4(
             "next_step": step3.get("next_step") or step25.get("next_step") or "Step 3",
             "reason": reason,
             "events": [{"event": "step4_waiting_for_inputs", "reason": reason}],
+        }
+    if interaction.get("awaiting_stack_candle_b") is True:
+        state = dict(interaction)
+        state["last_evaluated_candle_time"] = candle_timestamp(state.get("candle_a") if isinstance(state.get("candle_a"), dict) else None)
+        reason = "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        state["state_transition_reason"] = reason
+        return {
+            "step": "Step 4",
+            "status": "WAIT",
+            "state": state,
+            "next_step": "Step 4",
+            "reason": reason,
+            "events": list(interaction.get("events") or []) + [{"event": "step4_stack_candle_a_assigned", "reason": reason}],
         }
     result = evaluate_step4(interaction)
     if result.get("status") == "READY" and isinstance(result.get("state"), dict):
@@ -2021,11 +2277,7 @@ def run_once(symbol: str = "NQ", persist: bool = True) -> dict[str, Any]:
         normalized_symbol,
     )
     step_2_1a = evaluate_live_step_2_1a(snapshot, levels, liquidity, persisted_state)
-    rejection = detect_rejection_mode(
-        snapshot.get("ohlc"),
-        levels,
-        normalized_symbol,
-    )
+    rejection = rejection_from_step2_activation(step_2_1a, normalized_symbol)
     snapshot["liquidity"] = liquidity
     snapshot["step_2_1a"] = step_2_1a
     snapshot["rejection"] = rejection
@@ -2119,7 +2371,11 @@ def active_liquidity_from_snapshot(snapshot: dict[str, Any]) -> tuple[Any, Any]:
         or rejection.get("trigger_price")
     )
     if valid_active_liquidity_selection(name, price):
-        return name, price
+        display_name = (last_interacted or {}).get("display_name") if isinstance(last_interacted, dict) else None
+        group = step_2_1a.get("active_liquidity_group")
+        if not display_name and isinstance(group, dict):
+            display_name = group.get("display_name")
+        return display_name or name, price
 
     selected_liquidity = None
     if candle_close_confirmed(snapshot):
@@ -2130,7 +2386,7 @@ def active_liquidity_from_snapshot(snapshot: dict[str, Any]) -> tuple[Any, Any]:
             float((liquidity or {}).get("tick_size") or 0.25),
         )
     if selected_liquidity and valid_active_liquidity_selection(selected_liquidity.get("name"), selected_liquidity.get("price")):
-        return selected_liquidity.get("name"), selected_liquidity.get("price")
+        return selected_liquidity.get("display_name") or selected_liquidity.get("name"), selected_liquidity.get("price")
 
     return None, None
 
@@ -2192,15 +2448,14 @@ def current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
     step4_leg1_ready, _step4_leg1_reason = valid_participation_locked_leg1_state(step4_state)
     if step4.get("status") == "READY" and step4_leg1_ready:
         return "Step 5"
+    if not candle_close_confirmed(snapshot):
+        return "Step 2"
     if step3.get("status") == "ALLOW_STEP_4":
         return "Step 4"
     if step25.get("status") == "READY":
         return "Step 3"
     if candle_close_confirmed(snapshot) and rejection.get("rejection_mode") == "ON":
         return "Step 2.5"
-    active_name, _active_price = active_liquidity_from_snapshot(snapshot)
-    if valid_active_liquidity_selection(active_name, _active_price):
-        return "Step 3"
     return "Step 2"
 
 
@@ -2223,6 +2478,65 @@ def wait_reason_for_current_step(
     return result_reason(step6, result_reason(step5, result_reason(step4, "Waiting for EntryAgent setup requirements.")))
 
 
+def normalized_pathway_name(value: Any) -> str:
+    """Return a display-only pathway name from existing evaluated status fields."""
+    text = str(value or "").strip().upper().replace(" ", "")
+    if text in {"S/R", "SR", "S/RPULLBACKCONTINUATION"}:
+        return "S/R"
+    if text in {"R/S", "RS", "R/SPULLBACKCONTINUATION"}:
+        return "R/S"
+    if text and ("NORMAL" in text or "REJECTION" in text):
+        return "Normal"
+    return "none"
+
+
+def continuation_type_from_state(step25_state: dict[str, Any], controlling_mode: Any) -> str:
+    """Return S/R, R/S, or none for visibility without changing pathway control."""
+    controlling = normalized_pathway_name(controlling_mode)
+    if controlling in {"S/R", "R/S"}:
+        return controlling
+    candidate_modes = step25_state.get("candidate_modes")
+    if isinstance(candidate_modes, list):
+        for mode in candidate_modes:
+            normalized = normalized_pathway_name(mode)
+            if normalized in {"S/R", "R/S"}:
+                return normalized
+    return "none"
+
+
+def pathway_visibility_status(
+    side: str,
+    rejection_active: bool,
+    controlling_mode: Any,
+    continuation_type: str,
+    invalidated: bool,
+    step25_ready: bool,
+) -> str:
+    """Return display-only pathway status for Rejection or Continuation side."""
+    if invalidated:
+        if side == "rejection" or continuation_type != "none":
+            return "invalidated"
+        return "inactive"
+    if not rejection_active:
+        return "inactive"
+
+    controlling = normalized_pathway_name(controlling_mode)
+    if side == "rejection":
+        if controlling == "Normal":
+            return "controlling"
+        if controlling in {"S/R", "R/S"}:
+            return "frozen"
+        return "active" if step25_ready else "candidate"
+
+    if continuation_type == "none":
+        return "inactive"
+    if controlling == continuation_type:
+        return "controlling"
+    if controlling == "Normal":
+        return "candidate"
+    return "candidate" if step25_ready else "active"
+
+
 def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     """Build the minimal read-only Entry Manager status for one symbol."""
     snapshot = run_once(symbol, persist=True)
@@ -2232,6 +2546,7 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     step5 = snapshot.get("step5") if isinstance(snapshot.get("step5"), dict) else {}
     step6 = snapshot.get("step6") if isinstance(snapshot.get("step6"), dict) else {}
     rejection = snapshot.get("rejection") if isinstance(snapshot.get("rejection"), dict) else {}
+    step25_state = ((snapshot.get("step25") or {}).get("state") or {}) if isinstance((snapshot.get("step25") or {}).get("state"), dict) else {}
     step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
     step5_state = step5.get("state") if isinstance(step5.get("state"), dict) else {}
     step6_state = step6.get("state") if isinstance(step6.get("state"), dict) else {}
@@ -2276,8 +2591,39 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     sr_rs_context = None if no_active_liquidity else (
         step5_state.get("controlling_mode")
         or step4_state.get("controlling_mode")
-        or ((snapshot.get("step25") or {}).get("state") or {}).get("controlling_mode")
+        or step25_state.get("controlling_mode")
     )
+    setup_direction = None if no_active_liquidity else (
+        step6_state.get("setup_direction")
+        or step5_state.get("setup_direction")
+        or step4_state.get("setup_direction")
+        or (rejection.get("watch_side") if candle_close_confirmed(snapshot) else None)
+    )
+    leg1_status = "WAIT_ATR_REQUIRED" if atr_required_reason else (step4_state.get("leg1_status") or decision_status(step4))
+    leg2_status = step5_state.get("leg2_status") or decision_status(step5)
+    rejection_active = False if no_active_liquidity or not candle_close_confirmed(snapshot) else rejection.get("rejection_mode") == "ON"
+    continuation_type = continuation_type_from_state(step25_state, sr_rs_context)
+    invalidated = bool(invalidation_reason)
+    step25_ready = (snapshot.get("step25") or {}).get("status") == "READY"
+    rejection_side = {
+        "pathway_status": pathway_visibility_status("rejection", rejection_active, sr_rs_context, continuation_type, invalidated, step25_ready),
+        "current_step": current_step,
+        "current_step_label": step_label,
+        "setup_direction": rejection.get("watch_side") if rejection_active else setup_direction,
+        "leg1_status": leg1_status,
+        "leg2_status": leg2_status,
+        "entry_status": entry_status,
+    }
+    continuation_side = {
+        "continuation_type": continuation_type,
+        "pathway_status": pathway_visibility_status("continuation", rejection_active, sr_rs_context, continuation_type, invalidated, step25_ready),
+        "current_step": current_step if continuation_type != "none" else None,
+        "current_step_label": step_label if continuation_type != "none" else None,
+        "setup_direction": "SHORT" if continuation_type == "S/R" else "LONG" if continuation_type == "R/S" else None,
+        "leg1_status": leg1_status if continuation_type != "none" else None,
+        "leg2_status": leg2_status if continuation_type != "none" else None,
+        "entry_status": entry_status if continuation_type != "none" else None,
+    }
 
     return {
         "symbol": str(snapshot.get("requested_symbol") or symbol).upper(),
@@ -2297,18 +2643,18 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "close_vs_level": close_vs_level,
         "next_liquidity_above": liquidity.get("nearest_level_above"),
         "next_liquidity_below": liquidity.get("nearest_level_below"),
-        "setup_direction": None if no_active_liquidity else (
-            step6_state.get("setup_direction")
-            or step5_state.get("setup_direction")
-            or step4_state.get("setup_direction")
-            or (rejection.get("watch_side") if candle_close_confirmed(snapshot) else None)
-        ),
-        "rejection_mode_entered": False if no_active_liquidity or not candle_close_confirmed(snapshot) else rejection.get("rejection_mode") == "ON",
+        "setup_direction": setup_direction,
+        "rejection_mode_entered": rejection_active,
         "sr_rs_context": sr_rs_context,
-        "leg1_status": "WAIT_ATR_REQUIRED" if atr_required_reason else (step4_state.get("leg1_status") or decision_status(step4)),
-        "leg1_state": "WAIT_ATR_REQUIRED" if atr_required_reason else (step4_state.get("leg1_status") or decision_status(step4)),
-        "leg2_status": step5_state.get("leg2_status") or decision_status(step5),
-        "leg2_state": step5_state.get("leg2_status") or decision_status(step5),
+        "continuation_type": continuation_type,
+        "rejection_pathway_status": rejection_side["pathway_status"],
+        "continuation_pathway_status": continuation_side["pathway_status"],
+        "rejection_side": rejection_side,
+        "continuation_side": continuation_side,
+        "leg1_status": leg1_status,
+        "leg1_state": leg1_status,
+        "leg2_status": leg2_status,
+        "leg2_state": leg2_status,
         "leg2_reference_price": step5_state.get("active_leg1_reference") or step5_state.get("leg1_reference"),
         "entry_status": entry_status,
         "wait_reason": wait_reason,

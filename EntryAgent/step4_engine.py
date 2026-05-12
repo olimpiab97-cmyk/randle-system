@@ -172,6 +172,37 @@ def normalize_mode(mode: Any) -> str:
     return "Normal Rejection Mode"
 
 
+def continuation_acceptance_close_satisfied(state: dict[str, Any], candle: dict[str, Any]) -> bool:
+    mode = normalize_mode(state.get("controlling_mode"))
+    threshold = as_float(state.get("continuation_acceptance_threshold"))
+    close = as_float(candle.get("close"))
+    if threshold is None or close is None:
+        return False
+    if mode == "S/R":
+        return close > threshold
+    if mode == "R/S":
+        return close < threshold
+    return False
+
+
+def update_continuation_acceptance_after_leg1(state: dict[str, Any], candle_b: dict[str, Any], extreme: float | None) -> None:
+    if state.get("continuation_acceptance_required") is not True:
+        return
+    if continuation_acceptance_close_satisfied(state, candle_b):
+        state["continuation_acceptance_confirmed"] = True
+        state["continuation_acceptance_confirmed_at"] = candle_b.get("timestamp")
+        state["continuation_acceptance_source"] = "step4_candle_b_close"
+        return
+    mode = normalize_mode(state.get("controlling_mode"))
+    threshold = as_float(state.get("continuation_acceptance_threshold"))
+    if extreme is None:
+        return
+    if mode == "S/R":
+        state["continuation_acceptance_threshold"] = max(value for value in (threshold, extreme) if value is not None)
+    elif mode == "R/S":
+        state["continuation_acceptance_threshold"] = min(value for value in (threshold, extreme) if value is not None)
+
+
 def select_final_candle_a(state: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     mode = normalize_mode(state.get("controlling_mode"))
     activation_type = str(state.get("pathway_activation_type") or "normal").strip().lower()
@@ -187,6 +218,12 @@ def select_final_candle_a(state: dict[str, Any]) -> tuple[dict[str, Any] | None,
 
 
 def side_requirement_violated(state: dict[str, Any], candle: dict[str, Any]) -> str | None:
+    if (
+        normalize_mode(state.get("controlling_mode")) in {"S/R", "R/S"}
+        and state.get("pathway_activation_type") == "wick"
+        and state.get("continuation_acceptance_confirmed") is not True
+    ):
+        return None
     requirement = state.get("structure_side_requirement")
     if requirement not in ("ABOVE_LEVEL", "BELOW_LEVEL"):
         return None
@@ -317,6 +354,7 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
         state.pop("leg1_status", None)
         events.append({"event": "step4_stack_extreme_required", "reason": reason})
         return result("WAIT", state, "Step 4", reason, events)
+    update_continuation_acceptance_after_leg1(state, candidate_b, extreme)
     leg1_50_passed = apply_leg1_50_percent_rule(state, extreme, direction)
     if leg1_50_passed is False:
         reason = "Leg 1 invalid: active liquidity was penetrated beyond 50% before Leg 1 formed."

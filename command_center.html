@@ -625,6 +625,51 @@
       font-size: 12px;
       color: #90a1b8;
     }
+    .backend-status-line {
+      margin: 10px 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #2f855a;
+      background: #0f1d18;
+      color: #b7f7d8;
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .backend-status-line.warning {
+      border-color: #f59e0b;
+      background: #201706;
+      color: #ffdca8;
+    }
+    .backend-status-line.danger {
+      border-color: #f87171;
+      background: #251013;
+      color: #ffd1d1;
+    }
+    .backend-truth-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .backend-truth-item {
+      background: #111826;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 8px 10px;
+      min-width: 0;
+    }
+    .backend-truth-label {
+      font-size: 10px;
+      color: #9aa4b2;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .backend-truth-value {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
     .legend-item {
       display: inline-flex;
       align-items: center;
@@ -716,6 +761,28 @@
       gap: 10px;
       margin-top: 12px;
     }
+    .entry-agent-filter {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .entry-agent-filter-button {
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid #334155;
+      background: #0c1320;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .entry-agent-filter-button.active {
+      border-color: #166534;
+      color: #86efac;
+      background: #052e16;
+    }
     .entry-agent-card {
       background: #0c1320;
       border: 1px solid #223047;
@@ -742,6 +809,37 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
+    }
+    .entry-agent-context-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .entry-agent-pathway-layout {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      align-items: start;
+    }
+    .entry-agent-pathway-panel {
+      min-width: 0;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 10px;
+      background: #0f1726;
+    }
+    .entry-agent-panel-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
     }
     .entry-agent-field {
       background: #111826;
@@ -854,6 +952,8 @@
       .visual-stats,
       .trade-grid,
       .entry-agent-grid,
+      .entry-agent-context-grid,
+      .entry-agent-pathway-layout,
       .demo-live-map-controls {
         grid-template-columns: 1fr;
       }
@@ -1044,6 +1144,12 @@
           <span class="entry-agent-health offline" id="entryAgentHealth">Offline</span>
         </div>
         <div class="small" id="entryAgentMeta">Waiting for Entry Agent</div>
+        <div class="entry-agent-filter" aria-label="Entry Agent symbol filter">
+          <button type="button" class="entry-agent-filter-button active" data-entry-agent-symbol-filter="All">All</button>
+          <button type="button" class="entry-agent-filter-button" data-entry-agent-symbol-filter="NQ">NQ</button>
+          <button type="button" class="entry-agent-filter-button" data-entry-agent-symbol-filter="YM">YM</button>
+          <button type="button" class="entry-agent-filter-button" data-entry-agent-symbol-filter="RTY">RTY</button>
+        </div>
         <div id="entryAgentBox" class="entry-agent-list">
           <div class="entry-agent-offline">Entry Agent offline</div>
         </div>
@@ -1081,11 +1187,14 @@
     const $ = (id) => document.getElementById(id);
     let tradesPollHandle = null;
     let snapshotPollHandle = null;
+    let ordersPollHandle = null;
     let entryAgentPollHandle = null;
     let tradesRefreshInFlight = false;
     let snapshotRefreshInFlight = false;
+    let ordersRefreshInFlight = false;
     let submitInFlight = false;
     let latestSnapshot = null;
+    let latestOrdersPayload = null;
     let latestSnapshotFetchedAt = null;
     let tradesRequestSequence = 0;
     let latestAppliedTradesSequence = 0;
@@ -1093,6 +1202,8 @@
     let riskStateInFlight = false;
     let qaFeedInFlight = false;
     let entryAgentInFlight = false;
+    let entryAgentSymbolFilter = "All";
+    let latestEntryAgentPayload = null;
     let previousTvAtrStatusBySymbol = {};
     let latestTvAtrStatusBySymbol = {};
     let latestRiskPayload = null;
@@ -1316,6 +1427,17 @@
     }
 
     function computePnl(trade) {
+      if (String(trade.status || "").toLowerCase() === "closed") {
+        const totalProfit = Number(trade.total_profit);
+        if (Number.isFinite(totalProfit)) {
+          return totalProfit;
+        }
+        const tp1Profit = Number(trade.tp1_profit);
+        const runnerProfit = Number(trade.runner_profit);
+        if (Number.isFinite(tp1Profit) || Number.isFinite(runnerProfit)) {
+          return (Number.isFinite(tp1Profit) ? tp1Profit : 0) + (Number.isFinite(runnerProfit) ? runnerProfit : 0);
+        }
+      }
       const total = Number(trade.total_pnl);
       if (Number.isFinite(total)) {
         return total;
@@ -1337,6 +1459,12 @@
     }
 
     function getRealizedPnl(trade) {
+      if (String(trade.status || "").toLowerCase() === "closed") {
+        const totalProfit = Number(trade.total_profit);
+        if (Number.isFinite(totalProfit)) {
+          return totalProfit;
+        }
+      }
       const realized = Number(trade.realized_pnl);
       return Number.isFinite(realized) ? realized : null;
     }
@@ -1406,6 +1534,15 @@
       return numeric === null ? "n/a" : formatPrice(numeric);
     }
 
+    function valuesDiffer(left, right) {
+      const leftNumber = toFiniteNumber(left);
+      const rightNumber = toFiniteNumber(right);
+      if (leftNumber === null || rightNumber === null) {
+        return leftNumber !== rightNumber;
+      }
+      return Math.abs(leftNumber - rightNumber) > 1e-9;
+    }
+
     function formatClockTime(value) {
       const date = value instanceof Date ? value : new Date(value);
       if (Number.isNaN(date.getTime())) return "n/a";
@@ -1470,6 +1607,166 @@
           active_order_ids: activeOrderIds
         };
       });
+    }
+
+    function getExecutorOrders() {
+      return Array.isArray(latestOrdersPayload && latestOrdersPayload.orders)
+        ? latestOrdersPayload.orders
+        : [];
+    }
+
+    function isActiveExecutorOrder(order) {
+      if (!order) return false;
+      if (order.status === undefined || order.status === null || order.status === "") return true;
+      return String(order.status || "").toLowerCase() === "active";
+    }
+
+    function getExecutorOrdersForTrade(trade) {
+      const tradeId = String(trade && trade.trade_id || "");
+      if (!tradeId) return [];
+      return getExecutorOrders().filter((order) => String(order && order.trade_id || "") === tradeId);
+    }
+
+    function getActiveStopOrderForTrade(trade) {
+      const byOrderEndpoint = getExecutorOrdersForTrade(trade)
+        .find((order) => isActiveExecutorOrder(order) && String(order.type || "").toLowerCase() === "stop");
+      if (byOrderEndpoint) return byOrderEndpoint;
+
+      const symbol = resolveSnapshotSymbolForTrade(trade);
+      const symbolState = ((latestSnapshot && latestSnapshot.symbols) || {})[symbol] || {};
+      const workingOrders = Array.isArray(symbolState.working_orders) ? symbolState.working_orders : [];
+      return workingOrders.find((order) => (
+        isActiveExecutorOrder(order)
+        && String(order.type || "").toLowerCase() === "stop"
+        && String(order.trade_id || "") === String(trade && trade.trade_id || "")
+      )) || null;
+    }
+
+    function getTp1OrderForTrade(trade) {
+      return getExecutorOrdersForTrade(trade)
+        .filter((order) => String(order.type || "").toLowerCase() === "limit" && String(order.tag || "").toLowerCase() === "tp1")
+        .sort((a, b) => String(b.created_at || b.filled_at || "").localeCompare(String(a.created_at || a.filled_at || "")))[0] || null;
+    }
+
+    function getExecutorPositionQtyForTrade(trade) {
+      const symbol = resolveSnapshotSymbolForTrade(trade);
+      const symbolState = ((latestSnapshot && latestSnapshot.symbols) || {})[symbol] || {};
+      return toFiniteNumber(symbolState.position_qty);
+    }
+
+    function buildTradeBackendReadModel(trade) {
+      const activeStop = getActiveStopOrderForTrade(trade);
+      const tp1Order = getTp1OrderForTrade(trade);
+      const executorPositionQty = getExecutorPositionQtyForTrade(trade);
+      const executorPositionAbs = executorPositionQty === null ? null : Math.abs(executorPositionQty);
+      const tmStop = toFiniteNumber(trade && trade.current_stop);
+      const executorStop = activeStop ? toFiniteNumber(activeStop.stop_price) : null;
+      const tmRemaining = toFiniteNumber(trade && trade.remaining_size);
+      const executorStopQty = activeStop ? toFiniteNumber(activeStop.qty) : null;
+      const stopDiffers = activeStop && valuesDiffer(tmStop, executorStop);
+      const positionDiffers = executorPositionAbs !== null && valuesDiffer(tmRemaining, executorPositionAbs);
+      const hasOpenSize = (tmRemaining !== null && tmRemaining > 0) || (executorPositionAbs !== null && executorPositionAbs > 0);
+      const noActiveStop = hasOpenSize && !activeStop;
+      const isRunner = (
+        activeStop
+        && executorPositionAbs !== null
+        && executorPositionAbs > 0
+        && toFiniteNumber(trade && trade.position_size) !== null
+        && executorPositionAbs < Number(trade.position_size)
+      );
+      const warnings = [];
+      if (stopDiffers) {
+        warnings.push(`Executor stop differs from TM stop: executor ${formatTradePriceField(executorStop)} vs TM ${formatTradePriceField(tmStop)}`);
+      }
+      if (positionDiffers) {
+        warnings.push(`Executor position differs from TM remaining_size: executor ${formatValue(executorPositionAbs)} vs TM ${formatValue(tmRemaining)}`);
+      }
+      if (noActiveStop) {
+        warnings.push("No active protective stop");
+      }
+
+      let statusLine = "Backend synced";
+      let statusKind = "ok";
+      if (noActiveStop) {
+        statusLine = "No active protective stop";
+        statusKind = "danger";
+      } else if (stopDiffers) {
+        statusLine = "Executor stop differs from TM stop";
+        statusKind = "warning";
+      } else if (positionDiffers) {
+        statusLine = "Executor position differs from TM remaining_size";
+        statusKind = "warning";
+      } else if (isRunner) {
+        statusLine = "Runner protected";
+      }
+
+      return {
+        trade_id: trade && trade.trade_id,
+        direction: trade && trade.direction,
+        entry: trade && trade.entry_price,
+        current_stop: trade && trade.current_stop,
+        original_stop: trade && trade.original_stop,
+        be_trigger: trade && trade.be_trigger,
+        moved_to_be: Boolean(trade && trade.moved_to_be),
+        stop_state: trade && trade.stop_state,
+        remaining_size: trade && trade.remaining_size,
+        position_size: trade && trade.position_size,
+        tp1_hit: Boolean(trade && trade.tp1_hit),
+        tp1_price: trade && trade.tp1_price,
+        tp1_filled_qty: trade && trade.tp1_filled_qty,
+        active_stop_order_id: activeStop && activeStop.order_id,
+        active_stop_qty: executorStopQty,
+        active_stop_price: executorStop,
+        tp1_order_status: tp1Order ? tp1Order.status : "n/a",
+        oco_group: (activeStop && (activeStop.oco_group || activeStop.oco_parent_group)) || (tp1Order && tp1Order.oco_group) || (trade && trade.oco_group),
+        executor_position_qty: executorPositionQty,
+        executor_position_abs: executorPositionAbs,
+        display_stop_price: executorStop !== null ? executorStop : tmStop,
+        display_remaining_size: executorPositionAbs !== null ? executorPositionAbs : tmRemaining,
+        stopDiffers,
+        positionDiffers,
+        noActiveStop,
+        statusLine,
+        statusKind,
+        warnings,
+      };
+    }
+
+    function backendTruthField(label, value, extraClass = "") {
+      return `
+        <div class="backend-truth-item">
+          <div class="backend-truth-label">${escapeHtml(label)}</div>
+          <div class="backend-truth-value ${extraClass}">${escapeHtml(formatValue(value))}</div>
+        </div>
+      `;
+    }
+
+    function renderBackendTruthPanel(model) {
+      const statusClassName = model.statusKind === "danger" ? "danger" : (model.statusKind === "warning" ? "warning" : "");
+      return `
+        <div class="backend-status-line ${statusClassName}">${escapeHtml(model.statusLine)}</div>
+        <div class="backend-truth-grid">
+          ${backendTruthField("Trade ID", model.trade_id)}
+          ${backendTruthField("Direction", model.direction)}
+          ${backendTruthField("Entry", formatTradePriceField(model.entry))}
+          ${backendTruthField("TM Current Stop", formatTradePriceField(model.current_stop), model.stopDiffers ? "status-amber" : "")}
+          ${backendTruthField("Original Stop", formatTradePriceField(model.original_stop))}
+          ${backendTruthField("BE Trigger", formatTradePriceField(model.be_trigger))}
+          ${backendTruthField("Moved To BE", model.moved_to_be ? "true" : "false")}
+          ${backendTruthField("Stop State", model.stop_state)}
+          ${backendTruthField("TM Remaining", model.remaining_size, model.positionDiffers ? "status-amber" : "")}
+          ${backendTruthField("Position Size", model.position_size)}
+          ${backendTruthField("TP1 Hit", model.tp1_hit ? "true" : "false")}
+          ${backendTruthField("TP1 Price", formatTradePriceField(model.tp1_price))}
+          ${backendTruthField("TP1 Filled Qty", model.tp1_filled_qty)}
+          ${backendTruthField("Active Stop ID", model.active_stop_order_id || "none", model.noActiveStop ? "status-red" : "status-green")}
+          ${backendTruthField("Executor Stop Qty", model.active_stop_qty, model.positionDiffers ? "status-amber" : "")}
+          ${backendTruthField("Executor Stop Price", formatTradePriceField(model.active_stop_price), model.stopDiffers ? "status-amber" : "status-green")}
+          ${backendTruthField("Executor Position", model.executor_position_qty, model.positionDiffers ? "status-amber" : "")}
+          ${backendTruthField("TP1 Order Status", model.tp1_order_status)}
+          ${backendTruthField("OCO Group", model.oco_group || "n/a")}
+        </div>
+      `;
     }
 
     function isExecutorFlatNoOrdersForTrade(trade) {
@@ -1764,6 +2061,20 @@
         Object.assign(trade, buildDemoLiveMapTrade(trade.trade_id));
         updateDemoLiveMapControls();
       }
+      const backendModel = trade.is_demo_live_map
+        ? {
+          statusLine: "Backend synced",
+          statusKind: "ok",
+          warnings: [],
+          display_stop_price: toFiniteNumber(trade.current_stop),
+          display_remaining_size: toFiniteNumber(trade.remaining_size),
+        }
+        : buildTradeBackendReadModel(trade);
+      const visualTrade = {
+        ...trade,
+        current_stop: backendModel.display_stop_price !== null ? backendModel.display_stop_price : trade.current_stop,
+        remaining_size: backendModel.display_remaining_size !== null ? backendModel.display_remaining_size : trade.remaining_size,
+      };
       if (Number.isFinite(livePriceInfo.price)) {
         const livePriceKey = livePriceInfo.pulseKey || livePriceInfo.resolvedSymbol || trade.trade_id || "selected";
         const previousLivePrice = previousLivePriceBySymbol[livePriceKey];
@@ -1783,8 +2094,11 @@
         previousLivePriceBySymbol[livePriceKey] = livePriceInfo.price;
       }
 
-      const { levels, min, max } = deriveVisualLevels(trade, livePriceInfo);
-      const validationWarnings = getVisualValidationWarnings(trade);
+      const { levels, min, max } = deriveVisualLevels(visualTrade, livePriceInfo);
+      const validationWarnings = [
+        ...getVisualValidationWarnings(visualTrade),
+        ...(backendModel.warnings || []),
+      ];
       if (validationWarnings.length) {
         console.warn("[CommandCenter] trade visual validation warning", {
           trade_id: trade.trade_id,
@@ -1797,10 +2111,10 @@
         });
       }
       const layoutLevels = computeLevelLayout(levels, min, max);
-      const currentPriceForStats = Number.isFinite(livePriceInfo.price) ? livePriceInfo.price : trade.last_price;
-      const unrealizedPnl = computeUnrealizedPnl({ ...trade, last_price: currentPriceForStats });
-      const distanceToTp1 = computeDistance(currentPriceForStats, trade.tp1_price, trade.direction, "target");
-      const distanceToStop = computeDistance(currentPriceForStats, trade.current_stop, trade.direction, "stop");
+      const currentPriceForStats = Number.isFinite(livePriceInfo.price) ? livePriceInfo.price : visualTrade.last_price;
+      const unrealizedPnl = computeUnrealizedPnl({ ...visualTrade, last_price: currentPriceForStats });
+      const distanceToTp1 = computeDistance(currentPriceForStats, visualTrade.tp1_price, visualTrade.direction, "target");
+      const distanceToStop = computeDistance(currentPriceForStats, visualTrade.current_stop, visualTrade.direction, "stop");
       const visualSymbol = getTradeVisualSymbol(trade, livePriceInfo.resolvedSymbol);
       const visualMarketData = getMarketDataState(getLivePriceEntry(visualSymbol));
       const beLevel = layoutLevels.find((level) => level.key === "be_trigger") || null;
@@ -1864,11 +2178,12 @@
         <div class="visual-header">
           <div>
             <div class="visual-title">${escapeHtml(trade.is_demo_live_map ? "DEMO - READ ONLY" : (trade.trade_id || "Active Trade"))}</div>
-            <div class="visual-subtitle">${escapeHtml(formatValue(getKnownTradeSymbol(trade) || trade.symbol))} ${escapeHtml(formatValue(trade.direction))} | remaining ${escapeHtml(formatValue(trade.remaining_size))} | live ${escapeHtml(formatValue(visualSymbol))}</div>
+            <div class="visual-subtitle">${escapeHtml(formatValue(getKnownTradeSymbol(trade) || trade.symbol))} ${escapeHtml(formatValue(trade.direction))} | remaining ${escapeHtml(formatValue(visualTrade.remaining_size))} | live ${escapeHtml(formatValue(visualSymbol))}</div>
           </div>
           <div class="small">${escapeHtml(trade.is_demo_live_map ? "frontend only" : formatValue(trade.stop_state))}</div>
         </div>
         ${validationWarnings.length ? `<div class="visual-warning">${validationWarnings.map(escapeHtml).join("<br>")}</div>` : ""}
+        ${trade.is_demo_live_map ? "" : renderBackendTruthPanel(backendModel)}
         <div class="source-strip">
           <span>Price Source: Listener</span>
           <span>Order Source: Executor</span>
@@ -2014,21 +2329,34 @@
       const cardKind = trade.orphan_exposure ? "orphan" : kind;
       const title = trade.orphan_exposure ? "CRITICAL ORPHAN EXPOSURE" : (trade.trade_id || "Trade");
       const beStatus = getBreakEvenStatus(trade);
+      const backendModel = trade.orphan_exposure ? null : buildTradeBackendReadModel(trade);
       return `
         <div class="trade-card ${cardKind} ${selectedClass}" data-trade-id="${escapeHtml(trade.trade_id || "")}">
           <h3>${escapeHtml(title)} <span class="${statusClass(trade.status)}">${escapeHtml(formatValue(trade.status))}</span></h3>
+          ${backendModel ? `<div class="backend-status-line ${backendModel.statusKind === "danger" ? "danger" : (backendModel.statusKind === "warning" ? "warning" : "")}">${escapeHtml(backendModel.statusLine)}</div>` : ""}
           <div class="trade-grid">
+            ${cardField("Trade ID", trade.trade_id)}
             ${cardField("Symbol", trade.symbol)}
             ${cardField("Direction", trade.direction, trade.direction === "long" ? "status-green" : "status-red")}
             ${cardField("Entry", formatTradePriceField(trade.entry_price))}
             ${cardField("BE Trigger", formatTradePriceField(trade.be_trigger), beStatus === "Pending" ? "" : "status-green")}
             ${cardField("BE Status", beStatus, beStatus === "Pending" ? "" : (beStatus === "Missing" ? "status-amber" : "status-green"))}
+            ${cardField("Moved To BE", trade.moved_to_be ? "true" : "false")}
             ${cardField("Stop", formatTradePriceField(trade.current_stop))}
+            ${cardField("Original Stop", formatTradePriceField(trade.original_stop))}
             ${cardField("TP1", formatTradePriceField(trade.tp1_price))}
+            ${cardField("TP1 Hit", trade.tp1_hit ? "true" : "false")}
+            ${cardField("TP1 Filled Qty", trade.tp1_filled_qty)}
             ${cardField("Status", trade.status, statusClass(trade.status))}
             ${cardField("Remaining Size", trade.remaining_size)}
+            ${cardField("Position Size", trade.position_size)}
             ${cardField("Last Price", trade.last_price)}
             ${cardField("Stop State", trade.stop_state)}
+            ${backendModel ? cardField("Active Stop ID", backendModel.active_stop_order_id || "none", backendModel.noActiveStop ? "status-red" : "status-green") : ""}
+            ${backendModel ? cardField("Active Stop Qty", backendModel.active_stop_qty, backendModel.positionDiffers ? "status-amber" : "") : ""}
+            ${backendModel ? cardField("Active Stop Price", formatTradePriceField(backendModel.active_stop_price), backendModel.stopDiffers ? "status-amber" : "status-green") : ""}
+            ${backendModel ? cardField("TP1 Order Status", backendModel.tp1_order_status) : ""}
+            ${backendModel ? cardField("OCO Group", backendModel.oco_group || "n/a") : ""}
             ${cardField("Exit Reason", trade.exit_reason)}
             ${trade.orphan_exposure ? cardField("Executor Trade IDs", (trade.executor_trade_ids || []).join(", ") || "n/a", "status-red") : ""}
             ${trade.orphan_exposure ? cardField("Active Order IDs", (trade.active_order_ids || []).join(", ") || "n/a", "status-red") : ""}
@@ -2426,9 +2754,81 @@
       const text = String(value || "").toUpperCase();
       if (text.includes("STEP 6") || text.includes("ENTRY")) return "candidate";
       if (text.includes("INVALIDATE") || text.includes("INVALID") || text.includes("TERMINATED") || text.includes("BLOCKED")) return "invalidate";
-      if (text.includes("COMPLETE") || text.includes("CONFIRM") || text.includes("READY") || text.includes("ALLOW")) return "complete";
+      if (text === "CONTROLLING" || text === "ACTIVE") return "complete";
+      if (text === "CANDIDATE") return "candidate";
+      if (text === "FROZEN" || text === "INACTIVE") return "wait";
+      if (text === "NORMAL" || text === "S/R" || text === "R/S") return "complete";
+      if (text.includes("COMPLETE") || text.includes("CONFIRM") || text.includes("READY") || text.includes("ALLOW") || text.includes("VALIDATED") || text.includes("LOCKED")) return "complete";
       if (text.includes("WAIT") || text.includes("STEP 2") || text.includes("STEP 3") || text.includes("STEP 4") || text.includes("STEP 5")) return "wait";
       return "";
+    }
+
+    function updateEntryAgentFilterButtons() {
+      document.querySelectorAll("[data-entry-agent-symbol-filter]").forEach((button) => {
+        const value = button.getAttribute("data-entry-agent-symbol-filter") || "All";
+        button.classList.toggle("active", value === entryAgentSymbolFilter);
+      });
+    }
+
+    function entryAgentPathwayDisplay(value) {
+      const text = String(value || "").toUpperCase();
+      if (text.includes("R/S")) return "R/S";
+      if (text.includes("S/R")) return "S/R";
+      if (text.includes("NORMAL") || text.includes("REJECTION")) return "Normal";
+      return value || "Normal";
+    }
+
+    function entryAgentGroupComponents(group) {
+      if (!group || typeof group !== "object") return null;
+      const components = Array.isArray(group.components) ? group.components : [];
+      const prices = group.prices && typeof group.prices === "object" ? group.prices : {};
+      if (components.length) {
+        return components.map((name) => {
+          const price = prices[name];
+          return price === undefined || price === null ? name : `${name} (${formatValue(price)})`;
+        }).join(" / ");
+      }
+      const priceEntries = Object.keys(prices).map((name) => `${name} (${formatValue(prices[name])})`);
+      return priceEntries.length ? priceEntries.join(" / ") : null;
+    }
+
+    function entryAgentCurrentStepDisplay(item) {
+      const reason = item && item.invalidation_reason;
+      if (reason) return `INVALIDATED - ${reason}`;
+      return item && (item.current_step_label || item.current_step);
+    }
+
+    function entryAgentSideCurrentStepDisplay(item, side) {
+      const reason = item && item.invalidation_reason;
+      if (reason && side && side.pathway_status === "invalidated") return `INVALIDATED - ${reason}`;
+      return side && (side.current_step_label || side.current_step);
+    }
+
+    function entryAgentFallbackSide(item, sideName) {
+      if (!item) return {};
+      if (sideName === "continuation") {
+        const displayedType = entryAgentPathwayDisplay(item.continuation_type || item.sr_rs_context);
+        const continuationType = displayedType === "Normal" ? "none" : displayedType;
+        return {
+          continuation_type: continuationType,
+          pathway_status: item.continuation_pathway_status || (continuationType === "none" ? "inactive" : "candidate"),
+          current_step: continuationType === "none" ? null : item.current_step,
+          current_step_label: continuationType === "none" ? null : item.current_step_label,
+          setup_direction: continuationType === "S/R" ? "SHORT" : continuationType === "R/S" ? "LONG" : null,
+          leg1_status: continuationType === "none" ? null : item.leg1_status,
+          leg2_status: continuationType === "none" ? null : item.leg2_status,
+          entry_status: continuationType === "none" ? null : item.entry_status
+        };
+      }
+      return {
+        pathway_status: item.rejection_pathway_status || (item.rejection_mode_entered ? "active" : "inactive"),
+        current_step: item.current_step,
+        current_step_label: item.current_step_label,
+        setup_direction: item.setup_direction,
+        leg1_status: item.leg1_status,
+        leg2_status: item.leg2_status,
+        entry_status: item.entry_status
+      };
     }
 
     function entryAgentField(label, value, options = {}) {
@@ -2445,6 +2845,28 @@
       `;
     }
 
+    function renderEntryAgentSidePanel(title, side, item, options = {}) {
+      const status = side && side.pathway_status;
+      const currentStepDisplay = entryAgentSideCurrentStepDisplay(item, side);
+      return `
+        <div class="entry-agent-pathway-panel">
+          <div class="entry-agent-panel-title">
+            <span>${escapeHtml(title)}</span>
+            <span class="entry-agent-token ${entryAgentTokenClass(status)}">${escapeHtml(formatValue(status))}</span>
+          </div>
+          <div class="entry-agent-grid">
+            ${options.continuation ? entryAgentField("Continuation Type", side && side.continuation_type, { token: true }) : ""}
+            ${entryAgentField("Pathway Status", status, { token: true })}
+            ${entryAgentField("Current Step", currentStepDisplay, { token: true })}
+            ${entryAgentField("Setup Direction", side && side.setup_direction)}
+            ${entryAgentField("Shared Leg 1", side && side.leg1_status, { token: true })}
+            ${entryAgentField("Shared Leg 2", side && side.leg2_status, { token: true })}
+            ${entryAgentField("Entry Status", side && side.entry_status, { token: true })}
+          </div>
+        </div>
+      `;
+    }
+
     function renderEntryAgentOffline() {
       const health = $("entryAgentHealth");
       health.textContent = "Offline";
@@ -2454,24 +2876,43 @@
     }
 
     function renderEntryAgentStatus(data) {
+      latestEntryAgentPayload = data;
       const health = $("entryAgentHealth");
       const symbols = Array.isArray(data && data.symbols) ? data.symbols : [];
+      const visibleSymbols = entryAgentSymbolFilter === "All"
+        ? symbols
+        : symbols.filter((item) => String(item && item.symbol || "").toUpperCase() === entryAgentSymbolFilter);
       health.textContent = "Online";
       health.className = "entry-agent-health online";
-      $("entryAgentMeta").textContent = `${symbols.length} symbols updated ${new Date().toLocaleTimeString()}`;
+      updateEntryAgentFilterButtons();
+      $("entryAgentMeta").textContent = `${visibleSymbols.length} of ${symbols.length} symbols shown ${new Date().toLocaleTimeString()}`;
 
       if (!symbols.length) {
         $("entryAgentBox").innerHTML = `<div class="entry-agent-offline">Entry Agent offline</div>`;
         return;
       }
 
-      $("entryAgentBox").innerHTML = symbols.map((item) => {
+      if (!visibleSymbols.length) {
+        $("entryAgentBox").innerHTML = `<div class="entry-agent-offline">No symbols match ${escapeHtml(entryAgentSymbolFilter)}</div>`;
+        return;
+      }
+
+      $("entryAgentBox").innerHTML = visibleSymbols.map((item) => {
         const group = item && item.active_liquidity_group;
         const groupName = group && typeof group === "object" ? group.name : null;
+        const components = entryAgentGroupComponents(group);
+        const closeBoundary = group && typeof group === "object" ? group.close_boundary : null;
+        const extremeBoundary = group && typeof group === "object" ? group.extreme_boundary : null;
         const currentStep = item && item.current_step;
-        const currentStepDisplay = item && (item.current_step_label || item.current_step);
         const entryStatus = item && item.entry_status;
-        const candidateClass = entryAgentTokenClass(currentStep) === "candidate" || entryAgentTokenClass(entryStatus) === "candidate"
+        const rejectionSide = item && (item.rejection_side || entryAgentFallbackSide(item, "rejection"));
+        const continuationSide = item && (item.continuation_side || entryAgentFallbackSide(item, "continuation"));
+        const candidateClass = [
+          currentStep,
+          entryStatus,
+          rejectionSide && rejectionSide.pathway_status,
+          continuationSide && continuationSide.pathway_status
+        ].some((value) => entryAgentTokenClass(value) === "candidate")
           ? " entry-candidate"
           : "";
         return `
@@ -2480,18 +2921,16 @@
               <div class="entry-agent-symbol">${escapeHtml(item && item.symbol)}</div>
               <span class="entry-agent-token ${entryAgentTokenClass(entryStatus)}">${escapeHtml(formatValue(entryStatus))}</span>
             </div>
-            <div class="entry-agent-grid">
-              ${entryAgentField("Current Step", currentStepDisplay, { token: true })}
-              ${entryAgentField("Setup Direction", item && item.setup_direction)}
-              ${entryAgentField("Active Liquidity", item && item.active_liquidity_name)}
-              ${entryAgentField("Liquidity Price", item && item.active_liquidity_price)}
-              ${entryAgentField("Liquidity Group", groupName)}
-              ${entryAgentField("Leg 1", item && item.leg1_status, { token: true })}
-              ${entryAgentField("Leg 2", item && item.leg2_status, { token: true })}
-              ${entryAgentField("Timestamp", item && item.timestamp)}
-              ${entryAgentField("Wait Reason", item && item.wait_reason, { wide: true })}
-              ${entryAgentField("Invalidation", item && item.invalidation_reason, { wide: true })}
-              ${entryAgentField("Last Decision", item && item.last_decision, { wide: true })}
+            <div class="entry-agent-context-grid">
+              ${entryAgentField("Active Liquidity / Stack Owner", item && item.active_liquidity_name)}
+              ${entryAgentField("Liquidity Group", groupName || (item && item.liquidity_group))}
+              ${entryAgentField("Stack Components", components, { wide: true })}
+              ${entryAgentField("Close Boundary", closeBoundary)}
+              ${entryAgentField("Extreme Boundary", extremeBoundary)}
+            </div>
+            <div class="entry-agent-pathway-layout">
+              ${renderEntryAgentSidePanel("Rejection", rejectionSide, item)}
+              ${renderEntryAgentSidePanel("Continuation", continuationSide, item, { continuation: true })}
             </div>
           </div>
         `;
@@ -2538,6 +2977,16 @@
     }
 
     document.addEventListener("click", (event) => {
+      const entryAgentFilterButton = event.target.closest("[data-entry-agent-symbol-filter]");
+      if (entryAgentFilterButton) {
+        entryAgentSymbolFilter = entryAgentFilterButton.getAttribute("data-entry-agent-symbol-filter") || "All";
+        updateEntryAgentFilterButtons();
+        if (latestEntryAgentPayload) {
+          renderEntryAgentStatus(latestEntryAgentPayload);
+        }
+        return;
+      }
+
       const mapTradeChip = event.target.closest("#activeTradeMapSelector .map-trade-chip[data-trade-id]");
       if (mapTradeChip) {
         const tradeId = mapTradeChip.dataset.tradeId || null;
@@ -2696,6 +3145,29 @@
       }
     }
 
+    async function refreshOrders() {
+      if (ordersRefreshInFlight) {
+        return;
+      }
+      ordersRefreshInFlight = true;
+      try {
+        const data = await fetchJson(`${EX_BASE}/orders`);
+        latestOrdersPayload = data;
+        renderSelectedActiveTradeVisual();
+        if (latestTradesPayload) {
+          renderTradesPanel(latestTradesPayload, {
+            renderedAt: new Date().toISOString(),
+            tradeCount: Object.keys(latestTradesPayload.trades || {}).length,
+            sequence: latestAppliedTradesSequence
+          });
+        }
+      } catch (error) {
+        logTradesDebug(`orders fetch failure error=${error}`);
+      } finally {
+        ordersRefreshInFlight = false;
+      }
+    }
+
     async function refreshTrades() {
       if (tradesRefreshInFlight) {
         logTradesDebug("trades fetch skipped: previous request still in flight");
@@ -2817,6 +3289,7 @@
       logTradesDebug(`force refresh triggered reason=${reason}`);
       await Promise.all([
         refreshSnapshot(),
+        refreshOrders(),
         refreshTrades(),
         refreshTvAtrStatuses(),
         refreshRiskState(),
@@ -2835,6 +3308,12 @@
       if (snapshotPollHandle === null) {
         snapshotPollHandle = setInterval(() => {
           refreshSnapshot();
+        }, POLL_INTERVAL_MS);
+      }
+
+      if (ordersPollHandle === null) {
+        ordersPollHandle = setInterval(() => {
+          refreshOrders();
         }, POLL_INTERVAL_MS);
       }
 

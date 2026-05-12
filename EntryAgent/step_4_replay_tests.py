@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from entry_agent import build_step4_interaction
+from entry_agent import build_step4_interaction, evaluate_live_step4
 from step4_engine import evaluate_step4
 
 
-def candle(open_price: float, high: float, low: float, close: float) -> dict:
-    return {"open": open_price, "high": high, "low": low, "close": close}
+def candle(open_price: float, high: float, low: float, close: float, timestamp: str | None = None) -> dict:
+    payload = {"open": open_price, "high": high, "low": low, "close": close}
+    if timestamp is not None:
+        payload["timestamp"] = timestamp
+    return payload
 
 
 def base_interaction(direction: str = "SHORT") -> dict:
@@ -231,6 +234,33 @@ def test_sr_wrong_side_structure_blocks() -> None:
     assert "ABOVE_LEVEL" in result["reason"]
 
 
+def test_sr_provisional_leg1_does_not_require_close_back_above_stack_extreme() -> None:
+    provisional = candle(99.6, 100.0, 98.75, 99.8)
+    interaction = base_interaction("SHORT")
+    interaction.update(
+        {
+            "controlling_mode": "S/R",
+            "candidate_modes": ["S/R"],
+            "pathway_activation_type": "wick",
+            "pathway_level": 100.0,
+            "structure_side_requirement": "ABOVE_LEVEL",
+            "provisional_candle_a": provisional,
+            "initial_candle_a": candle(100.5, 100.75, 99.5, 99.4),
+            "active_stack": {"name": "LOW_STACK"},
+            "extreme_boundary": 100.0,
+            "stack_side": "lower",
+            "liquidity_type": "STATIC_STACK",
+            "continuation_acceptance_required": True,
+            "continuation_acceptance_threshold": 100.0,
+        }
+    )
+    result = evaluate_step4(interaction, candle(99.8, 100.5, 99.25, 99.75))
+    assert result["status"] == "READY"
+    assert result["next_step"] == "Step 5"
+    assert result["state"]["leg1_status"] == "COMPLETE"
+    assert result["state"].get("continuation_acceptance_confirmed") is not True
+
+
 def test_rs_wrong_side_structure_blocks() -> None:
     interaction = base_interaction("LONG")
     interaction["nearest_opposing_liquidity"] = {"name": "PMH", "price": 105.0}
@@ -324,6 +354,75 @@ def test_lower_static_stack_rejects_close_boundary_only_leg1() -> None:
     assert "close-boundary Leg 1 is not tradable" in result["reason"]
 
 
+def test_live_static_stack_assigns_post_extreme_candle_a_then_locks_leg1_on_future_b() -> None:
+    confirmation = candle(29233.0, 29265.75, 29231.25, 29262.75, "2026-05-12T13:42:00Z")
+    candle_a = candle(29262.5, 29284.5, 29258.5, 29274.5, "2026-05-12T13:43:00Z")
+    failed_b = candle(29274.0, 29285.75, 29263.25, 29285.0, "2026-05-12T13:44:00Z")
+    valid_b = candle(29285.5, 29296.0, 29266.0, 29273.0, "2026-05-12T13:45:00Z")
+    step25 = {
+        "status": "READY",
+        "next_step": "Step 3",
+        "state": {
+            "rejection_mode": "ON",
+            "interaction_state": "ACTIVE",
+            "step25_pathway_selection_complete": True,
+            "controlling_mode": "Normal Rejection Mode",
+            "candidate_modes": ["Normal Rejection Mode"],
+            "initial_candle_a": confirmation,
+        },
+        "events": [],
+    }
+    step3 = {
+        "status": "ALLOW_STEP_4",
+        "next_step": "Step 4",
+        "state": {
+            "step3_allows_structure": True,
+            "liquidity_type": "STATIC_STACK",
+            "active_liquidity": {"name": "PMH", "price": 29237.0},
+            "active_stack": {"name": "HIGH 1"},
+            "stack_side": "upper",
+            "extreme_boundary": 29250.25,
+            "close_boundary": 29237.0,
+            "tick_size": 0.25,
+            "stack_extreme_confirmation_seen": True,
+            "stack_extreme_confirmation_candle": confirmation,
+            "initial_candle_a": confirmation,
+            "candle_a": confirmation,
+        },
+        "events": [],
+    }
+    rejection = {"watch_side": "SHORT"}
+    liquidity = {"nearest_level_below": {"name": "PML", "price": 29113.0}, "tick_size": 0.25}
+
+    def snapshot(latest: dict) -> dict:
+        return {
+            "latest_bar_time": latest["timestamp"],
+            "ohlc": latest,
+            "ohlc_is_closed": True,
+            "liquidity": liquidity,
+            "atr": {"atr_1m_14": 31.25827865},
+        }
+
+    first = evaluate_live_step4(snapshot(candle_a), rejection, step25, step3, {})
+    assert first["status"] == "WAIT"
+    assert first["next_step"] == "Step 4"
+    assert first["state"]["candle_a"]["timestamp"] == "2026-05-12T13:43:00Z"
+    assert first["state"]["stack_step4_candle_a_assigned"] is True
+
+    second = evaluate_live_step4(snapshot(failed_b), rejection, step25, step3, {"step4": first})
+    assert second["status"] == "WAIT"
+    assert second["state"]["candle_a"]["timestamp"] == "2026-05-12T13:43:00Z"
+    assert second["state"]["participation_candidate_count"] == 1
+    assert second["state"].get("leg1_status") is None
+
+    third = evaluate_live_step4(snapshot(valid_b), rejection, step25, step3, {"step4": second})
+    assert third["status"] == "READY"
+    assert third["next_step"] == "Step 5"
+    assert third["state"]["leg1_status"] == "COMPLETE"
+    assert third["state"]["candle_a"]["timestamp"] == "2026-05-12T13:43:00Z"
+    assert third["state"]["candle_b"]["timestamp"] == "2026-05-12T13:45:00Z"
+
+
 def test_proximity_hard_bypass_routes_step7() -> None:
     interaction = base_interaction("SHORT")
     interaction["nearest_opposing_liquidity"] = {"name": "PML", "price": 100.8}
@@ -348,12 +447,14 @@ def run_tests() -> None:
         test_sr_close_based_reclaim_candle_becomes_candle_a,
         test_rs_close_based_reclaim_candle_becomes_candle_a,
         test_sr_wrong_side_structure_blocks,
+        test_sr_provisional_leg1_does_not_require_close_back_above_stack_extreme,
         test_rs_wrong_side_structure_blocks,
         test_wick_based_participation_passes_when_close_fails,
         test_both_participation_paths_fail_routes_step7,
         test_long_assigns_low_extreme,
         test_upper_static_stack_rejects_close_boundary_only_leg1,
         test_lower_static_stack_rejects_close_boundary_only_leg1,
+        test_live_static_stack_assigns_post_extreme_candle_a_then_locks_leg1_on_future_b,
         test_proximity_hard_bypass_routes_step7,
     ]
     for test in tests:

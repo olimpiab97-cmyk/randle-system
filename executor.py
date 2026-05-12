@@ -138,6 +138,10 @@ def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
 
+def log_supported_executor_actions():
+    log(f"SUPPORTED_EXECUTOR_ACTIONS {list(SUPPORTED_EXECUTOR_ACTIONS)}")
+
+
 def price_pipeline_timestamp(value):
     if isinstance(value, datetime):
         suffix = "" if value.tzinfo is not None else "Z"
@@ -198,6 +202,18 @@ ORDER_RISK_CAPPED_ACTIONS = {
     "move_stop_to_be",
     "reset_stop_to_original",
 }
+SUPPORTED_EXECUTOR_ACTIONS = (
+    "submit_entry",
+    "submit_stop",
+    "submit_limit",
+    "modify_stop",
+    "cancel_order",
+    "flatten_trade",
+    "flatten_symbol",
+    "flatten_all",
+    "move_stop_to_be",
+    "reset_stop_to_original",
+)
 SUPPORTED_EXECUTION_ROOTS = set(ENTRY_FILL_LAST_TICK_MAX_AGE_SECONDS.keys())
 
 
@@ -1289,6 +1305,28 @@ def active_orders_for_symbol(symbol):
     return results
 
 
+def active_trade_ids_for_symbol(symbol):
+    return sorted({
+        order.get("trade_id")
+        for order in active_orders_for_symbol(symbol)
+        if order.get("trade_id")
+    })
+
+
+def ambiguous_symbol_scope_response(symbol, trade_ids):
+    log(
+        "ambiguous_trade_scope "
+        f"symbol={symbol} active_trade_ids={trade_ids}"
+    )
+    return jsonify({
+        "ok": False,
+        "error": "ambiguous_trade_scope",
+        "message": "ambiguous_trade_scope",
+        "symbol": symbol,
+        "active_trade_ids": trade_ids,
+    }), 409
+
+
 def stop_prices_match(left, right, tolerance=0.01):
     try:
         return abs(round(float(left), 2) - round(float(right), 2)) <= tolerance
@@ -1349,7 +1387,7 @@ def cancel_oco_peers(trigger_order, timestamp, reason):
     return affected
 
 
-def clear_working_orders_for_flat_symbol(symbol, reason):
+def clear_working_orders_for_flat_symbol(symbol, reason, trade_id=None, oco_group=None):
     symbol = str(symbol or "").upper()
     if not symbol:
         return []
@@ -1357,10 +1395,23 @@ def clear_working_orders_for_flat_symbol(symbol, reason):
     position_qty = float((POSITIONS.get(symbol) or {}).get("qty", 0) or 0)
     if position_qty != 0:
         return []
+    if not trade_id and not oco_group:
+        trade_ids = active_trade_ids_for_symbol(symbol)
+        if len(trade_ids) > 1:
+            log(
+                "ambiguous_trade_scope "
+                f"action=clear_working_orders_for_flat_symbol symbol={symbol} "
+                f"active_trade_ids={trade_ids}"
+            )
+            return []
 
     timestamp = datetime.now().isoformat()
     affected = []
     for order in active_orders_for_symbol(symbol):
+        if trade_id and order.get("trade_id") != trade_id:
+            continue
+        if oco_group and order_oco_group(order) != oco_group:
+            continue
         order["status"] = "cancelled"
         order["cancelled_at"] = timestamp
         order["closed_reason"] = reason
@@ -1486,7 +1537,7 @@ def flatten_all_positions_and_cancel_working_orders(reason):
     }
 
 
-def evaluate_stop_fills_for_symbol(symbol, price):
+def evaluate_stop_fills_for_symbol(symbol, price, trade_id=None, order_id=None, oco_group=None):
     symbol = str(symbol or "").upper()
     if not symbol:
         return []
@@ -1502,23 +1553,38 @@ def evaluate_stop_fills_for_symbol(symbol, price):
     for order in list(active_orders_for_symbol(symbol)):
         if order.get("type") != "stop":
             continue
+        if trade_id and order.get("trade_id") != trade_id:
+            continue
+        if order_id and order.get("order_id") != order_id:
+            continue
+        if oco_group and order_oco_group(order) != oco_group:
+            continue
 
         stop_price = float(order.get("stop_price", 0))
         if not stop_triggered_for_position(position_qty, price, stop_price):
             continue
 
-        trade_id = order.get("trade_id")
+        triggered_trade_id = order.get("trade_id")
+        filled_qty = min(abs(float(order.get("qty", 0) or 0)), abs(position_qty))
+        if position_qty < 0:
+            new_qty = position_qty + filled_qty
+        else:
+            new_qty = position_qty - filled_qty
+        if abs(new_qty) < 1e-9:
+            new_qty = 0.0
+
         order["status"] = "closed"
         order["closed_at"] = timestamp
         order["filled_at"] = timestamp
         order["filled_price"] = float(stop_price)
         order["fill_trigger_price"] = float(price)
+        order["filled_qty"] = filled_qty
         order["closed_reason"] = "stop_triggered"
 
         affected = cancel_oco_peers(order, timestamp, "oco_cancel_after_stop_fill")
         if not affected:
             affected = close_active_orders_for_trade_symbol(
-                trade_id,
+                triggered_trade_id,
                 symbol,
                 timestamp,
                 "closed_after_stop_trigger",
@@ -1528,18 +1594,30 @@ def evaluate_stop_fills_for_symbol(symbol, price):
 
         affected.append(order["order_id"])
 
-        POSITIONS[symbol] = {
-            "qty": 0.0,
-            "avg_entry_price": 0.0,
-            "updated_at": timestamp,
-        }
-        orphan_orders = clear_working_orders_for_flat_symbol(symbol, "cleared_after_stop_flat")
-        for orphan_order_id in orphan_orders:
-            if orphan_order_id not in affected:
-                affected.append(orphan_order_id)
+        if new_qty == 0:
+            POSITIONS[symbol] = {
+                "qty": 0.0,
+                "avg_entry_price": 0.0,
+                "updated_at": timestamp,
+            }
+            orphan_orders = clear_working_orders_for_flat_symbol(
+                symbol,
+                "cleared_after_stop_flat",
+                trade_id=triggered_trade_id,
+                oco_group=order_oco_group(order),
+            )
+            for orphan_order_id in orphan_orders:
+                if orphan_order_id not in affected:
+                    affected.append(orphan_order_id)
+        else:
+            POSITIONS[symbol] = {
+                "qty": new_qty,
+                "avg_entry_price": float(position.get("avg_entry_price", 0) or 0),
+                "updated_at": timestamp,
+            }
 
         triggered.append({
-            "trade_id": trade_id,
+            "trade_id": triggered_trade_id,
             "stop_order_id": order["order_id"],
             "symbol": symbol,
             "stop_price": stop_price,
@@ -1547,13 +1625,13 @@ def evaluate_stop_fills_for_symbol(symbol, price):
             "affected_orders": affected,
         })
 
-        position_qty = 0.0
+        position_qty = new_qty
         break
 
     return triggered
 
 
-def evaluate_limit_fills_for_symbol(symbol, price):
+def evaluate_limit_fills_for_symbol(symbol, price, trade_id=None, order_id=None, oco_group=None):
     symbol = str(symbol or "").upper()
     if not symbol:
         return []
@@ -1569,6 +1647,12 @@ def evaluate_limit_fills_for_symbol(symbol, price):
     for order in list(active_orders_for_symbol(symbol)):
         if order.get("type") != "limit":
             continue
+        if trade_id and order.get("trade_id") != trade_id:
+            continue
+        if order_id and order.get("order_id") != order_id:
+            continue
+        if oco_group and order_oco_group(order) != oco_group:
+            continue
 
         current_position = POSITIONS.get(symbol, {})
         position_qty = float(current_position.get("qty", 0) or 0)
@@ -1579,7 +1663,7 @@ def evaluate_limit_fills_for_symbol(symbol, price):
         if not limit_triggered_for_position(position_qty, price, limit_price):
             continue
 
-        trade_id = order.get("trade_id")
+        triggered_trade_id = order.get("trade_id")
         requested_qty = abs(float(order.get("qty", 0) or 0))
         filled_qty = min(requested_qty, abs(position_qty))
 
@@ -1605,7 +1689,12 @@ def evaluate_limit_fills_for_symbol(symbol, price):
                 "avg_entry_price": 0.0,
                 "updated_at": timestamp,
             }
-            clear_working_orders_for_flat_symbol(symbol, "cleared_after_limit_flat")
+            clear_working_orders_for_flat_symbol(
+                symbol,
+                "cleared_after_limit_flat",
+                trade_id=triggered_trade_id,
+                oco_group=order_oco_group(order),
+            )
         else:
             POSITIONS[symbol] = {
                 "qty": new_qty,
@@ -1613,16 +1702,23 @@ def evaluate_limit_fills_for_symbol(symbol, price):
                 "updated_at": timestamp,
             }
 
-        remaining_qty = abs(new_qty)
+        trade_stop_qty = None
+        active_trade_stops = [
+            active_stop for active_stop in active_orders_for_trade(triggered_trade_id, "stop")
+            if str(active_stop.get("symbol", "")).upper() == symbol
+        ]
+        if active_trade_stops:
+            trade_stop_qty = float(active_trade_stops[0].get("qty", 0) or 0)
+        remaining_qty = max((trade_stop_qty if trade_stop_qty is not None else abs(position_qty)) - filled_qty, 0.0)
         resized_stops = resize_active_stops_for_trade_symbol(
-            trade_id,
+            triggered_trade_id,
             symbol,
             remaining_qty,
             timestamp,
         )
 
         triggered.append({
-            "trade_id": trade_id,
+            "trade_id": triggered_trade_id,
             "limit_order_id": order["order_id"],
             "symbol": symbol,
             "limit_price": limit_price,
@@ -2129,7 +2225,13 @@ def execute():
 
         stop_fills = []
         if symbol in LAST_PRICES:
-            stop_fills = evaluate_stop_fills_for_symbol(symbol, LAST_PRICES[symbol])
+            stop_fills = evaluate_stop_fills_for_symbol(
+                symbol,
+                LAST_PRICES[symbol],
+                trade_id=trade_id,
+                order_id=order_id,
+                oco_group=order_oco_group(ORDERS[order_id]),
+            )
             if stop_fills:
                 log(f"STOP FILLED IMMEDIATELY [{trade_id}] fills={stop_fills}")
 
@@ -2181,7 +2283,13 @@ def execute():
 
         limit_fills = []
         if symbol in LAST_PRICES:
-            limit_fills = evaluate_limit_fills_for_symbol(symbol, LAST_PRICES[symbol])
+            limit_fills = evaluate_limit_fills_for_symbol(
+                symbol,
+                LAST_PRICES[symbol],
+                trade_id=trade_id,
+                order_id=order_id,
+                oco_group=order_oco_group(ORDERS[order_id]),
+            )
             if limit_fills:
                 log(f"LIMIT FILLED IMMEDIATELY [{trade_id}] fills={limit_fills}")
 
@@ -2199,57 +2307,63 @@ def execute():
     # MODIFY ACTIVE STOP
     # =========================
     if action == "modify_stop":
-        if not trade_id or not symbol:
-            return jsonify({"ok": False, "message": "Missing trade_id or symbol"}), 400
-
-        broker_order_id = data.get("broker_order_id")
+        broker_order_id = data.get("order_id") or data.get("broker_order_id")
         stop_price = data.get("stop_price")
         if not broker_order_id:
-            return jsonify({"ok": False, "message": "Missing broker_order_id"}), 400
+            return jsonify({
+                "ok": False,
+                "error": "modify_stop_missing_order_id",
+                "message": "modify_stop_missing_order_id",
+            }), 400
         if stop_price is None:
             return jsonify({"ok": False, "message": "Missing stop_price"}), 400
 
         order = ORDERS.get(broker_order_id)
         if not order:
-            return jsonify({"ok": False, "message": "Order not found"}), 404
-        if order.get("trade_id") != trade_id or str(order.get("symbol", "")).upper() != symbol:
+            return jsonify({
+                "ok": False,
+                "error": "modify_stop_order_not_found",
+                "message": "modify_stop_order_not_found",
+            }), 404
+        if trade_id and order.get("trade_id") != trade_id:
+            return jsonify({
+                "ok": False,
+                "error": "modify_stop_trade_id_mismatch",
+                "message": "modify_stop_trade_id_mismatch",
+            }), 409
+        if symbol and str(order.get("symbol", "")).upper() != symbol:
             return jsonify({"ok": False, "message": "Order scope mismatch"}), 409
         if order.get("type") != "stop" or order.get("status") != "active":
             return jsonify({"ok": False, "message": "Order is not an active stop"}), 409
 
-        requested_qty = float(data.get("qty", order.get("qty", 0)) or 0)
-        if requested_qty <= 0:
-            return jsonify({"ok": False, "message": "qty_must_be_positive"}), 400
-
         previous_stop_price = order.get("stop_price")
-        previous_qty = order.get("qty")
         order["stop_price"] = float(stop_price)
-        order["qty"] = requested_qty
-        order["tag"] = data.get("tag") or order.get("tag") or "modified_stop"
-        if data.get("oco_group") is not None:
-            order["oco_group"] = data.get("oco_group")
-        if data.get("oco_role") is not None:
-            order["oco_role"] = data.get("oco_role")
+        if data.get("tag"):
+            order["tag"] = data.get("tag")
         order["modified_at"] = datetime.now().isoformat()
         order.setdefault("modify_history", []).append({
             "modified_at": order["modified_at"],
             "previous_stop_price": previous_stop_price,
-            "previous_qty": previous_qty,
             "new_stop_price": order["stop_price"],
-            "new_qty": order["qty"],
-            "tag": order.get("tag"),
         })
 
         log(
-            f"STOP MODIFIED [{trade_id}] {symbol} order_id={broker_order_id} "
+            f"STOP MODIFIED [{order.get('trade_id')}] {order.get('symbol')} order_id={broker_order_id} "
             f"stop={order['stop_price']} qty={order['qty']}"
         )
 
         stop_fills = []
-        if symbol in LAST_PRICES:
-            stop_fills = evaluate_stop_fills_for_symbol(symbol, LAST_PRICES[symbol])
+        order_symbol = str(order.get("symbol", "")).upper()
+        if order_symbol in LAST_PRICES:
+            stop_fills = evaluate_stop_fills_for_symbol(
+                order_symbol,
+                LAST_PRICES[order_symbol],
+                trade_id=order.get("trade_id"),
+                order_id=broker_order_id,
+                oco_group=order_oco_group(order),
+            )
             if stop_fills:
-                log(f"MODIFIED STOP FILLED IMMEDIATELY [{trade_id}] fills={stop_fills}")
+                log(f"MODIFIED STOP FILLED IMMEDIATELY [{order.get('trade_id')}] fills={stop_fills}")
 
         save_executor_state()
 
@@ -2257,6 +2371,7 @@ def execute():
             "ok": True,
             "message": "Stop modified",
             "broker_order_id": broker_order_id,
+            "order_id": broker_order_id,
             "order": order,
             "stop_fills": stop_fills,
         })
@@ -2267,12 +2382,14 @@ def execute():
     if action == "cancel_order":
         broker_order_id = data.get("broker_order_id")
 
-        if not broker_order_id:
-            return jsonify({"ok": False, "message": "Missing broker_order_id"}), 400
+        if not trade_id or not broker_order_id:
+            return jsonify({"ok": False, "message": "Missing trade_id or broker_order_id"}), 400
 
         order = ORDERS.get(broker_order_id)
         if not order:
             return jsonify({"ok": False, "message": "Order not found"}), 404
+        if order.get("trade_id") != trade_id:
+            return jsonify({"ok": False, "message": "Order scope mismatch"}), 409
 
         order["status"] = "cancelled"
         order["cancelled_at"] = datetime.now().isoformat()
@@ -2335,6 +2452,9 @@ def execute():
                 affected.append(order["order_id"])
             log(f"📉 SYMBOL FLATTENED [{trade_id}] {symbol} orders={affected}")
         else:
+            scoped_trade_ids = active_trade_ids_for_symbol(symbol)
+            if len(scoped_trade_ids) > 1:
+                return ambiguous_symbol_scope_response(symbol, scoped_trade_ids)
             for order in active_orders_for_symbol(symbol):
                 order["status"] = "closed"
                 order["closed_at"] = timestamp
@@ -2342,7 +2462,12 @@ def execute():
                 affected.append(order["order_id"])
             log(f"📉 SYMBOL FLATTENED [NO TRADE_ID] {symbol} orders={affected}")
 
-        if symbol in POSITIONS:
+        remaining_trade_ids = [
+            scoped_trade_id
+            for scoped_trade_id in active_trade_ids_for_symbol(symbol)
+            if scoped_trade_id != trade_id
+        ]
+        if symbol in POSITIONS and not remaining_trade_ids:
             POSITIONS[symbol] = {
                 "qty": 0.0,
                 "avg_entry_price": 0.0,
@@ -2391,6 +2516,13 @@ def execute():
         active_stops = active_orders_for_trade(trade_id, "stop")
 
         if active_stops:
+            if len(active_stops) > 1:
+                return jsonify({
+                    "ok": False,
+                    "error": "ambiguous_trade_scope",
+                    "message": "ambiguous_trade_scope",
+                    "existing_stop_ids": [order.get("order_id") for order in active_stops],
+                }), 409
             old_stop = active_stops[0]
             old_stop["status"] = "cancelled"
             old_stop["cancelled_at"] = datetime.now().isoformat()
@@ -2428,7 +2560,13 @@ def execute():
 
         stop_fills = []
         if symbol in LAST_PRICES:
-            stop_fills = evaluate_stop_fills_for_symbol(symbol, LAST_PRICES[symbol])
+            stop_fills = evaluate_stop_fills_for_symbol(
+                symbol,
+                LAST_PRICES[symbol],
+                trade_id=trade_id,
+                order_id=new_order_id,
+                oco_group=order_oco_group(ORDERS[new_order_id]),
+            )
             if stop_fills:
                 log(f"BE STOP FILLED IMMEDIATELY [{trade_id}] fills={stop_fills}")
 
@@ -2477,6 +2615,13 @@ def execute():
                 })
 
         if active_stops:
+            if len(active_stops) > 1:
+                return jsonify({
+                    "ok": False,
+                    "error": "ambiguous_trade_scope",
+                    "message": "ambiguous_trade_scope",
+                    "existing_stop_ids": [order.get("order_id") for order in active_stops],
+                }), 409
             old_stop = active_stops[0]
             old_stop["status"] = "cancelled"
             old_stop["cancelled_at"] = datetime.now().isoformat()
@@ -2513,7 +2658,13 @@ def execute():
 
         stop_fills = []
         if symbol in LAST_PRICES:
-            stop_fills = evaluate_stop_fills_for_symbol(symbol, LAST_PRICES[symbol])
+            stop_fills = evaluate_stop_fills_for_symbol(
+                symbol,
+                LAST_PRICES[symbol],
+                trade_id=trade_id,
+                order_id=new_order_id,
+                oco_group=order_oco_group(ORDERS[new_order_id]),
+            )
             if stop_fills:
                 log(f"RESET STOP FILLED IMMEDIATELY [{trade_id}] fills={stop_fills}")
 
@@ -2724,5 +2875,6 @@ def receive_price():
 
 if __name__ == "__main__":
     load_executor_state()
+    log_supported_executor_actions()
     log("🚀 Executor running on http://127.0.0.1:6001")
     app.run(host="0.0.0.0", port=6001, debug=True, use_reloader=False)

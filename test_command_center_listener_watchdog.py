@@ -67,6 +67,26 @@ class CommandCenterListenerWatchdogTests(unittest.TestCase):
         self.assertIn("stop_order", self.html)
         self.assertIn("Executor Snapshot", self.html)
 
+    def test_trade_visual_uses_backend_trade_and_executor_order_truth(self):
+        self.assertIn('const data = await fetchJson(`${EX_BASE}/orders`);', self.html)
+        self.assertIn("function buildTradeBackendReadModel(trade)", self.html)
+        self.assertIn("getActiveStopOrderForTrade", self.html)
+        self.assertIn("getTp1OrderForTrade", self.html)
+        self.assertIn("active_stop_order_id", self.html)
+        self.assertIn("active_stop_qty", self.html)
+        self.assertIn("active_stop_price", self.html)
+        self.assertIn("tp1_order_status", self.html)
+        self.assertIn("oco_group", self.html)
+
+    def test_trade_visual_warns_on_tm_executor_divergence(self):
+        self.assertIn("Executor stop differs from TM stop", self.html)
+        self.assertIn("Executor position differs from TM remaining_size", self.html)
+        self.assertIn("No active protective stop", self.html)
+        self.assertIn("Runner protected", self.html)
+        self.assertIn("Backend synced", self.html)
+        self.assertIn("display_stop_price", self.html)
+        self.assertIn("display_remaining_size", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()

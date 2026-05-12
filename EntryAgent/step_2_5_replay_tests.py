@@ -90,6 +90,37 @@ def test_wick_below_ll_green_close_selects_sr() -> None:
     assert result["structure_side_requirement"] == "ABOVE_LEVEL"
 
 
+def test_stacked_low_sr_requires_wick_through_stack_extreme() -> None:
+    previous = candle(101.0, 101.5, 99.5, 100.5)
+    current = candle(99.5, 100.75, 98.75, 100.25)
+    result = select_pathway(current, previous, 100.0, "LL", stack_extreme=99.0)
+
+    assert result["status"] == "READY"
+    assert result["controlling_mode"] == "S/R"
+    assert result["activation_type"] == "close"
+    assert result["candle_a"] == current
+    assert result["structure_side_requirement"] == "ABOVE_LEVEL"
+
+
+def test_stacked_low_sr_does_not_arm_from_middle_without_extreme_wick() -> None:
+    previous = candle(101.0, 101.5, 99.5, 100.5)
+    current = candle(99.5, 100.75, 99.25, 100.25)
+    result = select_pathway(current, previous, 100.0, "LL", stack_extreme=99.0)
+
+    assert result["status"] == "WAIT"
+    assert result["controlling_mode"] is None
+    assert result["candle_a"] is None
+
+
+def test_stacked_low_sr_uses_extreme_not_internal_close_boundary() -> None:
+    previous = candle(100.5, 100.75, 99.5, 99.4)
+    current = candle(99.6, 100.25, 99.25, 99.8)
+    result = select_pathway(current, previous, 100.0, "LL", stack_extreme=99.0)
+
+    assert result["status"] == "WAIT"
+    assert result["controlling_mode"] is None
+
+
 def test_close_below_ll_then_close_above_selects_sr() -> None:
     previous = candle(100.2, 100.4, 99.4, 99.7)
     current = candle(99.8, 100.5, 99.6, 100.2)
@@ -165,6 +196,9 @@ def test_no_step25_condition_waits() -> None:
         "candle_a": None,
         "provisional_candle_a": None,
         "structure_side_requirement": None,
+        "continuation_uses_stack_extreme": False,
+        "continuation_acceptance_required": False,
+        "continuation_acceptance_threshold": None,
     }
 
 
@@ -175,6 +209,9 @@ def run_tests() -> None:
         test_rs_close_based_selection_sets_reclaim_candle,
         test_rejection_off_waits,
         test_wick_below_ll_green_close_selects_sr,
+        test_stacked_low_sr_requires_wick_through_stack_extreme,
+        test_stacked_low_sr_does_not_arm_from_middle_without_extreme_wick,
+        test_stacked_low_sr_uses_extreme_not_internal_close_boundary,
         test_close_below_ll_then_close_above_selects_sr,
         test_close_below_ll_then_wick_into_level_selects_sr_provisional,
         test_wick_above_lh_red_close_selects_rs,

@@ -539,6 +539,71 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertIsNone(selected)
         self.assertEqual(entry_agent.active_liquidity_from_snapshot(snapshot), (None, None))
 
+    def test_ym_pml_ll_low_stack_waits_until_close_beyond_extreme_and_displays_combined(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        tv_context = {
+            "levels": {
+                "PML": {"price": 49731.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+                "LL": {"price": 49730.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+            }
+        }
+
+        inside = entry_agent.selected_active_liquidity_from_context(
+            tv_context,
+            49730.5,
+            {"open": 49732.0, "high": 49733.0, "low": 49730.25, "close": 49730.5},
+            tick_size=1.0,
+        )
+        exact_ll = entry_agent.selected_active_liquidity_from_context(
+            tv_context,
+            49730.0,
+            {"open": 49731.0, "high": 49732.0, "low": 49729.0, "close": 49730.0},
+            tick_size=1.0,
+        )
+        beyond_ll = entry_agent.selected_active_liquidity_from_context(
+            tv_context,
+            49729.0,
+            {"open": 49731.0, "high": 49732.0, "low": 49728.0, "close": 49729.0},
+            tick_size=1.0,
+        )
+
+        self.assertIsNone(inside)
+        self.assertIsNone(exact_ll)
+        self.assertEqual(beyond_ll["name"], "LL")
+        self.assertEqual(beyond_ll["display_name"], "PML/LL Liquidity")
+        self.assertEqual(beyond_ll["group"]["display_name"], "PML/LL Liquidity")
+        self.assertEqual(
+            entry_agent.active_liquidity_from_snapshot(
+                {
+                    "latest_price": 49729.0,
+                    "ohlc_is_closed": True,
+                    "ohlc": {"open": 49731.0, "high": 49732.0, "low": 49728.0, "close": 49729.0},
+                    "tv_context": tv_context,
+                    "liquidity": {"tick_size": 1.0},
+                    "step_2_1a": {
+                        "active_level": "LL",
+                        "level_price": 49730.0,
+                        "active_liquidity_group": beyond_ll["group"],
+                        "last_interacted_liquidity": {
+                            "name": "LL",
+                            "price": 49730.0,
+                            "display_name": "PML/LL Liquidity",
+                            "group": beyond_ll["group"],
+                        },
+                    },
+                }
+            ),
+            ("PML/LL Liquidity", 49730.0),
+        )
+
     def test_ym_below_pmh_does_not_mark_pmh_active_liquidity(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:

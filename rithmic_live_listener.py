@@ -45,19 +45,19 @@ ATR_PERIOD = 14
 ATR_SEED_BAR_COUNT = ATR_PERIOD + 1
 ATR_MAX_BAR_GAP_SECONDS = 60
 FEED_QUIET_SECONDS_BY_ROOT = {
-    "NQ": float(os.getenv("RITHMIC_NQ_QUIET_SECONDS", "2.0") or "2.0"),
-    "YM": float(os.getenv("RITHMIC_YM_QUIET_SECONDS", "3.0") or "3.0"),
-    "RTY": float(os.getenv("RITHMIC_RTY_QUIET_SECONDS", "3.0") or "3.0"),
+    "NQ": float(os.getenv("RITHMIC_NQ_QUIET_SECONDS", "5.0") or "5.0"),
+    "YM": float(os.getenv("RITHMIC_YM_QUIET_SECONDS", "5.0") or "5.0"),
+    "RTY": float(os.getenv("RITHMIC_RTY_QUIET_SECONDS", "5.0") or "5.0"),
 }
 FEED_STALE_SECONDS_BY_ROOT = {
-    "NQ": float(os.getenv("RITHMIC_NQ_STALE_SECONDS", "3.0") or "3.0"),
-    "YM": float(os.getenv("RITHMIC_YM_STALE_SECONDS", "10.0") or "10.0"),
-    "RTY": float(os.getenv("RITHMIC_RTY_STALE_SECONDS", "10.0") or "10.0"),
+    "NQ": float(os.getenv("RITHMIC_NQ_STALE_SECONDS", "15.0") or "15.0"),
+    "YM": float(os.getenv("RITHMIC_YM_STALE_SECONDS", "15.0") or "15.0"),
+    "RTY": float(os.getenv("RITHMIC_RTY_STALE_SECONDS", "15.0") or "15.0"),
 }
 FEED_DISCONNECTED_SECONDS_BY_ROOT = {
-    "NQ": float(os.getenv("RITHMIC_NQ_DISCONNECTED_SECONDS", "10.0") or "10.0"),
-    "YM": float(os.getenv("RITHMIC_YM_DISCONNECTED_SECONDS", "30.0") or "30.0"),
-    "RTY": float(os.getenv("RITHMIC_RTY_DISCONNECTED_SECONDS", "30.0") or "30.0"),
+    "NQ": float(os.getenv("RITHMIC_NQ_DISCONNECTED_SECONDS", "45.0") or "45.0"),
+    "YM": float(os.getenv("RITHMIC_YM_DISCONNECTED_SECONDS", "45.0") or "45.0"),
+    "RTY": float(os.getenv("RITHMIC_RTY_DISCONNECTED_SECONDS", "45.0") or "45.0"),
 }
 FEED_RECOVERY_TICK_CONFIRMATIONS = int(os.getenv("RITHMIC_FEED_RECOVERY_TICK_CONFIRMATIONS", "2") or "2")
 FEED_QUIET_SECONDS = FEED_QUIET_SECONDS_BY_ROOT["NQ"]
@@ -71,7 +71,7 @@ PRICE_SANITY_MAX_MOVE_BY_ROOT = {
 }
 TICK_QUEUE_MAX_SIZE = int(os.getenv("RITHMIC_TICK_QUEUE_MAX_SIZE", "5000") or "5000")
 PRICE_POST_MIN_INTERVAL_SECONDS = 1.0
-EXECUTOR_PRICE_POST_TIMEOUT_SECONDS = min(float(os.getenv("RITHMIC_EXECUTOR_PRICE_POST_TIMEOUT_SECONDS", "0.05") or "0.05"), 0.05)
+EXECUTOR_PRICE_POST_TIMEOUT_SECONDS = min(float(os.getenv("RITHMIC_EXECUTOR_PRICE_POST_TIMEOUT_SECONDS", "0.5") or "0.5"), 0.5)
 LISTENER_DOWNSTREAM_FORWARD_ENABLED = os.getenv("RITHMIC_ENABLE_DOWNSTREAM_PRICE_POSTS", "0").strip().lower() in {"1", "true", "yes", "on"}
 FEED_HEALTH_WRITE_MIN_INTERVAL_SECONDS = float(os.getenv("RITHMIC_FEED_HEALTH_WRITE_MIN_INTERVAL_SECONDS", "1.0") or "1.0")
 LISTENER_SUMMARY_HEARTBEAT_SECONDS = float(os.getenv("RITHMIC_SUMMARY_HEARTBEAT_SECONDS", "30.0") or "30.0")
@@ -94,6 +94,12 @@ latest_tick_monotonic_by_symbol = {}
 latest_dirty_by_symbol = set()
 latest_published_tick_time_by_symbol = {}
 raw_callback_count = defaultdict(int)
+BRIDGE_CONNECTION_HEALTH = {
+    "md_logged_in": False,
+    "ts_logged_in": False,
+    "market_data_closed": False,
+    "trading_system_closed": False,
+}
 
 # Credentials are read only from environment variables and must never be printed
 # or included raw in diagnostics/errors.
@@ -264,6 +270,19 @@ def parse_utc_timestamp(value):
         return None
 
 
+def update_bridge_connection_health_from_line(line):
+    if not str(line or "").startswith("STATUS|listener_heartbeat|"):
+        return
+    parts = str(line).split("|")[2:]
+    for part in parts:
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        normalized_key = key.strip()
+        if normalized_key in BRIDGE_CONNECTION_HEALTH:
+            BRIDGE_CONNECTION_HEALTH[normalized_key] = str(value).strip().lower() == "true"
+
+
 def get_feed_thresholds(symbol):
     root_symbol = normalize_symbol_root(symbol)
     return {
@@ -313,6 +332,33 @@ def calculate_feed_status(entry, reference_time=None, symbol=None):
     if age_seconds > thresholds["quiet_seconds"]:
         return "QUIET"
     return "LIVE"
+
+
+def derive_executor_price_feed_status(symbol, tick_timestamp_utc=None, reference_time=None):
+    normalized_symbol = str(symbol or "").strip().upper()
+    if not normalized_symbol:
+        return None
+
+    entry = {}
+    try:
+        payload = read_feed_health()
+        symbols = payload.get("symbols", {}) if isinstance(payload, dict) else {}
+        for alias in build_snapshot_symbol_aliases(normalized_symbol):
+            candidate = symbols.get(alias)
+            if isinstance(candidate, dict):
+                entry = dict(candidate)
+                break
+    except Exception:
+        entry = {}
+
+    if tick_timestamp_utc:
+        entry["last_tick_timestamp_utc"] = tick_timestamp_utc
+
+    if entry.get("last_tick_timestamp_utc"):
+        return calculate_feed_status(entry, reference_time=reference_time, symbol=normalized_symbol)
+
+    status = str(entry.get("feed_status") or "").strip().upper()
+    return status or None
 
 
 def refresh_feed_health_statuses(payload, reference_time=None):
@@ -413,6 +459,30 @@ def update_feed_health(symbol, field, timestamp_utc=None, force_status=None):
         payload["updated_at_utc"] = utc_now_iso()
     else:
         refresh_feed_health_statuses(payload)
+    try:
+        write_feed_health(payload)
+    except Exception as e:
+        print(f"RITHMIC WARNING|feed_health_write_failed|{sanitize_log_message(e)}")
+
+
+def record_executor_price_post_success(symbol, price, tick_timestamp_utc, post_timestamp_utc, latency_ms=None):
+    normalized_symbol = str(symbol or "").upper()
+    if not normalized_symbol:
+        return
+    payload = read_feed_health()
+    symbols = payload.setdefault("symbols", {})
+    for alias in build_snapshot_symbol_aliases(normalized_symbol):
+        entry = symbols.setdefault(alias, {})
+        entry["latest_price"] = float(price)
+        entry["latest_listener_price"] = float(price)
+        entry["last_listener_price_timestamp_utc"] = tick_timestamp_utc
+        entry["last_bridge_post_timestamp_utc"] = post_timestamp_utc
+        entry["last_successful_executor_price_post_timestamp_utc"] = post_timestamp_utc
+        entry["last_executor_publish_at"] = post_timestamp_utc
+        entry["last_executor_price_post_failure_reason"] = None
+        if latency_ms is not None:
+            entry["executor_publish_latency_ms"] = latency_ms
+    refresh_feed_health_statuses(payload, reference_time=parse_utc_timestamp(post_timestamp_utc))
     try:
         write_feed_health(payload)
     except Exception as e:
@@ -1676,10 +1746,35 @@ def forward_price_to_executor(
     timeout_seconds=None,
 ):
     timestamp_utc = utc_now_iso()
+
+    def reject(reason):
+        if update_health and str(symbol or "").strip():
+            update_feed_health(symbol, "last_executor_price_post_failure_timestamp_utc", timestamp_utc)
+        return False, reason
+
+    normalized_symbol = str(symbol or "").strip().upper()
+    if not normalized_symbol:
+        return False, "missing_symbol"
+    try:
+        normalized_price = float(price)
+    except (TypeError, ValueError):
+        return reject("price_not_numeric")
+    if not math.isfinite(normalized_price):
+        return reject("non_finite_price")
+    if normalized_price <= 0:
+        return reject("price_not_positive")
+
+    feed_status = derive_executor_price_feed_status(normalized_symbol, tick_timestamp_utc=tick_timestamp_utc)
+    if not feed_status:
+        return reject("missing_feed_status")
+    if feed_status in {"STALE", "DEAD", "DISCONNECTED"}:
+        return reject("stale_tick_timestamp_utc")
+
     payload = json.dumps({
-        "symbol": str(symbol).upper(),
-        "price": float(price),
+        "symbol": normalized_symbol,
+        "price": normalized_price,
         "tick_timestamp_utc": tick_timestamp_utc or timestamp_utc,
+        "feed_status": feed_status,
     }).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     internal_token = os.getenv("RANDLE_INTERNAL_TOKEN", "")
@@ -1706,8 +1801,12 @@ def forward_price_to_executor(
                 return False, reason
             else:
                 if update_health:
-                    update_feed_health(symbol, "last_bridge_post_timestamp_utc", timestamp_utc)
-                    update_feed_health(symbol, "last_successful_executor_price_post_timestamp_utc", timestamp_utc)
+                    record_executor_price_post_success(
+                        normalized_symbol,
+                        normalized_price,
+                        tick_timestamp_utc or timestamp_utc,
+                        timestamp_utc,
+                    )
                 return True, None
     except urllib.error.HTTPError as exc:
         body = ""
@@ -1725,6 +1824,15 @@ def forward_price_to_executor(
         print(
             "RITHMIC WARNING|executor_price_forward_failed|"
             f"symbol={symbol}|price={price}|status={exc.code}|reason={sanitize_log_message(reason)}"
+        )
+        if update_health:
+            update_feed_health(symbol, "last_executor_price_post_failure_timestamp_utc", timestamp_utc)
+        return False, reason
+    except TimeoutError:
+        reason = "timed out"
+        print(
+            "RITHMIC WARNING|executor_price_forward_failed|"
+            f"symbol={symbol}|price={price}|error={reason}"
         )
         if update_health:
             update_feed_health(symbol, "last_executor_price_post_failure_timestamp_utc", timestamp_utc)
@@ -1840,16 +1948,7 @@ class PricePublisher:
                     latest_published_tick_time_by_symbol[symbol] = tick_timestamp
                     latest_dirty_by_symbol.discard(symbol)
                 print(f"PRICE|{symbol}|{price}|ts={timestamp_utc}")
-                update_feed_health(symbol, "latest_price", float(price))
-                update_feed_health(symbol, "latest_listener_price", float(price))
-                update_feed_health(symbol, "last_listener_price_timestamp_utc", tick_timestamp)
-                update_feed_health(symbol, "last_bridge_post_timestamp_utc", timestamp_utc)
-                try:
-                    update_feed_health(symbol, "last_executor_publish_at", timestamp_utc)
-                except Exception as e:
-                    print(f"RITHMIC WARNING|feed_health_update_failed|{sanitize_log_message(e)}")
-                update_feed_health(symbol, "last_successful_executor_price_post_timestamp_utc", timestamp_utc)
-                update_feed_health(symbol, "executor_publish_latency_ms", latency_ms)
+                record_executor_price_post_success(symbol, price, tick_timestamp, timestamp_utc, latency_ms=latency_ms)
                 continue
 
             self.post_failures[symbol] += 1
@@ -2165,6 +2264,15 @@ def start_disconnect_watchdog(process, subscribed_symbols, enabled_event):
                 symbol for symbol in subscribed_symbols
                 if entries.get(symbol, {}).get("price_bridge_status") == "FROZEN"
             ]
+            live_or_quiet = [
+                symbol for symbol in subscribed_symbols
+                if entries.get(symbol, {}).get("feed_status") in {"LIVE", "QUIET"}
+            ]
+            terminal_symbols = sorted(set(disconnected) | set(frozen_bridge))
+            connection_closed = (
+                bool(BRIDGE_CONNECTION_HEALTH.get("market_data_closed"))
+                or bool(BRIDGE_CONNECTION_HEALTH.get("trading_system_closed"))
+            )
             if now - last_status_log >= LISTENER_SUMMARY_HEARTBEAT_SECONDS:
                 last_status_log = now
                 print(
@@ -2175,8 +2283,41 @@ def start_disconnect_watchdog(process, subscribed_symbols, enabled_event):
                     f"disconnected={','.join(disconnected)}|"
                     f"frozen_bridge={','.join(frozen_bridge)}"
                 )
-            for symbol in subscribed_symbols:
+            if connection_closed and not terminal_symbols:
+                print(
+                    "RITHMIC WARNING|bridge_connection_closed_reconnect|"
+                    f"market_data_closed={BRIDGE_CONNECTION_HEALTH.get('market_data_closed')}|"
+                    f"trading_system_closed={BRIDGE_CONNECTION_HEALTH.get('trading_system_closed')}"
+                )
+                terminate_process(process)
+                return
+            if live_or_quiet and not connection_closed:
+                for symbol in disconnected:
+                    entry = entries.get(symbol, {})
+                    age_seconds = entry.get("feed_age_seconds")
+                    if age_seconds is None:
+                        last_tick = parse_utc_timestamp(entry.get("last_tick_timestamp_utc"))
+                        if last_tick is not None:
+                            reference_time = datetime.now(timezone.utc).replace(tzinfo=None)
+                            age_seconds = max(0.0, (reference_time - last_tick).total_seconds())
+                    age_text = "unknown" if age_seconds is None else f"{float(age_seconds):.3f}"
+                    print(
+                        "RITHMIC STATUS|dead_restart_skipped_symbol_only|"
+                        f"symbol={symbol}|age_seconds={age_text}|"
+                        f"live_or_quiet_symbols={len(live_or_quiet)}"
+                    )
+                continue
+            if not connection_closed and len(terminal_symbols) < len(tracked):
+                continue
+            restart_candidates = terminal_symbols
+            for symbol in restart_candidates:
                 entry = entries.get(symbol, {})
+                if symbol in frozen_bridge and str(entry.get("feed_status") or "").upper() != "DEAD":
+                    entry = {
+                        "feed_status": "DEAD",
+                        "last_tick_timestamp_utc": entry.get("last_tick_timestamp_utc"),
+                        "feed_age_seconds": RESTART_DEAD_THRESHOLD_SECONDS + 1,
+                    }
                 if maybe_restart_listener(symbol, entry, process):
                     return
     thread = threading.Thread(target=watch, name="rithmic_disconnect_watchdog", daemon=True)
@@ -2246,6 +2387,7 @@ def main():
                     safe_line = sanitize_log_message(line)
                     if LOG_RAW_TICKS or not line.startswith("TICK|"):
                         print(f"RITHMIC {safe_line}")
+                    update_bridge_connection_health_from_line(line)
 
                     if line == "STATUS|manual_shutdown":
                         manual_shutdown_seen = True

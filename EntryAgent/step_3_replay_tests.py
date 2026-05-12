@@ -5,8 +5,11 @@ from __future__ import annotations
 from step3_engine import evaluate_step3
 
 
-def candle(open_price: float, high: float, low: float, close: float) -> dict:
-    return {"open": open_price, "high": high, "low": low, "close": close}
+def candle(open_price: float, high: float, low: float, close: float, timestamp: str | None = None) -> dict:
+    payload = {"open": open_price, "high": high, "low": low, "close": close}
+    if timestamp is not None:
+        payload["timestamp"] = timestamp
+    return payload
 
 
 def base_interaction() -> dict:
@@ -59,7 +62,7 @@ def test_upper_static_stack_allows_step4_after_hh_beyond_extreme() -> None:
             "active_stack": {"name": "PMH_ONH_STACK"},
             "extreme_boundary": 101.0,
             "stack_side": "upper",
-            "latest_candle": candle(100.0, 101.25, 99.75, 100.5),
+            "latest_candle": candle(100.0, 101.25, 99.75, 101.25),
         }
     )
     result = evaluate_step3(interaction)
@@ -68,6 +71,44 @@ def test_upper_static_stack_allows_step4_after_hh_beyond_extreme() -> None:
     assert result["state"]["sweep_extreme_boundary_seen"] is True
     assert result["state"]["step3_allows_structure"] is True
     assert result["state"]["candle_a_source"] == "stack_extreme_confirmation_candle"
+
+
+def test_upper_static_stack_allows_step4_after_wick_hh_beyond_extreme() -> None:
+    interaction = base_interaction()
+    interaction.update(
+        {
+            "active_stack": {"name": "PMH_ONH_STACK"},
+            "extreme_boundary": 101.0,
+            "stack_side": "upper",
+            "latest_candle": candle(100.0, 101.25, 99.75, 100.5),
+        }
+    )
+    result = evaluate_step3(interaction)
+    assert_result("stack wick confirmed", result, "ALLOW_STEP_4", "Step 4", "step3_structure_allowed")
+    assert result["state"]["stack_extreme_confirmation_seen"] is True
+
+
+def test_static_stack_confirmation_candle_is_not_reassigned_after_proof() -> None:
+    confirmation = candle(100.0, 101.25, 99.75, 101.25, "2026-05-12T13:42:00Z")
+    later = candle(101.25, 102.0, 100.75, 101.5, "2026-05-12T13:43:00Z")
+    interaction = base_interaction()
+    interaction.update(
+        {
+            "active_stack": {"name": "PMH_ONH_STACK"},
+            "extreme_boundary": 101.0,
+            "stack_side": "upper",
+            "latest_candle": confirmation,
+        }
+    )
+    first = evaluate_step3(interaction)
+    assert_result("stack confirmed", first, "ALLOW_STEP_4", "Step 4", "step3_structure_allowed")
+
+    followup = dict(first["state"])
+    followup["latest_candle"] = later
+    second = evaluate_step3(followup)
+    assert_result("stack confirmation preserved", second, "ALLOW_STEP_4", "Step 4", "step3_structure_allowed")
+    assert second["state"]["stack_extreme_confirmation_candle"]["timestamp"] == "2026-05-12T13:42:00Z"
+    assert second["state"]["candle_a"]["timestamp"] == "2026-05-12T13:42:00Z"
 
 
 def test_lower_static_stack_waits_until_ll_beyond_extreme() -> None:
@@ -94,7 +135,7 @@ def test_lower_static_stack_allows_step4_after_ll_beyond_extreme() -> None:
             "active_liquidity": {"name": "PML", "price": 99.0},
             "extreme_boundary": 98.0,
             "stack_side": "lower",
-            "latest_candle": candle(99.0, 99.5, 97.75, 98.5),
+            "latest_candle": candle(99.0, 99.5, 97.75, 97.75),
         }
     )
     result = evaluate_step3(interaction)
@@ -137,6 +178,8 @@ def run_tests() -> None:
         test_normal_level_allows_step4,
         test_static_stack_waits_for_extreme_confirmation,
         test_upper_static_stack_allows_step4_after_hh_beyond_extreme,
+        test_upper_static_stack_allows_step4_after_wick_hh_beyond_extreme,
+        test_static_stack_confirmation_candle_is_not_reassigned_after_proof,
         test_lower_static_stack_waits_until_ll_beyond_extreme,
         test_lower_static_stack_allows_step4_after_ll_beyond_extreme,
         test_rotation_filter_does_not_downgrade_stack_to_normal_structure,

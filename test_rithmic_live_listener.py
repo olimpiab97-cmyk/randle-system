@@ -6,8 +6,9 @@ import tempfile
 import time
 import unittest
 import urllib.error
+from contextlib import redirect_stdout
 from datetime import timedelta, timezone
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 
 
@@ -34,6 +35,12 @@ class RithmicLiveListenerTests(unittest.TestCase):
         self.listener.latest_dirty_by_symbol.clear()
         self.listener.latest_published_tick_time_by_symbol.clear()
         self.listener.raw_callback_count.clear()
+        self.listener.BRIDGE_CONNECTION_HEALTH.update({
+            "md_logged_in": True,
+            "ts_logged_in": True,
+            "market_data_closed": False,
+            "trading_system_closed": False,
+        })
         self._original_subscriptions_env = os.environ.get(self.listener.RITHMIC_SUBSCRIPTIONS_ENV)
         self._original_secondary_diagnostic_env = os.environ.get(
             self.listener.RITHMIC_SECONDARY_DIAGNOSTIC_SUBSCRIPTION_ENV
@@ -308,16 +315,33 @@ class RithmicLiveListenerTests(unittest.TestCase):
         self.assertNotIn("Request", callback_source)
         self.assertNotIn("json", callback_source.lower())
 
-    def test_listener_stall_marks_feed_stale(self):
-        reference_time = self.listener.datetime(2026, 4, 30, 13, 31, 5)
+    def test_listener_stall_marks_feed_stale_after_relaxed_threshold(self):
+        reference_time = self.listener.datetime(2026, 4, 30, 13, 31, 16)
         entry = {"last_tick_timestamp_utc": "2026-04-30T13:31:00Z"}
 
         status = self.listener.calculate_feed_status(entry, reference_time=reference_time)
 
         self.assertEqual(status, "STALE")
 
+    def test_two_to_three_second_quiet_does_not_become_stale(self):
+        entry = {"last_tick_timestamp_utc": "2026-04-30T13:31:00Z"}
+
+        two_second_status = self.listener.calculate_feed_status(
+            entry,
+            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 2),
+            symbol="NQM6",
+        )
+        three_second_status = self.listener.calculate_feed_status(
+            entry,
+            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 3),
+            symbol="NQM6",
+        )
+
+        self.assertNotEqual(two_second_status, "STALE")
+        self.assertNotEqual(three_second_status, "STALE")
+
     def test_ym_and_rty_enter_quiet_before_stale(self):
-        reference_time = self.listener.datetime(2026, 4, 30, 13, 31, 5)
+        reference_time = self.listener.datetime(2026, 4, 30, 13, 31, 6)
         entry = {"last_tick_timestamp_utc": "2026-04-30T13:31:00Z"}
 
         self.assertEqual(
@@ -541,19 +565,19 @@ class RithmicLiveListenerTests(unittest.TestCase):
         )
         quiet = self.listener.refresh_feed_health_statuses(
             json.loads(json.dumps(live)),
-            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 2, 500000),
+            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 6),
         )
         stale = self.listener.refresh_feed_health_statuses(
             json.loads(json.dumps(quiet)),
-            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 5),
+            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 16),
         )
         dead = self.listener.refresh_feed_health_statuses(
             json.loads(json.dumps(stale)),
-            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 30),
+            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 46),
         )
         still_dead = self.listener.refresh_feed_health_statuses(
             json.loads(json.dumps(dead)),
-            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 40),
+            reference_time=self.listener.datetime(2026, 4, 30, 13, 31, 50),
         )
 
         self.assertEqual(live["symbols"]["NQM6"]["feed_status"], "LIVE")
@@ -585,7 +609,7 @@ class RithmicLiveListenerTests(unittest.TestCase):
         self.assertLess(len(worker.bar_cache.get("NQM6", [])), self.listener.ATR_SEED_BAR_COUNT)
 
     def test_quiet_feed_is_not_trusted_as_live_system_state(self):
-        reference_time = self.listener.datetime(2026, 4, 30, 13, 31, 5)
+        reference_time = self.listener.datetime(2026, 4, 30, 13, 31, 6)
         payload = {
             "symbols": {
                 "YMM6": {"last_tick_timestamp_utc": "2026-04-30T13:31:00Z"},
@@ -651,6 +675,51 @@ class RithmicLiveListenerTests(unittest.TestCase):
         self.assertNotIn("last_bridge_post_timestamp_utc", entry)
         self.assertNotIn("last_successful_executor_price_post_timestamp_utc", entry)
 
+    def test_fresh_price_publisher_tick_with_missing_cached_feed_status_posts_live(self):
+        captured_payloads = []
+
+        class SuccessfulResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        def fake_urlopen(request, timeout):
+            payload = json.loads(request.data.decode("utf-8"))
+            captured_payloads.append(payload)
+            if not payload.get("feed_status"):
+                raise self._http_error(409, {
+                    "ok": False,
+                    "error": "missing_feed_status",
+                    "reason": "missing_feed_status",
+                    "symbol": payload.get("symbol"),
+                })
+            return SuccessfulResponse()
+
+        original_urlopen = self.listener.urllib.request.urlopen
+        try:
+            self.listener.urllib.request.urlopen = fake_urlopen
+            publisher = self.listener.PricePublisher(["NQM6"])
+            self.listener.update_latest_price_from_tick({
+                "symbol": "NQM6",
+                "price": 19000.25,
+                "timestamp": self.listener.utc_now_iso(),
+            })
+            publisher.publish_once()
+        finally:
+            self.listener.urllib.request.urlopen = original_urlopen
+
+        payload = json.loads(self.listener.FEED_HEALTH_PATH.read_text(encoding="utf-8"))
+        entry = payload["symbols"]["NQM6"]
+        self.assertEqual(captured_payloads[0]["feed_status"], "LIVE")
+        self.assertNotEqual(entry.get("last_executor_price_post_failure_reason"), "missing_feed_status")
+        self.assertIn("last_successful_executor_price_post_timestamp_utc", entry)
+        self.assertIn("last_bridge_post_timestamp_utc", entry)
+        self.assertEqual(entry["last_bridge_post_age_seconds"], 0.0)
+
     def test_later_successful_price_post_sets_bridge_post_timestamp_after_failure(self):
         results = [(False, "stale_tick_timestamp_utc"), (True, None)]
 
@@ -679,9 +748,42 @@ class RithmicLiveListenerTests(unittest.TestCase):
         payload = json.loads(self.listener.FEED_HEALTH_PATH.read_text(encoding="utf-8"))
         entry = payload["symbols"]["NQM6"]
         self.assertEqual(entry["executor_price_post_failure_count"], 1)
-        self.assertEqual(entry["last_executor_price_post_failure_reason"], "stale_tick_timestamp_utc")
+        self.assertIsNone(entry["last_executor_price_post_failure_reason"])
         self.assertIn("last_bridge_post_timestamp_utc", entry)
         self.assertIn("last_successful_executor_price_post_timestamp_utc", entry)
+        self.assertEqual(entry["last_bridge_post_age_seconds"], 0.0)
+
+    def test_timeout_does_not_prevent_next_successful_price_post(self):
+        results = [(False, "timed out"), (True, None)]
+
+        def scripted_forward(symbol, price, update_health=True, tick_timestamp_utc=None, timeout_seconds=None):
+            return results.pop(0)
+
+        original_forward = self.listener.forward_price_to_executor
+        try:
+            self.listener.forward_price_to_executor = scripted_forward
+            publisher = self.listener.PricePublisher(["NQM6"])
+            self.listener.update_latest_price_from_tick({
+                "symbol": "NQM6",
+                "price": 19000.25,
+                "timestamp": "2026-05-04T05:00:00Z",
+            })
+            publisher.publish_once()
+            self.listener.update_latest_price_from_tick({
+                "symbol": "NQM6",
+                "price": 19000.50,
+                "timestamp": "2026-05-04T05:00:01Z",
+            })
+            publisher.publish_once()
+        finally:
+            self.listener.forward_price_to_executor = original_forward
+
+        payload = json.loads(self.listener.FEED_HEALTH_PATH.read_text(encoding="utf-8"))
+        entry = payload["symbols"]["NQM6"]
+        self.assertEqual(entry["executor_price_post_failure_count"], 1)
+        self.assertIsNone(entry["last_executor_price_post_failure_reason"])
+        self.assertIn("last_successful_executor_price_post_timestamp_utc", entry)
+        self.assertEqual(entry["latest_price"], 19000.50)
 
     def test_burst_tick_enqueue_does_not_block_and_drops_safely(self):
         self.listener.TICK_QUEUE_MAX_SIZE = 5
@@ -801,11 +903,37 @@ class RithmicLiveListenerTests(unittest.TestCase):
 
         self.assertFalse(fake_process.terminated)
 
-    def test_disconnect_watchdog_reconnects_when_one_tracked_symbol_disconnects(self):
+    def test_disconnect_watchdog_skips_symbol_only_dead_when_another_symbol_live(self):
         payload = {
             "symbols": {
                 "NQM6": {"last_tick_timestamp_utc": self._iso_seconds_ago(1)},
-                "YMM6": {"last_tick_timestamp_utc": self._iso_seconds_ago(31)},
+                "YMM6": {"last_tick_timestamp_utc": self._iso_seconds_ago(46)},
+            }
+        }
+        self.listener.write_feed_health(payload)
+        fake_process = self._fake_process()
+        output = StringIO()
+
+        enabled_event = self.listener.threading.Event()
+        with redirect_stdout(output):
+            stop_event, thread = self.listener.start_disconnect_watchdog(fake_process, ["NQM6", "YMM6"], enabled_event)
+            try:
+                enabled_event.set()
+                time.sleep(1.2)
+            finally:
+                stop_event.set()
+                thread.join(timeout=2)
+
+        self.assertFalse(fake_process.terminated)
+        self.assertIn("dead_restart_skipped_symbol_only", output.getvalue())
+        self.assertIn("symbol=YMM6", output.getvalue())
+        self.assertIn("live_or_quiet_symbols=1", output.getvalue())
+
+    def test_disconnect_watchdog_reconnects_when_all_tracked_symbols_dead(self):
+        payload = {
+            "symbols": {
+                "NQM6": {"last_tick_timestamp_utc": self._iso_seconds_ago(46)},
+                "YMM6": {"last_tick_timestamp_utc": self._iso_seconds_ago(46)},
             }
         }
         self.listener.write_feed_health(payload)

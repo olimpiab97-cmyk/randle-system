@@ -143,12 +143,18 @@ def evaluate_step3(interaction: dict[str, Any], recent_candles: list[dict[str, A
         events.append({"event": "step3_structure_blocked", "reason": reason, "liquidity_type": "STATIC_STACK"})
         return result("WAIT", state, "Step 3", reason, events)
 
+    previous_confirmation_seen = state.get("stack_extreme_confirmation_seen") is True
+    previous_confirmation_candle = state.get("stack_extreme_confirmation_candle")
     state["stack_extreme_confirmation_seen"] = True
-    state["stack_extreme_confirmation_candle"] = latest_candle
+    state["stack_extreme_confirmation_candle"] = previous_confirmation_candle if previous_confirmation_seen and isinstance(previous_confirmation_candle, dict) else latest_candle
     state["sweep_extreme_boundary_seen"] = True
     state["step3_allows_structure"] = True
     state["step3_block_reason"] = None
-    if isinstance(latest_candle, dict):
+    if previous_confirmation_seen and isinstance(previous_confirmation_candle, dict):
+        state["initial_candle_a"] = state.get("initial_candle_a") if isinstance(state.get("initial_candle_a"), dict) else previous_confirmation_candle
+        state["candle_a"] = state.get("candle_a") if isinstance(state.get("candle_a"), dict) else previous_confirmation_candle
+        state["candle_a_source"] = state.get("candle_a_source") or "stack_extreme_confirmation_candle"
+    elif isinstance(latest_candle, dict):
         state["initial_candle_a"] = latest_candle
         state["candle_a"] = latest_candle
         state["candle_a_source"] = "stack_extreme_confirmation_candle"

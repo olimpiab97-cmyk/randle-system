@@ -868,6 +868,126 @@ class OfflineReplayTests(unittest.TestCase):
         self.assertEqual(replacement_stop["oco_role"], "protective_stop")
         self.assertTrue(replacement_stop.get("modify_history"))
 
+    def test_t936_style_be_modifies_existing_stop_without_error_or_flatten(self):
+        self._save_clean_manager_state()
+        state = self.manager.load_state()
+        nq_trade = self.manager.create_trade_state(
+            {
+                "event": "enter_trade",
+                "symbol": "NQ",
+                "direction": "short",
+                "position_size": 2,
+            },
+            {
+                "atr_value": 14.0,
+                "atr_source": "tradingview_atr_relay",
+                "atr_bar_timestamp": "2026-01-01T09:29:00Z",
+            },
+            requested_symbol="NQ",
+            execution_symbol="NQM6",
+        )
+        nq_trade.update({
+            "trade_id": "T-936cb5ca",
+            "symbol": "NQM6",
+            "execution_symbol": "NQM6",
+            "requested_symbol": "NQ",
+            "direction": "short",
+            "status": "active",
+            "entry_price": 29352.0,
+            "original_stop": 29366.0,
+            "current_stop": 29366.0,
+            "be_trigger": 29345.0,
+            "tp1_price": 29338.0,
+            "remaining_size": 2,
+            "position_size": 2,
+            "stop_order_id": "STOP-T936",
+            "tp1_order_id": "LIMIT-T936",
+            "oco_group": "OCO-T-936cb5ca-PROTECTIVE",
+        })
+        other_nq_trade = dict(nq_trade)
+        other_nq_trade.update({
+            "trade_id": "T-other-nq",
+            "entry_price": 29400.0,
+            "original_stop": 29420.0,
+            "current_stop": 29420.0,
+            "be_trigger": 29320.0,
+            "tp1_price": 29300.0,
+            "stop_order_id": "STOP-other-nq",
+            "tp1_order_id": "LIMIT-other-nq",
+            "oco_group": "OCO-T-other-nq-PROTECTIVE",
+        })
+        ym_trade = dict(nq_trade)
+        ym_trade.update({
+            "trade_id": "T-ym-live",
+            "symbol": "YMM6",
+            "execution_symbol": "YMM6",
+            "requested_symbol": "YM",
+            "entry_price": 49684.0,
+            "original_stop": 49697.0,
+            "current_stop": 49697.0,
+            "be_trigger": 49671.0,
+            "tp1_price": 49658.0,
+            "stop_order_id": "STOP-ym-live",
+            "tp1_order_id": "LIMIT-ym-live",
+            "oco_group": "OCO-T-ym-live-PROTECTIVE",
+        })
+        state["trades"] = {
+            nq_trade["trade_id"]: self.manager.serialize_trade(nq_trade),
+            other_nq_trade["trade_id"]: self.manager.serialize_trade(other_nq_trade),
+            ym_trade["trade_id"]: self.manager.serialize_trade(ym_trade),
+        }
+        self.manager.save_state(state)
+
+        self.executor.POSITIONS["NQM6"] = {
+            "symbol": "NQM6",
+            "qty": -4.0,
+            "avg_entry_price": 29376.0,
+        }
+        self.executor.POSITIONS["YMM6"] = {
+            "symbol": "YMM6",
+            "qty": -2.0,
+            "avg_entry_price": 49684.0,
+        }
+        for order_id, trade_id, symbol, stop_price, group in (
+            ("STOP-T936", "T-936cb5ca", "NQM6", 29366.0, "OCO-T-936cb5ca-PROTECTIVE"),
+            ("STOP-other-nq", "T-other-nq", "NQM6", 29420.0, "OCO-T-other-nq-PROTECTIVE"),
+            ("STOP-ym-live", "T-ym-live", "YMM6", 49697.0, "OCO-T-ym-live-PROTECTIVE"),
+        ):
+            self.executor.ORDERS[order_id] = {
+                "order_id": order_id,
+                "trade_id": trade_id,
+                "symbol": symbol,
+                "type": "stop",
+                "status": "active",
+                "qty": 2.0,
+                "stop_price": stop_price,
+                "oco_group": group,
+                "oco_role": "protective_stop",
+            }
+
+        after_be = self.manager.process_price_update_by_id(
+            "T-936cb5ca",
+            29345.0,
+            self._timestamps(1)[0],
+        )
+
+        self.assertEqual(after_be["status"], "active")
+        self.assertTrue(after_be["moved_to_be"])
+        self.assertTrue(after_be["be_state_locked"])
+        self.assertEqual(after_be["current_stop"], 29352.0)
+        self.assertEqual(after_be["remaining_size"], 2)
+        self.assertIsNone(after_be.get("error_reason"))
+        self.assertEqual(self.executor.ORDERS["STOP-T936"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-T936"]["stop_price"], 29352.0)
+        self.assertEqual(self.executor.ORDERS["STOP-other-nq"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-other-nq"]["stop_price"], 29420.0)
+        self.assertEqual(self.executor.ORDERS["STOP-ym-live"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-ym-live"]["stop_price"], 49697.0)
+        self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], -4.0)
+        self.assertEqual(self.executor.POSITIONS["YMM6"]["qty"], -2.0)
+        self.assertEqual(self.manager.get_trade("T-other-nq")["remaining_size"], 2)
+        self.assertEqual(self.manager.get_trade("T-ym-live")["remaining_size"], 2)
+
     def test_entry_fill_creates_resting_stop_and_tp1_limit_immediately(self):
         trade = self._new_short_trade()
 

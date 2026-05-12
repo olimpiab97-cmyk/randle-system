@@ -49,8 +49,10 @@ def select_pathway(
     prev_candle: dict[str, Any],
     level: float,
     level_type: str,
+    stack_extreme: float | None = None,
 ) -> dict[str, Any]:
-    level_value = float(level)
+    level_value = float(stack_extreme) if stack_extreme is not None else float(level)
+    wick_level = level_value
     normalized_level_type = str(level_type or "").strip().upper()
     output = {
         "status": "WAIT",
@@ -59,11 +61,14 @@ def select_pathway(
         "candle_a": None,
         "provisional_candle_a": None,
         "structure_side_requirement": None,
+        "continuation_uses_stack_extreme": stack_extreme is not None,
+        "continuation_acceptance_required": False,
+        "continuation_acceptance_threshold": None,
     }
 
     if normalized_level_type == "LL":
         if (
-            _price(last_candle, "low") < level_value
+            _price(last_candle, "low") < wick_level
             and _price(last_candle, "close") >= level_value
             and _price(last_candle, "close") > _price(last_candle, "open")
         ):
@@ -92,7 +97,7 @@ def select_pathway(
                 return output
 
             if (
-                _price(last_candle, "low") <= level_value
+                _price(last_candle, "low") <= wick_level
                 and _price(last_candle, "close") <= level_value
                 and _price(last_candle, "close") > _price(last_candle, "open")
             ):
@@ -103,13 +108,15 @@ def select_pathway(
                         "activation_type": "wick",
                         "provisional_candle_a": last_candle,
                         "structure_side_requirement": "ABOVE_LEVEL",
+                        "continuation_acceptance_required": True,
+                        "continuation_acceptance_threshold": _price(last_candle, "high"),
                     }
                 )
                 return output
 
     if normalized_level_type == "LH":
         if (
-            _price(last_candle, "high") > level_value
+            _price(last_candle, "high") > wick_level
             and _price(last_candle, "close") <= level_value
             and _price(last_candle, "close") < _price(last_candle, "open")
         ):
@@ -138,7 +145,7 @@ def select_pathway(
                 return output
 
             if (
-                _price(last_candle, "high") >= level_value
+                _price(last_candle, "high") >= wick_level
                 and _price(last_candle, "close") >= level_value
                 and _price(last_candle, "close") < _price(last_candle, "open")
             ):
@@ -149,6 +156,8 @@ def select_pathway(
                         "activation_type": "wick",
                         "provisional_candle_a": last_candle,
                         "structure_side_requirement": "BELOW_LEVEL",
+                        "continuation_acceptance_required": True,
+                        "continuation_acceptance_threshold": _price(last_candle, "low"),
                     }
                 )
                 return output
@@ -158,14 +167,6 @@ def select_pathway(
 
 def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
     """Select the active rejection pathway after Step 2 activates Rejection Mode."""
-    if {"last_candle", "prev_candle", "level", "level_type"}.issubset(interaction):
-        return select_pathway(
-            interaction["last_candle"],
-            interaction["prev_candle"],
-            interaction["level"],
-            interaction["level_type"],
-        )
-
     state = dict(interaction)
     events = list(state.get("events") or [])
 
@@ -177,6 +178,16 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
         return result("WAIT", state, "Step 2", reason, events)
 
     initial_candle_a = state.get("initial_candle_a") or state.get("candle_a")
+    live_selection = None
+    if {"last_candle", "prev_candle", "level", "level_type"}.issubset(state):
+        live_selection = select_pathway(
+            state["last_candle"],
+            state["prev_candle"],
+            state["level"],
+            state["level_type"],
+            state.get("stack_extreme"),
+        )
+
     requested_mode = normalize_mode(state.get("controlling_mode") or state.get("pathway_mode"))
     candidate_modes = [normalize_mode(mode) for mode in as_list(state.get("candidate_modes"))]
     candidate_modes = [mode for mode in candidate_modes if mode]
@@ -187,7 +198,22 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
     if activation_type is not None:
         activation_type = str(activation_type).strip().lower()
 
-    if requested_mode in (SR_MODE, RS_MODE):
+    if isinstance(live_selection, dict) and live_selection.get("status") == "READY":
+        controlling_mode = normalize_mode(live_selection.get("controlling_mode"))
+        activation_type = live_selection.get("activation_type")
+        state["pathway_level"] = state.get("level")
+        state["structure_side_requirement"] = live_selection.get("structure_side_requirement")
+        state["continuation_uses_stack_extreme"] = live_selection.get("continuation_uses_stack_extreme")
+        state["continuation_acceptance_required"] = live_selection.get("continuation_acceptance_required")
+        state["continuation_acceptance_threshold"] = live_selection.get("continuation_acceptance_threshold")
+        if activation_type == "wick":
+            provisional_candle_a = live_selection.get("provisional_candle_a")
+            reclaim_candle_a = None
+        else:
+            reclaim_candle_a = live_selection.get("candle_a")
+            provisional_candle_a = None
+        candidate_modes = [controlling_mode] if controlling_mode else []
+    elif requested_mode in (SR_MODE, RS_MODE):
         controlling_mode = requested_mode
     elif SR_MODE in candidate_modes and (isinstance(reclaim_candle_a, dict) or isinstance(provisional_candle_a, dict)):
         controlling_mode = SR_MODE
@@ -202,7 +228,7 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
             state["step25_block_reason"] = "Normal Rejection Mode requires initial_candle_a from Step 2."
             reason = state["step25_block_reason"]
             events.append({"event": "step25_waiting_for_initial_candle_a", "reason": reason})
-            return result("WAIT", state, "Step 2", reason, events)
+            return result("WAIT", state, "Step 2.5", reason, events)
         candidate_modes = candidate_modes or [NORMAL_MODE]
         structure_side_requirement = state.get("structure_side_requirement")
     else:
@@ -229,6 +255,8 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
     state["provisional_candle_a"] = provisional_candle_a
     state["pathway_level"] = state.get("pathway_level")
     state["pathway_activation_type"] = activation_type or "normal"
+    state["continuation_acceptance_required"] = bool(state.get("continuation_acceptance_required"))
+    state["continuation_acceptance_threshold"] = state.get("continuation_acceptance_threshold")
     state["step25_pathway_selection_complete"] = True
     state["step25_block_reason"] = None
 

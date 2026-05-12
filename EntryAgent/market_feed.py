@@ -116,6 +116,36 @@ def _latest_matching_bar(data: Any, root_symbol: str) -> dict[str, Any] | None:
     return latest_bar
 
 
+def recent_closed_bars(root_symbol: str, limit: int = 2) -> list[dict[str, Any]]:
+    """Return recent closed bars for live Step 2.5 candle-pair qualification."""
+    if not RITHMIC_BARS_PATH.exists():
+        return []
+
+    data = _read_json(RITHMIC_BARS_PATH)
+    symbols = data.get("symbols", {}) if isinstance(data, dict) else {}
+    bars: list[dict[str, Any]] = []
+    for symbol, symbol_bars in symbols.items():
+        if not _matches_symbol(str(symbol), root_symbol) or not isinstance(symbol_bars, list):
+            continue
+        for bar in symbol_bars:
+            if not isinstance(bar, dict):
+                continue
+            if any(bar.get(key) is None for key in ("open", "high", "low", "close", "timestamp")):
+                continue
+            bars.append(
+                {
+                    "open": bar.get("open"),
+                    "high": bar.get("high"),
+                    "low": bar.get("low"),
+                    "close": bar.get("close"),
+                    "timestamp": bar.get("timestamp"),
+                }
+            )
+
+    bars = sorted(bars, key=lambda item: str(item.get("timestamp") or ""))
+    return bars[-limit:]
+
+
 def _snapshot_from_bars(root_symbol: str) -> dict[str, Any] | None:
     if not RITHMIC_BARS_PATH.exists():
         return None
@@ -183,9 +213,27 @@ def _snapshot_from_executor_state(root_symbol: str) -> dict[str, Any] | None:
     }
 
 
+def _with_live_trade_manager_price(decision_snapshot: dict[str, Any], live_snapshot: dict[str, Any] | None) -> dict[str, Any]:
+    """Attach forming-bar live price fields without replacing confirmed decision OHLC."""
+    if not isinstance(live_snapshot, dict):
+        return decision_snapshot
+    snapshot = dict(decision_snapshot)
+    snapshot["decision_source"] = decision_snapshot.get("source")
+    snapshot["live_source"] = live_snapshot.get("source")
+    snapshot["live_price"] = live_snapshot.get("latest_price")
+    snapshot["live_bar_time"] = live_snapshot.get("latest_bar_time")
+    snapshot["live_ohlc"] = live_snapshot.get("ohlc")
+    snapshot["live_ohlc_is_closed"] = live_snapshot.get("ohlc_is_closed")
+    return snapshot
+
+
 def get_latest_market_snapshot(symbol: str = "NQ") -> dict[str, Any]:
-    """Read the latest one-shot snapshot from recent bars, then executor state."""
-    return _snapshot_from_trade_manager(symbol) or _snapshot_from_bars(symbol) or _snapshot_from_executor_state(symbol) or {
+    """Read the latest one-shot decision snapshot from confirmed bars, preserving live price separately."""
+    closed_bar_snapshot = _snapshot_from_bars(symbol)
+    trade_manager_snapshot = _snapshot_from_trade_manager(symbol)
+    if closed_bar_snapshot:
+        return _with_live_trade_manager_price(closed_bar_snapshot, trade_manager_snapshot)
+    return trade_manager_snapshot or _snapshot_from_executor_state(symbol) or {
         "source": None,
         "symbol": symbol,
         "latest_price": None,

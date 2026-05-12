@@ -129,6 +129,34 @@ def test_nq_2026_05_07_onl_sequence_qualifies_at_1021_not_1024() -> None:
     assert entry["state"]["step5_trigger_candle"]["timestamp"] == "2026-05-07T10:21:00"
 
 
+def test_sr_provisional_step5_waits_for_acceptance_threshold_then_locks_leg2() -> None:
+    state = base_interaction("SHORT")
+    state.update(
+        {
+            "controlling_mode": "S/R",
+            "pathway_activation_type": "wick",
+            "continuation_acceptance_required": True,
+            "continuation_acceptance_confirmed": False,
+            "continuation_acceptance_threshold": 101.0,
+            "candle_a": candle(100.0, 101.0, 99.25, 100.0, timestamp="a"),
+            "leg1_reference": 100.0,
+            "leg1_reference_price": 100.0,
+            "anchor_extreme": 102.0,
+            "leg1_extreme": 102.0,
+        }
+    )
+
+    waiting = evaluate_step5(state, candle(100.25, 101.25, 99.5, 100.75, timestamp="wait"))
+    assert waiting["status"] == "WAIT"
+    assert waiting["next_step"] == "Step 5"
+    assert waiting["state"]["continuation_acceptance_confirmed"] is not True
+
+    accepted = evaluate_step5(waiting["state"], candle(100.75, 101.5, 100.25, 101.35, timestamp="accept"))
+    assert accepted["status"] == "WAIT"
+    assert accepted["state"]["continuation_acceptance_confirmed"] is True
+    assert accepted["state"]["leg2_status"] == "CONFIRMED"
+
+
 def run_tests() -> None:
     tests = [
         test_short_leg2_locks_and_validates_with_sweep_and_short_trigger,
@@ -137,6 +165,7 @@ def run_tests() -> None:
         test_short_close_above_anchor_extreme_invalidates,
         test_long_close_below_anchor_extreme_invalidates,
         test_nq_2026_05_07_onl_sequence_qualifies_at_1021_not_1024,
+        test_sr_provisional_step5_waits_for_acceptance_threshold_then_locks_leg2,
     ]
     for test in tests:
         test()

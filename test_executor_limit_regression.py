@@ -1247,6 +1247,10 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         self.assertEqual(data["order"]["status"], "active")
 
     def test_modify_stop_updates_existing_active_stop_order(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -2.0,
+            "avg_entry_price": 27020.0,
+        }
         self.executor.ORDERS["STOP-MODIFY"] = {
             "order_id": "STOP-MODIFY",
             "trade_id": "T-MODIFY",
@@ -1259,21 +1263,40 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
             "oco_role": "protective_stop",
             "created_at": datetime.now().isoformat(),
         }
+        self.executor.ORDERS["LIMIT-MODIFY"] = {
+            "order_id": "LIMIT-MODIFY",
+            "trade_id": "T-MODIFY",
+            "type": "limit",
+            "symbol": "NQM6",
+            "limit_price": 26980.0,
+            "qty": 1.0,
+            "status": "active",
+            "tag": "tp1",
+            "oco_group": "OCO-T-MODIFY-PROTECTIVE",
+            "oco_role": "tp1_limit",
+        }
 
         response = self.executor.app.test_client().post("/execute", json={
             "action": "modify_stop",
             "trade_id": "T-MODIFY",
             "symbol": "NQM6",
-            "broker_order_id": "STOP-MODIFY",
+            "order_id": "STOP-MODIFY",
             "stop_price": 27000.0,
-            "qty": 2,
+            "qty": 1,
             "tag": "breakeven",
+            "oco_group": "OCO-SHOULD-NOT-REPLACE",
+            "oco_role": "wrong_role",
         })
         data = response.get_json()
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(data["ok"])
         self.assertEqual(data["broker_order_id"], "STOP-MODIFY")
+        self.assertEqual(data["order_id"], "STOP-MODIFY")
+        self.assertEqual(data["stop_fills"], [])
+        self.assertNotIn("error", data)
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["order_id"], "STOP-MODIFY")
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["trade_id"], "T-MODIFY")
         self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["status"], "active")
         self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["stop_price"], 27000.0)
         self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["qty"], 2.0)
@@ -1281,6 +1304,284 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["oco_group"], "OCO-T-MODIFY-PROTECTIVE")
         self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["oco_role"], "protective_stop")
         self.assertTrue(self.executor.ORDERS["STOP-MODIFY"]["modify_history"])
+        self.assertEqual(self.executor.ORDERS["LIMIT-MODIFY"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["LIMIT-MODIFY"]["limit_price"], 26980.0)
+        self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], -2.0)
+        self.assertFalse(any(
+            order.get("closed_reason") in {"flatten_trade", "flatten_symbol", "global_flatten"}
+            for order in self.executor.ORDERS.values()
+        ))
+
+    def test_modify_stop_missing_order_id_rejects_safely(self):
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "modify_stop",
+            "trade_id": "T-MODIFY",
+            "symbol": "NQM6",
+            "stop_price": 27000.0,
+            "qty": 1,
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "modify_stop_missing_order_id")
+        self.assertEqual(self.executor.ORDERS, {})
+        self.assertEqual(self.executor.POSITIONS, {})
+
+    def test_modify_stop_unknown_order_id_rejects_safely(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -2.0,
+            "avg_entry_price": 27020.0,
+        }
+        self.executor.ORDERS["LIMIT-MODIFY"] = {
+            "order_id": "LIMIT-MODIFY",
+            "trade_id": "T-MODIFY",
+            "type": "limit",
+            "symbol": "NQM6",
+            "limit_price": 26980.0,
+            "qty": 1.0,
+            "status": "active",
+            "tag": "tp1",
+            "oco_group": "OCO-T-MODIFY-PROTECTIVE",
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "modify_stop",
+            "trade_id": "T-MODIFY",
+            "symbol": "NQM6",
+            "order_id": "STOP-UNKNOWN",
+            "stop_price": 27000.0,
+            "qty": 1,
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "modify_stop_order_not_found")
+        self.assertEqual(self.executor.ORDERS["LIMIT-MODIFY"]["status"], "active")
+        self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], -2.0)
+
+    def test_modify_stop_trade_id_mismatch_rejects_safely(self):
+        self.executor.ORDERS["STOP-MODIFY"] = {
+            "order_id": "STOP-MODIFY",
+            "trade_id": "T-MODIFY",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 27010.0,
+            "qty": 2.0,
+            "status": "active",
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "modify_stop",
+            "trade_id": "T-OTHER",
+            "symbol": "NQM6",
+            "order_id": "STOP-MODIFY",
+            "stop_price": 27000.0,
+            "qty": 1,
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "modify_stop_trade_id_mismatch")
+        self.assertEqual(self.executor.ORDERS["STOP-MODIFY"]["stop_price"], 27010.0)
+
+    def test_supported_executor_actions_startup_diagnostic_includes_modify_stop(self):
+        messages = []
+        self.executor.log = messages.append
+
+        self.executor.log_supported_executor_actions()
+
+        self.assertIn("modify_stop", self.executor.SUPPORTED_EXECUTOR_ACTIONS)
+        self.assertEqual(len(messages), 1)
+        self.assertIn("SUPPORTED_EXECUTOR_ACTIONS", messages[0])
+        self.assertIn("modify_stop", messages[0])
+
+    def test_modify_stop_scoped_to_order_id_does_not_trigger_other_same_symbol_stop(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -4.0,
+            "avg_entry_price": 100.0,
+        }
+        self.executor.LAST_PRICES["NQM6"] = 99.0
+        self.executor.ORDERS["STOP-A"] = {
+            "order_id": "STOP-A",
+            "trade_id": "T-A",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 110.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": "OCO-T-A-PROTECTIVE",
+        }
+        self.executor.ORDERS["STOP-B"] = {
+            "order_id": "STOP-B",
+            "trade_id": "T-B",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 98.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": "OCO-T-B-PROTECTIVE",
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "modify_stop",
+            "trade_id": "T-A",
+            "symbol": "NQM6",
+            "broker_order_id": "STOP-A",
+            "stop_price": 100.0,
+            "qty": 2.0,
+            "tag": "breakeven",
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["stop_fills"], [])
+        self.assertEqual(self.executor.ORDERS["STOP-A"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-A"]["stop_price"], 100.0)
+        self.assertEqual(self.executor.ORDERS["STOP-B"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-B"]["stop_price"], 98.0)
+        self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], -4.0)
+
+    def test_tp1_fill_scoped_to_trade_keeps_other_same_symbol_trade_protected(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -4.0,
+            "avg_entry_price": 100.0,
+        }
+        self.executor.ORDERS["LIMIT-A"] = {
+            "order_id": "LIMIT-A",
+            "trade_id": "T-A",
+            "type": "limit",
+            "symbol": "NQM6",
+            "limit_price": 90.0,
+            "qty": 1.0,
+            "status": "active",
+            "tag": "tp1",
+            "oco_group": "OCO-T-A-PROTECTIVE",
+        }
+        self.executor.ORDERS["STOP-A"] = {
+            "order_id": "STOP-A",
+            "trade_id": "T-A",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 110.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": "OCO-T-A-PROTECTIVE",
+            "oco_role": "protective_stop",
+        }
+        self.executor.ORDERS["LIMIT-B"] = {
+            "order_id": "LIMIT-B",
+            "trade_id": "T-B",
+            "type": "limit",
+            "symbol": "NQM6",
+            "limit_price": 80.0,
+            "qty": 1.0,
+            "status": "active",
+            "tag": "tp1",
+            "oco_group": "OCO-T-B-PROTECTIVE",
+        }
+        self.executor.ORDERS["STOP-B"] = {
+            "order_id": "STOP-B",
+            "trade_id": "T-B",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 112.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": "OCO-T-B-PROTECTIVE",
+            "oco_role": "protective_stop",
+        }
+
+        response = self.executor.app.test_client().post("/price", json=self._price_payload(
+            symbol="NQM6",
+            price=90.0,
+        ))
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(data["ok"])
+        self.assertEqual(len(data["limit_fills"]), 1)
+        self.assertEqual(data["limit_fills"][0]["trade_id"], "T-A")
+        self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], -3.0)
+        self.assertEqual(self.executor.ORDERS["LIMIT-A"]["status"], "closed")
+        self.assertEqual(self.executor.ORDERS["STOP-A"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-A"]["qty"], 1.0)
+        self.assertEqual(self.executor.ORDERS["LIMIT-B"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-B"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-B"]["qty"], 2.0)
+
+    def test_nq_stop_event_does_not_touch_ym_trade(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -2.0,
+            "avg_entry_price": 100.0,
+        }
+        self.executor.POSITIONS["YMM6"] = {
+            "qty": -2.0,
+            "avg_entry_price": 40000.0,
+        }
+        self.executor.ORDERS["STOP-NQ"] = {
+            "order_id": "STOP-NQ",
+            "trade_id": "T-NQ",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 105.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": "OCO-T-NQ-PROTECTIVE",
+        }
+        self.executor.ORDERS["STOP-YM"] = {
+            "order_id": "STOP-YM",
+            "trade_id": "T-YM",
+            "type": "stop",
+            "symbol": "YMM6",
+            "stop_price": 40020.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": "OCO-T-YM-PROTECTIVE",
+        }
+
+        response = self.executor.app.test_client().post("/price", json=self._price_payload(
+            symbol="NQM6",
+            price=106.0,
+        ))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.executor.ORDERS["STOP-NQ"]["status"], "closed")
+        self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], 0.0)
+        self.assertEqual(self.executor.ORDERS["STOP-YM"]["status"], "active")
+        self.assertEqual(self.executor.POSITIONS["YMM6"]["qty"], -2.0)
+
+    def test_symbol_flatten_rejects_ambiguous_multi_trade_scope(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -4.0,
+            "avg_entry_price": 100.0,
+        }
+        for trade_id in ("T-A", "T-B"):
+            self.executor.ORDERS[f"STOP-{trade_id}"] = {
+                "order_id": f"STOP-{trade_id}",
+                "trade_id": trade_id,
+                "type": "stop",
+                "symbol": "NQM6",
+                "stop_price": 110.0,
+                "qty": 2.0,
+                "status": "active",
+            }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "flatten_symbol",
+            "symbol": "NQM6",
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "ambiguous_trade_scope")
+        self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], -4.0)
+        self.assertEqual(self.executor.ORDERS["STOP-T-A"]["status"], "active")
+        self.assertEqual(self.executor.ORDERS["STOP-T-B"]["status"], "active")
 
     def test_cancel_order_allowed_while_watchdog_stale(self):
         self.executor.ORDERS["LIMIT-CANCEL"] = {

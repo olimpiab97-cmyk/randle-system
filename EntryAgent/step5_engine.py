@@ -82,6 +82,51 @@ def body_opposite_color(candle: dict[str, Any], direction: str) -> bool:
     return False
 
 
+def normalize_mode(mode: Any) -> str:
+    value = str(mode or "").strip().upper().replace(" ", "")
+    if value in {"S/R", "SR", "S/RPULLBACKCONTINUATION"}:
+        return "S/R"
+    if value in {"R/S", "RS", "R/SPULLBACKCONTINUATION"}:
+        return "R/S"
+    return "Normal Rejection Mode"
+
+
+def update_continuation_acceptance_probe(state: dict[str, Any], candle: dict[str, Any]) -> None:
+    if state.get("continuation_acceptance_required") is not True or state.get("continuation_acceptance_confirmed") is True:
+        return
+    mode = normalize_mode(state.get("controlling_mode"))
+    threshold = as_float(state.get("continuation_acceptance_threshold"))
+    if mode == "S/R":
+        high = as_float(candle.get("high"))
+        if high is not None:
+            state["continuation_acceptance_threshold"] = max(value for value in (threshold, high) if value is not None)
+    elif mode == "R/S":
+        low = as_float(candle.get("low"))
+        if low is not None:
+            state["continuation_acceptance_threshold"] = min(value for value in (threshold, low) if value is not None)
+
+
+def continuation_acceptance_satisfied(state: dict[str, Any], candle: dict[str, Any]) -> bool:
+    if state.get("continuation_acceptance_required") is not True or state.get("continuation_acceptance_confirmed") is True:
+        return True
+    mode = normalize_mode(state.get("controlling_mode"))
+    threshold = as_float(state.get("continuation_acceptance_threshold"))
+    close = candle_close(candle)
+    if threshold is None or close is None:
+        return False
+    if mode == "S/R" and close > threshold:
+        state["continuation_acceptance_confirmed"] = True
+        state["continuation_acceptance_confirmed_at"] = candle.get("timestamp")
+        state["continuation_acceptance_source"] = "step5_close_above_threshold"
+        return True
+    if mode == "R/S" and close < threshold:
+        state["continuation_acceptance_confirmed"] = True
+        state["continuation_acceptance_confirmed_at"] = candle.get("timestamp")
+        state["continuation_acceptance_source"] = "step5_close_below_threshold"
+        return True
+    return False
+
+
 def apply_candle_b_reference_upgrade(state: dict[str, Any], direction: str) -> float | None:
     """Deprecated compatibility shim; Step 5 now uses fixed Candle A close."""
     reference = leg1_candle_a_close(state)
@@ -221,6 +266,11 @@ def validate_confirmation_window(state: dict[str, Any], candle: dict[str, Any], 
         state["structure_status"] = "INVALID"
         state["interaction_state"] = "CONSUMED"
         return terminate_interaction(state, "Step 5", "Anchor Extreme close invalidation occurred before Leg 2 validation.")
+    if not continuation_acceptance_satisfied(state, candle):
+        update_continuation_acceptance_probe(state, candle)
+        reason = "Step 5 waiting: provisional continuation requires acceptance close beyond the active wick threshold."
+        events.append({"event": "step5_continuation_acceptance_wait", "reason": reason, "threshold": state.get("continuation_acceptance_threshold")})
+        return result("WAIT", state, "Step 5", reason, events)
 
     count = int(state.get("step5_confirmation_candle_count") or state.get("step5_participation_candle_count") or 0) + 1
     state["step5_confirmation_candle_count"] = count
@@ -325,6 +375,11 @@ def evaluate_step5(interaction: dict[str, Any], leg2_candle: dict[str, Any] | No
         state["structure_status"] = "INVALID"
         state["interaction_state"] = "CONSUMED"
         return terminate_interaction(state, "Step 5", "Anchor Extreme close invalidation occurred before Leg 2 activation.")
+    if not continuation_acceptance_satisfied(state, candle):
+        update_continuation_acceptance_probe(state, candle)
+        reason = "Step 5 waiting: provisional continuation requires acceptance close beyond the active wick threshold."
+        events.append({"event": "step5_continuation_acceptance_wait", "reason": reason, "threshold": state.get("continuation_acceptance_threshold")})
+        return result("WAIT", state, "Step 5", reason, events)
 
     if not close_beyond_reference(candle, reference, str(direction), tick_size):
         reason = "Step 5 waiting: Leg 2 Candle A requires close beyond fixed Leg 1 Candle A reference."
