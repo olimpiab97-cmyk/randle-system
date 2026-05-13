@@ -311,6 +311,113 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 6")
         self.assertNotIn("publication_gate_debug", snapshot)
 
+    def test_continuation_step2_sr_requires_bullish_close_back_across_lower_liquidity(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step25_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        prev_candle = {"open": 29204.0, "high": 29205.0, "low": 29190.0, "close": 29192.5}
+        bullish_reclaim = {"open": 29191.0, "high": 29208.0, "low": 29188.0, "close": 29206.0}
+        bearish_reclaim = {"open": 29208.0, "high": 29210.0, "low": 29188.0, "close": 29206.0}
+
+        valid = step25_engine.select_pathway(bullish_reclaim, prev_candle, 29200.0, "LL", active_liquidity_selected=True)
+        invalid = step25_engine.select_pathway(bearish_reclaim, prev_candle, 29200.0, "LL", active_liquidity_selected=True)
+
+        self.assertEqual(valid["status"], "READY")
+        self.assertEqual(valid["controlling_mode"], "S/R")
+        self.assertEqual(valid["activation_type"], "close")
+        self.assertEqual(invalid["status"], "WAIT")
+
+    def test_continuation_step2_rs_requires_bearish_close_back_across_upper_liquidity(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step25_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        prev_candle = {"open": 29402.0, "high": 29415.0, "low": 29401.0, "close": 29408.0}
+        bearish_reclaim = {"open": 29409.0, "high": 29412.0, "low": 29390.0, "close": 29396.0}
+        bullish_reclaim = {"open": 29394.0, "high": 29412.0, "low": 29390.0, "close": 29396.0}
+
+        valid = step25_engine.select_pathway(bearish_reclaim, prev_candle, 29400.0, "LH", active_liquidity_selected=True)
+        invalid = step25_engine.select_pathway(bullish_reclaim, prev_candle, 29400.0, "LH", active_liquidity_selected=True)
+
+        self.assertEqual(valid["status"], "READY")
+        self.assertEqual(valid["controlling_mode"], "R/S")
+        self.assertEqual(valid["activation_type"], "close")
+        self.assertEqual(invalid["status"], "WAIT")
+
+    def test_continuation_step2_does_not_activate_on_wick_without_close_back_across(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step25_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        prev_candle = {"open": 29204.0, "high": 29206.0, "low": 29190.0, "close": 29192.5}
+        wick_only = {"open": 29191.0, "high": 29205.0, "low": 29180.0, "close": 29196.0}
+
+        result = step25_engine.select_pathway(wick_only, prev_candle, 29200.0, "LL", active_liquidity_selected=True)
+
+        self.assertEqual(result["status"], "WAIT")
+        self.assertIsNone(result["controlling_mode"])
+
+    def test_continuation_step2_requires_active_liquidity_selected(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step25_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        prev_candle = {"open": 29204.0, "high": 29205.0, "low": 29190.0, "close": 29192.5}
+        bullish_reclaim = {"open": 29191.0, "high": 29208.0, "low": 29188.0, "close": 29206.0}
+
+        result = step25_engine.select_pathway(bullish_reclaim, prev_candle, 29200.0, "LL", active_liquidity_selected=False)
+
+        self.assertEqual(result["status"], "WAIT")
+        self.assertIsNone(result["controlling_mode"])
+
+    def test_continuation_step25_does_not_honor_requested_mode_without_step2_activation(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step25_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        candle = {"open": 29191.0, "high": 29208.0, "low": 29188.0, "close": 29206.0}
+        result = step25_engine.evaluate_step25(
+            {
+                "rejection_mode": "ON",
+                "initial_candle_a": candle,
+                "controlling_mode": "S/R",
+                "candidate_modes": ["S/R"],
+                "reclaim_candle_a": candle,
+                "continuation_step2_activated": False,
+                "events": [],
+            }
+        )
+
+        self.assertEqual(result["status"], "READY")
+        self.assertEqual(result["state"]["controlling_mode"], "Normal Rejection Mode")
+        self.assertNotIn("S/R", result["state"]["candidate_modes"])
+
     def test_active_liquidity_selection_uses_active_tv_stack_zone(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:

@@ -1730,7 +1730,7 @@ def build_step25_interaction(
     level_price = step_2_1a.get("level_price") or rejection.get("trigger_price")
     side = step_2_1a.get("side") or side_for_level(str(active_level or ""))
     pathway_level_type = "LH" if side == "upper" else "LL" if side == "lower" else None
-    pathway_level = (active_group or {}).get("extreme_boundary") if isinstance(active_group, dict) else level_price
+    pathway_level = level_price
     pathway_stack_extreme = (active_group or {}).get("extreme_boundary") if isinstance(active_group, dict) else None
     bars = recent_closed_bars(str(snapshot.get("normalized_symbol") or snapshot.get("symbol") or "NQ"), 2)
     previous_step25 = persisted_state.get("step25") if isinstance(persisted_state.get("step25"), dict) else {}
@@ -1754,6 +1754,8 @@ def build_step25_interaction(
         "provisional_candle_a": previous_state.get("provisional_candle_a") if previous_locked else None,
         "pathway_level": previous_state.get("pathway_level") if previous_locked else pathway_level,
         "pathway_activation_type": previous_state.get("pathway_activation_type") if previous_locked else None,
+        "continuation_step2_activated": previous_state.get("continuation_step2_activated") if previous_locked else None,
+        "active_liquidity_selected": active_level is not None and level_price is not None,
         "events": list(previous_step25.get("events") or []) if previous_locked else [],
     }
     if len(bars) >= 2 and pathway_level is not None and pathway_level_type:
