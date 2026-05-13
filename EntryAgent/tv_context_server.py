@@ -255,6 +255,7 @@ def entry_reasoning_record(status: dict[str, Any], timestamp: str | None = None)
         "invalidation_reason": status.get("invalidation_reason"),
         "wait_reason": status.get("wait_reason"),
         "last_decision": status.get("last_decision"),
+        "publication_gate_debug": status.get("publication_gate_debug"),
     }
 
 

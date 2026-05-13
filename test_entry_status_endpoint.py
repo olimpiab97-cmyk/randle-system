@@ -180,6 +180,137 @@ class EntryStatusEndpointTests(unittest.TestCase):
         )
         self.assertEqual(reason, "No active liquidity selected.")
 
+    def test_nq_publication_gate_blocks_step4_until_step3_passes(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        snapshot = {
+            "normalized_symbol": "NQ",
+            "latest_price": 29192.5,
+            "ohlc_is_closed": True,
+            "rejection": {"rejection_mode": "ON"},
+            "step25": {"status": "READY"},
+            "step3": {"status": "WAIT", "next_step": "Step 3"},
+            "step4": {"status": "WAIT", "next_step": "Step 4"},
+            "step5": {"status": "WAIT"},
+            "step6": {"status": "WAIT"},
+        }
+
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 3")
+        self.assertEqual(snapshot["publication_gate_debug"][0]["attempted_step"], "Step 4")
+        self.assertIn("Step 3 officially passes", snapshot["publication_gate_debug"][0]["reason"])
+
+    def test_nq_publication_gate_blocks_step5_until_leg1_locked(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        snapshot = {
+            "normalized_symbol": "NQ",
+            "latest_price": 29192.5,
+            "ohlc_is_closed": True,
+            "rejection": {"rejection_mode": "ON"},
+            "step25": {"status": "READY"},
+            "step3": {"status": "ALLOW_STEP_4", "next_step": "Step 4"},
+            "step4": {
+                "status": "READY",
+                "next_step": "Step 5",
+                "state": {"leg1_status": "WAIT", "leg1_state_locked": False},
+            },
+            "step5": {"status": "WAIT"},
+            "step6": {"status": "WAIT"},
+        }
+
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 4")
+        self.assertEqual(snapshot["publication_gate_debug"][0]["attempted_step"], "Step 5")
+        self.assertIn("Leg 1 is locked", snapshot["publication_gate_debug"][0]["reason"])
+
+    def test_nq_publication_gate_blocks_step6_until_leg2_locked(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        leg1_state = {
+            "leg1_status": "COMPLETE",
+            "leg1_state_locked": True,
+            "leg1_reference_price": 29171.5,
+            "leg1_reference_candle_time": "2026-05-13T13:56:00Z",
+            "leg1_direction": "SHORT",
+            "active_liquidity": {"name": "PML", "price": 29200.0},
+            "leg1_completed_at": "2026-05-13T13:56:00Z",
+            "current_active_sequence_started_at": "2026-05-13T13:55:00Z",
+            "candle_a": {"timestamp": "2026-05-13T13:55:00Z"},
+            "candle_b": {"timestamp": "2026-05-13T13:56:00Z"},
+        }
+        snapshot = {
+            "normalized_symbol": "NQ",
+            "latest_price": 29160.75,
+            "ohlc_is_closed": True,
+            "rejection": {"rejection_mode": "ON"},
+            "step25": {"status": "READY"},
+            "step3": {"status": "ALLOW_STEP_4", "next_step": "Step 4"},
+            "step4": {"status": "READY", "next_step": "Step 5", "state": leg1_state},
+            "step5": {"status": "READY", "next_step": "Step 6", "state": {"leg2_status": "WAIT"}},
+            "step6": {"status": "ENTRY_CONFIRMED"},
+        }
+
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 5")
+        self.assertEqual(snapshot["publication_gate_debug"][0]["attempted_step"], "Step 6")
+        self.assertIn("Leg 2 is locked", snapshot["publication_gate_debug"][0]["reason"])
+
+    def test_nq_publication_gate_allows_step6_after_leg2_validated(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        leg1_state = {
+            "leg1_status": "COMPLETE",
+            "leg1_state_locked": True,
+            "leg1_reference_price": 29171.5,
+            "leg1_reference_candle_time": "2026-05-13T13:56:00Z",
+            "leg1_direction": "SHORT",
+            "active_liquidity": {"name": "PML", "price": 29200.0},
+            "leg1_completed_at": "2026-05-13T13:56:00Z",
+            "current_active_sequence_started_at": "2026-05-13T13:55:00Z",
+            "candle_a": {"timestamp": "2026-05-13T13:55:00Z"},
+            "candle_b": {"timestamp": "2026-05-13T13:56:00Z"},
+        }
+        snapshot = {
+            "normalized_symbol": "NQ",
+            "latest_price": 29160.75,
+            "ohlc_is_closed": True,
+            "rejection": {"rejection_mode": "ON"},
+            "step25": {"status": "READY"},
+            "step3": {"status": "ALLOW_STEP_4", "next_step": "Step 4"},
+            "step4": {"status": "READY", "next_step": "Step 5", "state": leg1_state},
+            "step5": {"status": "READY", "next_step": "Step 6", "state": {"leg2_status": "VALIDATED"}},
+            "step6": {"status": "ENTRY_CONFIRMED"},
+        }
+
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 6")
+        self.assertNotIn("publication_gate_debug", snapshot)
+
     def test_active_liquidity_selection_uses_active_tv_stack_zone(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:

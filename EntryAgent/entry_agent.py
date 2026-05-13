@@ -2427,8 +2427,48 @@ def is_atr_required_reason(reason: str | None) -> bool:
     return bool(reason and "requires ATR" in reason)
 
 
-def current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
-    """Return the next/current blueprint step from the evaluated read-only snapshot."""
+def publication_gate_enabled(snapshot: dict[str, Any]) -> bool:
+    """Return True when current-step publication gating should be enforced."""
+    symbol = snapshot.get("normalized_symbol") or snapshot.get("requested_symbol") or snapshot.get("symbol")
+    return root_symbol(str(symbol or "")) == "NQ"
+
+
+def add_publication_gate_debug(
+    snapshot: dict[str, Any],
+    attempted_step: str,
+    published_step: str,
+    reason: str,
+) -> None:
+    """Record why a downstream current_step promotion was blocked."""
+    events = snapshot.setdefault("publication_gate_debug", [])
+    if not isinstance(events, list):
+        events = []
+        snapshot["publication_gate_debug"] = events
+    event = {
+        "event": "current_step_promotion_blocked",
+        "attempted_step": attempted_step,
+        "published_step": published_step,
+        "reason": reason,
+    }
+    if event not in events:
+        events.append(event)
+
+
+def step3_publication_passed(step3: dict[str, Any]) -> bool:
+    """Return True only when Step 3 officially authorizes Step 4 publication."""
+    return step3.get("status") == "ALLOW_STEP_4" and step3.get("next_step") == "Step 4"
+
+
+def leg2_publication_locked(step5: dict[str, Any]) -> bool:
+    """Return True only when Step 5 has locked/validated Leg 2 for Step 6 publication."""
+    if step5.get("status") != "READY" or step5.get("next_step") != "Step 6":
+        return False
+    state = step5.get("state") if isinstance(step5.get("state"), dict) else {}
+    return state.get("leg2_status") in {"VALIDATED", "COMPLETE"} or state.get("step5_participation_validated") is True
+
+
+def ungated_current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
+    """Return the legacy current step before NQ publication gating is applied."""
     if snapshot.get("latest_price") is None:
         return "WAIT_FOR_MARKET_DATA"
     if snapshot.get("suppress_active_liquidity") is True:
@@ -2451,6 +2491,75 @@ def current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
     if not candle_close_confirmed(snapshot):
         return "Step 2"
     if step3.get("status") == "ALLOW_STEP_4":
+        return "Step 4"
+    if step25.get("status") == "READY":
+        return "Step 3"
+    if candle_close_confirmed(snapshot) and rejection.get("rejection_mode") == "ON":
+        return "Step 2.5"
+    return "Step 2"
+
+
+def current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
+    """Return the next/current blueprint step from the evaluated read-only snapshot."""
+    if not publication_gate_enabled(snapshot):
+        return ungated_current_step_from_snapshot(snapshot)
+    if snapshot.get("latest_price") is None:
+        return "WAIT_FOR_MARKET_DATA"
+    if snapshot.get("suppress_active_liquidity") is True:
+        return "Step 2"
+    step6 = snapshot.get("step6") if isinstance(snapshot.get("step6"), dict) else {}
+    step5 = snapshot.get("step5") if isinstance(snapshot.get("step5"), dict) else {}
+    step4 = snapshot.get("step4") if isinstance(snapshot.get("step4"), dict) else {}
+    step3 = snapshot.get("step3") if isinstance(snapshot.get("step3"), dict) else {}
+    step25 = snapshot.get("step25") if isinstance(snapshot.get("step25"), dict) else {}
+    rejection = snapshot.get("rejection") if isinstance(snapshot.get("rejection"), dict) else {}
+    step3_ready = step3_publication_passed(step3)
+    step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    leg1_ready, _leg1_reason = valid_participation_locked_leg1_state(step4_state)
+    leg2_ready = leg2_publication_locked(step5)
+
+    if decision_status(step6) == "CONFIRM" or step5.get("status") == "READY" or step5.get("next_step") == "Step 6":
+        if step3_ready and leg1_ready and leg2_ready:
+            return "Step 6"
+        reason = "Step 6 publication blocked until Step 3 has passed, Leg 1 is locked, and Leg 2 is locked."
+        published = "Step 5" if step3_ready and leg1_ready else "Step 4" if step3_ready else "Step 3" if step25.get("status") == "READY" else "Step 2.5" if rejection.get("rejection_mode") == "ON" else "Step 2"
+        add_publication_gate_debug(snapshot, "Step 6", published, reason)
+        if published == "Step 5":
+            return "Step 5"
+        if published == "Step 4":
+            return "Step 4"
+        if published == "Step 3":
+            return "Step 3"
+        if published == "Step 2.5" and candle_close_confirmed(snapshot):
+            return "Step 2.5"
+        return "Step 2"
+
+    if step4.get("status") == "READY" or step4.get("next_step") == "Step 5":
+        if step3_ready and leg1_ready:
+            return "Step 5"
+        reason = "Step 5 publication blocked until Step 3 has passed and Leg 1 is locked."
+        published = "Step 4" if step3_ready else "Step 3" if step25.get("status") == "READY" else "Step 2.5" if rejection.get("rejection_mode") == "ON" else "Step 2"
+        add_publication_gate_debug(snapshot, "Step 5", published, reason)
+        if published == "Step 4":
+            return "Step 4"
+        if published == "Step 3":
+            return "Step 3"
+        if published == "Step 2.5" and candle_close_confirmed(snapshot):
+            return "Step 2.5"
+        return "Step 2"
+
+    if step4.get("next_step") == "Step 4" and not step3_ready:
+        reason = "Step 4 publication blocked until Step 3 officially passes."
+        published = "Step 3" if step25.get("status") == "READY" else "Step 2.5" if rejection.get("rejection_mode") == "ON" else "Step 2"
+        add_publication_gate_debug(snapshot, "Step 4", published, reason)
+        if published == "Step 3":
+            return "Step 3"
+        if published == "Step 2.5" and candle_close_confirmed(snapshot):
+            return "Step 2.5"
+        return "Step 2"
+    if not candle_close_confirmed(snapshot):
+        return "Step 2"
+    if step3_ready:
         return "Step 4"
     if step25.get("status") == "READY":
         return "Step 3"
@@ -2660,6 +2769,7 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "wait_reason": wait_reason,
         "invalidation_reason": invalidation_reason,
         "last_decision": last_decision,
+        "publication_gate_debug": snapshot.get("publication_gate_debug") if isinstance(snapshot.get("publication_gate_debug"), list) else [],
         "leg1_state_locked": step4_state.get("leg1_state_locked"),
         "leg1_locked": step4_state.get("leg1_state_locked"),
         "leg1_completed_at": step4_state.get("leg1_completed_at"),
