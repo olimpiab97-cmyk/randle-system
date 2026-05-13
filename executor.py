@@ -2675,6 +2675,7 @@ def execute():
             "message": "Stop reset to original",
             "trade_id": trade_id,
             "new_stop_id": new_order_id,
+            "broker_order_id": new_order_id,
             "stop_fills": stop_fills
         })
 
