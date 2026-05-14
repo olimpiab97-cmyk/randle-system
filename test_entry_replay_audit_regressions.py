@@ -126,7 +126,8 @@ class EntryReplayAuditRegressionTests(unittest.TestCase):
                     "setup_direction": "SHORT",
                     "active_liquidity": {"name": "PMH", "price": 100.0},
                     "leg1_completed_at": setup_candle["timestamp"],
-                    "candle_a": setup_candle,
+                    "candle_a": {"timestamp": "2026-05-07T13:29:00Z"},
+                    "candle_b": {"timestamp": setup_candle["timestamp"]},
                 },
             },
             "step5": {"status": "WAIT"},
@@ -135,7 +136,9 @@ class EntryReplayAuditRegressionTests(unittest.TestCase):
         }
 
         self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 4")
-        self.assertIsNone(entry_agent.build_step5_interaction(snapshot, snapshot["step4"], {}))
+        step5 = entry_agent.evaluate_live_step5(snapshot, snapshot["step4"], {})
+        self.assertEqual(step5["status"], "WAIT")
+        self.assertTrue(step5["state"]["leg2_same_sequence_rejected"])
 
     def test_active_liquidity_switches_to_expected_close_confirmed_level(self):
         entry_agent = load_entry_agent()
@@ -344,6 +347,64 @@ class EntryReplayAuditRegressionTests(unittest.TestCase):
         self.assertEqual(snapshot["step4"]["state"], {})
         self.assertEqual(snapshot["step5"]["state"], {})
         self.assertEqual(snapshot["step6"]["state"], {})
+
+    def test_2026_05_13_nq_1338_projection_has_no_premature_step5_flags(self):
+        audit = self.audit_module.build_audit("2026-05-13")
+        target_rows = [
+            row
+            for row in audit["rows"]
+            if row.get("symbol") == "NQ"
+            and "2026-05-13T13:38:00Z" <= str(row.get("candle_time")) <= "2026-05-13T14:00:00Z"
+        ]
+
+        self.assertTrue(target_rows)
+        for row in target_rows:
+            self.assertNotIn("leg1_complete_without_completed_bar", row["flags"])
+            self.assertNotIn("step5_before_prior_confirmed_leg1", row["flags"])
+            self.assertNotEqual(row["actual_step"], "Step 3")
+
+    def test_2026_05_14_nq_1338_leg1_window_replay_fields(self):
+        audit = self.audit_module.build_audit("2026-05-14")
+        target_rows = [
+            row
+            for row in audit["rows"]
+            if row.get("symbol") == "NQ"
+            and "2026-05-14T13:38:00Z" <= str(row.get("candle_time")) <= "2026-05-14T13:42:00Z"
+        ]
+        by_minute = {}
+        for row in target_rows:
+            by_minute.setdefault(row.get("candle_minute"), []).append(row)
+
+        self.assertIn("2026-05-14T13:38:00Z", by_minute)
+        self.assertIn("2026-05-14T13:39:00Z", by_minute)
+        self.assertTrue(all(row.get("actual_step") != "Step 3" for row in target_rows))
+        self.assertTrue(any(row.get("leg1_window_candle_index") == 1 for row in by_minute["2026-05-14T13:39:00Z"]))
+
+        confirmed = [row for row in target_rows if row.get("leg1_state") == "COMPLETE"]
+        if confirmed:
+            self.assertTrue(any(row.get("actual_step") == "Step 4" for row in confirmed))
+        else:
+            for index, minute in enumerate(
+                (
+                    "2026-05-14T13:39:00Z",
+                    "2026-05-14T13:40:00Z",
+                    "2026-05-14T13:41:00Z",
+                    "2026-05-14T13:42:00Z",
+                ),
+                start=1,
+            ):
+                self.assertTrue(any(row.get("leg1_window_candle_index") == index for row in by_minute.get(minute, [])))
+
+    def test_replay_audit_exposes_structure_and_control_fields(self):
+        audit = self.audit_module.build_audit("2026-05-14")
+        self.assertTrue(audit["rows"])
+        row = audit["rows"][0]
+
+        self.assertIn("leg1_state", row)
+        self.assertIn("leg2_state", row)
+        self.assertIn("current_pathway_control", row)
+        self.assertIn("current_controlling_mode", row)
+        self.assertIn("current_continuation_type", row)
 
 
 if __name__ == "__main__":

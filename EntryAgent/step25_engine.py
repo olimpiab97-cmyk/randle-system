@@ -50,7 +50,7 @@ def continuation_step2_close_back_across(
     level: float,
     level_type: str,
 ) -> bool:
-    """Return True only when continuation Step 2 closes back across with opposite color."""
+    """Return True only when closed candles prove outside structure then close back inside."""
     normalized_level_type = str(level_type or "").strip().upper()
     level_value = float(level)
     prev_close = _price(prev_candle, "close")
@@ -70,9 +70,11 @@ def select_pathway(
     level_type: str,
     stack_extreme: float | None = None,
     active_liquidity_selected: bool = True,
+    rejection_step2_confirmed: bool | None = None,
 ) -> dict[str, Any]:
     level_value = float(level)
     normalized_level_type = str(level_type or "").strip().upper()
+    rejection_confirmed = active_liquidity_selected if rejection_step2_confirmed is None else bool(rejection_step2_confirmed)
     output = {
         "status": "WAIT",
         "controlling_mode": None,
@@ -84,9 +86,10 @@ def select_pathway(
         "continuation_acceptance_required": False,
         "continuation_acceptance_threshold": None,
         "continuation_step2_activated": False,
+        "continuation_rejection_step2_required": True,
     }
 
-    if not active_liquidity_selected:
+    if not active_liquidity_selected or not rejection_confirmed:
         return output
 
     if normalized_level_type == "LL":
@@ -142,6 +145,7 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
             state["level_type"],
             state.get("stack_extreme"),
             bool(state.get("active_liquidity_selected")),
+            bool(state.get("rejection_step2_confirmed")),
         )
 
     requested_mode = normalize_mode(state.get("controlling_mode") or state.get("pathway_mode"))
@@ -149,10 +153,12 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
     candidate_modes = [mode for mode in candidate_modes if mode]
 
     reclaim_candle_a = state.get("reclaim_candle_a")
-    provisional_candle_a = state.get("provisional_candle_a")
     activation_type = state.get("pathway_activation_type")
     if activation_type is not None:
         activation_type = str(activation_type).strip().lower()
+    if activation_type == "wick":
+        activation_type = None
+        state["pathway_activation_type"] = None
 
     if isinstance(live_selection, dict) and live_selection.get("status") == "READY":
         controlling_mode = normalize_mode(live_selection.get("controlling_mode"))
@@ -163,25 +169,27 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
         state["continuation_acceptance_required"] = live_selection.get("continuation_acceptance_required")
         state["continuation_acceptance_threshold"] = live_selection.get("continuation_acceptance_threshold")
         state["continuation_step2_activated"] = live_selection.get("continuation_step2_activated")
-        if activation_type == "wick":
-            provisional_candle_a = live_selection.get("provisional_candle_a")
-            reclaim_candle_a = None
-        else:
-            reclaim_candle_a = live_selection.get("candle_a")
-            provisional_candle_a = None
+        reclaim_candle_a = live_selection.get("candle_a")
         candidate_modes = [controlling_mode] if controlling_mode else []
-    elif requested_mode in (SR_MODE, RS_MODE) and state.get("continuation_step2_activated") is True:
+    elif (
+        requested_mode in (SR_MODE, RS_MODE)
+        and state.get("continuation_step2_activated") is True
+        and activation_type == "close"
+        and isinstance(reclaim_candle_a, dict)
+    ):
         controlling_mode = requested_mode
     elif (
         state.get("continuation_step2_activated") is True
         and SR_MODE in candidate_modes
-        and (isinstance(reclaim_candle_a, dict) or isinstance(provisional_candle_a, dict))
+        and activation_type == "close"
+        and isinstance(reclaim_candle_a, dict)
     ):
         controlling_mode = SR_MODE
     elif (
         state.get("continuation_step2_activated") is True
         and RS_MODE in candidate_modes
-        and (isinstance(reclaim_candle_a, dict) or isinstance(provisional_candle_a, dict))
+        and activation_type == "close"
+        and isinstance(reclaim_candle_a, dict)
     ):
         controlling_mode = RS_MODE
     else:
@@ -197,12 +205,10 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
         candidate_modes = [NORMAL_MODE]
         structure_side_requirement = state.get("structure_side_requirement")
     else:
-        if not activation_type:
-            activation_type = "close" if isinstance(reclaim_candle_a, dict) else "wick"
-        required_candle = reclaim_candle_a if activation_type == "close" else provisional_candle_a
-        if not isinstance(required_candle, dict):
+        activation_type = "close"
+        if not isinstance(reclaim_candle_a, dict):
             state["step25_pathway_selection_complete"] = False
-            state["step25_block_reason"] = f"{controlling_mode} requires Candle A for {activation_type}-based activation."
+            state["step25_block_reason"] = f"{controlling_mode} requires a closed Candle A reclaim; wick continuation activation is disabled."
             reason = state["step25_block_reason"]
             events.append({"event": "step25_waiting_for_pathway_candle_a", "reason": reason})
             return result("WAIT", state, "Step 2.5", reason, events)
@@ -217,7 +223,7 @@ def evaluate_step25(interaction: dict[str, Any]) -> dict[str, Any]:
     state["controlling_mode"] = controlling_mode
     state["structure_side_requirement"] = structure_side_requirement
     state["reclaim_candle_a"] = reclaim_candle_a
-    state["provisional_candle_a"] = provisional_candle_a
+    state["provisional_candle_a"] = None
     state["pathway_level"] = state.get("pathway_level")
     state["pathway_activation_type"] = activation_type or "normal"
     state["continuation_acceptance_required"] = bool(state.get("continuation_acceptance_required"))

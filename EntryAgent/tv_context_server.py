@@ -222,6 +222,18 @@ def reasoning_log_path(date_text: str | None = None) -> Path:
     return DATA_DIR / f"entry_reasoning_{date_value}.jsonl"
 
 
+def sanitize_public_entry_status(status: dict[str, Any]) -> dict[str, Any]:
+    """Prevent internal-only Step 3 from reaching Command Center status output."""
+    if not isinstance(status, dict):
+        return status
+    if status.get("current_step") != "Step 3":
+        return status
+    sanitized = dict(status)
+    sanitized["current_step"] = "Step 2"
+    sanitized["current_step_label"] = current_step_label("Step 2")
+    return sanitized
+
+
 def entry_reasoning_record(status: dict[str, Any], timestamp: str | None = None) -> dict[str, Any]:
     """Return a chart-review reasoning record from a status payload."""
     return {
@@ -241,10 +253,20 @@ def entry_reasoning_record(status: dict[str, Any], timestamp: str | None = None)
         "setup_direction": status.get("setup_direction"),
         "rejection_mode_entered": bool(status.get("rejection_mode_entered")),
         "sr_rs_context": status.get("sr_rs_context"),
+        "current_pathway_control": status.get("current_pathway_control"),
+        "current_controlling_mode": status.get("current_controlling_mode"),
+        "current_continuation_type": status.get("current_continuation_type"),
         "leg1_state": status.get("leg1_state") or status.get("leg1_status"),
         "leg1_locked": status.get("leg1_locked") or status.get("leg1_state_locked"),
         "leg1_reference_price": status.get("leg1_reference_price"),
         "leg1_completed_at": status.get("leg1_completed_at"),
+        "leg1_window_active": status.get("leg1_window_active"),
+        "leg1_window_started_at": status.get("leg1_window_started_at"),
+        "leg1_window_candle_index": status.get("leg1_window_candle_index"),
+        "leg1_window_remaining": status.get("leg1_window_remaining"),
+        "leg1_window_expires_at": status.get("leg1_window_expires_at"),
+        "leg1_window_invalidated": status.get("leg1_window_invalidated"),
+        "leg1_window_invalidation_reason": status.get("leg1_window_invalidation_reason"),
         "fifty_percent_rule_phase": status.get("fifty_percent_rule_phase"),
         "leg2_state": status.get("leg2_state") or status.get("leg2_status"),
         "leg2_candidate_candle_time": status.get("leg2_candidate_candle_time"),
@@ -269,10 +291,20 @@ def reasoning_state_key(record: dict[str, Any]) -> tuple[Any, ...]:
         record.get("setup_direction"),
         record.get("rejection_mode_entered"),
         record.get("sr_rs_context"),
+        record.get("current_pathway_control"),
+        record.get("current_controlling_mode"),
+        record.get("current_continuation_type"),
         record.get("leg1_state"),
         record.get("leg1_locked"),
         record.get("leg1_reference_price"),
         record.get("leg1_completed_at"),
+        record.get("leg1_window_active"),
+        record.get("leg1_window_started_at"),
+        record.get("leg1_window_candle_index"),
+        record.get("leg1_window_remaining"),
+        record.get("leg1_window_expires_at"),
+        record.get("leg1_window_invalidated"),
+        record.get("leg1_window_invalidation_reason"),
         record.get("fifty_percent_rule_phase"),
         record.get("leg2_state"),
         record.get("leg2_candidate_candle_time"),
@@ -628,7 +660,7 @@ def get_entry_status() -> tuple[Any, int]:
     if not symbols:
         return jsonify({"ok": False, "error": "no supported symbols requested"}), 400
 
-    statuses = [build_entry_status(symbol) for symbol in symbols]
+    statuses = [sanitize_public_entry_status(build_entry_status(symbol)) for symbol in symbols]
     for status in statuses:
         if isinstance(status, dict) and not status.get("current_step_label"):
             status["current_step_label"] = current_step_label(status.get("current_step"))

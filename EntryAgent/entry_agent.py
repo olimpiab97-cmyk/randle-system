@@ -50,7 +50,7 @@ ACTIVE_LIQUIDITY_PRIORITY = {
 LOCAL_MARKET_TIMEZONE = ZoneInfo("America/Los_Angeles")
 STEP_LABELS = {
     "Step 1": "Step 1 (Session / Level Prep)",
-    "Step 2": "Step 2 (Liquidity Close)",
+    "Step 2": "Step 2 (Liquidity Close / Pathway Activation)",
     "Step 2.5": "Step 2.5 (S/R-R/S Continuation Logic)",
     "Step 3": "Step 3 (Participation)",
     "Step 4": "Step 4 (Leg 1 Formation)",
@@ -508,7 +508,7 @@ def valid_active_liquidity_selection(name: Any, price: Any) -> bool:
 
 
 def no_active_liquidity_result(step: str, reason: str = "No active liquidity selected.") -> dict[str, Any]:
-    """Return a cleared WAIT result for downstream steps while no liquidity is active."""
+    """Return a cleared WAIT result for downstream internal evaluators while no liquidity is active."""
     return {
         "step": step,
         "status": "WAIT",
@@ -531,8 +531,35 @@ def unconfirmed_current_candle_result(step: str, next_step: str, reason: str) ->
     }
 
 
+def unconfirmed_step4_invalidation_result(step4: dict[str, Any], reason: str) -> dict[str, Any]:
+    """Return Step 4 WAIT while preserving public Leg 1 window countdown fields."""
+    state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    allowed_keys = {
+        "leg1_window_active",
+        "leg1_window_started_at",
+        "leg1_window_candle_index",
+        "leg1_window_remaining",
+        "leg1_window_expires_at",
+        "participation_timer",
+        "participation_candidate_count",
+        "participation_candle_number",
+    }
+    masked_state = {key: state.get(key) for key in allowed_keys if key in state}
+    masked_state["leg1_status"] = "WAIT"
+    masked_state["leg1_state_locked"] = False
+    masked_state["state_transition_reason"] = reason
+    return {
+        "step": "Step 4",
+        "status": "WAIT",
+        "state": masked_state,
+        "next_step": "Step 4",
+        "reason": reason,
+        "events": list(step4.get("events") or []) + [{"event": "current_candle_step4_invalidation_masked", "reason": reason}],
+    }
+
+
 def clear_downstream_state_without_active_liquidity(snapshot: dict[str, Any]) -> None:
-    """Force Step 2 and clear stale downstream state when no active liquidity is selected."""
+    """Clear stale downstream state when no close-confirmed liquidity activation is public."""
     reason = "No active liquidity selected."
     snapshot["suppress_active_liquidity"] = True
     snapshot["step_2_1a"] = {
@@ -567,8 +594,54 @@ def state_touches_candle_time(state: dict[str, Any], latest_time: Any, paths: tu
     return any(same_candle_time(nested_value(state, path), latest_time) for path in paths)
 
 
+def step4_leg1_invalidation_attempt(step4: dict[str, Any]) -> bool:
+    """Return True for Step 4/Leg 1 invalidations that must wait for a closed candle."""
+    if not isinstance(step4, dict) or decision_status(step4) != "INVALIDATE":
+        return False
+    state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    source = str(state.get("invalidation_source") or state.get("invalidation_source_step") or state.get("terminated_by") or "")
+    reason = result_reason(step4, "")
+    reason_lower = reason.lower()
+    return (
+        source in {"Step 4", "step4", "leg1_50_percent_rule"}
+        or "candle b failed" in reason_lower
+        or "step 4" in reason_lower
+        or "leg 1 invalid" in reason_lower
+        or "leg1" in reason_lower
+        or "active liquidity was penetrated beyond 50%" in reason_lower
+    )
+
+
+def mask_unconfirmed_step4_leg1_invalidation(snapshot: dict[str, Any], reason: str) -> bool:
+    """Mask live-candle Step 4/Leg 1 invalidation publication; return True when masked."""
+    latest_time = snapshot.get("latest_bar_time")
+    if candle_close_confirmed(snapshot) or not latest_time:
+        return False
+    step4 = snapshot.get("step4") if isinstance(snapshot.get("step4"), dict) else {}
+    step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    step4_unconfirmed = state_touches_candle_time(
+        step4_state,
+        latest_time,
+        (
+            ("invalidation_source_candle_time",),
+            ("invalidated_at",),
+            ("leg1_completed_at",),
+            ("leg1_reference_candle_time",),
+            ("last_evaluated_candle_time",),
+            ("candle_b", "timestamp"),
+            ("latest_candle", "timestamp"),
+        ),
+    )
+    if not step4_unconfirmed or not step4_leg1_invalidation_attempt(step4):
+        return False
+    snapshot["step4"] = unconfirmed_step4_invalidation_result(step4, reason)
+    snapshot["step5"] = unconfirmed_current_candle_result("Step 5", "Step 4", reason)
+    snapshot["step6"] = unconfirmed_current_candle_result("Step 6", "Step 4", reason)
+    return True
+
+
 def hide_unconfirmed_current_candle_advancement(snapshot: dict[str, Any]) -> None:
-    """Hide state advancement tied to the live forming candle from operator status."""
+    """Hide non-Step-6 state advancement tied to the live forming candle from operator status."""
     if candle_close_confirmed(snapshot):
         return
     latest_time = snapshot.get("latest_bar_time")
@@ -576,6 +649,8 @@ def hide_unconfirmed_current_candle_advancement(snapshot: dict[str, Any]) -> Non
         return
 
     reason = "Monitoring current 1-minute candle until close confirmation."
+    if mask_unconfirmed_step4_leg1_invalidation(snapshot, reason):
+        return
     step4 = snapshot.get("step4") if isinstance(snapshot.get("step4"), dict) else {}
     step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
     step4_unconfirmed = state_touches_candle_time(
@@ -621,29 +696,6 @@ def hide_unconfirmed_current_candle_advancement(snapshot: dict[str, Any]) -> Non
         snapshot["step5"] = unconfirmed_current_candle_result("Step 5", "Step 5", reason)
         snapshot["step6"] = unconfirmed_current_candle_result("Step 6", "Step 5", reason)
         return
-
-    step6 = snapshot.get("step6") if isinstance(snapshot.get("step6"), dict) else {}
-    step6_state = step6.get("state") if isinstance(step6.get("state"), dict) else {}
-    step6_unconfirmed = state_touches_candle_time(
-        step6_state,
-        latest_time,
-        (
-            ("entry_candle", "timestamp"),
-            ("entry_candidate", "timestamp"),
-            ("latest_candle", "timestamp"),
-            ("last_evaluated_candle_time",),
-            ("entry_triggered_at",),
-            ("phase2_failed_entry_candle", "timestamp"),
-        ),
-    )
-    if step6_unconfirmed and (
-        decision_status(step6) == "CONFIRM"
-        or step6_state.get("entry_triggered") is True
-        or step6_state.get("setup_direction") in {"LONG", "SHORT"}
-        or step6_state.get("entry_candidate") is not None
-    ):
-        snapshot["step6"] = unconfirmed_current_candle_result("Step 6", "Step 6", reason)
-
 
 def persisted_active_liquidity(
     persisted_state: dict[str, Any],
@@ -1101,6 +1153,11 @@ def build_current_candle(snapshot: dict[str, Any]) -> dict[str, Any] | None:
     """Build a completed candle payload for downstream decision engines."""
     if not candle_close_confirmed(snapshot):
         return None
+    return build_snapshot_candle(snapshot)
+
+
+def build_snapshot_candle(snapshot: dict[str, Any]) -> dict[str, Any] | None:
+    """Build a candle payload from the current snapshot, whether closed or live."""
     ohlc = snapshot.get("ohlc")
     if not isinstance(ohlc, dict):
         return None
@@ -1211,6 +1268,35 @@ def same_active_liquidity(left: Any, right: Any) -> bool:
     left_name, left_price = active_liquidity_identity(left)
     right_name, right_price = active_liquidity_identity(right)
     return bool(left_name and left_name == right_name and left_price is not None and left_price == right_price)
+
+
+def pathway_control_from_price(active_liquidity: dict[str, Any] | None, price: Any) -> dict[str, Any]:
+    """Return live pathway control without changing confirmed structure state."""
+    if not isinstance(active_liquidity, dict):
+        return {"current_pathway_control": "inactive", "current_controlling_mode": None, "current_continuation_type": "none"}
+    level_name = active_liquidity.get("name")
+    level_price = optional_float(active_liquidity.get("price"))
+    latest_price = optional_float(price)
+    side = active_liquidity.get("side") or side_for_level(str(level_name or ""))
+    if level_price is None or latest_price is None or side not in {"upper", "lower"}:
+        return {"current_pathway_control": "inactive", "current_controlling_mode": None, "current_continuation_type": "none"}
+    if side == "upper":
+        rejection_controls = latest_price >= level_price
+        continuation_type = "R/S"
+    else:
+        rejection_controls = latest_price <= level_price
+        continuation_type = "S/R"
+    if rejection_controls:
+        return {
+            "current_pathway_control": "rejection",
+            "current_controlling_mode": "Normal Rejection Mode",
+            "current_continuation_type": continuation_type,
+        }
+    return {
+        "current_pathway_control": "continuation",
+        "current_controlling_mode": continuation_type,
+        "current_continuation_type": continuation_type,
+    }
 
 
 def valid_locked_leg1_state(
@@ -1751,11 +1837,12 @@ def build_step25_interaction(
         "controlling_mode": previous_state.get("controlling_mode") if previous_locked else None,
         "structure_side_requirement": previous_state.get("structure_side_requirement") if previous_locked else None,
         "reclaim_candle_a": previous_state.get("reclaim_candle_a") if previous_locked else None,
-        "provisional_candle_a": previous_state.get("provisional_candle_a") if previous_locked else None,
+        "provisional_candle_a": None,
         "pathway_level": previous_state.get("pathway_level") if previous_locked else pathway_level,
-        "pathway_activation_type": previous_state.get("pathway_activation_type") if previous_locked else None,
+        "pathway_activation_type": previous_state.get("pathway_activation_type") if previous_locked and previous_state.get("pathway_activation_type") != "wick" else None,
         "continuation_step2_activated": previous_state.get("continuation_step2_activated") if previous_locked else None,
         "active_liquidity_selected": active_level is not None and level_price is not None,
+        "rejection_step2_confirmed": step_2_1a.get("step_2_activated") is True,
         "events": list(previous_step25.get("events") or []) if previous_locked else [],
     }
     if len(bars) >= 2 and pathway_level is not None and pathway_level_type:
@@ -1780,7 +1867,7 @@ def evaluate_live_step25(
     """Evaluate Step 2.5 after Step 2 activates Rejection Mode."""
     interaction = build_step25_interaction(snapshot, rejection, step_2_1a, persisted_state)
     if interaction is None:
-        reason = "Step 2.5 waiting for Step 2 Rejection Mode activation."
+        reason = "Step 2.5 requires a Step 2 liquidity-close pathway activation."
         return {
             "step": "Step 2.5",
             "status": "WAIT",
@@ -1802,7 +1889,7 @@ def evaluate_live_step3(
     """Evaluate Step 3 after existing Step 2 / 2.1A outputs are available."""
     interaction = build_step3_interaction(snapshot, rejection, step25, step_2_1a, persisted_state)
     if interaction is None:
-        reason = "Step 3 waiting for Step 2 activation, Step 2.5 selection, Candle A, and active liquidity."
+        reason = "Step 3 requires Step 2 liquidity-close activation, Step 2.5 selection, Candle A, and active liquidity."
         return {
             "step": "Step 3",
             "status": "WAIT",
@@ -1967,6 +2054,13 @@ def build_step4_interaction(
             "participation_candidate_keys": previous_state.get("participation_candidate_keys") or [],
             "participation_candidate_count": previous_state.get("participation_candidate_count") or 0,
             "participation_timer": previous_state.get("participation_timer"),
+            "leg1_window_active": previous_state.get("leg1_window_active"),
+            "leg1_window_started_at": previous_state.get("leg1_window_started_at"),
+            "leg1_window_candle_index": previous_state.get("leg1_window_candle_index"),
+            "leg1_window_remaining": previous_state.get("leg1_window_remaining"),
+            "leg1_window_expires_at": previous_state.get("leg1_window_expires_at"),
+            "leg1_window_invalidated": previous_state.get("leg1_window_invalidated"),
+            "leg1_window_invalidation_reason": previous_state.get("leg1_window_invalidation_reason"),
             "nearest_opposing_liquidity": nearest_opposing_liquidity(snapshot.get("liquidity") or {}, setup_direction),
             "next_break_side_liquidity": next_break_side_liquidity(snapshot.get("liquidity") or {}, setup_direction),
             "atr_1m_14": atr_from_snapshot(snapshot),
@@ -2012,6 +2106,11 @@ def evaluate_live_step4(
         current_candle = build_current_candle(snapshot)
         if current_candle is not None:
             state["latest_candle"] = current_candle
+        control = pathway_control_from_price(
+            state.get("active_liquidity") if isinstance(state.get("active_liquidity"), dict) else None,
+            (current_candle or {}).get("close") if isinstance(current_candle, dict) else snapshot.get("latest_price"),
+        )
+        state.update(control)
         state["last_evaluated_candle_time"] = candle_timestamp(current_candle) or state.get("last_evaluated_candle_time")
         state["state_transition_reason"] = "Leg 1 locked; Step 4 not re-evaluated on status refresh."
         state["fifty_percent_rule_phase"] = "skipped_leg1_locked"
@@ -2222,7 +2321,7 @@ def build_step6_interaction(
     if not isinstance(step5_state, dict):
         return None
 
-    current_candle = build_current_candle(snapshot)
+    current_candle = build_snapshot_candle(snapshot)
     if current_candle is None:
         return None
 
@@ -2289,7 +2388,13 @@ def run_once(symbol: str = "NQ", persist: bool = True) -> dict[str, Any]:
     snapshot["step4"] = evaluate_live_step4(snapshot, rejection, snapshot["step25"], snapshot["step3"], symbol_persisted_state)
     snapshot["step5"] = evaluate_live_step5(snapshot, snapshot["step4"], symbol_persisted_state)
     active_name, active_price = active_liquidity_from_snapshot(snapshot)
-    if snapshot.get("latest_price") is not None and not valid_active_liquidity_selection(active_name, active_price):
+    step4_state = snapshot["step4"].get("state") if isinstance(snapshot["step4"].get("state"), dict) else {}
+    prior_locked_leg1, _prior_locked_reason = valid_participation_locked_leg1_state(step4_state)
+    if (
+        snapshot.get("latest_price") is not None
+        and not valid_active_liquidity_selection(active_name, active_price)
+        and (candle_close_confirmed(snapshot) or not prior_locked_leg1)
+    ):
         clear_downstream_state_without_active_liquidity(snapshot)
     else:
         snapshot["step6"] = evaluate_live_step6(snapshot, snapshot["step5"], symbol_persisted_state)
@@ -2317,6 +2422,10 @@ def run_once(symbol: str = "NQ", persist: bool = True) -> dict[str, Any]:
         snapshot["tv_context"],
         levels,
         rejection,
+    )
+    mask_unconfirmed_step4_leg1_invalidation(
+        snapshot,
+        "Monitoring current 1-minute candle until close confirmation.",
     )
     if persist:
         persist_state(snapshot)
@@ -2431,8 +2540,7 @@ def is_atr_required_reason(reason: str | None) -> bool:
 
 def publication_gate_enabled(snapshot: dict[str, Any]) -> bool:
     """Return True when current-step publication gating should be enforced."""
-    symbol = snapshot.get("normalized_symbol") or snapshot.get("requested_symbol") or snapshot.get("symbol")
-    return root_symbol(str(symbol or "")) == "NQ"
+    return True
 
 
 def add_publication_gate_debug(
@@ -2461,12 +2569,48 @@ def step3_publication_passed(step3: dict[str, Any]) -> bool:
     return step3.get("status") == "ALLOW_STEP_4" and step3.get("next_step") == "Step 4"
 
 
-def leg2_publication_locked(step5: dict[str, Any]) -> bool:
+def milestone_closed_or_prior(snapshot: dict[str, Any], state: dict[str, Any], paths: tuple[tuple[str, ...], ...]) -> bool:
+    """Return True when a milestone is not sourced from the current live candle."""
+    if candle_close_confirmed(snapshot):
+        return True
+    latest_time = snapshot.get("latest_bar_time")
+    return not latest_time or not state_touches_candle_time(state, latest_time, paths)
+
+
+def leg1_publication_locked(snapshot: dict[str, Any], step4: dict[str, Any]) -> bool:
+    """Return True only when Leg 1 is a publishable closed-candle milestone."""
+    state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    locked_ok, _reason = valid_participation_locked_leg1_state(state)
+    return locked_ok and milestone_closed_or_prior(
+        snapshot,
+        state,
+        (
+            ("leg1_completed_at",),
+            ("leg1_reference_candle_time",),
+            ("last_evaluated_candle_time",),
+            ("candle_b", "timestamp"),
+            ("latest_candle", "timestamp"),
+        ),
+    )
+
+
+def leg2_publication_locked(snapshot: dict[str, Any], step5: dict[str, Any]) -> bool:
     """Return True only when Step 5 has locked/validated Leg 2 for Step 6 publication."""
     if step5.get("status") != "READY" or step5.get("next_step") != "Step 6":
         return False
     state = step5.get("state") if isinstance(step5.get("state"), dict) else {}
-    return state.get("leg2_status") in {"VALIDATED", "COMPLETE"} or state.get("step5_participation_validated") is True
+    locked = state.get("leg2_status") in {"VALIDATED", "COMPLETE"} or state.get("step5_participation_validated") is True
+    return locked and milestone_closed_or_prior(
+        snapshot,
+        state,
+        (
+            ("leg2_candidate_candle_time",),
+            ("leg2_completed_at",),
+            ("last_evaluated_candle_time",),
+            ("leg2_candle", "timestamp"),
+            ("latest_candle", "timestamp"),
+        ),
+    )
 
 
 def ungated_current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
@@ -2502,7 +2646,7 @@ def ungated_current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
 
 
 def current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
-    """Return the next/current blueprint step from the evaluated read-only snapshot."""
+    """Return the last public milestone; Step 2 is close-confirmed pathway activation."""
     if not publication_gate_enabled(snapshot):
         return ungated_current_step_from_snapshot(snapshot)
     if snapshot.get("latest_price") is None:
@@ -2513,60 +2657,33 @@ def current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
     step5 = snapshot.get("step5") if isinstance(snapshot.get("step5"), dict) else {}
     step4 = snapshot.get("step4") if isinstance(snapshot.get("step4"), dict) else {}
     step3 = snapshot.get("step3") if isinstance(snapshot.get("step3"), dict) else {}
-    step25 = snapshot.get("step25") if isinstance(snapshot.get("step25"), dict) else {}
-    rejection = snapshot.get("rejection") if isinstance(snapshot.get("rejection"), dict) else {}
-    step3_ready = step3_publication_passed(step3)
-    step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
-    leg1_ready, _leg1_reason = valid_participation_locked_leg1_state(step4_state)
-    leg2_ready = leg2_publication_locked(step5)
+    leg1_ready = leg1_publication_locked(snapshot, step4)
+    leg2_ready = leg2_publication_locked(snapshot, step5)
 
     if decision_status(step6) == "CONFIRM" or step5.get("status") == "READY" or step5.get("next_step") == "Step 6":
-        if step3_ready and leg1_ready and leg2_ready:
-            return "Step 6"
-        reason = "Step 6 publication blocked until Step 3 has passed, Leg 1 is locked, and Leg 2 is locked."
-        published = "Step 5" if step3_ready and leg1_ready else "Step 4" if step3_ready else "Step 3" if step25.get("status") == "READY" else "Step 2.5" if rejection.get("rejection_mode") == "ON" else "Step 2"
-        add_publication_gate_debug(snapshot, "Step 6", published, reason)
-        if published == "Step 5":
+        if leg1_ready and leg2_ready:
+            if decision_status(step6) == "CONFIRM":
+                return "Step 6"
             return "Step 5"
+        reason = "Step 6 publication blocked until Leg 1 and Leg 2 are close-confirmed."
+        published = "Step 4" if leg1_ready else "Step 2"
+        add_publication_gate_debug(snapshot, "Step 6", published, reason)
         if published == "Step 4":
             return "Step 4"
-        if published == "Step 3":
-            return "Step 3"
-        if published == "Step 2.5" and candle_close_confirmed(snapshot):
-            return "Step 2.5"
         return "Step 2"
 
     if step4.get("status") == "READY" or step4.get("next_step") == "Step 5":
-        if step3_ready and leg1_ready:
-            return "Step 5"
-        reason = "Step 5 publication blocked until Step 3 has passed and Leg 1 is locked."
-        published = "Step 4" if step3_ready else "Step 3" if step25.get("status") == "READY" else "Step 2.5" if rejection.get("rejection_mode") == "ON" else "Step 2"
-        add_publication_gate_debug(snapshot, "Step 5", published, reason)
-        if published == "Step 4":
+        if leg1_ready:
             return "Step 4"
-        if published == "Step 3":
-            return "Step 3"
-        if published == "Step 2.5" and candle_close_confirmed(snapshot):
-            return "Step 2.5"
+        reason = "Step 4 publication blocked until Leg 1 is close-confirmed."
+        published = "Step 2"
+        add_publication_gate_debug(snapshot, "Step 5", published, reason)
         return "Step 2"
 
-    if step4.get("next_step") == "Step 4" and not step3_ready:
+    if step4.get("next_step") == "Step 4" and not step3_publication_passed(step3):
         reason = "Step 4 publication blocked until Step 3 officially passes."
-        published = "Step 3" if step25.get("status") == "READY" else "Step 2.5" if rejection.get("rejection_mode") == "ON" else "Step 2"
-        add_publication_gate_debug(snapshot, "Step 4", published, reason)
-        if published == "Step 3":
-            return "Step 3"
-        if published == "Step 2.5" and candle_close_confirmed(snapshot):
-            return "Step 2.5"
+        add_publication_gate_debug(snapshot, "Step 4", "Step 2", reason)
         return "Step 2"
-    if not candle_close_confirmed(snapshot):
-        return "Step 2"
-    if step3_ready:
-        return "Step 4"
-    if step25.get("status") == "READY":
-        return "Step 3"
-    if candle_close_confirmed(snapshot) and rejection.get("rejection_mode") == "ON":
-        return "Step 2.5"
     return "Step 2"
 
 
@@ -2577,9 +2694,11 @@ def wait_reason_for_current_step(
     step5: dict[str, Any],
     step6: dict[str, Any],
 ) -> str:
-    """Return operator-facing WAIT text for the current blueprint step."""
+    """Return operator-facing text without redefining current_step as the next watched step."""
     if current_step == "Step 2" and not active_name:
         return "No active liquidity selected."
+    if current_step == "Step 2":
+        return "Step 2 confirmed: liquidity close activated a valid pathway; public state holds at this milestone until Step 4 confirms."
     if current_step in {"Step 2.5", "Step 3", "Step 4"}:
         return result_reason(step4, "Leg 1 waiting for Step 4 requirements.")
     if current_step == "Step 5":
@@ -2678,6 +2797,9 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         wait_reason = "No market price available."
     elif atr_required_reason:
         wait_reason = atr_required_reason
+    elif entry_status == "WAIT" and not invalidation_reason and not candle_close_confirmed(snapshot):
+        live_mask_reason = result_reason(step4, "")
+        wait_reason = live_mask_reason if "current 1-minute candle" in live_mask_reason else wait_reason_for_current_step(current_step, active_name, step4, step5, step6)
     elif entry_status == "WAIT" and not invalidation_reason:
         wait_reason = wait_reason_for_current_step(current_step, active_name, step4, step5, step6)
     else:
@@ -2699,28 +2821,70 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     except (TypeError, ValueError):
         close_vs_level = None
 
-    sr_rs_context = None if no_active_liquidity else (
-        step5_state.get("controlling_mode")
+    structure_active_liquidity = step4_state.get("active_liquidity") if isinstance(step4_state.get("active_liquidity"), dict) else None
+    structure_control = pathway_control_from_price(
+        structure_active_liquidity,
+        ohlc.get("close") if ohlc.get("close") is not None else snapshot.get("latest_price"),
+    )
+    locked_structure = step4_state.get("leg1_state_locked") is True and step4_state.get("leg1_status") == "COMPLETE"
+    if locked_structure and no_active_liquidity and structure_active_liquidity:
+        active_name = structure_active_liquidity.get("display_name") or structure_active_liquidity.get("name")
+        active_price = structure_active_liquidity.get("price")
+        no_active_liquidity = snapshot.get("latest_price") is not None and not valid_active_liquidity_selection(active_name, active_price)
+        try:
+            if active_price is not None and ohlc.get("close") is not None:
+                close_vs_level = float(ohlc.get("close")) - float(active_price)
+        except (TypeError, ValueError):
+            close_vs_level = None
+    current_pathway_control = (
+        step6_state.get("current_pathway_control")
+        or step5_state.get("current_pathway_control")
+        or step4_state.get("current_pathway_control")
+        or (structure_control.get("current_pathway_control") if locked_structure else None)
+    )
+    current_controlling_mode = (
+        step6_state.get("current_controlling_mode")
+        or step5_state.get("current_controlling_mode")
+        or step4_state.get("current_controlling_mode")
+        or (structure_control.get("current_controlling_mode") if locked_structure else None)
+    )
+    current_continuation_type = (
+        step6_state.get("current_continuation_type")
+        or step5_state.get("current_continuation_type")
+        or step4_state.get("current_continuation_type")
+        or (structure_control.get("current_continuation_type") if locked_structure else None)
+    )
+
+    sr_rs_context = None if no_active_liquidity and not locked_structure else (
+        current_controlling_mode
+        or step5_state.get("controlling_mode")
         or step4_state.get("controlling_mode")
         or step25_state.get("controlling_mode")
     )
-    setup_direction = None if no_active_liquidity else (
+    setup_direction = None if no_active_liquidity and not locked_structure else (
         step6_state.get("setup_direction")
         or step5_state.get("setup_direction")
         or step4_state.get("setup_direction")
         or (rejection.get("watch_side") if candle_close_confirmed(snapshot) else None)
     )
-    leg1_status = "WAIT_ATR_REQUIRED" if atr_required_reason else (step4_state.get("leg1_status") or decision_status(step4))
-    leg2_status = step5_state.get("leg2_status") or decision_status(step5)
-    rejection_active = False if no_active_liquidity or not candle_close_confirmed(snapshot) else rejection.get("rejection_mode") == "ON"
-    continuation_type = continuation_type_from_state(step25_state, sr_rs_context)
+    raw_leg1_status = "WAIT_ATR_REQUIRED" if atr_required_reason else (step4_state.get("leg1_status") or decision_status(step4))
+    raw_leg2_status = step5_state.get("leg2_status") or decision_status(step5)
+    leg1_published = current_step in {"Step 4", "Step 5", "Step 6"}
+    leg2_published = current_step in {"Step 5", "Step 6"}
+    leg1_status = raw_leg1_status if leg1_published else "WAIT"
+    leg2_status = raw_leg2_status if leg2_published else "WAIT"
+    public_setup_direction = setup_direction if leg1_published or current_step == "Step 6" else None
+    rejection_active = False if (no_active_liquidity and not locked_structure) or not candle_close_confirmed(snapshot) else rejection.get("rejection_mode") == "ON" or locked_structure
+    continuation_type = current_continuation_type if current_continuation_type in {"S/R", "R/S"} else continuation_type_from_state(step25_state, sr_rs_context)
     invalidated = bool(invalidation_reason)
     step25_ready = (snapshot.get("step25") or {}).get("status") == "READY"
     rejection_side = {
         "pathway_status": pathway_visibility_status("rejection", rejection_active, sr_rs_context, continuation_type, invalidated, step25_ready),
+        "current_pathway_control": current_pathway_control,
+        "current_controlling_mode": current_controlling_mode,
         "current_step": current_step,
         "current_step_label": step_label,
-        "setup_direction": rejection.get("watch_side") if rejection_active else setup_direction,
+        "setup_direction": rejection.get("watch_side") if rejection_active and leg1_published else public_setup_direction,
         "leg1_status": leg1_status,
         "leg2_status": leg2_status,
         "entry_status": entry_status,
@@ -2728,6 +2892,8 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     continuation_side = {
         "continuation_type": continuation_type,
         "pathway_status": pathway_visibility_status("continuation", rejection_active, sr_rs_context, continuation_type, invalidated, step25_ready),
+        "current_pathway_control": current_pathway_control,
+        "current_controlling_mode": current_controlling_mode,
         "current_step": current_step if continuation_type != "none" else None,
         "current_step_label": step_label if continuation_type != "none" else None,
         "setup_direction": "SHORT" if continuation_type == "S/R" else "LONG" if continuation_type == "R/S" else None,
@@ -2754,10 +2920,13 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "close_vs_level": close_vs_level,
         "next_liquidity_above": liquidity.get("nearest_level_above"),
         "next_liquidity_below": liquidity.get("nearest_level_below"),
-        "setup_direction": setup_direction,
+        "setup_direction": public_setup_direction,
         "rejection_mode_entered": rejection_active,
         "sr_rs_context": sr_rs_context,
         "continuation_type": continuation_type,
+        "current_pathway_control": current_pathway_control,
+        "current_controlling_mode": current_controlling_mode,
+        "current_continuation_type": continuation_type,
         "rejection_pathway_status": rejection_side["pathway_status"],
         "continuation_pathway_status": continuation_side["pathway_status"],
         "rejection_side": rejection_side,
@@ -2766,7 +2935,7 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "leg1_state": leg1_status,
         "leg2_status": leg2_status,
         "leg2_state": leg2_status,
-        "leg2_reference_price": step5_state.get("active_leg1_reference") or step5_state.get("leg1_reference"),
+        "leg2_reference_price": (step5_state.get("active_leg1_reference") or step5_state.get("leg1_reference")) if leg2_published else None,
         "entry_status": entry_status,
         "wait_reason": wait_reason,
         "invalidation_reason": invalidation_reason,
@@ -2774,11 +2943,11 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "publication_gate_debug": snapshot.get("publication_gate_debug") if isinstance(snapshot.get("publication_gate_debug"), list) else [],
         "leg1_state_locked": step4_state.get("leg1_state_locked"),
         "leg1_locked": step4_state.get("leg1_state_locked"),
-        "leg1_completed_at": step4_state.get("leg1_completed_at"),
-        "leg1_reference_price": step4_state.get("leg1_reference_price") or step4_state.get("leg1_reference"),
-        "leg1_reference_candle_time": step4_state.get("leg1_reference_candle_time"),
-        "leg1_direction": step4_state.get("leg1_direction") or step4_state.get("setup_direction"),
-        "last_evaluated_candle_time": step4_state.get("last_evaluated_candle_time") or step5_state.get("last_evaluated_candle_time"),
+        "leg1_completed_at": step4_state.get("leg1_completed_at") if leg1_published else None,
+        "leg1_reference_price": (step4_state.get("leg1_reference_price") or step4_state.get("leg1_reference")) if leg1_published else None,
+        "leg1_reference_candle_time": step4_state.get("leg1_reference_candle_time") if leg1_published else None,
+        "leg1_direction": (step4_state.get("leg1_direction") or step4_state.get("setup_direction")) if leg1_published else None,
+        "last_evaluated_candle_time": (step4_state.get("last_evaluated_candle_time") if leg1_published else None) or (step5_state.get("last_evaluated_candle_time") if leg2_published else None),
         "invalidated_at": step4_state.get("invalidated_at") or step5_state.get("invalidated_at"),
         "invalidated_liquidity": step4_state.get("invalidated_liquidity") or step5_state.get("invalidated_liquidity"),
         "invalidation_source_candle_time": step4_state.get("invalidation_source_candle_time") or step5_state.get("invalidation_source_candle_time"),
@@ -2786,14 +2955,21 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "invalidation_source_step": step4_state.get("invalidation_source_step") or step5_state.get("invalidation_source_step"),
         "consumed_liquidity_levels": step4_state.get("consumed_liquidity_levels") or step5_state.get("consumed_liquidity_levels") or [],
         "state_transition_reason": step4_state.get("state_transition_reason") or step5_state.get("state_transition_reason"),
-        "leg1_formed_at_percent": step4_state.get("leg1_formed_at_percent"),
-        "leg1_50_percent_rule_passed": step4_state.get("leg1_50_percent_rule_passed"),
-        "fifty_percent_rule_phase": step4_state.get("fifty_percent_rule_phase"),
-        "leg2_formed_at_percent": step5_state.get("leg2_formed_at_percent"),
-        "leg2_25_percent_rule_passed": step5_state.get("leg2_25_percent_rule_passed"),
-        "leg2_candidate_candle_time": step5_state.get("leg2_candidate_candle_time"),
-        "leg2_same_sequence_rejected": step5_state.get("leg2_same_sequence_rejected"),
-        "leg2_wait_reason": step5_state.get("leg2_wait_reason"),
+        "leg1_formed_at_percent": step4_state.get("leg1_formed_at_percent") if leg1_published else None,
+        "leg1_50_percent_rule_passed": step4_state.get("leg1_50_percent_rule_passed") if leg1_published else None,
+        "fifty_percent_rule_phase": step4_state.get("fifty_percent_rule_phase") if leg1_published else None,
+        "leg1_window_active": step4_state.get("leg1_window_active") is True,
+        "leg1_window_started_at": step4_state.get("leg1_window_started_at"),
+        "leg1_window_candle_index": step4_state.get("leg1_window_candle_index"),
+        "leg1_window_remaining": step4_state.get("leg1_window_remaining"),
+        "leg1_window_expires_at": step4_state.get("leg1_window_expires_at"),
+        "leg1_window_invalidated": step4_state.get("leg1_window_invalidated") is True,
+        "leg1_window_invalidation_reason": step4_state.get("leg1_window_invalidation_reason"),
+        "leg2_formed_at_percent": step5_state.get("leg2_formed_at_percent") if leg2_published else None,
+        "leg2_25_percent_rule_passed": step5_state.get("leg2_25_percent_rule_passed") if leg2_published else None,
+        "leg2_candidate_candle_time": step5_state.get("leg2_candidate_candle_time") if leg2_published else None,
+        "leg2_same_sequence_rejected": step5_state.get("leg2_same_sequence_rejected") if leg2_published else None,
+        "leg2_wait_reason": step5_state.get("leg2_wait_reason") if leg1_published else None,
     }
 
 

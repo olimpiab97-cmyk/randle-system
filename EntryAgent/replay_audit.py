@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +80,20 @@ def minute_key(value: Any) -> str | None:
     return parsed.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def format_time(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def minute_delta(start: str | None, current: str | None) -> int | None:
+    start_time = parse_time(start)
+    current_time = parse_time(current)
+    if not start_time or not current_time:
+        return None
+    return int((current_time - start_time).total_seconds() // 60)
+
+
 def is_exact_minute_timestamp(value: Any) -> bool:
     parsed = parse_time(value)
     return bool(parsed and parsed.second == 0 and parsed.microsecond == 0)
@@ -87,6 +101,56 @@ def is_exact_minute_timestamp(value: Any) -> bool:
 
 def step_at_least(step: Any, minimum: str) -> bool:
     return STEP_RANK.get(str(step), 0) >= STEP_RANK[minimum]
+
+
+def projected_public_step(
+    record: dict[str, Any],
+    bars_for_symbol: dict[str, dict[str, Any]],
+    candle_minute: str | None,
+    last_confirmed_leg1_minute: str | None,
+) -> str:
+    """Project raw historical reasoning rows onto public close-confirmed milestones.
+
+    Step 2 means the public liquidity-close/pathway-activation milestone. It
+    persists as the visible milestone until closed-candle Leg 1 promotes Step 4.
+    """
+    raw_step = str(record.get("step") or "Step 2")
+    if raw_step == "Step 3":
+        return "Step 2"
+
+    leg1_minute = minute_key(record.get("leg1_completed_at")) or last_confirmed_leg1_minute
+    leg1_confirmed = bool(leg1_minute and leg1_minute in bars_for_symbol)
+    leg1_prior = bool(leg1_confirmed and candle_minute and leg1_minute < candle_minute)
+    if not leg1_confirmed:
+        return "Step 2"
+
+    leg2_complete = str(record.get("leg2_state") or "").upper() in {"VALIDATED", "COMPLETE"}
+    if raw_step == "Step 6":
+        return "Step 6" if leg2_complete else "Step 4"
+    if step_at_least(raw_step, "Step 5"):
+        return "Step 5" if leg1_prior and leg2_complete else "Step 4"
+    if step_at_least(raw_step, "Step 4"):
+        return "Step 4"
+    return "Step 2"
+
+
+def project_public_record(
+    record: dict[str, Any],
+    bars_for_symbol: dict[str, dict[str, Any]],
+    candle_minute: str | None,
+    last_confirmed_leg1_minute: str | None,
+) -> dict[str, Any]:
+    """Return the Command Center-visible state implied by milestone semantics."""
+    projected = dict(record)
+    projected_step = projected_public_step(record, bars_for_symbol, candle_minute, last_confirmed_leg1_minute)
+    projected["step"] = projected_step
+    if not step_at_least(projected_step, "Step 4"):
+        projected["leg1_state"] = "WAIT"
+        projected["leg1_completed_at"] = None
+        projected["setup_direction"] = None
+    if not step_at_least(projected_step, "Step 5"):
+        projected["leg2_state"] = "WAIT"
+    return projected
 
 
 def active_levels(tv_context: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -241,8 +305,18 @@ def add_case(cases: list[dict[str, Any]], case_type: str, record: dict[str, Any]
                 "active_liquidity_name": record.get("active_liquidity_name"),
                 "liquidity_price": record.get("liquidity_price"),
                 "setup_direction": record.get("setup_direction"),
+                "current_pathway_control": record.get("current_pathway_control"),
+                "current_controlling_mode": record.get("current_controlling_mode"),
+                "current_continuation_type": record.get("current_continuation_type"),
                 "leg1_state": record.get("leg1_state"),
                 "leg1_completed_at": record.get("leg1_completed_at"),
+                "leg1_window_active": record.get("leg1_window_active"),
+                "leg1_window_started_at": record.get("leg1_window_started_at"),
+                "leg1_window_candle_index": record.get("leg1_window_candle_index"),
+                "leg1_window_remaining": record.get("leg1_window_remaining"),
+                "leg1_window_expires_at": record.get("leg1_window_expires_at"),
+                "leg1_window_invalidated": record.get("leg1_window_invalidated"),
+                "leg1_window_invalidation_reason": record.get("leg1_window_invalidation_reason"),
                 "leg2_state": record.get("leg2_state"),
                 "entry_status": record.get("entry_status"),
                 "wait_reason": record.get("wait_reason"),
@@ -261,6 +335,8 @@ def audit_records(
     rows: list[dict[str, Any]] = []
     cases: list[dict[str, Any]] = []
     last_leg1_complete_minute: dict[str, str] = {}
+    leg1_window_state: dict[str, dict[str, Any]] = {}
+    reset_activation_minutes: set[tuple[str, str]] = set()
     seen_trade_keys_by_symbol: dict[str, set[str]] = defaultdict(set)
 
     for record in records:
@@ -268,8 +344,96 @@ def audit_records(
         if symbol not in SYMBOLS:
             continue
         candle_minute = minute_key(record.get("candle_time"))
-        bar = bars.get(symbol, {}).get(candle_minute or "")
+        bars_for_symbol = bars.get(symbol, {})
+        bar = bars_for_symbol.get(candle_minute or "")
         close_confirmed = bool(candle_minute and bar)
+        record = project_public_record(record, bars_for_symbol, candle_minute, last_leg1_complete_minute.get(symbol))
+        window_state = leg1_window_state.get(symbol)
+        has_logged_window = record.get("leg1_window_candle_index") is not None
+        if not has_logged_window:
+            if record.get("leg1_state") == "COMPLETE":
+                if window_state and candle_minute:
+                    index = minute_delta(window_state.get("activation_minute"), candle_minute)
+                    if index is not None and 1 <= index <= 4:
+                        record["leg1_window_started_at"] = window_state.get("started_at") or candle_minute
+                        record["leg1_window_candle_index"] = index
+                        record["leg1_window_remaining"] = 0
+                        record["leg1_window_expires_at"] = window_state.get("expires_at")
+                        record["leg1_window_active"] = False
+                        record["leg1_window_invalidated"] = False
+                        record["leg1_window_invalidation_reason"] = None
+                leg1_window_state.pop(symbol, None)
+            elif record.get("invalidation_source") == "step4" or "Candle B failed both" in str(record.get("invalidation_reason") or ""):
+                if window_state and candle_minute:
+                    index = minute_delta(window_state.get("activation_minute"), candle_minute)
+                    if index is not None and 1 <= index <= 4:
+                        if index < 4 and not window_state.get("reset_from_premature"):
+                            start_time = parse_time(candle_minute)
+                            window_state = {
+                                "activation_minute": candle_minute,
+                                "started_at": format_time(start_time + timedelta(minutes=1)) if start_time else None,
+                                "expires_at": format_time(start_time + timedelta(minutes=4)) if start_time else None,
+                                "reset_from_premature": True,
+                            }
+                            leg1_window_state[symbol] = window_state
+                            reset_activation_minutes.add((symbol, candle_minute))
+                        elif index < 4:
+                            record["leg1_window_started_at"] = window_state.get("started_at") or candle_minute
+                            record["leg1_window_candle_index"] = index
+                            record["leg1_window_remaining"] = 4 - index
+                            record["leg1_window_expires_at"] = window_state.get("expires_at")
+                            record["leg1_window_active"] = True
+                            record["leg1_window_invalidated"] = False
+                            record["leg1_window_invalidation_reason"] = None
+                        else:
+                            record["leg1_window_started_at"] = window_state.get("started_at") or candle_minute
+                            record["leg1_window_candle_index"] = index
+                            record["leg1_window_remaining"] = 0
+                            record["leg1_window_expires_at"] = window_state.get("expires_at")
+                            record["leg1_window_active"] = False
+                            record["leg1_window_invalidated"] = True
+                            record["leg1_window_invalidation_reason"] = record.get("invalidation_reason")
+                if record.get("leg1_window_invalidated") is True:
+                    leg1_window_state.pop(symbol, None)
+            elif record.get("step") == "Step 2" and record.get("active_liquidity_name") and record.get("rejection_mode_entered") and candle_minute:
+                existing_delta = minute_delta(window_state.get("activation_minute"), candle_minute) if window_state else None
+                if existing_delta is not None and existing_delta > 4:
+                    window_state = None
+                    leg1_window_state.pop(symbol, None)
+                if not window_state:
+                    start_time = parse_time(candle_minute)
+                    started_at = format_time(start_time + timedelta(minutes=1)) if start_time else None
+                    expires_at = format_time(start_time + timedelta(minutes=4)) if start_time else None
+                    window_state = {
+                        "activation_minute": candle_minute,
+                        "started_at": started_at,
+                        "expires_at": expires_at,
+                    }
+                    leg1_window_state[symbol] = window_state
+                index = minute_delta(window_state.get("activation_minute"), candle_minute)
+                if index is not None and 1 <= index <= 4:
+                    record["leg1_window_started_at"] = window_state.get("started_at")
+                    record["leg1_window_candle_index"] = index
+                    record["leg1_window_remaining"] = 4 - index
+                    record["leg1_window_expires_at"] = window_state.get("expires_at")
+                    record["leg1_window_active"] = index < 4
+                    record["leg1_window_invalidated"] = index >= 4
+                    record["leg1_window_invalidation_reason"] = "Candle 4 closed without valid Shared Leg 1 participation." if index >= 4 else None
+            if (
+                record.get("leg1_window_candle_index") is None
+                and window_state
+                and candle_minute
+                and record.get("leg1_state") != "COMPLETE"
+            ):
+                index = minute_delta(window_state.get("activation_minute"), candle_minute)
+                if index is not None and 1 <= index <= 4:
+                    record["leg1_window_started_at"] = window_state.get("started_at")
+                    record["leg1_window_candle_index"] = index
+                    record["leg1_window_remaining"] = 4 - index
+                    record["leg1_window_expires_at"] = window_state.get("expires_at")
+                    record["leg1_window_active"] = index < 4
+                    record["leg1_window_invalidated"] = index >= 4
+                    record["leg1_window_invalidation_reason"] = "Candle 4 closed without valid Shared Leg 1 participation." if index >= 4 else None
         expected_active = expected_active_liquidity(record, contexts.get(symbol))
         flags: list[str] = []
 
@@ -351,13 +515,34 @@ def audit_records(
                 "actual_step": record.get("step"),
                 "expected_active_liquidity": expected_active,
                 "actual_active_liquidity": actual_active,
+                "current_pathway_control": record.get("current_pathway_control"),
+                "current_controlling_mode": record.get("current_controlling_mode"),
+                "current_continuation_type": record.get("current_continuation_type"),
                 "leg1_state": record.get("leg1_state"),
+                "leg1_window_active": record.get("leg1_window_active"),
+                "leg1_window_started_at": record.get("leg1_window_started_at"),
+                "leg1_window_candle_index": record.get("leg1_window_candle_index"),
+                "leg1_window_remaining": record.get("leg1_window_remaining"),
+                "leg1_window_expires_at": record.get("leg1_window_expires_at"),
+                "leg1_window_invalidated": record.get("leg1_window_invalidated"),
+                "leg1_window_invalidation_reason": record.get("leg1_window_invalidation_reason"),
                 "leg2_state": record.get("leg2_state"),
                 "entry_status": record.get("entry_status"),
                 "trades": minute_trades,
                 "flags": flags,
             }
         )
+
+    for row in rows:
+        key = (str(row.get("symbol")), str(row.get("candle_minute")))
+        if key in reset_activation_minutes:
+            row["leg1_window_active"] = None
+            row["leg1_window_started_at"] = None
+            row["leg1_window_candle_index"] = None
+            row["leg1_window_remaining"] = None
+            row["leg1_window_expires_at"] = None
+            row["leg1_window_invalidated"] = None
+            row["leg1_window_invalidation_reason"] = None
 
     for symbol, trade_keys in seen_trade_keys_by_symbol.items():
         if symbol == "NQ" and len(trade_keys) > 1:
@@ -398,7 +583,7 @@ def write_report(path: Path, date_text: str, rows: list[dict[str, Any]], cases: 
         lines.append(
             "| {symbol} | {candle} | close_confirmed={confirmed} | expected_step={expected_step} | "
             "actual_step={actual_step} | expected_liq={expected_liq} | actual_liq={actual_liq} | "
-            "leg1={leg1} | leg2={leg2} | trades={trades} | flags={flags} |".format(
+            "control={control} mode={mode} | leg1={leg1} | leg1_window={window} | leg2={leg2} | trades={trades} | flags={flags} |".format(
                 symbol=row["symbol"],
                 candle=row["candle_time"],
                 confirmed=row["close_confirmed"],
@@ -406,10 +591,54 @@ def write_report(path: Path, date_text: str, rows: list[dict[str, Any]], cases: 
                 actual_step=row["actual_step"],
                 expected_liq=row["expected_active_liquidity"],
                 actual_liq=row["actual_active_liquidity"],
+                control=row.get("current_pathway_control"),
+                mode=row.get("current_controlling_mode"),
                 leg1=row["leg1_state"],
+                window=(
+                    f"Candle {row.get('leg1_window_candle_index')} of 4 remaining={row.get('leg1_window_remaining')}"
+                    if row.get("leg1_window_candle_index") is not None
+                    else "-"
+                ),
                 leg2=row["leg2_state"],
                 trades=trade_text,
                 flags=",".join(row["flags"]),
+            )
+        )
+
+    lines.extend(["", "## Leg 1 Window Replay"])
+    window_rows = [row for row in rows if row.get("leg1_window_candle_index") is not None]
+    for row in window_rows[:300]:
+        lines.append(
+            "| {symbol} | {candle} | step={step} | leg1={leg1} | "
+            "window=Candle {index} of 4 | remaining={remaining} | active={active} | "
+            "expires_at={expires_at} | invalidated={invalidated} | reason={reason} |".format(
+                symbol=row["symbol"],
+                candle=row["candle_time"],
+                step=row["actual_step"],
+                leg1=row["leg1_state"],
+                index=row.get("leg1_window_candle_index"),
+                remaining=row.get("leg1_window_remaining"),
+                active=row.get("leg1_window_active"),
+                expires_at=row.get("leg1_window_expires_at"),
+                invalidated=row.get("leg1_window_invalidated"),
+                reason=row.get("leg1_window_invalidation_reason"),
+            )
+        )
+
+    lines.extend(["", "## Confirmed Structure / Pathway Control"])
+    structure_rows = [row for row in rows if row.get("leg1_state") == "COMPLETE"]
+    for row in structure_rows[:300]:
+        lines.append(
+            "| {symbol} | {candle} | step={step} | leg1={leg1} | control={control} | "
+            "mode={mode} | continuation={continuation} | leg2={leg2} |".format(
+                symbol=row["symbol"],
+                candle=row["candle_time"],
+                step=row["actual_step"],
+                leg1=row["leg1_state"],
+                control=row.get("current_pathway_control"),
+                mode=row.get("current_controlling_mode"),
+                continuation=row.get("current_continuation_type"),
+                leg2=row["leg2_state"],
             )
         )
 

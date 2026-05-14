@@ -39,9 +39,9 @@ class EntryStatusEndpointTests(unittest.TestCase):
             "leg1_status": "WAIT",
             "leg2_status": "WAIT",
             "entry_status": "WAIT",
-            "wait_reason": "Waiting for Step 2.",
+            "wait_reason": "Step 2 milestone confirmed.",
             "invalidation_reason": None,
-            "last_decision": "WAIT: Waiting for Step 2.",
+            "last_decision": "WAIT: Step 2 milestone confirmed.",
         }
 
         response = server.app.test_client().get("/entry/status?symbols=NQ,YM")
@@ -54,17 +54,16 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(payload["decision_truth"], "Entry Manager")
         self.assertEqual([item["symbol"] for item in payload["symbols"]], ["NQ", "YM"])
         self.assertEqual(payload["symbols"][0]["entry_status"], "WAIT")
-        self.assertEqual(payload["symbols"][0]["wait_reason"], "Waiting for Step 2.")
+        self.assertEqual(payload["symbols"][0]["wait_reason"], "Step 2 milestone confirmed.")
         self.assertEqual(payload["symbols"][0]["current_step"], "Step 2")
-        self.assertEqual(payload["symbols"][0]["current_step_label"], "Step 2 (Liquidity Close)")
+        self.assertEqual(payload["symbols"][0]["current_step_label"], "Step 2 (Liquidity Close / Pathway Activation)")
 
-    def test_entry_status_step_labels_cover_all_blueprint_steps(self):
+    def test_entry_status_step_labels_cover_public_blueprint_steps(self):
         server = self._load_server()
         expected = {
             "Step 1": "Step 1 (Session / Level Prep)",
-            "Step 2": "Step 2 (Liquidity Close)",
+            "Step 2": "Step 2 (Liquidity Close / Pathway Activation)",
             "Step 2.5": "Step 2.5 (S/R-R/S Continuation Logic)",
-            "Step 3": "Step 3 (Participation)",
             "Step 4": "Step 4 (Leg 1 Formation)",
             "Step 5": "Step 5 (Leg 2 Confirmation)",
             "Step 6": "Step 6 (Entry Trigger)",
@@ -202,7 +201,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
             "step6": {"status": "WAIT"},
         }
 
-        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 3")
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 2")
         self.assertEqual(snapshot["publication_gate_debug"][0]["attempted_step"], "Step 4")
         self.assertIn("Step 3 officially passes", snapshot["publication_gate_debug"][0]["reason"])
 
@@ -232,9 +231,9 @@ class EntryStatusEndpointTests(unittest.TestCase):
             "step6": {"status": "WAIT"},
         }
 
-        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 4")
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 2")
         self.assertEqual(snapshot["publication_gate_debug"][0]["attempted_step"], "Step 5")
-        self.assertIn("Leg 1 is locked", snapshot["publication_gate_debug"][0]["reason"])
+        self.assertIn("Leg 1 is close-confirmed", snapshot["publication_gate_debug"][0]["reason"])
 
     def test_nq_publication_gate_blocks_step6_until_leg2_locked(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
@@ -270,9 +269,9 @@ class EntryStatusEndpointTests(unittest.TestCase):
             "step6": {"status": "ENTRY_CONFIRMED"},
         }
 
-        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 5")
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 4")
         self.assertEqual(snapshot["publication_gate_debug"][0]["attempted_step"], "Step 6")
-        self.assertIn("Leg 2 is locked", snapshot["publication_gate_debug"][0]["reason"])
+        self.assertIn("Leg 2 are close-confirmed", snapshot["publication_gate_debug"][0]["reason"])
 
     def test_nq_publication_gate_allows_step6_after_leg2_validated(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
@@ -373,6 +372,35 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(result["status"], "WAIT")
         self.assertIsNone(result["controlling_mode"])
 
+    def test_same_candle_wick_reclaim_does_not_activate_continuation(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step25_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        candle = {"open": 29196.0, "high": 29208.0, "low": 29188.0, "close": 29198.0}
+        result = step25_engine.evaluate_step25(
+            {
+                "rejection_mode": "ON",
+                "initial_candle_a": candle,
+                "controlling_mode": "S/R",
+                "candidate_modes": ["S/R"],
+                "provisional_candle_a": candle,
+                "pathway_activation_type": "wick",
+                "continuation_step2_activated": True,
+                "events": [],
+            }
+        )
+
+        self.assertEqual(result["status"], "READY")
+        self.assertEqual(result["state"]["controlling_mode"], "Normal Rejection Mode")
+        self.assertEqual(result["state"]["pathway_activation_type"], "normal")
+        self.assertIsNone(result["state"]["provisional_candle_a"])
+
     def test_continuation_step2_requires_active_liquidity_selected(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:
@@ -387,6 +415,31 @@ class EntryStatusEndpointTests(unittest.TestCase):
         bullish_reclaim = {"open": 29191.0, "high": 29208.0, "low": 29188.0, "close": 29206.0}
 
         result = step25_engine.select_pathway(bullish_reclaim, prev_candle, 29200.0, "LL", active_liquidity_selected=False)
+
+        self.assertEqual(result["status"], "WAIT")
+        self.assertIsNone(result["controlling_mode"])
+
+    def test_continuation_step2_requires_rejection_step2_confirmed(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step25_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        prev_candle = {"open": 29204.0, "high": 29205.0, "low": 29190.0, "close": 29192.5}
+        bullish_reclaim = {"open": 29191.0, "high": 29208.0, "low": 29188.0, "close": 29206.0}
+
+        result = step25_engine.select_pathway(
+            bullish_reclaim,
+            prev_candle,
+            29200.0,
+            "LL",
+            active_liquidity_selected=True,
+            rejection_step2_confirmed=False,
+        )
 
         self.assertEqual(result["status"], "WAIT")
         self.assertIsNone(result["controlling_mode"])
@@ -711,7 +764,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
             )
         )
 
-    def test_current_step_moves_to_step3_when_active_liquidity_selected(self):
+    def test_current_step_remains_step2_when_active_liquidity_selected(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:
             import entry_agent
@@ -738,7 +791,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
             "step6": {"status": "WAIT"},
         }
 
-        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 3")
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 2")
 
     def test_step2_wick_touch_without_close_does_not_activate_rejection_liquidity(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
@@ -1137,7 +1190,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
             persisted = json.loads(entry_agent.STATE_PATH.read_text(encoding="utf-8"))["state_by_symbol"]["YM"]
 
             self.assertEqual(status["current_step"], "Step 2")
-            self.assertEqual(status["current_step_label"], "Step 2 (Liquidity Close)")
+            self.assertEqual(status["current_step_label"], "Step 2 (Liquidity Close / Pathway Activation)")
             self.assertEqual(status["entry_status"], "WAIT")
             self.assertEqual(status["wait_reason"], "No active liquidity selected.")
             self.assertIsNone(status["active_liquidity_name"])
@@ -1239,6 +1292,8 @@ class EntryStatusEndpointTests(unittest.TestCase):
                                         "leg1_reference_candle_time": "2026-05-06T15:02:00Z",
                                         "leg1_direction": "SHORT",
                                         "active_liquidity": {"name": "PMH", "price": 50000.0},
+                                        "candle_a": {"timestamp": "2026-05-06T15:01:00Z"},
+                                        "candle_b": {"timestamp": "2026-05-06T15:02:00Z"},
                                     },
                                 },
                             }
@@ -1257,7 +1312,13 @@ class EntryStatusEndpointTests(unittest.TestCase):
             self.assertEqual(intrabar["leg1_status"], "WAIT")
             self.assertIsNone(intrabar["setup_direction"])
             self.assertIsNone(intrabar["leg1_completed_at"])
-            self.assertEqual(intrabar["wait_reason"], "Monitoring current 1-minute candle until close confirmation.")
+            self.assertIn(
+                intrabar["wait_reason"],
+                {
+                    "Monitoring current 1-minute candle until close confirmation.",
+                    "No active liquidity selected.",
+                },
+            )
 
             market["ohlc_is_closed"] = True
             confirmed = entry_agent.build_entry_status("NQM6")
@@ -1357,6 +1418,323 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertIsNone(status["leg1_completed_at"])
         self.assertIsNone(status["leg2_candidate_candle_time"])
         self.assertEqual(status["wait_reason"], "Monitoring current 1-minute candle until close confirmation.")
+
+    def test_unclosed_leg1_candle1_masks_step4_invalidation_publication(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        original_run_once = entry_agent.run_once
+        current_time = "2026-05-14T13:39:00Z"
+        current_candle = {
+            "open": 21420.0,
+            "high": 21424.0,
+            "low": 21410.0,
+            "close": 21418.0,
+            "timestamp": current_time,
+        }
+
+        def fake_run_once(symbol, persist=True):
+            return {
+                "requested_symbol": symbol,
+                "normalized_symbol": "NQ",
+                "latest_price": current_candle["close"],
+                "latest_bar_time": current_time,
+                "ohlc": dict(current_candle),
+                "ohlc_is_closed": False,
+                "liquidity": {"tick_size": 0.25},
+                "step_2_1a": {
+                    "active_level": "ONH",
+                    "level_price": 21400.0,
+                    "last_interacted_liquidity": {"name": "ONH", "price": 21400.0},
+                },
+                "rejection": {"rejection_mode": "ON", "watch_side": "SHORT", "trigger_level": "ONH", "trigger_price": 21400.0},
+                "step25": {"status": "READY"},
+                "step3": {"status": "ALLOW_STEP_4", "next_step": "Step 4"},
+                "step4": {
+                    "status": "TERMINATED",
+                    "next_step": "Step 1",
+                    "reason": "Candle B failed both close-based participation and 34% wick-based participation.",
+                    "state": {
+                        "latest_candle": dict(current_candle),
+                        "candle_b": dict(current_candle),
+                        "leg1_status": "INVALID",
+                        "leg1_window_active": True,
+                        "leg1_window_started_at": current_time,
+                        "leg1_window_candle_index": 1,
+                        "leg1_window_remaining": 3,
+                        "leg1_window_expires_at": "2026-05-14T13:42:00Z",
+                        "invalidation_source": "step4",
+                        "invalidation_source_step": "Step 4",
+                    },
+                },
+                "step5": {"status": "WAIT", "state": {}, "next_step": "Step 4"},
+                "step6": {"status": "WAIT", "state": {}, "next_step": "Step 4"},
+            }
+
+        entry_agent.run_once = fake_run_once
+        try:
+            status = entry_agent.build_entry_status("NQM6")
+        finally:
+            entry_agent.run_once = original_run_once
+
+        self.assertEqual(status["current_step"], "Step 2")
+        self.assertEqual(status["entry_status"], "WAIT")
+        self.assertEqual(status["leg1_state"], "WAIT")
+        self.assertIsNone(status["invalidation_reason"])
+        self.assertIsNone(status["invalidation_source"])
+        self.assertTrue(status["leg1_window_active"])
+        self.assertEqual(status["leg1_window_candle_index"], 1)
+
+    def test_unclosed_leg1_50_percent_invalidation_source_is_not_public(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        current_time = "2026-05-14T13:39:00Z"
+        snapshot = {
+            "latest_price": 21418.0,
+            "latest_bar_time": current_time,
+            "ohlc": {"open": 21420.0, "high": 21428.0, "low": 21370.0, "close": 21418.0},
+            "ohlc_is_closed": False,
+            "step4": {
+                "status": "TERMINATED",
+                "reason": "Leg 1 invalid: active liquidity was penetrated beyond 50% before Leg 1 formed.",
+                "state": {
+                    "latest_candle": {"timestamp": current_time},
+                    "leg1_status": "INVALID",
+                    "leg1_window_active": True,
+                    "leg1_window_candle_index": 1,
+                    "invalidation_source": "leg1_50_percent_rule",
+                    "invalidation_source_step": "Step 4",
+                },
+            },
+            "step5": {"status": "WAIT", "state": {}},
+            "step6": {"status": "WAIT", "state": {}},
+        }
+
+        entry_agent.hide_unconfirmed_current_candle_advancement(snapshot)
+
+        self.assertEqual(snapshot["step4"]["status"], "WAIT")
+        self.assertEqual(snapshot["step4"]["state"]["leg1_status"], "WAIT")
+        self.assertIsNone(snapshot["step4"]["state"].get("invalidation_source"))
+        self.assertEqual(snapshot["step4"]["state"]["leg1_window_candle_index"], 1)
+
+    def test_locked_leg1_survives_rejection_to_continuation_control_toggle(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        original_run_once = entry_agent.run_once
+        current_close = {"value": 21395.0}
+        leg1_time = "2026-05-14T13:40:00Z"
+        locked_leg1 = {
+            "setup_direction": "SHORT",
+            "leg1_direction": "SHORT",
+            "leg1_status": "COMPLETE",
+            "leg1_state_locked": True,
+            "leg1_completed_at": leg1_time,
+            "leg1_reference_price": 21408.0,
+            "leg1_reference_candle_time": "2026-05-14T13:38:00Z",
+            "active_liquidity": {"name": "PMH", "price": 21400.0, "side": "upper"},
+            "candle_a": {"timestamp": "2026-05-14T13:38:00Z"},
+            "candle_b": {"timestamp": leg1_time},
+        }
+
+        def fake_run_once(symbol, persist=True):
+            close = current_close["value"]
+            return {
+                "requested_symbol": symbol,
+                "normalized_symbol": "NQ",
+                "latest_price": close,
+                "latest_bar_time": "2026-05-14T13:41:00Z",
+                "ohlc": {"open": close, "high": close + 2.0, "low": close - 2.0, "close": close},
+                "ohlc_is_closed": True,
+                "liquidity": {"tick_size": 0.25},
+                "step_2_1a": {},
+                "rejection": {"rejection_mode": "OFF"},
+                "step25": {"status": "WAIT", "state": {}},
+                "step3": {"status": "WAIT", "state": {}},
+                "step4": {"status": "READY", "next_step": "Step 5", "state": dict(locked_leg1)},
+                "step5": {"status": "WAIT", "state": dict(locked_leg1), "next_step": "Step 5"},
+                "step6": {"status": "WAIT", "state": {}, "next_step": "Step 5"},
+            }
+
+        entry_agent.run_once = fake_run_once
+        try:
+            status = entry_agent.build_entry_status("NQM6")
+        finally:
+            entry_agent.run_once = original_run_once
+
+        self.assertEqual(status["current_step"], "Step 4")
+        self.assertEqual(status["leg1_state"], "COMPLETE")
+        self.assertTrue(status["leg1_locked"])
+        self.assertEqual(status["leg1_reference_price"], 21408.0)
+        self.assertEqual(status["leg1_completed_at"], leg1_time)
+        self.assertEqual(status["active_liquidity_name"], "PMH")
+        self.assertEqual(status["current_pathway_control"], "continuation")
+        self.assertEqual(status["current_controlling_mode"], "R/S")
+        self.assertEqual(status["continuation_pathway_status"], "controlling")
+        self.assertNotEqual(status["current_step"], "Step 2")
+
+    def test_locked_leg1_survives_continuation_back_to_rejection_control_toggle(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        original_run_once = entry_agent.run_once
+        leg1_time = "2026-05-14T13:40:00Z"
+
+        def fake_run_once(symbol, persist=True):
+            return {
+                "requested_symbol": symbol,
+                "normalized_symbol": "NQ",
+                "latest_price": 21406.0,
+                "latest_bar_time": "2026-05-14T13:42:00Z",
+                "ohlc": {"open": 21396.0, "high": 21408.0, "low": 21394.0, "close": 21406.0},
+                "ohlc_is_closed": True,
+                "liquidity": {"tick_size": 0.25},
+                "step_2_1a": {},
+                "rejection": {"rejection_mode": "OFF"},
+                "step25": {"status": "WAIT", "state": {}},
+                "step3": {"status": "WAIT", "state": {}},
+                "step4": {
+                    "status": "READY",
+                    "next_step": "Step 5",
+                    "state": {
+                        "setup_direction": "SHORT",
+                        "leg1_direction": "SHORT",
+                        "leg1_status": "COMPLETE",
+                        "leg1_state_locked": True,
+                        "leg1_completed_at": leg1_time,
+                        "leg1_reference_price": 21408.0,
+                        "leg1_reference_candle_time": "2026-05-14T13:38:00Z",
+                        "active_liquidity": {"name": "PMH", "price": 21400.0, "side": "upper"},
+                        "candle_a": {"timestamp": "2026-05-14T13:38:00Z"},
+                        "candle_b": {"timestamp": leg1_time},
+                    },
+                },
+                "step5": {"status": "WAIT", "state": {}, "next_step": "Step 5"},
+                "step6": {"status": "WAIT", "state": {}, "next_step": "Step 5"},
+            }
+
+        entry_agent.run_once = fake_run_once
+        try:
+            status = entry_agent.build_entry_status("NQM6")
+        finally:
+            entry_agent.run_once = original_run_once
+
+        self.assertEqual(status["current_step"], "Step 4")
+        self.assertEqual(status["leg1_state"], "COMPLETE")
+        self.assertTrue(status["leg1_locked"])
+        self.assertEqual(status["leg1_reference_price"], 21408.0)
+        self.assertEqual(status["leg1_completed_at"], leg1_time)
+        self.assertEqual(status["current_pathway_control"], "rejection")
+        self.assertEqual(status["current_controlling_mode"], "Normal Rejection Mode")
+        self.assertEqual(status["rejection_pathway_status"], "controlling")
+
+    def test_step6_can_publish_live_after_prior_closed_leg2(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        original_run_once = entry_agent.run_once
+        current_time = "2026-05-07T13:45:00Z"
+        leg1_time = "2026-05-07T13:42:00Z"
+        leg2_time = "2026-05-07T13:44:00Z"
+        current_candle = {
+            "open": 50010.0,
+            "high": 50020.0,
+            "low": 49995.0,
+            "close": 50005.0,
+            "timestamp": current_time,
+        }
+
+        def fake_run_once(symbol, persist=True):
+            return {
+                "requested_symbol": symbol,
+                "normalized_symbol": "NQ",
+                "latest_price": current_candle["close"],
+                "latest_bar_time": current_time,
+                "ohlc": dict(current_candle),
+                "ohlc_is_closed": False,
+                "step_2_1a": {"active_level": "PMH", "level_price": 50000.0},
+                "rejection": {"rejection_mode": "ON", "watch_side": "SHORT"},
+                "step25": {"status": "READY"},
+                "step3": {"status": "ALLOW_STEP_4", "next_step": "Step 4"},
+                "step4": {
+                    "status": "READY",
+                    "next_step": "Step 5",
+                    "state": {
+                        "setup_direction": "SHORT",
+                        "leg1_direction": "SHORT",
+                        "leg1_status": "COMPLETE",
+                        "leg1_state_locked": True,
+                        "leg1_completed_at": leg1_time,
+                        "leg1_reference_price": 50008.0,
+                        "leg1_reference_candle_time": leg1_time,
+                        "active_liquidity": {"name": "PMH", "price": 50000.0},
+                        "candle_a": {"timestamp": "2026-05-07T13:41:00Z"},
+                        "candle_b": {"timestamp": leg1_time},
+                    },
+                },
+                "step5": {
+                    "status": "READY",
+                    "next_step": "Step 6",
+                    "state": {
+                        "setup_direction": "SHORT",
+                        "leg2_status": "VALIDATED",
+                        "step5_participation_validated": True,
+                        "leg2_candidate_candle_time": leg2_time,
+                        "leg2_candle": {"timestamp": leg2_time},
+                    },
+                },
+                "step6": {
+                    "status": "ENTRY_CONFIRMED",
+                    "state": {
+                        "setup_direction": "SHORT",
+                        "entry_triggered": True,
+                        "entry_candidate": dict(current_candle),
+                        "entry_candle": dict(current_candle),
+                    },
+                },
+            }
+
+        entry_agent.run_once = fake_run_once
+        try:
+            status = entry_agent.build_entry_status("NQM6")
+        finally:
+            entry_agent.run_once = original_run_once
+
+        self.assertEqual(status["current_step"], "Step 6")
+        self.assertEqual(status["entry_status"], "CONFIRM")
+        self.assertEqual(status["leg1_status"], "COMPLETE")
+        self.assertEqual(status["leg2_status"], "VALIDATED")
 
     def test_active_liquidity_persistence_is_scoped_per_root_symbol(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
@@ -1659,7 +2037,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
             for requested_symbol in ("NQM6", "YMM6", "RTYM6"):
                 status = entry_agent.build_entry_status(requested_symbol)
                 self.assertEqual(status["symbol"], requested_symbol)
-                self.assertEqual(status["current_step"], "Step 3")
+                self.assertEqual(status["current_step"], "Step 2")
                 self.assertEqual(status["active_liquidity_name"], "ONH")
                 self.assertIsNotNone(status["active_liquidity_price"])
 
@@ -2258,6 +2636,103 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(later_result["state"]["leg2_candidate_candle_time"], "2026-05-06T15:01:00Z")
         self.assertFalse(later_result["state"]["leg2_same_sequence_rejected"])
 
+    def test_leg1_window_counts_next_four_closed_candles_after_step2(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step4_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        state = {
+            "rejection_mode": "ON",
+            "step25_pathway_selection_complete": True,
+            "step3_allows_structure": True,
+            "interaction_state": "ACTIVE",
+            "setup_direction": "SHORT",
+            "initial_candle_a": {"timestamp": "2026-05-14T13:38:00Z", "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5},
+            "active_liquidity": {"name": "PMH", "price": 100.0},
+            "nearest_opposing_liquidity": {"name": "PML", "price": 90.0},
+            "atr_1m_14": 1.0,
+            "events": [],
+        }
+        no_participation = [
+            {"timestamp": "2026-05-14T13:39:00Z", "open": 102.0, "high": 102.75, "low": 102.0, "close": 102.5},
+            {"timestamp": "2026-05-14T13:40:00Z", "open": 102.5, "high": 103.25, "low": 102.5, "close": 103.0},
+            {"timestamp": "2026-05-14T13:41:00Z", "open": 103.0, "high": 103.75, "low": 103.0, "close": 103.5},
+            {"timestamp": "2026-05-14T13:42:00Z", "open": 103.5, "high": 104.25, "low": 103.5, "close": 104.0},
+        ]
+
+        for index, candle in enumerate(no_participation, start=1):
+            result = step4_engine.evaluate_step4({**state, "candle_b": candle})
+            state = result["state"]
+            self.assertEqual(state["leg1_window_candle_index"], index)
+            self.assertEqual(state["leg1_window_started_at"], "2026-05-14T13:39:00Z")
+            self.assertEqual(state["leg1_window_expires_at"], "2026-05-14T13:42:00Z")
+            self.assertEqual(state["leg1_window_remaining"], 4 - index)
+            if index < 4:
+                self.assertEqual(result["status"], "WAIT")
+                self.assertTrue(state["leg1_window_active"])
+                self.assertFalse(state["leg1_window_invalidated"])
+            else:
+                self.assertEqual(result["status"], "TERMINATED")
+                self.assertFalse(state["leg1_window_active"])
+                self.assertTrue(state["leg1_window_invalidated"])
+                self.assertEqual(
+                    state["leg1_window_invalidation_reason"],
+                    "Candle B failed both close-based participation and 34% wick-based participation.",
+                )
+
+    def test_leg1_window_accepts_participation_on_candles_1_through_4(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step4_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        def base_state():
+            return {
+                "rejection_mode": "ON",
+                "step25_pathway_selection_complete": True,
+                "step3_allows_structure": True,
+                "interaction_state": "ACTIVE",
+                "setup_direction": "SHORT",
+                "initial_candle_a": {"timestamp": "2026-05-14T13:38:00Z", "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5},
+                "active_liquidity": {"name": "PMH", "price": 100.0},
+                "nearest_opposing_liquidity": {"name": "PML", "price": 90.0},
+                "atr_1m_14": 1.0,
+                "events": [],
+            }
+
+        no_participation = [
+            {"timestamp": "2026-05-14T13:39:00Z", "open": 102.0, "high": 102.75, "low": 102.0, "close": 102.5},
+            {"timestamp": "2026-05-14T13:40:00Z", "open": 102.5, "high": 103.25, "low": 102.5, "close": 103.0},
+            {"timestamp": "2026-05-14T13:41:00Z", "open": 103.0, "high": 103.75, "low": 103.0, "close": 103.5},
+        ]
+        participation = {"open": 102.0, "high": 102.5, "low": 100.0, "close": 100.75}
+
+        for participation_index in (1, 2, 3, 4):
+            with self.subTest(participation_index=participation_index):
+                state = base_state()
+                for candle in no_participation[: participation_index - 1]:
+                    result = step4_engine.evaluate_step4({**state, "candle_b": candle})
+                    self.assertEqual(result["status"], "WAIT")
+                    state = result["state"]
+                candle = {**participation, "timestamp": f"2026-05-14T13:{38 + participation_index:02d}:00Z"}
+                result = step4_engine.evaluate_step4({**state, "candle_b": candle})
+
+                self.assertEqual(result["status"], "READY")
+                self.assertEqual(result["next_step"], "Step 5")
+                self.assertEqual(result["state"]["leg1_status"], "COMPLETE")
+                self.assertEqual(result["state"]["leg1_window_candle_index"], participation_index)
+                self.assertFalse(result["state"]["leg1_window_active"])
+                self.assertFalse(result["state"]["leg1_window_invalidated"])
+
     def test_market_feed_uses_trade_manager_last_price_snapshot(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:
@@ -2397,6 +2872,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["symbol"] for item in payload["symbols"]], ["NQM6", "YMM6", "RTYM6"])
+        self.assertTrue(all(item["current_step"] == "Step 2" for item in payload["symbols"]))
 
     def test_entry_status_cors_preflight_returns_allow_headers(self):
         server = self._load_server()
@@ -2478,7 +2954,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
             lines = server.ENTRY_DECISIONS_LOG_PATH.read_text(encoding="utf-8").splitlines()
             self.assertEqual(len(lines), 2)
             records = [json.loads(line) for line in lines]
-            self.assertEqual(records[0]["current_step"], "Step 3")
+            self.assertEqual(records[0]["current_step"], "Step 2")
             self.assertEqual(records[1]["current_step"], "Step 4")
             self.assertEqual(records[0]["active_liquidity_name"], "ONH")
 
@@ -2566,8 +3042,8 @@ class EntryStatusEndpointTests(unittest.TestCase):
             self.assertEqual(records[0]["symbol"], "YM")
             self.assertEqual(records[0]["candle_open"], 50000)
             self.assertEqual(records[0]["active_liquidity_name"], "ONH")
-            self.assertEqual(records[0]["step"], "Step 3")
-            self.assertEqual(records[0]["current_step_label"], "Step 3 (Participation)")
+            self.assertEqual(records[0]["step"], "Step 2")
+            self.assertEqual(records[0]["current_step_label"], "Step 2 (Liquidity Close / Pathway Activation)")
             self.assertEqual(records[1]["step"], "Step 4")
             self.assertEqual(records[1]["current_step_label"], "Step 4 (Leg 1 Formation)")
             self.assertEqual(records[2]["candle_time"], "2026-05-06T13:01:00Z")
