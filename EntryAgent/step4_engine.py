@@ -8,6 +8,7 @@ from typing import Any
 from step7_engine import terminate_interaction
 
 FINAL_PARTICIPATION_CANDLE_NUMBER = 4
+LEG1_WINDOW_INVALIDATION_REASON = "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation."
 
 
 def as_float(value: Any) -> float | None:
@@ -270,11 +271,25 @@ def format_candle_time(value: datetime | None) -> str | None:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def leg1_window_expires_at(started_at: Any) -> str | None:
+def leg1_window_expires_at(started_at: Any, *, started_at_is_confirmation: bool = False) -> str | None:
     parsed = parse_candle_time(started_at)
     if parsed is None:
         return None
-    return format_candle_time(parsed + timedelta(minutes=FINAL_PARTICIPATION_CANDLE_NUMBER - 1))
+    offset = FINAL_PARTICIPATION_CANDLE_NUMBER if started_at_is_confirmation else FINAL_PARTICIPATION_CANDLE_NUMBER - 1
+    return format_candle_time(parsed + timedelta(minutes=offset))
+
+
+def initialize_leg1_window(state: dict[str, Any], confirmation_time: Any) -> None:
+    """Start the Leg 1 window from Step 2 confirmation without counting that candle."""
+    if not confirmation_time or state.get("leg1_window_started_at"):
+        return
+    state["leg1_window_active"] = True
+    state["leg1_window_started_at"] = confirmation_time
+    state["leg1_window_candle_index"] = 0
+    state["leg1_window_remaining"] = FINAL_PARTICIPATION_CANDLE_NUMBER
+    state["leg1_window_expires_at"] = leg1_window_expires_at(confirmation_time, started_at_is_confirmation=True)
+    state["leg1_window_invalidated"] = False
+    state["leg1_window_invalidation_reason"] = None
 
 
 def apply_leg1_window_fields(
@@ -386,6 +401,8 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
                 }
             )
             return result("WAIT", state, "Step 4", reason, events)
+        reason = LEG1_WINDOW_INVALIDATION_REASON
+        apply_leg1_window_fields(state, candidate_b, candidate_count, invalidated=True, invalidation_reason=reason)
         mark_gateway_no_participation(state, reason)
         events.append(
             {

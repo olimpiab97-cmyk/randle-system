@@ -60,15 +60,15 @@ def test_close_based_participation_passes_and_assigns_leg1() -> None:
     assert state["candle_a_source"] == "initial_candle_a"
 
 
-def test_participation_on_candle_2_is_valid() -> None:
+def test_participation_on_candle_1_is_valid() -> None:
     result = evaluate_step4(base_interaction("SHORT"), valid_short_participation_candle(1))
     assert result["status"] == "READY"
     assert result["next_step"] == "Step 5"
     assert result["state"]["leg1_status"] == "COMPLETE"
-    assert result["state"]["participation_candle_number"] == 2
+    assert result["state"]["participation_candle_number"] == 1
 
 
-def test_participation_on_candle_3_is_valid() -> None:
+def test_participation_on_candle_2_is_valid() -> None:
     first = evaluate_step4(base_interaction("SHORT"), failed_short_participation_candle(1))
     assert first["status"] == "WAIT"
     assert first["next_step"] == "Step 4"
@@ -78,10 +78,10 @@ def test_participation_on_candle_3_is_valid() -> None:
     assert second["status"] == "READY"
     assert second["next_step"] == "Step 5"
     assert second["state"]["leg1_status"] == "COMPLETE"
-    assert second["state"]["participation_candle_number"] == 3
+    assert second["state"]["participation_candle_number"] == 2
 
 
-def test_participation_on_candle_4_is_valid() -> None:
+def test_participation_on_candle_3_is_valid() -> None:
     first = evaluate_step4(base_interaction("SHORT"), failed_short_participation_candle(1))
     second_wait = evaluate_step4(first["state"], failed_short_participation_candle(2))
     assert second_wait["status"] == "WAIT"
@@ -92,22 +92,39 @@ def test_participation_on_candle_4_is_valid() -> None:
     assert third["status"] == "READY"
     assert third["next_step"] == "Step 5"
     assert third["state"]["leg1_status"] == "COMPLETE"
-    assert third["state"]["participation_candle_number"] == 4
+    assert third["state"]["participation_candle_number"] == 3
+
+
+def test_participation_on_candle_4_is_valid() -> None:
+    first = evaluate_step4(base_interaction("SHORT"), failed_short_participation_candle(1))
+    second_wait = evaluate_step4(first["state"], failed_short_participation_candle(2))
+    third_wait = evaluate_step4(second_wait["state"], failed_short_participation_candle(3))
+    assert third_wait["status"] == "WAIT"
+    assert third_wait["next_step"] == "Step 4"
+    assert "leg1_status" not in third_wait["state"]
+
+    fourth = evaluate_step4(third_wait["state"], valid_short_participation_candle(4))
+    assert fourth["status"] == "READY"
+    assert fourth["next_step"] == "Step 5"
+    assert fourth["state"]["leg1_status"] == "COMPLETE"
+    assert fourth["state"]["participation_candle_number"] == 4
 
 
 def test_no_participation_by_candle_4_sets_gateway_without_leg1() -> None:
     first = evaluate_step4(base_interaction("SHORT"), failed_short_participation_candle(1))
     second = evaluate_step4(first["state"], failed_short_participation_candle(2))
     third = evaluate_step4(second["state"], failed_short_participation_candle(3))
+    fourth = evaluate_step4(third["state"], failed_short_participation_candle(4))
 
-    assert third["step"] == "Step 7"
-    assert third["status"] == "TERMINATED"
-    assert third["next_step"] == "Step 1"
-    assert third["state"]["level_state"] == "GATEWAY"
-    assert third["state"]["liquidity_state"] == "GATEWAY"
-    assert third["state"]["opposite_participation"] == "NOT_PRESENT"
-    assert third["state"].get("leg1_status") is None
-    assert third["next_step"] != "Step 5"
+    assert fourth["step"] == "Step 7"
+    assert fourth["status"] == "TERMINATED"
+    assert fourth["next_step"] == "Step 1"
+    assert fourth["reason"] == "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation."
+    assert fourth["state"]["level_state"] == "GATEWAY"
+    assert fourth["state"]["liquidity_state"] == "GATEWAY"
+    assert fourth["state"]["opposite_participation"] == "NOT_PRESENT"
+    assert fourth["state"].get("leg1_status") is None
+    assert fourth["next_step"] != "Step 5"
 
 
 def test_failed_participation_wait_does_not_proceed_to_step5() -> None:
@@ -147,7 +164,7 @@ def test_live_step4_uses_current_candle_not_prior_failed_candle_b() -> None:
     result = evaluate_step4(interaction)
     assert result["status"] == "READY"
     assert result["next_step"] == "Step 5"
-    assert result["state"]["participation_candle_number"] == 3
+    assert result["state"]["participation_candle_number"] == 2
 
 
 def test_step3_blocked_does_not_build_leg1() -> None:
@@ -436,6 +453,7 @@ def test_proximity_hard_bypass_routes_step7() -> None:
 def run_tests() -> None:
     tests = [
         test_close_based_participation_passes_and_assigns_leg1,
+        test_participation_on_candle_1_is_valid,
         test_participation_on_candle_2_is_valid,
         test_participation_on_candle_3_is_valid,
         test_participation_on_candle_4_is_valid,

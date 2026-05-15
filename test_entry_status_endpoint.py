@@ -2238,6 +2238,160 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertIsNone(snapshot["step4"]["state"].get("invalidation_source"))
         self.assertEqual(snapshot["step4"]["state"]["leg1_window_candle_index"], 1)
 
+    def test_leg1_window_starts_on_step2_confirmation_without_counting_confirmation_candle(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        confirmation = {
+            "open": 100.0,
+            "high": 101.0,
+            "low": 99.5,
+            "close": 100.5,
+            "timestamp": "2026-05-15T13:40:00Z",
+        }
+        candle1_fail = {
+            "open": 101.2,
+            "high": 101.6,
+            "low": 101.1,
+            "close": 101.5,
+            "timestamp": "2026-05-15T13:41:00Z",
+        }
+        candle1_valid = {
+            "open": 101.2,
+            "high": 101.6,
+            "low": 100.6,
+            "close": 100.75,
+            "timestamp": "2026-05-15T13:41:00Z",
+        }
+        step25 = {
+            "status": "READY",
+            "state": {
+                "rejection_mode": "ON",
+                "interaction_state": "ACTIVE",
+                "step25_pathway_selection_complete": True,
+                "controlling_mode": "Normal Rejection Mode",
+                "candidate_modes": ["Normal Rejection Mode"],
+                "initial_candle_a": confirmation,
+            },
+        }
+        step3 = {
+            "status": "ALLOW_STEP_4",
+            "next_step": "Step 4",
+            "state": {
+                "step3_allows_structure": True,
+                "active_liquidity": {"name": "PMH", "price": 100.0},
+            },
+        }
+        rejection = {"rejection_mode": "ON", "watch_side": "SHORT", "trigger_level": "PMH", "trigger_price": 100.0}
+
+        def snapshot(candle):
+            return {
+                "latest_bar_time": candle["timestamp"],
+                "ohlc": candle,
+                "ohlc_is_closed": True,
+                "liquidity": {"nearest_level_below": {"name": "PML", "price": 95.0}, "tick_size": 0.25},
+                "atr": {"atr_1m_14": 10.0},
+            }
+
+        confirmation_result = entry_agent.evaluate_live_step4(snapshot(confirmation), rejection, step25, step3, {})
+        self.assertEqual(confirmation_result["status"], "WAIT")
+        self.assertTrue(confirmation_result["state"]["leg1_window_active"])
+        self.assertEqual(confirmation_result["state"]["leg1_window_started_at"], confirmation["timestamp"])
+        self.assertEqual(confirmation_result["state"]["leg1_window_candle_index"], 0)
+        self.assertEqual(confirmation_result["state"]["leg1_window_remaining"], 4)
+        self.assertEqual(confirmation_result["state"]["leg1_window_expires_at"], "2026-05-15T13:44:00Z")
+
+        candle1_result = entry_agent.evaluate_live_step4(
+            snapshot(candle1_fail),
+            rejection,
+            step25,
+            step3,
+            {"step4": confirmation_result},
+        )
+        self.assertEqual(candle1_result["status"], "WAIT")
+        self.assertEqual(candle1_result["state"]["leg1_window_candle_index"], 1)
+        self.assertEqual(candle1_result["state"]["leg1_window_remaining"], 3)
+
+        complete_result = entry_agent.evaluate_live_step4(
+            snapshot(candle1_valid),
+            rejection,
+            step25,
+            step3,
+            {"step4": confirmation_result},
+        )
+        self.assertEqual(complete_result["status"], "READY")
+        self.assertEqual(complete_result["state"]["leg1_status"], "COMPLETE")
+        self.assertFalse(complete_result["state"]["leg1_window_active"])
+        self.assertFalse(complete_result["state"]["leg1_window_invalidated"])
+
+    def test_leg1_window_candle4_invalidates_and_reasoning_includes_count(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import step4_engine
+            server = self._load_server()
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        state = {
+            "system_state": "REJECTION MODE ON",
+            "trade_mode": "ON",
+            "rejection_mode": "ON",
+            "interaction_state": "ACTIVE",
+            "setup_direction": "SHORT",
+            "step25_pathway_selection_complete": True,
+            "step3_allows_structure": True,
+            "controlling_mode": "Normal Rejection Mode",
+            "candidate_modes": ["Normal Rejection Mode"],
+            "initial_candle_a": {"open": 100.0, "high": 101.0, "low": 99.5, "close": 100.5, "timestamp": "2026-05-15T13:40:00Z"},
+            "nearest_opposing_liquidity": {"name": "PML", "price": 95.0},
+            "atr_1m_14": 10.0,
+            "events": [],
+        }
+        step4_engine.initialize_leg1_window(state, "2026-05-15T13:40:00Z")
+
+        for minute in range(41, 45):
+            result = step4_engine.evaluate_step4(
+                state,
+                {"open": 101.2, "high": 101.6, "low": 101.1, "close": 101.5, "timestamp": f"2026-05-15T13:{minute}:00Z"},
+            )
+            state = result["state"]
+
+        expected_reason = "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation."
+        self.assertEqual(result["step"], "Step 7")
+        self.assertEqual(result["status"], "TERMINATED")
+        self.assertEqual(result["reason"], expected_reason)
+        self.assertFalse(result["state"]["leg1_window_active"])
+        self.assertTrue(result["state"]["leg1_window_invalidated"])
+        self.assertEqual(result["state"]["leg1_window_invalidation_reason"], expected_reason)
+        self.assertEqual(result["state"]["leg1_window_candle_index"], 4)
+        self.assertEqual(result["state"]["leg1_window_remaining"], 0)
+
+        reasoning = server.entry_reasoning_record(
+            {
+                "symbol": "NQ",
+                "leg1_window_active": result["state"]["leg1_window_active"],
+                "leg1_window_started_at": result["state"]["leg1_window_started_at"],
+                "leg1_window_candle_index": result["state"]["leg1_window_candle_index"],
+                "leg1_window_remaining": result["state"]["leg1_window_remaining"],
+                "leg1_window_expires_at": result["state"]["leg1_window_expires_at"],
+                "leg1_window_invalidated": result["state"]["leg1_window_invalidated"],
+                "leg1_window_invalidation_reason": result["state"]["leg1_window_invalidation_reason"],
+            }
+        )
+        self.assertFalse(reasoning["leg1_window_active"])
+        self.assertEqual(reasoning["leg1_window_candle_index"], 4)
+        self.assertEqual(reasoning["leg1_window_remaining"], 0)
+        self.assertEqual(reasoning["leg1_window_invalidation_reason"], expected_reason)
+
     def test_locked_leg1_survives_rejection_to_continuation_control_toggle(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:
@@ -3372,12 +3526,13 @@ class EntryStatusEndpointTests(unittest.TestCase):
             {"timestamp": "2026-05-14T13:41:00Z", "open": 103.0, "high": 103.75, "low": 103.0, "close": 103.5},
             {"timestamp": "2026-05-14T13:42:00Z", "open": 103.5, "high": 104.25, "low": 103.5, "close": 104.0},
         ]
+        step4_engine.initialize_leg1_window(state, "2026-05-14T13:38:00Z")
 
         for index, candle in enumerate(no_participation, start=1):
             result = step4_engine.evaluate_step4({**state, "candle_b": candle})
             state = result["state"]
             self.assertEqual(state["leg1_window_candle_index"], index)
-            self.assertEqual(state["leg1_window_started_at"], "2026-05-14T13:39:00Z")
+            self.assertEqual(state["leg1_window_started_at"], "2026-05-14T13:38:00Z")
             self.assertEqual(state["leg1_window_expires_at"], "2026-05-14T13:42:00Z")
             self.assertEqual(state["leg1_window_remaining"], 4 - index)
             if index < 4:
@@ -3390,7 +3545,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
                 self.assertTrue(state["leg1_window_invalidated"])
                 self.assertEqual(
                     state["leg1_window_invalidation_reason"],
-                    "Candle B failed both close-based participation and 34% wick-based participation.",
+                    "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation.",
                 )
 
     def test_leg1_window_accepts_participation_on_candles_1_through_4(self):
@@ -3427,6 +3582,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         for participation_index in (1, 2, 3, 4):
             with self.subTest(participation_index=participation_index):
                 state = base_state()
+                step4_engine.initialize_leg1_window(state, "2026-05-14T13:38:00Z")
                 for candle in no_participation[: participation_index - 1]:
                     result = step4_engine.evaluate_step4({**state, "candle_b": candle})
                     self.assertEqual(result["status"], "WAIT")

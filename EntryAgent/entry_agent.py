@@ -24,7 +24,7 @@ from levels import classify_liquidity_location, root_symbol
 from market_feed import get_latest_market_snapshot, recent_closed_bars
 from step25_engine import evaluate_step25
 from step3_engine import evaluate_step3
-from step4_engine import evaluate_step4
+from step4_engine import evaluate_step4, initialize_leg1_window
 from step5_engine import evaluate_step5
 from step6_engine import evaluate_step6
 
@@ -2147,8 +2147,7 @@ def build_step4_interaction(
     current_candle = build_current_candle(snapshot)
     if current_candle is None:
         return None
-    if is_setup_candle_reused_as_participation(current_candle, step25_state, step3_state):
-        return None
+    current_is_setup_candle = is_setup_candle_reused_as_participation(current_candle, step25_state, step3_state)
 
     previous_step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
     previous_state = previous_step4.get("state") if isinstance(previous_step4.get("state"), dict) else {}
@@ -2164,11 +2163,12 @@ def build_step4_interaction(
 
     interaction = dict(step25_state)
     interaction.update(step3_state)
+    step2_confirmation_time = candle_timestamp(step25_state.get("initial_candle_a") if isinstance(step25_state.get("initial_candle_a"), dict) else None)
     interaction.update(
         {
             "setup_direction": setup_direction,
-            "candle_b": current_candle,
-            "latest_candle": current_candle,
+            "candle_b": None if current_is_setup_candle else current_candle,
+            "latest_candle": None if current_is_setup_candle else current_candle,
             "participation_candidate_keys": previous_state.get("participation_candidate_keys") or [],
             "participation_candidate_count": previous_state.get("participation_candidate_count") or 0,
             "participation_timer": previous_state.get("participation_timer"),
@@ -2185,6 +2185,7 @@ def build_step4_interaction(
             "events": list(previous_step4.get("events") or step3.get("events") or []),
         }
     )
+    initialize_leg1_window(interaction, step2_confirmation_time)
     if interaction.get("liquidity_type") == "STATIC_STACK":
         previous_candle_a = previous_state.get("candle_a") if isinstance(previous_state.get("candle_a"), dict) else None
         confirmation_candle = step3_state.get("stack_extreme_confirmation_candle") if isinstance(step3_state.get("stack_extreme_confirmation_candle"), dict) else None
@@ -2243,6 +2244,25 @@ def evaluate_live_step4(
 
     interaction = build_step4_interaction(snapshot, rejection, step25, step3, persisted_state)
     if interaction is None:
+        if step25.get("status") == "READY" and step3.get("status") == "ALLOW_STEP_4":
+            state = {}
+            if isinstance(step25_state, dict):
+                state.update(step25_state)
+            if isinstance(step3_state, dict):
+                state.update(step3_state)
+            step2_confirmation_time = candle_timestamp(state.get("initial_candle_a") if isinstance(state.get("initial_candle_a"), dict) else None)
+            initialize_leg1_window(state, step2_confirmation_time)
+            if state.get("leg1_window_active") is True:
+                reason = "Step 4 waiting: Leg 1 window started after Step 2 confirmation; Candle 1 is the next candle."
+                state["state_transition_reason"] = reason
+                return {
+                    "step": "Step 4",
+                    "status": "WAIT",
+                    "state": state,
+                    "next_step": "Step 4",
+                    "reason": reason,
+                    "events": [{"event": "step4_leg1_window_started", "reason": reason}],
+                }
         reason = "Step 4 waiting for Step 2.5 selection, Step 3 permission, Candle A, Candle B, setup direction, ATR, and opposing liquidity."
         return {
             "step": "Step 4",
@@ -3570,6 +3590,7 @@ def format_snapshot(snapshot: dict[str, Any]) -> str:
     step25 = snapshot.get("step25") or {}
     step3 = snapshot.get("step3") or {}
     step4 = snapshot.get("step4") or {}
+    step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
     step5 = snapshot.get("step5") or {}
     step6 = snapshot.get("step6") or {}
     lines.extend(
@@ -3599,6 +3620,13 @@ def format_snapshot(snapshot: dict[str, Any]) -> str:
             f"step4_status: {step4.get('status')}",
             f"step4_next_step: {step4.get('next_step')}",
             f"step4_reason: {step4.get('reason')}",
+            f"leg1_window_active: {step4_state.get('leg1_window_active')}",
+            f"leg1_window_started_at: {step4_state.get('leg1_window_started_at')}",
+            f"leg1_window_candle_index: {step4_state.get('leg1_window_candle_index')}",
+            f"leg1_window_remaining: {step4_state.get('leg1_window_remaining')}",
+            f"leg1_window_expires_at: {step4_state.get('leg1_window_expires_at')}",
+            f"leg1_window_invalidated: {step4_state.get('leg1_window_invalidated')}",
+            f"leg1_window_invalidation_reason: {step4_state.get('leg1_window_invalidation_reason')}",
             f"step5_status: {step5.get('status')}",
             f"step5_next_step: {step5.get('next_step')}",
             f"step5_reason: {step5.get('reason')}",
