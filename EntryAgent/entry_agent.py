@@ -48,6 +48,10 @@ ACTIVE_LIQUIDITY_PRIORITY = {
     "PML": 3,
 }
 LOCAL_MARKET_TIMEZONE = ZoneInfo("America/Los_Angeles")
+OBSERVATION_RESET_HOUR = 6
+OBSERVATION_RESET_MINUTE = 15
+ENTRY_AUTHORIZATION_HOUR = 6
+ENTRY_AUTHORIZATION_MINUTE = 30
 STEP_LABELS = {
     "Step 1": "Step 1 (Session / Level Prep)",
     "Step 2": "Step 2 (Liquidity Close / Pathway Activation)",
@@ -394,6 +398,100 @@ def build_step_2_1a_candle(snapshot: dict[str, Any], active_level: str, level_pr
 def candle_close_confirmed(snapshot: dict[str, Any]) -> bool:
     """Return False only when the feed explicitly marks the OHLC as a live forming bar."""
     return snapshot.get("ohlc_is_closed") is not False
+
+
+def local_market_time(value: Any) -> datetime | None:
+    """Parse a timestamp and return it in the local market timezone."""
+    parsed = parse_candle_time(value)
+    return parsed.astimezone(LOCAL_MARKET_TIMEZONE) if parsed else None
+
+
+def local_session_date(value: Any) -> str | None:
+    """Return the local trading date for a candle/timestamp."""
+    local_time = local_market_time(value)
+    return local_time.date().isoformat() if local_time else None
+
+
+def at_or_after_local_time(value: Any, hour: int, minute: int) -> bool:
+    local_time = local_market_time(value)
+    if not local_time:
+        return False
+    boundary = local_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return local_time >= boundary
+
+
+def before_entry_authorization(snapshot: dict[str, Any]) -> bool:
+    """Return True during the 6:15-6:30 observation-only window."""
+    return at_or_after_local_time(snapshot.get("latest_bar_time"), OBSERVATION_RESET_HOUR, OBSERVATION_RESET_MINUTE) and not at_or_after_local_time(
+        snapshot.get("latest_bar_time"),
+        ENTRY_AUTHORIZATION_HOUR,
+        ENTRY_AUTHORIZATION_MINUTE,
+    )
+
+
+def valid_locked_tv_context(tv_context: dict[str, Any] | None) -> bool:
+    """Return True when the TradingView level map is usable for the session reset."""
+    if not isinstance(tv_context, dict) or not isinstance(tv_context.get("levels"), dict):
+        return False
+    explicit_locked = (
+        tv_context.get("locked")
+        if tv_context.get("locked") is not None
+        else tv_context.get("context_locked")
+        if tv_context.get("context_locked") is not None
+        else tv_context.get("locked_for_day")
+    )
+    if explicit_locked is not True:
+        return False
+    return bool(tv_context["levels"])
+
+
+def apply_observation_cycle_reset(
+    persisted_state: dict[str, Any],
+    symbol: str,
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    """Clear stale per-symbol setup state once per symbol/session after the 6:15 TV lock."""
+    session_date = local_session_date(snapshot.get("latest_bar_time"))
+    if (
+        not symbol
+        or not session_date
+        or not at_or_after_local_time(snapshot.get("latest_bar_time"), OBSERVATION_RESET_HOUR, OBSERVATION_RESET_MINUTE)
+        or not valid_locked_tv_context(snapshot.get("tv_context"))
+    ):
+        return persisted_state
+
+    symbol_key = root_symbol(symbol)
+    symbol_state = symbol_scoped_persisted_state(persisted_state, symbol_key)
+    if symbol_state.get("observation_reset_session_date") == session_date:
+        return persisted_state
+
+    reset_symbol_state = {
+        "symbol": symbol_state.get("symbol"),
+        "normalized_symbol": symbol_key,
+        "requested_symbol": symbol_state.get("requested_symbol") or symbol,
+        "latest_price": snapshot.get("latest_price"),
+        "latest_bar_time": snapshot.get("latest_bar_time"),
+        "tv_context": snapshot.get("tv_context"),
+        "tv_context_status": snapshot.get("tv_context_status"),
+        "observation_reset_session_date": session_date,
+        "observation_reset_bar_time": snapshot.get("latest_bar_time"),
+        "observation_reset_at": datetime.now(timezone.utc).isoformat(),
+    }
+    state = dict(persisted_state)
+    state_by_symbol = dict(state.get("state_by_symbol") or {})
+    state_by_symbol[symbol_key] = reset_symbol_state
+    state["state_by_symbol"] = state_by_symbol
+    last_by_symbol = dict(state.get("last_interacted_liquidity_by_symbol") or {})
+    last_by_symbol.pop(symbol_key, None)
+    state["last_interacted_liquidity_by_symbol"] = last_by_symbol
+    if root_symbol(str(state.get("normalized_symbol") or "")) == symbol_key:
+        state.update(reset_symbol_state)
+        state["last_interacted_liquidity"] = None
+    snapshot["observation_reset_applied"] = True
+    snapshot["observation_reset_session_date"] = session_date
+    snapshot["observation_reset_bar_time"] = snapshot.get("latest_bar_time")
+    snapshot["observation_reset_at"] = reset_symbol_state["observation_reset_at"]
+    return state
 
 
 def initial_or_persisted_step_2_1a_state(
@@ -1020,6 +1118,7 @@ def evaluate_live_step_2_1a(
     selected_liquidity = None
     current_candle = build_current_candle(snapshot)
     previous_liquidity = persisted_liquidity_candidate(persisted_state, symbol_key)
+    locked_liquidity = locked_leg1_active_liquidity(symbol_state)
     tick_size = float(liquidity.get("tick_size") or 0.25)
     if candle_close_confirmed(snapshot):
         selected_liquidity = selected_active_liquidity_from_context(
@@ -1034,6 +1133,9 @@ def evaluate_live_step_2_1a(
                 previous_liquidity,
                 snapshot.get("ohlc") if isinstance(snapshot.get("ohlc"), dict) else None,
             )
+    if isinstance(locked_liquidity, dict):
+        selected_liquidity = locked_liquidity
+        previous_liquidity = locked_liquidity
     consumed_levels = list(consumed_liquidity_levels(symbol_state))
     threshold_record, threshold_target = threshold_liquidity_exhaustion(
         symbol_state,
@@ -1041,7 +1143,7 @@ def evaluate_live_step_2_1a(
         snapshot.get("tv_context"),
         current_candle,
     )
-    if threshold_record:
+    if threshold_record and not isinstance(locked_liquidity, dict):
         consumed_levels = merge_consumed_liquidity_levels(consumed_levels, [threshold_record])
         if threshold_target and (
             not isinstance(selected_liquidity, dict)
@@ -1055,24 +1157,25 @@ def evaluate_live_step_2_1a(
         ):
             selected_liquidity = threshold_target
     symbol_state_with_consumed = {**symbol_state, "consumed_liquidity_levels": consumed_levels}
-    if selected_liquidity and consumed_liquidity_blocks(
+    if selected_liquidity and not isinstance(locked_liquidity, dict) and consumed_liquidity_blocks(
         symbol_state_with_consumed,
         selected_liquidity.get("name"),
         selected_liquidity.get("price"),
         current_candle,
     ):
         selected_liquidity = None
-    if same_liquidity_reactivation_blocked(selected_liquidity, symbol_state, current_candle):
+    if not isinstance(locked_liquidity, dict) and same_liquidity_reactivation_blocked(selected_liquidity, symbol_state, current_candle):
         selected_liquidity = None
-    consumed_levels = merge_consumed_liquidity_levels(
-        consumed_levels,
-        record_exhausted_liquidity(
-            symbol_state_with_consumed,
-            previous_liquidity,
-            selected_liquidity,
-            current_candle,
-        ),
-    )
+    if not isinstance(locked_liquidity, dict):
+        consumed_levels = merge_consumed_liquidity_levels(
+            consumed_levels,
+            record_exhausted_liquidity(
+                symbol_state_with_consumed,
+                previous_liquidity,
+                selected_liquidity,
+                current_candle,
+            ),
+        )
     active_level = selected_liquidity.get("name") if selected_liquidity else None
     level_price = selected_liquidity.get("price") if selected_liquidity else None
     if not selected_liquidity:
@@ -1268,6 +1371,21 @@ def same_active_liquidity(left: Any, right: Any) -> bool:
     left_name, left_price = active_liquidity_identity(left)
     right_name, right_price = active_liquidity_identity(right)
     return bool(left_name and left_name == right_name and left_price is not None and left_price == right_price)
+
+
+def locked_leg1_active_liquidity(persisted_state: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the active liquidity owned by a valid locked Leg 1 state."""
+    step5 = persisted_state.get("step5") if isinstance(persisted_state.get("step5"), dict) else {}
+    step5_state = step5.get("state") if isinstance(step5.get("state"), dict) else {}
+    if step5_state.get("leg2_status") == "WAIT" and step5_state.get("leg2_wait_reason"):
+        return None
+    step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
+    state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    locked_ok, _reason = valid_participation_locked_leg1_state(state)
+    if not locked_ok:
+        return None
+    active = state.get("active_liquidity")
+    return active if isinstance(active, dict) else None
 
 
 def pathway_control_from_price(active_liquidity: dict[str, Any] | None, price: Any) -> dict[str, Any]:
@@ -2344,6 +2462,190 @@ def build_step6_interaction(
     return interaction
 
 
+def unique_bars_by_time(*sources: Any) -> list[dict[str, Any]]:
+    """Return candles with timestamps, sorted by parsed candle time."""
+    by_time: dict[str, dict[str, Any]] = {}
+    for source in sources:
+        items = source if isinstance(source, list) else [source]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            timestamp = candle_timestamp(item)
+            if not timestamp:
+                continue
+            if all(item.get(key) is not None for key in ("open", "high", "low", "close")):
+                by_time[timestamp] = item
+    return sorted(by_time.values(), key=lambda item: parse_candle_time(candle_timestamp(item)) or datetime.min.replace(tzinfo=timezone.utc))
+
+
+def continuation_structure_condition(mode: str, candle: dict[str, Any], level: float) -> bool:
+    close = optional_float(candle.get("close"))
+    if close is None:
+        return False
+    if mode == "S/R":
+        return close < level
+    if mode == "R/S":
+        return close > level
+    return False
+
+
+def continuation_controlling_structure_from_bars(
+    mode: str,
+    level: float,
+    bars: list[dict[str, Any]],
+    reclaim_time: Any,
+) -> dict[str, Any] | None:
+    """Find the final uninterrupted close-through push before the continuation reclaim."""
+    reclaim_dt = parse_candle_time(reclaim_time)
+    if not reclaim_dt:
+        return None
+    active: dict[str, Any] | None = None
+    for candle in bars:
+        candle_time = parse_candle_time(candle_timestamp(candle))
+        if not candle_time or candle_time >= reclaim_dt:
+            continue
+        if continuation_structure_condition(mode, candle, level):
+            high = optional_float(candle.get("high"))
+            low = optional_float(candle.get("low"))
+            open_price = optional_float(candle.get("open"))
+            close_price = optional_float(candle.get("close"))
+            if high is None or low is None:
+                continue
+            if (
+                active is not None
+                and mode == "S/R"
+                and open_price is not None
+                and close_price is not None
+                and close_price > open_price
+                and close_price > optional_float(active.get("last_directional_close"))
+            ):
+                active = None
+                continue
+            if (
+                active is not None
+                and mode == "R/S"
+                and open_price is not None
+                and close_price is not None
+                and close_price < open_price
+                and close_price < optional_float(active.get("last_directional_close"))
+            ):
+                active = None
+                continue
+            if active is None:
+                active = {
+                    "high": high,
+                    "low": low,
+                    "start_time": candle_timestamp(candle),
+                    "end_time": candle_timestamp(candle),
+                    "last_directional_close": close_price,
+                }
+            else:
+                active["high"] = max(float(active["high"]), high)
+                active["low"] = min(float(active["low"]), low)
+                active["end_time"] = candle_timestamp(candle)
+                active["last_directional_close"] = close_price
+        else:
+            active = None
+    return active
+
+
+def continuation_structure_swept(
+    mode: str,
+    structure: dict[str, Any],
+    bars: list[dict[str, Any]],
+    reclaim_time: Any,
+    tick_size: Any,
+) -> bool:
+    reclaim_dt = parse_candle_time(reclaim_time)
+    if not reclaim_dt:
+        return False
+    tick = optional_float(tick_size)
+    high = optional_float(structure.get("high"))
+    low = optional_float(structure.get("low"))
+    for candle in bars:
+        candle_time = parse_candle_time(candle_timestamp(candle))
+        if not candle_time or candle_time <= reclaim_dt:
+            continue
+        candle_high = optional_float(candle.get("high"))
+        candle_low = optional_float(candle.get("low"))
+        if mode == "S/R" and high is not None and candle_high is not None:
+            if candle_high >= high + tick if tick is not None else candle_high > high:
+                return True
+        if mode == "R/S" and low is not None and candle_low is not None:
+            if candle_low <= low - tick if tick is not None else candle_low < low:
+                return True
+    return False
+
+
+def continuation_controlling_structure_status(
+    snapshot: dict[str, Any],
+    interaction: dict[str, Any],
+) -> dict[str, Any]:
+    """Return continuation controlling-structure sweep status for S/R or R/S."""
+    mode = normalized_pathway_name(interaction.get("controlling_mode") or interaction.get("current_controlling_mode"))
+    if mode not in {"S/R", "R/S"}:
+        return {"required": False}
+    level = optional_float(interaction.get("pathway_level") or interaction.get("level"))
+    reclaim = interaction.get("reclaim_candle_a") if isinstance(interaction.get("reclaim_candle_a"), dict) else None
+    reclaim_time = candle_timestamp(reclaim)
+    if level is None or not reclaim_time:
+        reason = "Continuation controlling-structure sweep requires a pathway level and reclaim candle."
+        return {
+            "required": True,
+            "swept": False,
+            "wait_reason": reason,
+            "events": [{"event": "continuation_controlling_structure_missing", "reason": reason}],
+        }
+    symbol = str(snapshot.get("normalized_symbol") or snapshot.get("symbol") or "NQ")
+    history = recent_closed_bars(symbol, 120)
+    current_candle = build_snapshot_candle(snapshot)
+    bars = unique_bars_by_time(
+        history,
+        interaction.get("initial_candle_a") if isinstance(interaction.get("initial_candle_a"), dict) else None,
+        reclaim,
+        interaction.get("candle_a") if isinstance(interaction.get("candle_a"), dict) else None,
+        interaction.get("candle_b") if isinstance(interaction.get("candle_b"), dict) else None,
+        interaction.get("leg2_candle") if isinstance(interaction.get("leg2_candle"), dict) else None,
+        current_candle,
+    )
+    structure = continuation_controlling_structure_from_bars(mode, level, bars, reclaim_time)
+    if not structure:
+        reason = "Continuation controlling-structure sweep requires a close-through structure before the reclaim candle."
+        return {
+            "required": True,
+            "swept": False,
+            "wait_reason": reason,
+            "events": [{"event": "continuation_controlling_structure_not_found", "reason": reason}],
+        }
+    swept = continuation_structure_swept(mode, structure, bars, reclaim_time, interaction.get("tick_size") or (snapshot.get("liquidity") or {}).get("tick_size"))
+    reason = None if swept else (
+        "S/R continuation entry requires a wick sweep above the continuation controlling-structure high."
+        if mode == "S/R"
+        else "R/S continuation entry requires a wick sweep below the continuation controlling-structure low."
+    )
+    return {
+        "required": True,
+        "swept": swept,
+        "high": structure.get("high"),
+        "low": structure.get("low"),
+        "start_time": structure.get("start_time"),
+        "end_time": structure.get("end_time"),
+        "wait_reason": reason,
+        "events": [] if swept else [{"event": "continuation_controlling_structure_sweep_required", "reason": reason}],
+    }
+
+
+def apply_continuation_structure_fields(state: dict[str, Any], status: dict[str, Any]) -> None:
+    if status.get("required") is not True:
+        return
+    state["continuation_controlling_structure_high"] = status.get("high")
+    state["continuation_controlling_structure_low"] = status.get("low")
+    state["continuation_controlling_structure_start_time"] = status.get("start_time")
+    state["continuation_controlling_structure_end_time"] = status.get("end_time")
+    state["continuation_controlling_structure_swept"] = status.get("swept") is True
+    state["continuation_controlling_structure_wait_reason"] = status.get("wait_reason")
+
+
 def evaluate_live_step6(snapshot: dict[str, Any], step5: dict[str, Any], persisted_state: dict[str, Any]) -> dict[str, Any]:
     """Evaluate Step 6 after Step 5 is ready; do not place orders."""
     interaction = build_step6_interaction(snapshot, step5, persisted_state)
@@ -2357,7 +2659,23 @@ def evaluate_live_step6(snapshot: dict[str, Any], step5: dict[str, Any], persist
             "reason": reason,
             "events": [{"event": "step6_waiting_for_inputs", "reason": reason}],
         }
-    return evaluate_step6(interaction)
+    continuation_status = continuation_controlling_structure_status(snapshot, interaction)
+    if continuation_status.get("required") is True:
+        apply_continuation_structure_fields(interaction, continuation_status)
+        if continuation_status.get("swept") is not True:
+            reason = str(continuation_status.get("wait_reason") or "Continuation controlling-structure sweep is required before Step 6 entry.")
+            return {
+                "step": "Step 6",
+                "status": "WAIT",
+                "state": interaction,
+                "next_step": "Step 6",
+                "reason": reason,
+                "events": list(interaction.get("events") or []) + list(continuation_status.get("events") or []),
+            }
+    result = evaluate_step6(interaction)
+    if continuation_status.get("required") is True and isinstance(result.get("state"), dict):
+        apply_continuation_structure_fields(result["state"], continuation_status)
+    return result
 
 
 def run_once(symbol: str = "NQ", persist: bool = True) -> dict[str, Any]:
@@ -2371,6 +2689,8 @@ def run_once(symbol: str = "NQ", persist: bool = True) -> dict[str, Any]:
     snapshot["normalized_symbol"] = normalized_symbol
     snapshot["tv_context"] = load_tv_context(normalized_symbol)
     snapshot["tv_context_status"] = tv_context_freshness_status(snapshot["tv_context"])
+    persisted_state = apply_observation_cycle_reset(persisted_state, normalized_symbol, snapshot)
+    symbol_persisted_state = symbol_scoped_persisted_state(persisted_state, normalized_symbol)
     levels = active_levels_from_tv_context(snapshot["tv_context"])
     liquidity = classify_liquidity_location(
         snapshot.get("latest_price"),
@@ -2531,6 +2851,53 @@ def first_invalidation_reason(*results: dict[str, Any]) -> str | None:
         if decision_status(result) == "INVALIDATE":
             return result_reason(result, "Invalidated by EntryAgent rule.")
     return None
+
+
+def step_order(step: Any) -> float:
+    """Return blueprint step order for public consistency checks."""
+    text = str(step or "").strip()
+    if not text.startswith("Step "):
+        return 0.0
+    try:
+        return float(text.replace("Step ", "", 1))
+    except ValueError:
+        return 0.0
+
+
+def result_invalidation_source_step(result: dict[str, Any]) -> str | None:
+    """Return the invalidating step from an engine result."""
+    if not isinstance(result, dict) or decision_status(result) != "INVALIDATE":
+        return None
+    state = result.get("state") if isinstance(result.get("state"), dict) else {}
+    source_step = state.get("invalidation_source_step") or result.get("step")
+    return str(source_step) if source_step else None
+
+
+def public_invalidation_from_results(current_step: str, *results: dict[str, Any]) -> dict[str, Any]:
+    """Expose invalidation only when its source step is not ahead of public current_step."""
+    public_order = step_order(current_step)
+    for result in results:
+        if decision_status(result) != "INVALIDATE":
+            continue
+        source_step = result_invalidation_source_step(result)
+        if step_order(source_step) <= public_order:
+            state = result.get("state") if isinstance(result.get("state"), dict) else {}
+            return {
+                "reason": result_reason(result, "Invalidated by EntryAgent rule."),
+                "source_step": source_step,
+                "source": state.get("invalidation_source"),
+                "source_candle_time": state.get("invalidation_source_candle_time"),
+                "invalidated_at": state.get("invalidated_at"),
+                "invalidated_liquidity": state.get("invalidated_liquidity"),
+            }
+    return {
+        "reason": None,
+        "source_step": None,
+        "source": None,
+        "source_candle_time": None,
+        "invalidated_at": None,
+        "invalidated_liquidity": None,
+    }
 
 
 def is_atr_required_reason(reason: str | None) -> bool:
@@ -2708,6 +3075,84 @@ def wait_reason_for_current_step(
     return result_reason(step6, result_reason(step5, result_reason(step4, "Waiting for EntryAgent setup requirements.")))
 
 
+def current_step_public_status(current_step: str, active_name: Any, rejection_active: bool) -> str:
+    """Return the public milestone status used by UI surfaces."""
+    if current_step == "Step 2" and active_name and rejection_active:
+        return "CONFIRMED"
+    if current_step in {"Step 4", "Step 5", "Step 6"}:
+        return "CONFIRMED"
+    return "WAIT"
+
+
+def confirmed_time_from_candle(candle: Any) -> str | None:
+    """Return a candle close timestamp from a candle-like dict."""
+    return candle_timestamp(candle if isinstance(candle, dict) else None)
+
+
+def step2_confirmed_at(snapshot: dict[str, Any], step_2_1a: dict[str, Any], current_step_status: str) -> str | None:
+    """Return the Step 2 liquidity-close confirmation candle time."""
+    if current_step_status != "CONFIRMED" or step_2_1a.get("step_2_activated") is not True:
+        return None
+    return (
+        confirmed_time_from_candle(step_2_1a.get("candle_a"))
+        or step_2_1a.get("last_evaluated_bar_time")
+        or (snapshot.get("latest_bar_time") if candle_close_confirmed(snapshot) else None)
+    )
+
+
+def leg1_confirmed_at(step4_state: dict[str, Any], leg1_published: bool) -> str | None:
+    """Return the public Leg 1 confirmation candle time."""
+    if not leg1_published:
+        return None
+    return step4_state.get("leg1_completed_at") or confirmed_time_from_candle(step4_state.get("candle_b"))
+
+
+def leg2_confirmed_at(step5_state: dict[str, Any], leg2_published: bool) -> str | None:
+    """Return the public Leg 2 validation candle time."""
+    if not leg2_published:
+        return None
+    return (
+        step5_state.get("leg2_candidate_candle_time")
+        or step5_state.get("leg2_completed_at")
+        or confirmed_time_from_candle(step5_state.get("leg2_candle"))
+    )
+
+
+def entry_confirmed_at(snapshot: dict[str, Any], step6_state: dict[str, Any], entry_status: str) -> str | None:
+    """Return the public entry trigger candle time, never sourced from a live forming candle."""
+    if entry_status != "CONFIRM":
+        return None
+    entry_time = (
+        confirmed_time_from_candle(step6_state.get("entry_candle"))
+        or step6_state.get("entry_confirmed_at")
+        or step6_state.get("last_evaluated_candle_time")
+    )
+    if not entry_time:
+        return None
+    if not candle_close_confirmed(snapshot) and same_candle_time(entry_time, snapshot.get("latest_bar_time")):
+        return None
+    return entry_time
+
+
+def current_step_confirmed_at(
+    current_step: str,
+    step2_time: str | None,
+    leg1_time: str | None,
+    leg2_time: str | None,
+    entry_time: str | None,
+) -> str | None:
+    """Return the candle time for the currently public milestone."""
+    if current_step == "Step 2":
+        return step2_time
+    if current_step == "Step 4":
+        return leg1_time
+    if current_step == "Step 5":
+        return leg2_time
+    if current_step == "Step 6":
+        return entry_time or leg2_time
+    return None
+
+
 def normalized_pathway_name(value: Any) -> str:
     """Return a display-only pathway name from existing evaluated status fields."""
     text = str(value or "").strip().upper().replace(" ", "")
@@ -2732,6 +3177,15 @@ def continuation_type_from_state(step25_state: dict[str, Any], controlling_mode:
             if normalized in {"S/R", "R/S"}:
                 return normalized
     return "none"
+
+
+def selected_pathway_from_mode(controlling_mode: Any) -> str | None:
+    controlling = normalized_pathway_name(controlling_mode)
+    if controlling == "Normal":
+        return "rejection"
+    if controlling in {"S/R", "R/S"}:
+        return "continuation"
+    return None
 
 
 def pathway_visibility_status(
@@ -2775,6 +3229,7 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     step4 = snapshot.get("step4") if isinstance(snapshot.get("step4"), dict) else {}
     step5 = snapshot.get("step5") if isinstance(snapshot.get("step5"), dict) else {}
     step6 = snapshot.get("step6") if isinstance(snapshot.get("step6"), dict) else {}
+    step_2_1a = snapshot.get("step_2_1a") if isinstance(snapshot.get("step_2_1a"), dict) else {}
     rejection = snapshot.get("rejection") if isinstance(snapshot.get("rejection"), dict) else {}
     step25_state = ((snapshot.get("step25") or {}).get("state") or {}) if isinstance((snapshot.get("step25") or {}).get("state"), dict) else {}
     step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
@@ -2787,16 +3242,26 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     no_active_liquidity = snapshot.get("latest_price") is not None and not valid_active_liquidity_selection(active_name, active_price)
     current_step = current_step_from_snapshot(snapshot)
     step_label = current_step_label(current_step)
-    invalidation_reason = first_invalidation_reason(step4, step5, step6)
+    raw_invalidation_reason = first_invalidation_reason(step4, step5, step6)
+    public_invalidation = public_invalidation_from_results(current_step, step4, step5, step6)
+    invalidation_reason = public_invalidation["reason"]
     atr_required_reason = invalidation_reason if is_atr_required_reason(invalidation_reason) else None
-    entry_status = "WAIT_ATR_REQUIRED" if atr_required_reason else ("INVALIDATE" if invalidation_reason else decision_status(step6))
+    raw_entry_status = decision_status(step6)
+    if raw_entry_status == "INVALIDATE" and not invalidation_reason:
+        raw_entry_status = "WAIT"
+    entry_status = "WAIT_ATR_REQUIRED" if atr_required_reason else ("INVALIDATE" if invalidation_reason else raw_entry_status)
     if atr_required_reason:
         invalidation_reason = None
+    entry_authorization_blocked = entry_status == "CONFIRM" and before_entry_authorization(snapshot)
+    if entry_authorization_blocked:
+        entry_status = "WAIT"
 
     if snapshot.get("latest_price") is None:
         wait_reason = "No market price available."
     elif atr_required_reason:
         wait_reason = atr_required_reason
+    elif entry_authorization_blocked:
+        wait_reason = "Observation window active until 06:30 PT; entry authorization is blocked."
     elif entry_status == "WAIT" and not invalidation_reason and not candle_close_confirmed(snapshot):
         live_mask_reason = result_reason(step4, "")
         wait_reason = live_mask_reason if "current 1-minute candle" in live_mask_reason else wait_reason_for_current_step(current_step, active_name, step4, step5, step6)
@@ -2855,12 +3320,14 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         or (structure_control.get("current_continuation_type") if locked_structure else None)
     )
 
-    sr_rs_context = None if no_active_liquidity and not locked_structure else (
-        current_controlling_mode
-        or step5_state.get("controlling_mode")
+    authoritative_controlling_mode = (
+        step25_state.get("controlling_mode")
         or step4_state.get("controlling_mode")
-        or step25_state.get("controlling_mode")
+        or step5_state.get("controlling_mode")
+        or step6_state.get("controlling_mode")
+        or current_controlling_mode
     )
+    sr_rs_context = None if no_active_liquidity and not locked_structure else authoritative_controlling_mode
     setup_direction = None if no_active_liquidity and not locked_structure else (
         step6_state.get("setup_direction")
         or step5_state.get("setup_direction")
@@ -2875,31 +3342,68 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     leg2_status = raw_leg2_status if leg2_published else "WAIT"
     public_setup_direction = setup_direction if leg1_published or current_step == "Step 6" else None
     rejection_active = False if (no_active_liquidity and not locked_structure) or not candle_close_confirmed(snapshot) else rejection.get("rejection_mode") == "ON" or locked_structure
-    continuation_type = current_continuation_type if current_continuation_type in {"S/R", "R/S"} else continuation_type_from_state(step25_state, sr_rs_context)
+    selected_pathway = selected_pathway_from_mode(sr_rs_context)
+    continuation_type = (
+        normalized_pathway_name(sr_rs_context)
+        if selected_pathway == "continuation"
+        else continuation_type_from_state(step25_state, sr_rs_context)
+    )
+    if selected_pathway == "rejection":
+        current_pathway_control = "rejection"
+        current_controlling_mode = "Normal Rejection Mode"
+        current_continuation_type = continuation_type if continuation_type in {"S/R", "R/S"} else "none"
+    elif selected_pathway == "continuation":
+        current_pathway_control = "continuation"
+        current_controlling_mode = continuation_type if continuation_type in {"S/R", "R/S"} else sr_rs_context
+        current_continuation_type = continuation_type
+    elif rejection.get("rejection_mode") == "ON" and candle_close_confirmed(snapshot):
+        current_pathway_control = "rejection"
+        current_controlling_mode = "Normal Rejection Mode"
+        current_continuation_type = continuation_type if continuation_type in {"S/R", "R/S"} else "none"
+        selected_pathway = "rejection"
     invalidated = bool(invalidation_reason)
     step25_ready = (snapshot.get("step25") or {}).get("status") == "READY"
+    current_step_status = current_step_public_status(current_step, active_name, rejection_active)
+    step2_time = step2_confirmed_at(snapshot, step_2_1a, current_step_status)
+    leg1_time = leg1_confirmed_at(step4_state, leg1_published)
+    leg2_time = leg2_confirmed_at(step5_state, leg2_published)
+    entry_time = entry_confirmed_at(snapshot, step6_state, entry_status)
+    current_step_time = current_step_confirmed_at(current_step, step2_time, leg1_time, leg2_time, entry_time)
     rejection_side = {
         "pathway_status": pathway_visibility_status("rejection", rejection_active, sr_rs_context, continuation_type, invalidated, step25_ready),
         "current_pathway_control": current_pathway_control,
         "current_controlling_mode": current_controlling_mode,
         "current_step": current_step,
         "current_step_label": step_label,
+        "current_step_status": current_step_status,
+        "current_step_confirmed_at": current_step_time,
+        "selected_pathway": selected_pathway,
         "setup_direction": rejection.get("watch_side") if rejection_active and leg1_published else public_setup_direction,
         "leg1_status": leg1_status,
         "leg2_status": leg2_status,
         "entry_status": entry_status,
+        "leg1_confirmed_at": leg1_time,
+        "leg2_confirmed_at": leg2_time,
+        "entry_status_confirmed_at": entry_time,
     }
+    continuation_selected = selected_pathway == "continuation"
     continuation_side = {
         "continuation_type": continuation_type,
         "pathway_status": pathway_visibility_status("continuation", rejection_active, sr_rs_context, continuation_type, invalidated, step25_ready),
         "current_pathway_control": current_pathway_control,
         "current_controlling_mode": current_controlling_mode,
-        "current_step": current_step if continuation_type != "none" else None,
-        "current_step_label": step_label if continuation_type != "none" else None,
+        "current_step": current_step if continuation_selected else None,
+        "current_step_label": step_label if continuation_selected else None,
+        "current_step_status": current_step_status if continuation_selected else None,
+        "current_step_confirmed_at": current_step_time if continuation_selected else None,
+        "selected_pathway": selected_pathway if continuation_selected else None,
         "setup_direction": "SHORT" if continuation_type == "S/R" else "LONG" if continuation_type == "R/S" else None,
-        "leg1_status": leg1_status if continuation_type != "none" else None,
-        "leg2_status": leg2_status if continuation_type != "none" else None,
-        "entry_status": entry_status if continuation_type != "none" else None,
+        "leg1_status": leg1_status if continuation_selected else None,
+        "leg2_status": leg2_status if continuation_selected else None,
+        "entry_status": entry_status if continuation_selected else None,
+        "leg1_confirmed_at": leg1_time if continuation_selected else None,
+        "leg2_confirmed_at": leg2_time if continuation_selected else None,
+        "entry_status_confirmed_at": entry_time if continuation_selected else None,
     }
 
     return {
@@ -2912,6 +3416,9 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "candle_close": ohlc.get("close"),
         "current_step": current_step,
         "current_step_label": step_label,
+        "current_step_status": current_step_status,
+        "current_step_confirmed_at": current_step_time,
+        "selected_pathway": selected_pathway,
         "active_liquidity_name": active_name,
         "active_liquidity_price": active_price,
         "active_liquidity_group": active_group,
@@ -2933,12 +3440,16 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "continuation_side": continuation_side,
         "leg1_status": leg1_status,
         "leg1_state": leg1_status,
+        "leg1_confirmed_at": leg1_time,
         "leg2_status": leg2_status,
         "leg2_state": leg2_status,
+        "leg2_confirmed_at": leg2_time,
         "leg2_reference_price": (step5_state.get("active_leg1_reference") or step5_state.get("leg1_reference")) if leg2_published else None,
         "entry_status": entry_status,
+        "entry_status_confirmed_at": entry_time,
         "wait_reason": wait_reason,
         "invalidation_reason": invalidation_reason,
+        "internal_invalidation_reason": raw_invalidation_reason,
         "last_decision": last_decision,
         "publication_gate_debug": snapshot.get("publication_gate_debug") if isinstance(snapshot.get("publication_gate_debug"), list) else [],
         "leg1_state_locked": step4_state.get("leg1_state_locked"),
@@ -2948,11 +3459,11 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "leg1_reference_candle_time": step4_state.get("leg1_reference_candle_time") if leg1_published else None,
         "leg1_direction": (step4_state.get("leg1_direction") or step4_state.get("setup_direction")) if leg1_published else None,
         "last_evaluated_candle_time": (step4_state.get("last_evaluated_candle_time") if leg1_published else None) or (step5_state.get("last_evaluated_candle_time") if leg2_published else None),
-        "invalidated_at": step4_state.get("invalidated_at") or step5_state.get("invalidated_at"),
-        "invalidated_liquidity": step4_state.get("invalidated_liquidity") or step5_state.get("invalidated_liquidity"),
-        "invalidation_source_candle_time": step4_state.get("invalidation_source_candle_time") or step5_state.get("invalidation_source_candle_time"),
-        "invalidation_source": step4_state.get("invalidation_source") or step5_state.get("invalidation_source"),
-        "invalidation_source_step": step4_state.get("invalidation_source_step") or step5_state.get("invalidation_source_step"),
+        "invalidated_at": public_invalidation["invalidated_at"],
+        "invalidated_liquidity": public_invalidation["invalidated_liquidity"],
+        "invalidation_source_candle_time": public_invalidation["source_candle_time"],
+        "invalidation_source": public_invalidation["source"],
+        "invalidation_source_step": public_invalidation["source_step"],
         "consumed_liquidity_levels": step4_state.get("consumed_liquidity_levels") or step5_state.get("consumed_liquidity_levels") or [],
         "state_transition_reason": step4_state.get("state_transition_reason") or step5_state.get("state_transition_reason"),
         "leg1_formed_at_percent": step4_state.get("leg1_formed_at_percent") if leg1_published else None,
@@ -2970,6 +3481,12 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "leg2_candidate_candle_time": step5_state.get("leg2_candidate_candle_time") if leg2_published else None,
         "leg2_same_sequence_rejected": step5_state.get("leg2_same_sequence_rejected") if leg2_published else None,
         "leg2_wait_reason": step5_state.get("leg2_wait_reason") if leg1_published else None,
+        "continuation_controlling_structure_high": step6_state.get("continuation_controlling_structure_high") or step5_state.get("continuation_controlling_structure_high"),
+        "continuation_controlling_structure_low": step6_state.get("continuation_controlling_structure_low") or step5_state.get("continuation_controlling_structure_low"),
+        "continuation_controlling_structure_start_time": step6_state.get("continuation_controlling_structure_start_time") or step5_state.get("continuation_controlling_structure_start_time"),
+        "continuation_controlling_structure_end_time": step6_state.get("continuation_controlling_structure_end_time") or step5_state.get("continuation_controlling_structure_end_time"),
+        "continuation_controlling_structure_swept": step6_state.get("continuation_controlling_structure_swept"),
+        "continuation_controlling_structure_wait_reason": step6_state.get("continuation_controlling_structure_wait_reason"),
     }
 
 
@@ -2992,6 +3509,7 @@ def persist_state(snapshot: dict[str, Any]) -> None:
         (((snapshot.get("step5") or {}).get("state") or {}).get("consumed_liquidity_levels")),
         consumed_liquidity_levels(symbol_scoped_persisted_state(previous_state, symbol_key)),
     )
+    previous_symbol_state = symbol_scoped_persisted_state(previous_state, symbol_key)
     symbol_state = {
         "symbol": snapshot.get("symbol"),
         "normalized_symbol": snapshot.get("normalized_symbol"),
@@ -3015,6 +3533,9 @@ def persist_state(snapshot: dict[str, Any]) -> None:
         "gateway": snapshot.get("gateway"),
         "tv_context": snapshot.get("tv_context"),
         "tv_context_status": snapshot.get("tv_context_status"),
+        "observation_reset_session_date": snapshot.get("observation_reset_session_date") or previous_symbol_state.get("observation_reset_session_date"),
+        "observation_reset_bar_time": snapshot.get("observation_reset_bar_time") or previous_symbol_state.get("observation_reset_bar_time"),
+        "observation_reset_at": snapshot.get("observation_reset_at") or previous_symbol_state.get("observation_reset_at"),
     }
     if symbol_key:
         state_by_symbol[symbol_key] = symbol_state

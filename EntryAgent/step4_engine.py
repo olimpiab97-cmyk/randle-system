@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from step7_engine import terminate_interaction
 
 FINAL_PARTICIPATION_CANDLE_NUMBER = 4
-MAX_PARTICIPATION_CANDIDATES_AFTER_CANDLE_A = FINAL_PARTICIPATION_CANDLE_NUMBER - 1
 
 
 def as_float(value: Any) -> float | None:
@@ -252,6 +252,50 @@ def candle_key(candle: dict[str, Any]) -> tuple:
     )
 
 
+def parse_candle_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def format_candle_time(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def leg1_window_expires_at(started_at: Any) -> str | None:
+    parsed = parse_candle_time(started_at)
+    if parsed is None:
+        return None
+    return format_candle_time(parsed + timedelta(minutes=FINAL_PARTICIPATION_CANDLE_NUMBER - 1))
+
+
+def apply_leg1_window_fields(
+    state: dict[str, Any],
+    candle: dict[str, Any],
+    candle_index: int,
+    *,
+    invalidated: bool = False,
+    invalidation_reason: str | None = None,
+    complete: bool = False,
+) -> None:
+    started_at = state.get("leg1_window_started_at") or candle.get("timestamp")
+    state["leg1_window_started_at"] = started_at
+    state["leg1_window_candle_index"] = candle_index
+    state["leg1_window_remaining"] = max(0, FINAL_PARTICIPATION_CANDLE_NUMBER - candle_index)
+    state["leg1_window_expires_at"] = state.get("leg1_window_expires_at") or leg1_window_expires_at(started_at)
+    state["leg1_window_invalidated"] = bool(invalidated)
+    state["leg1_window_invalidation_reason"] = invalidation_reason
+    state["leg1_window_active"] = not complete and not invalidated and candle_index < FINAL_PARTICIPATION_CANDLE_NUMBER
+
+
 def register_participation_candidate(state: dict[str, Any], candle: dict[str, Any]) -> int:
     keys = list(state.get("participation_candidate_keys") or [])
     key = candle_key(candle)
@@ -259,12 +303,16 @@ def register_participation_candidate(state: dict[str, Any], candle: dict[str, An
         keys.append(key)
     state["participation_candidate_keys"] = keys
     state["participation_candidate_count"] = len(keys)
-    state["participation_candle_number"] = len(keys) + 1
+    state["participation_candle_number"] = len(keys)
+    apply_leg1_window_fields(state, candle, len(keys))
     state["participation_timer"] = {
         "active": True,
         "candidate_count": len(keys),
-        "candle_number": len(keys) + 1,
+        "candle_number": len(keys),
         "final_candle_number": FINAL_PARTICIPATION_CANDLE_NUMBER,
+        "started_at": state.get("leg1_window_started_at"),
+        "remaining": state.get("leg1_window_remaining"),
+        "expires_at": state.get("leg1_window_expires_at"),
     }
     return len(keys)
 
@@ -275,6 +323,10 @@ def mark_gateway_no_participation(state: dict[str, Any], reason: str) -> None:
     state["opposite_participation"] = "NOT_PRESENT"
     state["step4_block_reason"] = reason
     state["participation_window_failed"] = True
+    state["leg1_window_invalidated"] = True
+    state["leg1_window_invalidation_reason"] = reason
+    state["leg1_window_active"] = False
+    state["leg1_window_remaining"] = 0
     state.pop("leg1_status", None)
     state.pop("leg1_reference", None)
     state.pop("leg1_extreme", None)
@@ -320,13 +372,16 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
     wick_pass = wick_participation(candidate_b, direction)
     if not (close_pass or wick_pass):
         reason = "Candle B failed both close-based participation and 34% wick-based participation."
-        if candidate_count < MAX_PARTICIPATION_CANDIDATES_AFTER_CANDLE_A:
+        if candidate_count < FINAL_PARTICIPATION_CANDLE_NUMBER:
             events.append(
                 {
                     "event": "step4_participation_window_wait",
                     "reason": reason,
                     "candidate_count": candidate_count,
-                    "candle_number": candidate_count + 1,
+                    "candle_number": candidate_count,
+                    "window_label": f"Candle {candidate_count} of {FINAL_PARTICIPATION_CANDLE_NUMBER}",
+                    "remaining": state.get("leg1_window_remaining"),
+                    "expires_at": state.get("leg1_window_expires_at"),
                     "final_candle_number": FINAL_PARTICIPATION_CANDLE_NUMBER,
                 }
             )
@@ -337,7 +392,8 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
                 "event": "step4_participation_window_failed",
                 "reason": reason,
                 "candidate_count": candidate_count,
-                "candle_number": candidate_count + 1,
+                "candle_number": candidate_count,
+                "window_label": f"Candle {candidate_count} of {FINAL_PARTICIPATION_CANDLE_NUMBER}",
                 "level_state": "GATEWAY",
             }
         )
@@ -369,6 +425,7 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
     state["candle_a"] = candle_a
     state["candle_a_source"] = candle_a_source
     state["leg1_status"] = "COMPLETE"
+    apply_leg1_window_fields(state, candidate_b, candidate_count, complete=True)
     state["leg1_reference"] = reference
     state["leg1_extreme"] = extreme
     state["leg1_extreme_owner"] = owner
@@ -378,6 +435,8 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
         **dict(state.get("participation_timer") or {}),
         "active": False,
         "completed": True,
+        "remaining": 0,
+        "completed_at": candidate_b.get("timestamp"),
     }
 
     atr = as_float(state.get("atr_1m_14") or state.get("atr"))

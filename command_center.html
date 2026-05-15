@@ -2798,10 +2798,30 @@
       return item && (item.current_step_label || item.current_step);
     }
 
+    function formatEntryAgentConfirmedAt(value) {
+      if (!value) return null;
+      const date = new Date(value);
+      if (!Number.isFinite(date.getTime())) return null;
+      return new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Los_Angeles",
+        hour: "numeric",
+        minute: "2-digit"
+      }).format(date);
+    }
+
+    function entryAgentWithConfirmedAt(value, confirmedAt) {
+      const text = formatValue(value);
+      const timeText = formatEntryAgentConfirmedAt(confirmedAt);
+      return timeText ? `${text} @ ${timeText}` : text;
+    }
+
     function entryAgentSideCurrentStepDisplay(item, side) {
       const reason = item && item.invalidation_reason;
       if (reason && side && side.pathway_status === "invalidated") return `INVALIDATED - ${reason}`;
-      return side && (side.current_step_label || side.current_step);
+      const label = side && (side.current_step_label || side.current_step);
+      const status = side && side.current_step_status;
+      const display = label && status === "CONFIRMED" ? `${label} confirmed` : label;
+      return entryAgentWithConfirmedAt(display, side && side.current_step_confirmed_at);
     }
 
     function entryAgentFallbackSide(item, sideName) {
@@ -2814,20 +2834,30 @@
           pathway_status: item.continuation_pathway_status || (continuationType === "none" ? "inactive" : "candidate"),
           current_step: continuationType === "none" ? null : item.current_step,
           current_step_label: continuationType === "none" ? null : item.current_step_label,
+          current_step_status: continuationType === "none" ? null : item.current_step_status,
+          current_step_confirmed_at: continuationType === "none" ? null : item.current_step_confirmed_at,
           setup_direction: continuationType === "S/R" ? "SHORT" : continuationType === "R/S" ? "LONG" : null,
           leg1_status: continuationType === "none" ? null : item.leg1_status,
           leg2_status: continuationType === "none" ? null : item.leg2_status,
-          entry_status: continuationType === "none" ? null : item.entry_status
+          entry_status: continuationType === "none" ? null : item.entry_status,
+          leg1_confirmed_at: continuationType === "none" ? null : item.leg1_confirmed_at,
+          leg2_confirmed_at: continuationType === "none" ? null : item.leg2_confirmed_at,
+          entry_status_confirmed_at: continuationType === "none" ? null : item.entry_status_confirmed_at
         };
       }
       return {
         pathway_status: item.rejection_pathway_status || (item.rejection_mode_entered ? "active" : "inactive"),
         current_step: item.current_step,
         current_step_label: item.current_step_label,
+        current_step_status: item.current_step_status,
+        current_step_confirmed_at: item.current_step_confirmed_at,
         setup_direction: item.setup_direction,
         leg1_status: item.leg1_status,
         leg2_status: item.leg2_status,
-        entry_status: item.entry_status
+        entry_status: item.entry_status,
+        leg1_confirmed_at: item.leg1_confirmed_at,
+        leg2_confirmed_at: item.leg2_confirmed_at,
+        entry_status_confirmed_at: item.entry_status_confirmed_at
       };
     }
 
@@ -2859,9 +2889,9 @@
             ${entryAgentField("Pathway Status", status, { token: true })}
             ${entryAgentField("Current Step", currentStepDisplay, { token: true })}
             ${entryAgentField("Setup Direction", side && side.setup_direction)}
-            ${entryAgentField("Shared Leg 1", side && side.leg1_status, { token: true })}
-            ${entryAgentField("Shared Leg 2", side && side.leg2_status, { token: true })}
-            ${entryAgentField("Entry Status", side && side.entry_status, { token: true })}
+            ${entryAgentField("Shared Leg 1", entryAgentWithConfirmedAt(side && side.leg1_status, side && side.leg1_confirmed_at), { token: true })}
+            ${entryAgentField("Shared Leg 2", entryAgentWithConfirmedAt(side && side.leg2_status, side && side.leg2_confirmed_at), { token: true })}
+            ${entryAgentField("Entry Status", entryAgentWithConfirmedAt(side && side.entry_status, side && side.entry_status_confirmed_at), { token: true })}
           </div>
         </div>
       `;
