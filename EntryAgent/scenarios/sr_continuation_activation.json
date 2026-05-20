@@ -1,0 +1,14 @@
+{
+  "symbol": "NQ",
+  "daily_atr": 500,
+  "tick_size": 0.25,
+  "levels": [
+    {"name": "PML", "price": 29000, "status": "ACTIVE", "group": "NONE"}
+  ],
+  "candles": [
+    {"time": "2026-05-20T13:30:00Z", "open": 29005, "high": 29006, "low": 28996, "close": 28999},
+    {"time": "2026-05-20T13:31:00Z", "open": 28999, "high": 29000, "low": 28992, "close": 28994},
+    {"time": "2026-05-20T13:32:00Z", "open": 28994, "high": 29006, "low": 28993, "close": 29004},
+    {"time": "2026-05-20T13:33:00Z", "open": 29004, "high": 29010, "low": 29002, "close": 29008}
+  ]
+}
