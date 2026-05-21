@@ -202,9 +202,9 @@ def selected_active_liquidity_from_context(
 
     def combined_stack_name(components: list[dict[str, Any]], side: str | None) -> str:
         if side == "lower":
-            ordered = sorted(components, key=lambda item: (-float(item["price"]), str(item["name"])))
-        elif side == "upper":
             ordered = sorted(components, key=lambda item: (float(item["price"]), str(item["name"])))
+        elif side == "upper":
+            ordered = sorted(components, key=lambda item: (-float(item["price"]), str(item["name"])))
         else:
             ordered = sorted(components, key=lambda item: (item["priority"], str(item["name"])))
         return f"{'/'.join(str(component['name']) for component in ordered)} Liquidity"
@@ -1309,6 +1309,38 @@ def build_last_interacted_liquidity(selected_liquidity: dict[str, Any] | None) -
     }
 
 
+def stack_group_with_dynamic_extreme(
+    group: dict[str, Any] | None,
+    candle: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Return stack group with wick-only sweep extreme migrated when close reclaims the stack."""
+    if not isinstance(group, dict) or not isinstance(candle, dict):
+        return group
+    side = group.get("side")
+    extreme_boundary = optional_float(group.get("extreme_boundary"))
+    close = optional_float(candle.get("close"))
+    high = optional_float(candle.get("high"))
+    low = optional_float(candle.get("low"))
+    if side not in {"upper", "lower"} or extreme_boundary is None or close is None:
+        return group
+
+    updated_extreme = None
+    if side == "lower" and low is not None and low < extreme_boundary and close > extreme_boundary:
+        updated_extreme = low
+    elif side == "upper" and high is not None and high > extreme_boundary and close < extreme_boundary:
+        updated_extreme = high
+    if updated_extreme is None:
+        return group
+
+    updated = dict(group)
+    updated["extreme_boundary"] = updated_extreme
+    if side == "lower":
+        updated["low"] = updated_extreme
+    else:
+        updated["high"] = updated_extreme
+    return updated
+
+
 def evaluate_live_step_2_1a(
     snapshot: dict[str, Any],
     _levels: dict[str, Any],
@@ -1462,7 +1494,11 @@ def evaluate_live_step_2_1a(
     step_state["last_evaluated_bar_time"] = candle["timestamp"]
     step_state["candle_index"] = candle_index
     step_state["next_candle_index"] = candle_index + 1
-    step_state["active_liquidity_group"] = selected_liquidity.get("group") if selected_liquidity else None
+    selected_group = selected_liquidity.get("group") if selected_liquidity else None
+    selected_group = stack_group_with_dynamic_extreme(selected_group, candle)
+    if selected_liquidity and isinstance(selected_group, dict):
+        selected_liquidity = {**selected_liquidity, "group": selected_group}
+    step_state["active_liquidity_group"] = selected_group
     step_state["last_interacted_liquidity"] = (
         build_last_interacted_liquidity(selected_liquidity)
         or persisted_active_liquidity(persisted_state, symbol_key, snapshot.get("tv_context"))
@@ -3804,8 +3840,9 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         and rejection.get("rejection_mode") == "ON"
         and candle_close_confirmed(snapshot)
     )
+    step2_pathway_confirmed = step_2_1a.get("step_2_activated") is True or step2_rejection_confirmed
     public_setup_direction = setup_direction if leg1_published or current_step == "Step 6" or step2_rejection_confirmed else None
-    rejection_active = False if (no_active_liquidity and not locked_structure) or not candle_close_confirmed(snapshot) else rejection.get("rejection_mode") == "ON" or locked_structure
+    rejection_active = False if (no_active_liquidity and not locked_structure) or not candle_close_confirmed(snapshot) else step2_pathway_confirmed or locked_structure
     selected_pathway = selected_pathway_from_mode(sr_rs_context)
     continuation_type = (
         normalized_pathway_name(sr_rs_context)
@@ -3825,6 +3862,14 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         current_controlling_mode = "Normal Rejection Mode"
         current_continuation_type = continuation_type if continuation_type in {"S/R", "R/S"} else "none"
         selected_pathway = "rejection"
+    if current_step == "Step 2" and not step2_pathway_confirmed and not locked_structure:
+        sr_rs_context = None
+        selected_pathway = None
+        continuation_type = "none"
+        current_pathway_control = "inactive"
+        current_controlling_mode = None
+        current_continuation_type = "none"
+        public_setup_direction = None
     shared_leg1_with_continuation = (
         current_step == "Step 4"
         and leg1_status == "COMPLETE"

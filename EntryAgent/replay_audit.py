@@ -33,6 +33,7 @@ STEP_RANK = {
     "Step 7": 7,
 }
 ACTIVE_PRIORITY = {"YH": 0, "YL": 0, "ONH": 1, "ONL": 1, "LH": 2, "LL": 2, "PMH": 3, "PML": 3}
+LIQUIDITY_NAME_SUFFIX = " Liquidity"
 
 
 def read_json(path: Path) -> Any:
@@ -153,6 +154,39 @@ def project_public_record(
     return projected
 
 
+def ordered_stack_display_name(value: Any) -> Any:
+    """Return stack display names in controlling-extreme-to-inward level order."""
+    if not isinstance(value, str) or "/" not in value:
+        return value
+    text = value.strip()
+    suffix = LIQUIDITY_NAME_SUFFIX if text.endswith(LIQUIDITY_NAME_SUFFIX) else ""
+    body = text[: -len(suffix)] if suffix else text
+    components = [part.strip() for part in body.split("/") if part.strip()]
+    if not components or any(component not in ACTIVE_PRIORITY for component in components):
+        return value
+    ordered = sorted(components, key=lambda component: (ACTIVE_PRIORITY[component], component))
+    return f"{'/'.join(ordered)}{suffix}"
+
+
+def suppress_unconfirmed_step2_pathway(record: dict[str, Any], close_confirmed: bool) -> None:
+    """Keep replay publication aligned with CC: wick-only Step 2 has no pathway control."""
+    if close_confirmed or record.get("step") != "Step 2":
+        return
+    record["setup_direction"] = None
+    record["rejection_mode_entered"] = False
+    record["sr_rs_context"] = None
+    record["current_pathway_control"] = "inactive"
+    record["current_controlling_mode"] = None
+    record["current_continuation_type"] = "none"
+    record["leg1_window_active"] = False
+    record["leg1_window_started_at"] = None
+    record["leg1_window_candle_index"] = None
+    record["leg1_window_remaining"] = None
+    record["leg1_window_expires_at"] = None
+    record["leg1_window_invalidated"] = False
+    record["leg1_window_invalidation_reason"] = None
+
+
 def active_levels(tv_context: dict[str, Any]) -> dict[str, dict[str, Any]]:
     levels = tv_context.get("levels") if isinstance(tv_context.get("levels"), dict) else {}
     active: dict[str, dict[str, Any]] = {}
@@ -196,6 +230,117 @@ def expected_active_liquidity(record: dict[str, Any], tv_context: dict[str, Any]
     if not candidates:
         return None
     return min(candidates)[2]
+
+
+def record_candle(record: dict[str, Any]) -> dict[str, Any] | None:
+    candle = {
+        "open": record.get("candle_open"),
+        "high": record.get("candle_high"),
+        "low": record.get("candle_low"),
+        "close": record.get("candle_close"),
+        "timestamp": minute_key(record.get("candle_time")),
+    }
+    if any(candle.get(key) is None for key in ("open", "high", "low", "close", "timestamp")):
+        return None
+    return candle
+
+
+def candle_range(candle: dict[str, Any]) -> float | None:
+    high = optional_float(candle.get("high"))
+    low = optional_float(candle.get("low"))
+    if high is None or low is None:
+        return None
+    value = high - low
+    return value if value > 0 else None
+
+
+def close_based_participation(candle_a: dict[str, Any], candle_b: dict[str, Any], direction: str) -> bool:
+    close_b = optional_float(candle_b.get("close"))
+    if close_b is None:
+        return False
+    if direction == "SHORT":
+        high_a = optional_float(candle_a.get("high"))
+        return high_a is not None and close_b <= high_a
+    if direction == "LONG":
+        low_a = optional_float(candle_a.get("low"))
+        return low_a is not None and close_b >= low_a
+    return False
+
+
+def wick_participation(candle_b: dict[str, Any], direction: str) -> bool:
+    full_range = candle_range(candle_b)
+    if full_range is None:
+        return False
+    high = optional_float(candle_b.get("high"))
+    low = optional_float(candle_b.get("low"))
+    open_price = optional_float(candle_b.get("open"))
+    close = optional_float(candle_b.get("close"))
+    if None in (high, low, open_price, close):
+        return False
+    if direction == "SHORT":
+        wick = high - max(open_price, close)
+    elif direction == "LONG":
+        wick = min(open_price, close) - low
+    else:
+        return False
+    return wick / full_range >= 0.34
+
+
+def shared_leg1_participation(window_state: dict[str, Any], record: dict[str, Any], candle_minute: str | None) -> bool:
+    if not candle_minute:
+        return False
+    index = minute_delta(window_state.get("activation_minute"), candle_minute)
+    if index is None or not 1 <= index <= 4:
+        return False
+    candle_a = window_state.get("candle_a")
+    candle_b = record_candle(record)
+    if not isinstance(candle_a, dict) or not isinstance(candle_b, dict):
+        return False
+    side = window_state.get("side")
+    level_price = optional_float(window_state.get("liquidity_price"))
+    close_b = optional_float(candle_b.get("close"))
+    if level_price is None or close_b is None:
+        return False
+    direction = "LONG" if side == "lower" else "SHORT" if side == "upper" else None
+    if direction is None:
+        return False
+    if side == "lower" and close_b <= level_price:
+        return False
+    if side == "upper" and close_b >= level_price:
+        return False
+    return close_based_participation(candle_a, candle_b, direction) or wick_participation(candle_b, direction)
+
+
+def apply_shared_leg1_projection(record: dict[str, Any], window_state: dict[str, Any], candle_minute: str) -> None:
+    side = window_state.get("side")
+    setup_direction = "LONG" if side == "lower" else "SHORT"
+    continuation_type = "S/R" if side == "lower" else "R/S"
+    index = minute_delta(window_state.get("activation_minute"), candle_minute) or 1
+    record["step"] = "Step 4"
+    record["current_step_label"] = "Shared Leg 1 Confirmed"
+    record["active_liquidity_name"] = window_state.get("active_liquidity_name")
+    record["liquidity_price"] = window_state.get("liquidity_price")
+    record["setup_direction"] = setup_direction
+    record["rejection_mode_entered"] = True
+    record["sr_rs_context"] = continuation_type
+    record["current_pathway_control"] = "rejection"
+    record["current_controlling_mode"] = "Normal Rejection Mode"
+    record["current_continuation_type"] = continuation_type
+    record["leg1_state"] = "COMPLETE"
+    record["leg1_locked"] = True
+    record["leg1_completed_at"] = candle_minute
+    record["_shared_leg1_projected"] = True
+    record["leg1_window_started_at"] = window_state.get("started_at") or window_state.get("activation_minute")
+    record["leg1_window_candle_index"] = index
+    record["leg1_window_remaining"] = 0
+    record["leg1_window_expires_at"] = window_state.get("expires_at")
+    record["leg1_window_active"] = False
+    record["leg1_window_invalidated"] = False
+    record["leg1_window_invalidation_reason"] = None
+    record["leg2_state"] = "WAIT"
+    record["entry_status"] = "WAIT"
+    record["wait_reason"] = "Leg 1 complete: Candle B participation valid; Anchor Extreme assigned; proximity distance > 10% ATR."
+    record["last_decision"] = f"WAIT: {record['wait_reason']}"
 
 
 def load_bars(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
@@ -348,8 +493,37 @@ def audit_records(
         bar = bars_for_symbol.get(candle_minute or "")
         close_confirmed = bool(candle_minute and bar)
         record = project_public_record(record, bars_for_symbol, candle_minute, last_leg1_complete_minute.get(symbol))
+        record["active_liquidity_name"] = ordered_stack_display_name(record.get("active_liquidity_name"))
+        suppress_unconfirmed_step2_pathway(record, close_confirmed)
         window_state = leg1_window_state.get(symbol)
         has_logged_window = record.get("leg1_window_candle_index") is not None
+        if (
+            window_state
+            and record.get("leg1_state") != "COMPLETE"
+            and shared_leg1_participation(window_state, record, candle_minute)
+        ):
+            apply_shared_leg1_projection(record, window_state, str(candle_minute))
+            leg1_window_state.pop(symbol, None)
+            window_state = None
+            has_logged_window = True
+        if (
+            has_logged_window
+            and record.get("step") == "Step 2"
+            and record.get("active_liquidity_name")
+            and record.get("rejection_mode_entered")
+            and record.get("leg1_window_candle_index") == 0
+            and candle_minute
+        ):
+            window_state = {
+                "activation_minute": candle_minute,
+                "started_at": record.get("leg1_window_started_at") or candle_minute,
+                "expires_at": record.get("leg1_window_expires_at"),
+                "candle_a": record_candle(record),
+                "active_liquidity_name": record.get("active_liquidity_name"),
+                "liquidity_price": record.get("liquidity_price"),
+                "side": level_side(str(record.get("active_liquidity_name") or "")),
+            }
+            leg1_window_state[symbol] = window_state
         if not has_logged_window:
             if record.get("leg1_state") == "COMPLETE":
                 if window_state and candle_minute:
@@ -408,6 +582,10 @@ def audit_records(
                         "activation_minute": candle_minute,
                         "started_at": started_at,
                         "expires_at": expires_at,
+                        "candle_a": record_candle(record),
+                        "active_liquidity_name": record.get("active_liquidity_name"),
+                        "liquidity_price": record.get("liquidity_price"),
+                        "side": level_side(str(record.get("active_liquidity_name") or "")),
                     }
                     leg1_window_state[symbol] = window_state
                 index = minute_delta(window_state.get("activation_minute"), candle_minute)
@@ -439,7 +617,7 @@ def audit_records(
 
         if record.get("leg1_state") == "COMPLETE":
             completed_minute = minute_key(record.get("leg1_completed_at"))
-            if not completed_minute or completed_minute not in bars.get(symbol, {}):
+            if not record.get("_shared_leg1_projected") and (not completed_minute or completed_minute not in bars.get(symbol, {})):
                 flags.append("leg1_complete_without_completed_bar")
                 add_case(
                     cases,
