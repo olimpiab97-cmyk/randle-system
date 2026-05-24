@@ -67,7 +67,7 @@ def enforce_endpoint_auth():
     if path in {"/execute", "/price", "/sync_snapshot"}:
         return require_internal_token()
 
-    if path in {"/health", "/orders", "/positions"} or path.startswith("/debug/"):
+    if path in {"/health", "/orders", "/positions", "/account_snapshot"} or path.startswith("/debug/"):
         return reject_auth("localhost_required", 403)
 
     return None
@@ -113,6 +113,7 @@ DATA_DIR = BASE_DIR / "Data"
 EXECUTOR_STATE_FILE = DATA_DIR / "executor_state.json"
 TRADE_MANAGER_PERSISTENCE_FILE = DATA_DIR / "persistence_state.json"
 RITHMIC_FEED_HEALTH_FILE = DATA_DIR / "rithmic_feed_health.json"
+ACCOUNT_SNAPSHOT_FILE = DATA_DIR / "paper_account_snapshot.json"
 TRADE_MANAGER_PRICE_URL = os.getenv("TRADE_MANAGER_PRICE_URL", "http://127.0.0.1:7001/price").strip() or "http://127.0.0.1:7001/price"
 STATE_VERSION = 1
 EXECUTOR_STATE_LOADED = False
@@ -811,6 +812,70 @@ def read_rithmic_feed_health():
     except Exception:
         return {"symbols": {}, "system_state_feed": "STALE"}
     return payload if isinstance(payload, dict) else {"symbols": {}, "system_state_feed": "STALE"}
+
+
+def safe_numeric(value):
+    if value in (None, ""):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return numeric
+
+
+def first_numeric(payload, *keys):
+    for key in keys:
+        if key in payload:
+            numeric = safe_numeric(payload.get(key))
+            if numeric is not None:
+                return numeric
+    return None
+
+
+def build_unavailable_account_snapshot(reason):
+    return {
+        "ok": False,
+        "source": "paper_account",
+        "reason": reason,
+        "balance": None,
+        "cash_balance": None,
+        "net_liq": None,
+        "unrealized_pnl": None,
+        "realized_pnl": None,
+        "updated_at": None,
+    }
+
+
+def read_paper_account_snapshot():
+    path = Path(ACCOUNT_SNAPSHOT_FILE)
+    if not path.exists():
+        return build_unavailable_account_snapshot("paper_account_snapshot_unavailable")
+
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return build_unavailable_account_snapshot("paper_account_snapshot_unreadable")
+
+    if not isinstance(payload, dict):
+        return build_unavailable_account_snapshot("paper_account_snapshot_invalid")
+
+    snapshot = {
+        "ok": True,
+        "source": "paper_account",
+        "balance": first_numeric(payload, "balance", "account_balance", "equity"),
+        "cash_balance": first_numeric(payload, "cash_balance", "cash", "cashBalance"),
+        "net_liq": first_numeric(payload, "net_liq", "netLiq", "net_liquidation", "netLiquidation"),
+        "unrealized_pnl": first_numeric(payload, "unrealized_pnl", "unrealizedPnl", "open_pnl", "openPnl"),
+        "realized_pnl": first_numeric(payload, "realized_pnl", "realizedPnl"),
+        "updated_at": payload.get("updated_at") or payload.get("timestamp") or payload.get("received_at"),
+    }
+    if not any(snapshot.get(key) is not None for key in ("balance", "cash_balance", "net_liq")):
+        return build_unavailable_account_snapshot("paper_account_balance_fields_missing")
+    return snapshot
 
 
 def build_listener_freshness(symbol, reference_time):
@@ -1757,6 +1822,11 @@ def positions():
         "ok": True,
         "positions": POSITIONS
     })
+
+
+@app.route("/account_snapshot", methods=["GET"])
+def account_snapshot():
+    return jsonify(read_paper_account_snapshot())
 
 
 @app.route("/debug/live_prices", methods=["GET"])

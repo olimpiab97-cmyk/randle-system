@@ -138,7 +138,7 @@
     }
     .metric-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 12px;
       margin-bottom: 16px;
     }
@@ -165,6 +165,168 @@
       margin-top: 8px;
       font-size: 12px;
       color: #90a1b8;
+    }
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      margin: 0 0 16px;
+    }
+    .tab-button {
+      width: auto;
+      min-width: 110px;
+      margin-top: 0;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f1724;
+      color: #cbd5e1;
+    }
+    .tab-button.active {
+      border-color: #22d3ee;
+      color: #eaffff;
+      background: #102033;
+      box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.22);
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+    .kpi-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .kpi-chart-wrap {
+      margin-top: 16px;
+      background: #0c1320;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .kpi-equity-canvas {
+      display: block;
+      width: 100%;
+      height: 260px;
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(148, 163, 184, 0.06) 0%, rgba(148, 163, 184, 0) 100%),
+        #0a111b;
+    }
+    .kpi-table-wrap {
+      margin-top: 16px;
+      max-height: 560px;
+      overflow: auto;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      background: #0c1320;
+    }
+    .kpi-table {
+      width: 100%;
+      min-width: 1480px;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .kpi-table th,
+    .kpi-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #223047;
+      text-align: left;
+      white-space: nowrap;
+      vertical-align: top;
+    }
+    .kpi-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #101a2b;
+      color: #9fb0c7;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 11px;
+    }
+    .kpi-table tr:last-child td {
+      border-bottom: 0;
+    }
+    .kpi-empty {
+      margin-top: 14px;
+      padding: 18px;
+      border: 1px dashed #2d3a4f;
+      border-radius: 8px;
+      color: #94a3b8;
+      background: #0a111b;
+    }
+    .kpi-screenshot-cell {
+      min-width: 130px;
+    }
+    .kpi-attach-button {
+      width: auto;
+      margin-top: 0;
+      padding: 6px 9px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .kpi-screenshot-placeholder {
+      margin-top: 6px;
+      color: #94a3b8;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .kpi-screenshot-thumb {
+      display: block;
+      width: 74px;
+      height: 46px;
+      margin-top: 6px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #0a111b;
+      cursor: zoom-in;
+    }
+    .kpi-lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background: rgba(4, 8, 14, 0.82);
+    }
+    .kpi-lightbox.visible {
+      display: flex;
+    }
+    .kpi-lightbox-panel {
+      max-width: min(1100px, 96vw);
+      max-height: 92vh;
+      background: #0c1320;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+    }
+    .kpi-lightbox-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      color: #dbe7f5;
+      font-size: 13px;
+    }
+    .kpi-lightbox-close {
+      width: auto;
+      margin-top: 0;
+      padding: 6px 10px;
+    }
+    .kpi-lightbox-image {
+      display: block;
+      max-width: calc(96vw - 48px);
+      max-height: calc(92vh - 72px);
+      border-radius: 8px;
+      background: #0a111b;
     }
     .risk-grid {
       display: grid;
@@ -935,6 +1097,9 @@
       .metric-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+      .kpi-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
       .snapshot-card {
         position: static;
       }
@@ -954,8 +1119,16 @@
       .entry-agent-grid,
       .entry-agent-context-grid,
       .entry-agent-pathway-layout,
+      .kpi-summary-grid,
       .demo-live-map-controls {
         grid-template-columns: 1fr;
+      }
+      .tab-bar {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+      .tab-button {
+        width: 100%;
       }
       .diagnostic-overlay {
         grid-template-columns: 1fr;
@@ -1013,8 +1186,19 @@
       <div class="metric-value" id="metricWorkingOrders">--</div>
       <div class="metric-subtext" id="metricWorkingOrdersSub">Waiting for data</div>
     </div>
+    <div class="metric-card">
+      <div class="metric-label">Paper Balance</div>
+      <div class="metric-value" id="metricPaperBalance">--</div>
+      <div class="metric-subtext" id="metricPaperBalanceSub">Waiting for data</div>
+    </div>
   </section>
 
+  <div class="tab-bar" role="tablist" aria-label="Command Center sections">
+    <button type="button" class="tab-button active" data-tab-target="dashboardPanel" role="tab" aria-selected="true">Dashboard</button>
+    <button type="button" class="tab-button" data-tab-target="kpiPanel" role="tab" aria-selected="false">KPIs</button>
+  </div>
+
+  <section id="dashboardPanel" class="tab-panel active" role="tabpanel">
   <div class="command-layout">
     <main class="main-column">
       <div class="grid">
@@ -1177,12 +1361,73 @@
       </div>
     </aside>
   </div>
+  </section>
+
+  <section id="kpiPanel" class="tab-panel" role="tabpanel">
+    <div class="card">
+      <div class="section-title">
+        <div>
+          <h2>KPIs</h2>
+          <div class="small">Read-only closed trade journal and equity curve from /trades.</div>
+        </div>
+        <span id="kpiMeta" class="small">Waiting for data</span>
+      </div>
+      <div id="kpiUnavailable" class="kpi-empty" style="display:none;">KPI data unavailable.</div>
+      <div id="kpiContent">
+        <div class="kpi-summary-grid" id="kpiSummaryGrid"></div>
+        <div class="kpi-chart-wrap">
+          <div class="section-title">
+            <h2>Equity Curve</h2>
+            <span class="small" id="kpiEquityMeta">Baseline $100,000.00</span>
+          </div>
+          <canvas id="kpiEquityCanvas" class="kpi-equity-canvas" height="260"></canvas>
+        </div>
+        <div class="kpi-table-wrap">
+          <table class="kpi-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Symbol</th>
+                <th>Rejection/Continuation</th>
+                <th>Pathway</th>
+                <th>Direction</th>
+                <th>Result</th>
+                <th>R multiple</th>
+                <th>PnL</th>
+                <th>Entry price</th>
+                <th>Stop price</th>
+                <th>BE trigger/price</th>
+                <th>TP1 price</th>
+                <th>Exit price</th>
+                <th>Exit reason</th>
+                <th>Trade ID</th>
+                <th>Screenshot</th>
+              </tr>
+            </thead>
+            <tbody id="kpiJournalBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="kpiLightbox" class="kpi-lightbox" aria-hidden="true">
+    <div class="kpi-lightbox-panel" role="dialog" aria-modal="true" aria-label="Screenshot preview">
+      <div class="kpi-lightbox-header">
+        <span id="kpiLightboxTitle">Screenshot preview</span>
+        <button type="button" class="kpi-lightbox-close" id="kpiLightboxClose">Close</button>
+      </div>
+      <img id="kpiLightboxImage" class="kpi-lightbox-image" alt="Selected trade screenshot preview" />
+    </div>
+  </div>
 
   <script>
     const TM_BASE = "http://127.0.0.1:7001";
     const EX_BASE = "http://127.0.0.1:6001";
     const ENTRY_AGENT_BASE = "http://127.0.0.1:7002";
     const POLL_INTERVAL_MS = 1000;
+    const EMPTY_FIELD = "\u2014";
 
     const $ = (id) => document.getElementById(id);
     let tradesPollHandle = null;
@@ -1192,9 +1437,11 @@
     let tradesRefreshInFlight = false;
     let snapshotRefreshInFlight = false;
     let ordersRefreshInFlight = false;
+    let accountSnapshotInFlight = false;
     let submitInFlight = false;
     let latestSnapshot = null;
     let latestOrdersPayload = null;
+    let latestAccountSnapshot = null;
     let latestSnapshotFetchedAt = null;
     let tradesRequestSequence = 0;
     let latestAppliedTradesSequence = 0;
@@ -1219,6 +1466,7 @@
     const demoLiveLifecycleByTrade = {};
     const previousLivePriceBySymbol = {};
     const livePulseBySymbol = {};
+    const kpiScreenshotByTradeId = {};
     const DEMO_LIVE_MAP_TRADES = [
       {
         trade_id: "DEMO-NQ",
@@ -1560,6 +1808,413 @@
       return numeric.toFixed(digits);
     }
 
+    function formatMoney(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return "n/a";
+      return numeric.toLocaleString(undefined, {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function displayKpiField(value) {
+      if (value === null || value === undefined || value === "") {
+        return EMPTY_FIELD;
+      }
+      return String(value);
+    }
+
+    function firstKpiValue(trade, keys) {
+      for (const key of keys) {
+        if (trade && trade[key] !== undefined && trade[key] !== null && trade[key] !== "") {
+          return trade[key];
+        }
+      }
+      return null;
+    }
+
+    function getClosedTradeTimeValue(trade) {
+      return firstKpiValue(trade, [
+        "closed_at",
+        "exit_at",
+        "exited_at",
+        "close_time",
+        "exit_time",
+        "updated_at",
+        "created_at",
+        "opened_at"
+      ]);
+    }
+
+    function formatKpiDate(value) {
+      if (!value) return EMPTY_FIELD;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return EMPTY_FIELD;
+      return date.toLocaleDateString();
+    }
+
+    function formatKpiTime(value) {
+      if (!value) return EMPTY_FIELD;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return EMPTY_FIELD;
+      return date.toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+
+    function formatKpiPrice(value) {
+      const numeric = toPositivePrice(value);
+      return numeric === null ? EMPTY_FIELD : formatPrice(numeric);
+    }
+
+    function getClosedJournalTrades(payload = latestTradesPayload) {
+      if (!payload || payload.ok === false) {
+        return null;
+      }
+      const sourceTrades = Array.isArray(payload.trades)
+        ? payload.trades.map((trade, index) => [trade && trade.trade_id ? trade.trade_id : String(index), trade])
+        : Object.entries((payload && payload.trades) || {});
+      if (!sourceTrades.length && !payload.trades) {
+        return null;
+      }
+      return sourceTrades
+        .map(([tradeId, trade]) => ({
+          ...(trade || {}),
+          trade_id: (trade && trade.trade_id) || tradeId
+        }))
+        .filter((trade) => {
+          const status = String(trade.status || "").toLowerCase();
+          return status === "closed" || status === "archived" || trade.archived === true;
+        })
+        .sort((a, b) => {
+          const aTime = new Date(getClosedTradeTimeValue(a) || 0).getTime();
+          const bTime = new Date(getClosedTradeTimeValue(b) || 0).getTime();
+          return aTime - bTime;
+        });
+    }
+
+    function getKpiPnl(trade) {
+      const pnl = computePnl(trade);
+      if (pnl !== null) return pnl;
+      const fallback = toFiniteNumber(firstKpiValue(trade, ["pnl", "profit", "net_pnl", "closed_pnl"]));
+      return fallback;
+    }
+
+    function getKpiResult(trade, pnl) {
+      const existing = firstKpiValue(trade, ["result", "outcome", "win_loss", "trade_result"]);
+      if (existing !== null) {
+        const text = String(existing).toUpperCase();
+        if (text.includes("BREAKEVEN") || text === "BREAK_EVEN") return "BE";
+        if (text.startsWith("W") || text === "WIN") return "W";
+        if (text.startsWith("L") || text === "LOSS") return "L";
+        if (text === "BE") return "BE";
+        return existing;
+      }
+      if (pnl === null) return EMPTY_FIELD;
+      if (pnl > 0) return "W";
+      if (pnl < 0) return "L";
+      return "BE";
+    }
+
+    function getKpiRMultiple(trade, pnl) {
+      const existing = toFiniteNumber(firstKpiValue(trade, [
+        "r_multiple",
+        "r_mult",
+        "rr",
+        "r",
+        "realized_r",
+        "total_r",
+        "risk_reward",
+        "r_value"
+      ]));
+      if (existing !== null) return existing;
+      const risk = toFiniteNumber(firstKpiValue(trade, [
+        "initial_risk_dollars",
+        "risk_dollars",
+        "initial_risk",
+        "risk_amount",
+        "dollar_risk"
+      ]));
+      if (pnl === null || risk === null || risk === 0) return null;
+      return pnl / risk;
+    }
+
+    function getKpiStartingEquity() {
+      if (latestAccountSnapshot && latestAccountSnapshot.ok === true) {
+        const candidate = toFiniteNumber(firstKpiValue(latestAccountSnapshot, [
+          "starting_balance",
+          "starting_equity",
+          "baseline",
+          "balance",
+          "net_liq",
+          "cash_balance"
+        ]));
+        if (candidate !== null) return candidate;
+      }
+      return 100000;
+    }
+
+    function getCurrentSyntheticEquity(startingEquity, totalPnl) {
+      if (latestAccountSnapshot && latestAccountSnapshot.ok === true) {
+        const candidate = toFiniteNumber(firstKpiValue(latestAccountSnapshot, ["balance", "net_liq", "cash_balance"]));
+        if (candidate !== null) return candidate;
+      }
+      return startingEquity + totalPnl;
+    }
+
+    function renderKpiSummary(items) {
+      const container = $("kpiSummaryGrid");
+      if (!container) return;
+      const fragment = document.createDocumentFragment();
+      for (const item of items) {
+        const node = document.createElement("div");
+        node.className = "metric-card";
+        node.innerHTML = `
+          <div class="metric-label">${escapeHtml(item.label)}</div>
+          <div class="metric-value">${escapeHtml(item.value)}</div>
+          <div class="metric-subtext">${escapeHtml(item.subtext || "")}</div>
+        `;
+        fragment.appendChild(node);
+      }
+      container.replaceChildren(fragment);
+    }
+
+    function buildKpiRows(trades) {
+      return trades.map((trade, index) => {
+        const timestamp = getClosedTradeTimeValue(trade);
+        const pnl = getKpiPnl(trade);
+        const rMultiple = getKpiRMultiple(trade, pnl);
+        const pathwayRaw = firstKpiValue(trade, ["pathway", "continuation_type", "sr_rs_context", "setup_pathway"]);
+        const beValue = firstKpiValue(trade, ["be_price", "break_even_price", "be_trigger", "break_even_trigger"]);
+        const tradeIdValue = firstKpiValue(trade, ["trade_id", "id"]);
+        return {
+          timestamp,
+          pnl,
+          rMultiple,
+          cells: [
+            formatKpiDate(timestamp),
+            formatKpiTime(timestamp),
+            displayKpiField(firstKpiValue(trade, ["symbol", "execution_symbol", "requested_symbol"])),
+            displayKpiField(firstKpiValue(trade, ["rejection_continuation", "setup_type", "entry_type", "trade_type"])),
+            displayKpiField(pathwayRaw === null ? null : entryAgentPathwayDisplay(pathwayRaw)),
+            displayKpiField(firstKpiValue(trade, ["direction", "side"])),
+            displayKpiField(getKpiResult(trade, pnl)),
+            rMultiple === null ? EMPTY_FIELD : rMultiple.toFixed(2),
+            pnl === null ? EMPTY_FIELD : formatMoney(pnl),
+            formatKpiPrice(firstKpiValue(trade, ["entry_price", "avg_entry_price", "fill_price"])),
+            formatKpiPrice(firstKpiValue(trade, ["original_stop", "initial_stop", "stop_price", "current_stop"])),
+            formatKpiPrice(beValue),
+            formatKpiPrice(firstKpiValue(trade, ["tp1_price", "target_price", "take_profit_price"])),
+            formatKpiPrice(firstKpiValue(trade, ["exit_price", "close_price", "last_price", "avg_exit_price"])),
+            displayKpiField(firstKpiValue(trade, ["exit_reason", "close_reason", "reason"])),
+            displayKpiField(tradeIdValue)
+          ],
+          screenshotKey: tradeIdValue === null ? `kpi-row-${index}` : String(tradeIdValue)
+        };
+      });
+    }
+
+    function renderKpiScreenshotCell(tradeId) {
+      const key = String(tradeId || "");
+      const screenshot = kpiScreenshotByTradeId[key] || null;
+      const label = screenshot ? screenshot.filename : "No screenshot";
+      const thumbMarkup = screenshot && screenshot.url
+        ? `<img class="kpi-screenshot-thumb" src="${escapeHtml(screenshot.url)}" alt="${escapeHtml(screenshot.filename)}" data-kpi-screenshot-preview="${escapeHtml(key)}" />`
+        : "";
+      return `
+        <td class="kpi-screenshot-cell">
+          <button type="button" class="kpi-attach-button" data-kpi-attach="${escapeHtml(key)}">Attach</button>
+          <div class="kpi-screenshot-placeholder" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+          ${thumbMarkup}
+          <input type="file" accept="image/*" data-kpi-file-input="${escapeHtml(key)}" hidden />
+        </td>
+      `;
+    }
+
+    function renderKpiJournal(rows) {
+      const body = $("kpiJournalBody");
+      if (!body) return;
+      const fragment = document.createDocumentFragment();
+      if (!rows.length) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td colspan="17">${EMPTY_FIELD}</td>`;
+        fragment.appendChild(row);
+      } else {
+        for (const item of rows) {
+          const row = document.createElement("tr");
+          row.innerHTML = `${item.cells.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}${renderKpiScreenshotCell(item.screenshotKey)}`;
+          fragment.appendChild(row);
+        }
+      }
+      body.replaceChildren(fragment);
+    }
+
+    function drawEquityCurve(points) {
+      const canvas = $("kpiEquityCanvas");
+      if (!canvas) return;
+      const parentWidth = canvas.parentElement ? canvas.parentElement.clientWidth - 24 : 0;
+      const width = Math.max(320, parentWidth || 900);
+      const height = 260;
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(width * scale);
+      canvas.height = Math.floor(height * scale);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#0a111b";
+      ctx.fillRect(0, 0, width, height);
+
+      const padding = { top: 20, right: 20, bottom: 34, left: 72 };
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      const values = points.map((point) => point.equity);
+      const minValue = Math.min(...values);
+      const maxValue = Math.max(...values);
+      const range = maxValue - minValue || 1;
+      const yFor = (value) => padding.top + plotHeight - ((value - minValue) / range) * plotHeight;
+      const xFor = (index) => padding.left + (points.length === 1 ? 0 : (index / (points.length - 1)) * plotWidth);
+
+      ctx.strokeStyle = "#223047";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i <= 4; i += 1) {
+        const y = padding.top + (i / 4) * plotHeight;
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = "#8ea0b8";
+      ctx.font = "12px Arial";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      for (let i = 0; i <= 4; i += 1) {
+        const value = maxValue - (i / 4) * range;
+        ctx.fillText(formatMoney(value), padding.left - 8, padding.top + (i / 4) * plotHeight);
+      }
+
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      points.forEach((point, index) => {
+        const x = xFor(index);
+        const y = yFor(point.equity);
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = "#eaffff";
+      points.forEach((point, index) => {
+        const x = xFor(index);
+        const y = yFor(point.equity);
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function closeKpiLightbox() {
+      const lightbox = $("kpiLightbox");
+      const image = $("kpiLightboxImage");
+      if (!lightbox || !image) return;
+      lightbox.classList.remove("visible");
+      lightbox.setAttribute("aria-hidden", "true");
+      image.removeAttribute("src");
+      $("kpiLightboxTitle").textContent = "Screenshot preview";
+    }
+
+    function openKpiLightbox(tradeId) {
+      const screenshot = kpiScreenshotByTradeId[String(tradeId || "")];
+      if (!screenshot || !screenshot.url) return;
+      const lightbox = $("kpiLightbox");
+      const image = $("kpiLightboxImage");
+      if (!lightbox || !image) return;
+      $("kpiLightboxTitle").textContent = screenshot.filename || "Screenshot preview";
+      image.src = screenshot.url;
+      lightbox.classList.add("visible");
+      lightbox.setAttribute("aria-hidden", "false");
+    }
+
+    function handleKpiScreenshotFile(tradeId, file) {
+      const key = String(tradeId || "");
+      if (!key || !file || !String(file.type || "").startsWith("image/")) {
+        return;
+      }
+      const existing = kpiScreenshotByTradeId[key];
+      if (existing && existing.url) {
+        URL.revokeObjectURL(existing.url);
+      }
+      kpiScreenshotByTradeId[key] = {
+        filename: file.name || "Selected image",
+        url: URL.createObjectURL(file)
+      };
+      renderKpiPanel();
+    }
+
+    function getKpiFileInput(tradeId) {
+      const key = String(tradeId || "");
+      return Array.from(document.querySelectorAll("[data-kpi-file-input]"))
+        .find((input) => input.getAttribute("data-kpi-file-input") === key) || null;
+    }
+
+    function renderKpiPanel(payload = latestTradesPayload, options = {}) {
+      if (!$("kpiContent")) return;
+      const unavailable = options.unavailable || !payload || payload.ok === false;
+      $("kpiUnavailable").style.display = unavailable ? "block" : "none";
+      $("kpiContent").style.display = unavailable ? "none" : "block";
+      if (unavailable) {
+        $("kpiMeta").textContent = "KPI data unavailable.";
+        return;
+      }
+
+      const trades = getClosedJournalTrades(payload) || [];
+      const rows = buildKpiRows(trades);
+      const pnls = rows.map((row) => row.pnl).filter((value) => value !== null);
+      const rValues = rows.map((row) => row.rMultiple).filter((value) => value !== null);
+      const totalPnl = pnls.reduce((sum, value) => sum + value, 0);
+      const wins = rows.filter((row) => row.pnl !== null && row.pnl > 0).length;
+      const losses = rows.filter((row) => row.pnl !== null && row.pnl < 0).length;
+      const breakevens = rows.filter((row) => row.pnl !== null && row.pnl === 0).length;
+      const startingEquity = getKpiStartingEquity();
+      const currentEquity = getCurrentSyntheticEquity(startingEquity, totalPnl);
+      const averageR = rValues.length ? rValues.reduce((sum, value) => sum + value, 0) / rValues.length : null;
+      const bestTrade = pnls.length ? Math.max(...pnls) : null;
+      const worstTrade = pnls.length ? Math.min(...pnls) : null;
+      const winRate = rows.length ? `${((wins / rows.length) * 100).toFixed(1)}%` : EMPTY_FIELD;
+
+      renderKpiSummary([
+        { label: "Total trades", value: String(rows.length), subtext: "Closed/archived" },
+        { label: "Wins", value: String(wins), subtext: "PnL > 0" },
+        { label: "Losses", value: String(losses), subtext: "PnL < 0" },
+        { label: "Breakevens", value: String(breakevens), subtext: "PnL = 0" },
+        { label: "Win rate", value: winRate, subtext: "Wins / total" },
+        { label: "Total PnL", value: formatMoney(totalPnl), subtext: "Closed trades" },
+        { label: "Average R", value: averageR === null ? EMPTY_FIELD : averageR.toFixed(2), subtext: "Available R fields" },
+        { label: "Best trade", value: bestTrade === null ? EMPTY_FIELD : formatMoney(bestTrade), subtext: "Largest PnL" },
+        { label: "Worst trade", value: worstTrade === null ? EMPTY_FIELD : formatMoney(worstTrade), subtext: "Smallest PnL" },
+        { label: "Current synthetic equity", value: formatMoney(currentEquity), subtext: "Account snapshot or curve" }
+      ]);
+      renderKpiJournal(rows);
+
+      let cumulative = 0;
+      const points = [{ equity: startingEquity }];
+      for (const row of rows) {
+        if (row.pnl !== null) {
+          cumulative += row.pnl;
+          points.push({ equity: startingEquity + cumulative });
+        }
+      }
+      $("kpiEquityMeta").textContent = `Baseline ${formatMoney(startingEquity)} | Current ${formatMoney(startingEquity + cumulative)}`;
+      drawEquityCurve(points);
+      $("kpiMeta").textContent = `${rows.length} closed/archived trades | last update ${new Date().toISOString()}`;
+    }
+
     function getTradeTimestamp(trade) {
       return trade.closed_at || trade.created_at || trade.last_price_at || "";
     }
@@ -1815,6 +2470,29 @@
     function setMetric(id, value, subtext) {
       $(id).textContent = value;
       $(`${id}Sub`).textContent = subtext;
+    }
+
+    function renderAccountSnapshot(snapshot) {
+      if (!snapshot || snapshot.ok !== true) {
+        setMetric("metricPaperBalance", "--", "Paper balance unavailable");
+        renderKpiPanel();
+        return;
+      }
+
+      const balance = toFiniteNumber(snapshot.balance);
+      const cashBalance = toFiniteNumber(snapshot.cash_balance);
+      const netLiq = toFiniteNumber(snapshot.net_liq);
+      const unrealizedPnl = toFiniteNumber(snapshot.unrealized_pnl);
+      const displayBalance = balance !== null ? balance : (cashBalance !== null ? cashBalance : netLiq);
+      const details = [];
+      if (netLiq !== null) details.push(`Net liq ${formatMoney(netLiq)}`);
+      if (unrealizedPnl !== null) details.push(`Open P/L ${formatMoney(unrealizedPnl)}`);
+      setMetric(
+        "metricPaperBalance",
+        displayBalance === null ? "--" : formatMoney(displayBalance),
+        details.length ? details.join(" | ") : "Paper account telemetry"
+      );
+      renderKpiPanel();
     }
 
     function renderSessionSummary(summaryItems) {
@@ -2655,6 +3333,7 @@
       const payloadSize = metadata.tradeCount ?? trades.length;
       const sequence = metadata.sequence ?? "n/a";
       $("tradesRenderMeta").textContent = `Polling active | last render ${renderedAt} | payload ${payloadSize} trades | ${orphanTrades.length} orphan | seq ${sequence}`;
+      renderKpiPanel(data);
       updateDashboardSummary();
     }
 
@@ -3198,6 +3877,23 @@
       }
     }
 
+    async function refreshAccountSnapshot() {
+      if (accountSnapshotInFlight) {
+        return;
+      }
+      accountSnapshotInFlight = true;
+      try {
+        const data = await fetchJson(`${EX_BASE}/account_snapshot`);
+        latestAccountSnapshot = data;
+        renderAccountSnapshot(data);
+      } catch (error) {
+        latestAccountSnapshot = { ok: false, reason: "account_snapshot_fetch_failed" };
+        renderAccountSnapshot(latestAccountSnapshot);
+      } finally {
+        accountSnapshotInFlight = false;
+      }
+    }
+
     async function refreshTrades() {
       if (tradesRefreshInFlight) {
         logTradesDebug("trades fetch skipped: previous request still in flight");
@@ -3240,6 +3936,7 @@
         logTradesDebug(`closed trade ids=${closedTradeIds.length ? closedTradeIds.join(",") : "none"}`);
       } catch (error) {
         logTradesDebug(`trades fetch failure error=${error}`);
+        renderKpiPanel(null, { unavailable: true });
       } finally {
         tradesRefreshInFlight = false;
       }
@@ -3324,6 +4021,7 @@
         refreshTvAtrStatuses(),
         refreshRiskState(),
         refreshQaFeed(),
+        refreshAccountSnapshot(),
         refreshEntryAgentStatus()
       ]);
     }
@@ -3344,6 +4042,7 @@
       if (ordersPollHandle === null) {
         ordersPollHandle = setInterval(() => {
           refreshOrders();
+          refreshAccountSnapshot();
         }, POLL_INTERVAL_MS);
       }
 
@@ -3370,6 +4069,71 @@
       logTradesDebug(`polling started interval_ms=${POLL_INTERVAL_MS}`);
       showStartupMarker(`polling started interval_ms=${POLL_INTERVAL_MS}`);
     }
+
+    function activateTab(targetId) {
+      document.querySelectorAll("[data-tab-target]").forEach((button) => {
+        const active = button.getAttribute("data-tab-target") === targetId;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === targetId);
+      });
+      if (targetId === "kpiPanel") {
+        renderKpiPanel();
+      }
+    }
+
+    document.querySelectorAll("[data-tab-target]").forEach((button) => {
+      button.addEventListener("click", () => activateTab(button.getAttribute("data-tab-target")));
+    });
+    $("kpiJournalBody").addEventListener("click", (event) => {
+      const attachButton = event.target.closest("[data-kpi-attach]");
+      if (attachButton) {
+        const tradeId = attachButton.getAttribute("data-kpi-attach");
+        const input = getKpiFileInput(tradeId);
+        if (input) input.click();
+        return;
+      }
+      const preview = event.target.closest("[data-kpi-screenshot-preview]");
+      if (preview) {
+        openKpiLightbox(preview.getAttribute("data-kpi-screenshot-preview"));
+      }
+    });
+    $("kpiJournalBody").addEventListener("change", (event) => {
+      const input = event.target.closest("[data-kpi-file-input]");
+      if (!input) return;
+      const file = input.files && input.files[0];
+      handleKpiScreenshotFile(input.getAttribute("data-kpi-file-input"), file);
+      input.value = "";
+    });
+    $("kpiJournalBody").addEventListener("error", (event) => {
+      const image = event.target.closest("[data-kpi-screenshot-preview]");
+      if (!image) return;
+      const tradeId = image.getAttribute("data-kpi-screenshot-preview");
+      const screenshot = kpiScreenshotByTradeId[String(tradeId || "")];
+      if (screenshot && screenshot.url) {
+        URL.revokeObjectURL(screenshot.url);
+      }
+      delete kpiScreenshotByTradeId[String(tradeId || "")];
+      renderKpiPanel();
+    }, true);
+    $("kpiLightboxClose").onclick = closeKpiLightbox;
+    $("kpiLightbox").addEventListener("click", (event) => {
+      if (event.target === $("kpiLightbox")) {
+        closeKpiLightbox();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeKpiLightbox();
+      }
+    });
+    window.addEventListener("resize", () => {
+      if ($("kpiPanel") && $("kpiPanel").classList.contains("active")) {
+        renderKpiPanel();
+      }
+    });
 
     $("submitTradeBtn").onclick = submitTrade;
     $("symbol").onchange = updateSubmitAvailability;
