@@ -2247,6 +2247,222 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         self.assertTrue(snapshots["RTYM6"]["atr_trade_approved"])
         self.assertFalse(snapshots["NQM6"]["atr_trade_approved"])
 
+    def test_set_manual_exit_limit_creates_reduce_only_limit_and_replaces_tp(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": 2.0,
+            "avg_entry_price": 27000.0,
+        }
+        self.executor.ORDERS["LIMIT-TP1"] = {
+            "order_id": "LIMIT-TP1",
+            "trade_id": "T-MANUAL",
+            "type": "limit",
+            "symbol": "NQM6",
+            "limit_price": 27020.0,
+            "qty": 1.0,
+            "status": "active",
+            "tag": "tp1",
+            "oco_group": "OCO-T-MANUAL-PROTECTIVE",
+            "oco_role": "tp1_limit",
+        }
+        self.executor.ORDERS["STOP-PROTECTIVE"] = {
+            "order_id": "STOP-PROTECTIVE",
+            "trade_id": "T-MANUAL",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 26980.0,
+            "qty": 2.0,
+            "status": "active",
+            "oco_group": "OCO-T-MANUAL-PROTECTIVE",
+            "oco_role": "protective_stop",
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "set_manual_exit_limit",
+            "trade_id": "T-MANUAL",
+            "symbol": "NQM6",
+            "limit_price": 27025.0,
+            "qty": 1,
+            "manual_confirmation": True,
+            "intent": "manual_exit_limit",
+            "replace_existing_tp": True,
+            "level_label": "YL",
+            "oco_group": "OCO-T-MANUAL-PROTECTIVE",
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(data["ok"])
+        self.assertEqual(self.executor.ORDERS["LIMIT-TP1"]["status"], "cancelled")
+        self.assertEqual(self.executor.ORDERS["LIMIT-TP1"]["closed_reason"], "manual_exit_limit_replaced")
+        order = data["order"]
+        self.assertEqual(order["type"], "limit")
+        self.assertEqual(order["tag"], "manual_exit_limit")
+        self.assertEqual(order["oco_role"], "manual_exit_limit")
+        self.assertEqual(order["oco_group"], "OCO-T-MANUAL-PROTECTIVE")
+        self.assertTrue(order["reduce_only"])
+        self.assertEqual(order["side"], "sell")
+        self.assertEqual(order["tif"], "DAY")
+        self.assertEqual(order["limit_price"], 27025.0)
+        self.assertEqual(order["qty"], 1.0)
+        self.assertEqual(order["level_label"], "YL")
+        self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], 2.0)
+
+    def test_set_manual_exit_limit_rejects_without_manual_confirmation(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -1.0,
+            "avg_entry_price": 27000.0,
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "set_manual_exit_limit",
+            "trade_id": "T-MANUAL",
+            "symbol": "NQM6",
+            "limit_price": 26980.0,
+            "qty": 1,
+            "intent": "manual_exit_limit",
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "manual_confirmation_required")
+        self.assertEqual(self.executor.ORDERS, {})
+
+    def test_set_manual_exit_limit_rejects_quantity_above_position(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": 1.0,
+            "avg_entry_price": 27000.0,
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "set_manual_exit_limit",
+            "trade_id": "T-MANUAL",
+            "symbol": "NQM6",
+            "limit_price": 27020.0,
+            "qty": 2,
+            "manual_confirmation": True,
+            "intent": "manual_exit_limit",
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "manual_exit_qty_exceeds_position")
+        self.assertEqual(self.executor.ORDERS, {})
+
+    def test_set_manual_exit_limit_rejects_invalid_tick_increment(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": 1.0,
+            "avg_entry_price": 27000.0,
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "set_manual_exit_limit",
+            "trade_id": "T-MANUAL",
+            "symbol": "NQM6",
+            "limit_price": 27020.13,
+            "qty": 1,
+            "manual_confirmation": True,
+            "intent": "manual_exit_limit",
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "invalid_tick_increment")
+        self.assertEqual(self.executor.ORDERS, {})
+
+    def test_set_manual_exit_limit_rejects_active_limit_without_replace(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": -1.0,
+            "avg_entry_price": 27000.0,
+        }
+        self.executor.ORDERS["STOP-PROTECTIVE"] = {
+            "order_id": "STOP-PROTECTIVE",
+            "trade_id": "T-MANUAL",
+            "type": "stop",
+            "symbol": "NQM6",
+            "stop_price": 27010.0,
+            "qty": 1.0,
+            "status": "active",
+            "oco_group": "OCO-T-MANUAL-PROTECTIVE",
+            "oco_role": "protective_stop",
+        }
+        self.executor.ORDERS["LIMIT-EXISTING"] = {
+            "order_id": "LIMIT-EXISTING",
+            "trade_id": "T-MANUAL",
+            "type": "limit",
+            "symbol": "NQM6",
+            "limit_price": 26980.0,
+            "qty": 1.0,
+            "status": "active",
+            "tag": "tp1",
+            "oco_group": "OCO-T-MANUAL-PROTECTIVE",
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "set_manual_exit_limit",
+            "trade_id": "T-MANUAL",
+            "symbol": "NQM6",
+            "limit_price": 26975.0,
+            "qty": 1,
+            "manual_confirmation": True,
+            "intent": "manual_exit_limit",
+            "replace_existing_tp": False,
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "active_limit_exists")
+        self.assertEqual(self.executor.ORDERS["LIMIT-EXISTING"]["status"], "active")
+
+    def test_set_manual_exit_limit_rejects_when_oco_linkage_not_confirmed(self):
+        self.executor.POSITIONS["NQM6"] = {
+            "qty": 1.0,
+            "avg_entry_price": 27000.0,
+        }
+
+        response = self.executor.app.test_client().post("/execute", json={
+            "action": "set_manual_exit_limit",
+            "trade_id": "T-MANUAL",
+            "symbol": "NQM6",
+            "limit_price": 27020.0,
+            "qty": 1,
+            "manual_confirmation": True,
+            "intent": "manual_exit_limit",
+            "oco_group": "OCO-T-MANUAL-PROTECTIVE",
+        })
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "oco_linkage_not_confirmed")
+        self.assertEqual(self.executor.ORDERS, {})
+
+    def test_day_manual_exit_limit_expires_after_session_date(self):
+        self.executor.ORDERS["LIMIT-DAY"] = {
+            "order_id": "LIMIT-DAY",
+            "trade_id": "T-MANUAL",
+            "type": "limit",
+            "symbol": "NQM6",
+            "limit_price": 27020.0,
+            "qty": 1.0,
+            "status": "active",
+            "tag": "manual_exit_limit",
+            "oco_group": "OCO-T-MANUAL-PROTECTIVE",
+            "oco_role": "manual_exit_limit",
+            "reduce_only": True,
+            "tif": "DAY",
+            "session_date": "2026-05-01",
+        }
+
+        expired = self.executor.expire_stale_day_manual_exit_orders(reference_date="2026-05-02")
+
+        self.assertEqual(expired, ["LIMIT-DAY"])
+        self.assertEqual(self.executor.ORDERS["LIMIT-DAY"]["status"], "cancelled")
+        self.assertEqual(self.executor.ORDERS["LIMIT-DAY"]["closed_reason"], "day_manual_exit_expired")
+
 
 if __name__ == "__main__":
     unittest.main()

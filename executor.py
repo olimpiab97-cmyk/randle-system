@@ -199,6 +199,7 @@ ORDER_RISK_CAPPED_ACTIONS = {
     "submit_entry",
     "submit_stop",
     "submit_limit",
+    "set_manual_exit_limit",
     "modify_stop",
     "move_stop_to_be",
     "reset_stop_to_original",
@@ -207,6 +208,7 @@ SUPPORTED_EXECUTOR_ACTIONS = (
     "submit_entry",
     "submit_stop",
     "submit_limit",
+    "set_manual_exit_limit",
     "modify_stop",
     "cancel_order",
     "flatten_trade",
@@ -1295,6 +1297,32 @@ def save_executor_state():
         return False
 
 
+def expire_stale_day_manual_exit_orders(reference_date=None):
+    reference_date = reference_date or datetime.now().date().isoformat()
+    expired = []
+    timestamp = datetime.now().isoformat()
+
+    for order in ORDERS.values():
+        if order.get("type") != "limit":
+            continue
+        if order.get("oco_role") != "manual_exit_limit":
+            continue
+        if str(order.get("tif") or "").upper() != "DAY":
+            continue
+        if str(order.get("status") or "").lower() not in WORKING_ORDER_STATUSES:
+            continue
+        session_date = order.get("session_date") or str(order.get("created_at") or "")[:10]
+        if session_date and session_date < reference_date:
+            order["status"] = "cancelled"
+            order["cancelled_at"] = timestamp
+            order["closed_reason"] = "day_manual_exit_expired"
+            expired.append(order.get("order_id"))
+
+    if expired:
+        log(f"DAY MANUAL EXIT ORDERS EXPIRED orders={expired}")
+    return expired
+
+
 def load_executor_state():
     global EXECUTOR_STATE_LOADED, EXECUTOR_STATE_SAVED_AT
 
@@ -1326,8 +1354,12 @@ def load_executor_state():
         POSITIONS.clear()
         POSITIONS.update(positions)
 
+        expired_orders = expire_stale_day_manual_exit_orders()
+
         EXECUTOR_STATE_LOADED = True
         EXECUTOR_STATE_SAVED_AT = payload.get("saved_at")
+        if expired_orders:
+            save_executor_state()
 
         log(
             f"STATE LOADED file={EXECUTOR_STATE_FILE} "
@@ -1397,6 +1429,35 @@ def stop_prices_match(left, right, tolerance=0.01):
         return abs(round(float(left), 2) - round(float(right), 2)) <= tolerance
     except (TypeError, ValueError):
         return False
+
+
+def price_is_valid_tick(value, symbol, tolerance=1e-9):
+    try:
+        price = float(value)
+        tick_size = float(get_tick_size(symbol))
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(price) or not math.isfinite(tick_size) or tick_size <= 0:
+        return False
+    ticks = round(price / tick_size)
+    return abs((ticks * tick_size) - price) <= tolerance
+
+
+def find_position_symbol(symbol):
+    raw_symbol = str(symbol or "").strip().upper()
+    if raw_symbol in POSITIONS:
+        return raw_symbol
+    try:
+        resolved_symbol, _ = resolve_execution_symbol(raw_symbol)
+    except Exception:
+        resolved_symbol = raw_symbol
+    if resolved_symbol in POSITIONS:
+        return resolved_symbol
+    raw_root = normalize_symbol_root(raw_symbol)
+    for candidate in POSITIONS:
+        if normalize_symbol_root(candidate) == raw_root:
+            return candidate
+    return resolved_symbol or raw_symbol
 
 
 def active_stop_matches_request(order, trade_id, symbol, qty, stop_price):
@@ -2371,6 +2432,160 @@ def execute():
             "broker_order_id": order_id,
             "order": ORDERS[order_id],
             "limit_fills": limit_fills
+        })
+
+    # =========================
+    # MANUAL REDUCE-ONLY EXIT LIMIT
+    # =========================
+    if action == "set_manual_exit_limit":
+        if not trade_id:
+            return jsonify({"ok": False, "error": "missing_trade_id", "message": "missing_trade_id"}), 400
+        if not symbol:
+            return jsonify({"ok": False, "error": "missing_symbol", "message": "missing_symbol"}), 400
+        if data.get("manual_confirmation") is not True:
+            return jsonify({
+                "ok": False,
+                "error": "manual_confirmation_required",
+                "message": "manual_confirmation_required",
+            }), 400
+        if data.get("intent") != "manual_exit_limit":
+            return jsonify({"ok": False, "error": "invalid_intent", "message": "invalid_intent"}), 400
+
+        limit_price = data.get("limit_price", data.get("price"))
+        if limit_price is None:
+            return jsonify({"ok": False, "error": "missing_limit_price", "message": "missing_limit_price"}), 400
+        try:
+            limit_price = float(limit_price)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "invalid_price", "message": "invalid_price"}), 400
+        if not math.isfinite(limit_price):
+            return jsonify({"ok": False, "error": "invalid_price", "message": "invalid_price"}), 400
+        if not price_is_valid_tick(limit_price, symbol):
+            return jsonify({
+                "ok": False,
+                "error": "invalid_tick_increment",
+                "message": "invalid_tick_increment",
+            }), 400
+
+        position_symbol = find_position_symbol(symbol)
+        position = POSITIONS.get(position_symbol) or {}
+        position_qty = float(position.get("qty", 0) or 0)
+        if position_qty == 0:
+            return jsonify({"ok": False, "error": "position_flat_or_missing", "message": "position_flat_or_missing"}), 409
+
+        requested_qty = float(data.get("qty", 0) or 0)
+        if requested_qty <= 0:
+            return jsonify({"ok": False, "error": "qty_must_be_positive", "message": "qty_must_be_positive"}), 400
+        if requested_qty > abs(position_qty):
+            return jsonify({
+                "ok": False,
+                "error": "manual_exit_qty_exceeds_position",
+                "message": "manual_exit_qty_exceeds_position",
+            }), 409
+
+        side = "sell" if position_qty > 0 else "buy"
+        oco_group = data.get("oco_group") or default_oco_group(trade_id)
+        if not oco_group or oco_group != default_oco_group(trade_id):
+            return jsonify({
+                "ok": False,
+                "error": "oco_linkage_not_confirmed",
+                "message": "oco_linkage_not_confirmed",
+            }), 409
+
+        active_oco_peers = [
+            order for order in active_orders_for_trade(trade_id)
+            if order_oco_group(order) == oco_group and order.get("type") == "stop"
+        ]
+        if not active_oco_peers:
+            return jsonify({
+                "ok": False,
+                "error": "oco_linkage_not_confirmed",
+                "message": "oco_linkage_not_confirmed",
+            }), 409
+
+        active_limits = [
+            order for order in active_orders_for_trade(trade_id, "limit")
+            if str(order.get("symbol", "")).upper() == str(position_symbol).upper()
+        ]
+        existing_limits = [
+            order for order in active_limits
+            if order_oco_group(order) == oco_group
+        ]
+        if active_limits and len(active_limits) != len(existing_limits):
+            return jsonify({
+                "ok": False,
+                "error": "oco_linkage_not_confirmed",
+                "message": "active_limit_outside_protective_oco_scope",
+            }), 409
+        replace_existing_tp = data.get("replace_existing_tp") is True
+        if existing_limits and not replace_existing_tp:
+            return jsonify({
+                "ok": False,
+                "error": "active_limit_exists",
+                "message": "active_limit_exists",
+                "existing_limit_ids": [order["order_id"] for order in existing_limits],
+            }), 409
+
+        timestamp = datetime.now().isoformat()
+        replaced_limit_ids = []
+        if replace_existing_tp:
+            for existing_limit in existing_limits:
+                existing_limit["status"] = "cancelled"
+                existing_limit["cancelled_at"] = timestamp
+                existing_limit["closed_reason"] = "manual_exit_limit_replaced"
+                replaced_limit_ids.append(existing_limit["order_id"])
+
+        order_id = make_id("LIMIT")
+
+        ORDERS[order_id] = {
+            "order_id": order_id,
+            "trade_id": trade_id,
+            "type": "limit",
+            "tag": "manual_exit_limit",
+            "oco_group": oco_group,
+            "oco_role": "manual_exit_limit",
+            "symbol": position_symbol,
+            "limit_price": limit_price,
+            "qty": requested_qty,
+            "status": "active",
+            "created_at": timestamp,
+            "manual_confirmation": True,
+            "intent": "manual_exit_limit",
+            "reduce_only": True,
+            "side": side,
+            "tif": "DAY",
+            "session_date": datetime.now().date().isoformat(),
+            "level_label": str(data.get("level_label") or "").strip() or None,
+            "replaced_limit_ids": replaced_limit_ids,
+        }
+
+        log(
+            f"MANUAL EXIT LIMIT SET [{trade_id}] {position_symbol} "
+            f"side={side} limit={limit_price} qty={requested_qty} replaced={replaced_limit_ids}"
+        )
+
+        limit_fills = []
+        if position_symbol in LAST_PRICES:
+            limit_fills = evaluate_limit_fills_for_symbol(
+                position_symbol,
+                LAST_PRICES[position_symbol],
+                trade_id=trade_id,
+                order_id=order_id,
+                oco_group=order_oco_group(ORDERS[order_id]),
+            )
+            if limit_fills:
+                log(f"MANUAL EXIT LIMIT FILLED IMMEDIATELY [{trade_id}] fills={limit_fills}")
+
+        save_executor_state()
+
+        return jsonify({
+            "ok": True,
+            "message": "Manual exit limit set",
+            "broker_order_id": order_id,
+            "order_id": order_id,
+            "order": ORDERS[order_id],
+            "replaced_limit_ids": replaced_limit_ids,
+            "limit_fills": limit_fills,
         })
 
     # =========================

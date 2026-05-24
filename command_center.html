@@ -328,6 +328,43 @@
       border-radius: 8px;
       background: #0a111b;
     }
+    .manual-exit-panel {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0;
+      padding: 12px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #0c1320;
+    }
+    .manual-exit-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.2fr) minmax(90px, 0.7fr) minmax(90px, 0.6fr) minmax(110px, 0.8fr) minmax(100px, 0.7fr);
+      gap: 10px;
+      align-items: end;
+    }
+    .manual-exit-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .manual-exit-checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 0;
+      color: #dbe7f5;
+    }
+    .manual-exit-checks input {
+      width: auto;
+      margin-top: 0;
+    }
+    .manual-exit-response {
+      min-height: 26px;
+      font-size: 12px;
+      color: #9fb0c7;
+    }
     .risk-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1120,6 +1157,7 @@
       .entry-agent-context-grid,
       .entry-agent-pathway-layout,
       .kpi-summary-grid,
+      .manual-exit-grid,
       .demo-live-map-controls {
         grid-template-columns: 1fr;
       }
@@ -1273,6 +1311,41 @@
           <span id="tradesRenderMeta" class="small">Polling active</span>
         </div>
         <div id="orphanExposureBanner" class="orphan-exposure-banner"></div>
+        <div class="manual-exit-panel">
+          <div class="section-title">
+            <h2>Manual Exit Limit</h2>
+            <span class="small">Manual only</span>
+          </div>
+          <div class="manual-exit-grid">
+            <label>Trade
+              <select id="manualExitTradeSelect"></select>
+            </label>
+            <label>Symbol
+              <input id="manualExitSymbol" type="text" readonly />
+            </label>
+            <label>Quantity
+              <input id="manualExitQuantity" type="number" min="1" step="1" />
+            </label>
+            <label>Price
+              <input id="manualExitPrice" type="number" step="0.25" />
+            </label>
+            <label>Level
+              <input id="manualExitLevelLabel" type="text" maxlength="12" placeholder="YL" />
+            </label>
+          </div>
+          <div class="manual-exit-checks">
+            <label>
+              <input id="manualExitReplaceTp" type="checkbox" checked />
+              Replace existing TP
+            </label>
+            <label>
+              <input id="manualExitConfirm" type="checkbox" />
+              Confirm manual exit
+            </label>
+            <button id="manualExitSubmitBtn" type="button">Set Exit Limit</button>
+          </div>
+          <div id="manualExitResponse" class="manual-exit-response">Select an active trade.</div>
+        </div>
         <div class="active-trade-layout">
           <div class="visual-panel">
             <div class="section-title">
@@ -1439,6 +1512,7 @@
     let ordersRefreshInFlight = false;
     let accountSnapshotInFlight = false;
     let submitInFlight = false;
+    let manualExitInFlight = false;
     let latestSnapshot = null;
     let latestOrdersPayload = null;
     let latestAccountSnapshot = null;
@@ -2448,6 +2522,114 @@
       ];
     }
 
+    function getManualExitTrades() {
+      return getLatestActiveTrades().filter((trade) => !trade.orphan_exposure && trade.status === "active");
+    }
+
+    function getSelectedManualExitTrade() {
+      const selectedId = $("manualExitTradeSelect").value;
+      return getManualExitTrades().find((trade) => trade.trade_id === selectedId) || null;
+    }
+
+    function updateManualExitPanel(preserveSelection = true) {
+      const select = $("manualExitTradeSelect");
+      const previousValue = preserveSelection ? select.value : "";
+      const trades = getManualExitTrades();
+      const fragment = document.createDocumentFragment();
+
+      if (!trades.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "No active trades";
+        fragment.appendChild(option);
+      } else {
+        for (const trade of trades) {
+          const option = document.createElement("option");
+          option.value = trade.trade_id || "";
+          option.textContent = `${trade.trade_id || "Trade"} | ${trade.symbol || ""} | ${trade.direction || ""} | qty ${formatValue(trade.remaining_size)}`;
+          fragment.appendChild(option);
+        }
+      }
+
+      select.replaceChildren(fragment);
+      if (previousValue && trades.some((trade) => trade.trade_id === previousValue)) {
+        select.value = previousValue;
+      } else if (selectedActiveTradeId && trades.some((trade) => trade.trade_id === selectedActiveTradeId)) {
+        select.value = selectedActiveTradeId;
+      }
+
+      const selected = getSelectedManualExitTrade();
+      $("manualExitSymbol").value = selected ? (selected.symbol || selected.execution_symbol || selected.requested_symbol || "") : "";
+      if (selected && !$("manualExitQuantity").value) {
+        const remaining = toFiniteNumber(selected.remaining_size);
+        $("manualExitQuantity").value = remaining !== null && remaining > 0 ? String(remaining) : "1";
+      }
+      $("manualExitSubmitBtn").disabled = manualExitInFlight || !selected;
+      if (!selected) {
+        $("manualExitResponse").textContent = "No active trade available.";
+      }
+    }
+
+    async function submitManualExitLimit() {
+      if (manualExitInFlight) {
+        return;
+      }
+
+      const trade = getSelectedManualExitTrade();
+      if (!trade) {
+        $("manualExitResponse").textContent = "Select an active trade.";
+        return;
+      }
+      if (!$("manualExitConfirm").checked) {
+        $("manualExitResponse").textContent = "Manual confirmation is required.";
+        return;
+      }
+
+      const price = toFiniteNumber($("manualExitPrice").value);
+      const quantity = toFiniteNumber($("manualExitQuantity").value);
+      if (price === null || quantity === null || quantity <= 0) {
+        $("manualExitResponse").textContent = "Enter a valid price and quantity.";
+        return;
+      }
+
+      manualExitInFlight = true;
+      $("manualExitSubmitBtn").disabled = true;
+      $("manualExitSubmitBtn").textContent = "Setting...";
+      $("manualExitResponse").textContent = "Submitting manual exit limit...";
+
+      try {
+        const data = await fetchJson(`${TM_BASE}/trades/${encodeURIComponent(trade.trade_id)}/manual_exit_limit`, {
+          method: "POST",
+          body: JSON.stringify({
+            symbol: $("manualExitSymbol").value || trade.symbol,
+            price,
+            quantity,
+            manual_confirmation: true,
+            intent: "manual_exit_limit",
+            replace_existing_tp: $("manualExitReplaceTp").checked,
+            level_label: $("manualExitLevelLabel").value.trim()
+          }),
+          headers: {
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (data && data.ok) {
+          $("manualExitResponse").textContent = `Manual exit limit set: ${formatValue(data.broker_order_id || data.order_id)}`;
+          $("manualExitConfirm").checked = false;
+          await forceRefreshAll("manual_exit_limit_set");
+        } else {
+          $("manualExitResponse").textContent = `Manual exit rejected: ${formatValue((data && (data.error || data.message)) || "unknown_error")}`;
+        }
+      } catch (error) {
+        $("manualExitResponse").textContent = `Manual exit failed: ${error}`;
+      } finally {
+        manualExitInFlight = false;
+        $("manualExitSubmitBtn").textContent = "Set Exit Limit";
+        updateManualExitPanel();
+      }
+    }
+
     function renderOrphanExposureBanner(orphanTrades) {
       const banner = $("orphanExposureBanner");
       if (!orphanTrades.length) {
@@ -3328,6 +3510,7 @@
       $("closedTradeCount").textContent = `${closedTrades.length} shown`;
       renderTradeList("errorTradesBox", errorTrades, "error", "No hidden error trades.");
       renderSelectedActiveTradeVisual();
+      updateManualExitPanel();
 
       const renderedAt = metadata.renderedAt || new Date().toISOString();
       const payloadSize = metadata.tradeCount ?? trades.length;
@@ -4142,6 +4325,8 @@
     $("refreshTradesBtn").onclick = refreshTrades;
     $("demoLiveMapToggle").onclick = () => setDemoLiveMapEnabled(!demoLiveMapEnabled);
     $("demoLivePriceBtn").onclick = setDemoLivePriceFromInput;
+    $("manualExitTradeSelect").onchange = () => updateManualExitPanel(true);
+    $("manualExitSubmitBtn").onclick = submitManualExitLimit;
     $("demoLivePriceInput").addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         setDemoLivePriceFromInput();

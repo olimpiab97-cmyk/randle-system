@@ -1834,6 +1834,77 @@ def find_recent_filled_stop_for_trade(executor_orders, trade):
     return filled_stops[-1]
 
 
+def is_executor_manual_exit_limit_fill(order):
+    if not isinstance(order, dict):
+        return False
+    if order.get("type") != "limit":
+        return False
+    if order.get("oco_role") != "manual_exit_limit" and order.get("tag") != "manual_exit_limit":
+        return False
+    status = str(order.get("status", "")).lower()
+    if status == "filled":
+        return True
+    if status != "closed":
+        return False
+    closed_reason = str(order.get("closed_reason") or "").strip().lower()
+    return bool(order.get("filled_at")) or closed_reason == "limit_triggered"
+
+
+def find_recent_filled_manual_exit_limit_for_trade(executor_orders, trade):
+    manual_exit_order = find_executor_order_by_id(executor_orders, trade.get("manual_exit_order_id"))
+    if is_executor_manual_exit_limit_fill(manual_exit_order):
+        return manual_exit_order
+
+    filled_limits = [
+        order for order in executor_orders
+        if order.get("trade_id") == trade.get("trade_id")
+        and is_executor_manual_exit_limit_fill(order)
+    ]
+    if not filled_limits:
+        return None
+
+    filled_limits.sort(key=lambda order: str(order.get("filled_at") or order.get("closed_at") or ""))
+    return filled_limits[-1]
+
+
+def apply_manual_exit_limit_fill_from_executor(trade, manual_order, live_qty):
+    filled_at = manual_order.get("filled_at") or manual_order.get("closed_at") or datetime.now().isoformat()
+    filled_price = manual_order.get("filled_price")
+    if filled_price is None:
+        filled_price = manual_order.get("limit_price")
+    filled_qty = float(manual_order.get("filled_qty") or manual_order.get("qty") or 0)
+    live_abs_qty = abs(float(live_qty or 0))
+
+    trade["manual_exit_order_id"] = manual_order.get("order_id") or trade.get("manual_exit_order_id")
+    trade["manual_exit_price"] = filled_price
+    trade["manual_exit_filled_at"] = filled_at
+    trade["manual_exit_filled_qty"] = filled_qty
+    trade["manual_exit_hit"] = True
+    trade["tp1_hit"] = True
+    trade["tp1_hit_at"] = trade.get("tp1_hit_at") or filled_at
+    trade["tp1_filled_qty"] = filled_qty
+    trade["tp1_exit_price"] = filled_price
+    trade["tp1_order_id"] = trade.get("tp1_order_id") or manual_order.get("order_id")
+    trade["tp1_price"] = filled_price
+    trade["remaining_size"] = live_abs_qty
+    trade["error_reason"] = None
+
+    if live_abs_qty <= 0:
+        trade["status"] = "closed"
+        trade["remaining_size"] = 0
+        trade["closed_at"] = filled_at
+        trade["exit_reason"] = "manual_exit_limit"
+        trade["exit_price"] = filled_price
+        trade["stop_state"] = "flat"
+        trade["recovery_status"] = "closed_from_manual_exit_limit"
+    else:
+        trade["status"] = "active"
+        trade["recovery_status"] = "partial_manual_exit_limit_reconciled"
+
+    update_profit_breakdown(trade, include_runner=False)
+    return trade
+
+
 def find_executor_flatten_evidence_for_trade(executor_orders, trade):
     flattened_orders = []
     for order in executor_orders:
@@ -2594,6 +2665,10 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
     symbol_snapshot = executor_snapshot.get(trade["symbol"], {})
     live_qty = float(symbol_snapshot.get("position_qty", 0) or 0)
     apply_be_evidence_from_executor_history(trade, executor_orders)
+
+    manual_exit_fill = find_recent_filled_manual_exit_limit_for_trade(executor_orders, trade)
+    if manual_exit_fill:
+        return apply_manual_exit_limit_fill_from_executor(trade, manual_exit_fill, live_qty)
 
     active_stops = find_executor_stop_for_trade(executor_orders, trade["trade_id"])
     active_tp1 = next(
@@ -3670,6 +3745,82 @@ def place_limit_order(trade_id, symbol, limit_price, qty, tag=None, oco_group=No
     )
 
 
+def price_is_valid_tick(value, symbol, tolerance=1e-9):
+    try:
+        price = float(value)
+        tick_size = float(get_symbol_tick_size(symbol))
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(price) or not math.isfinite(tick_size) or tick_size <= 0:
+        return False
+    ticks = round(price / tick_size)
+    return abs((ticks * tick_size) - price) <= tolerance
+
+
+def find_executor_symbol_snapshot(executor_snapshot, symbol):
+    if not isinstance(executor_snapshot, dict):
+        return None, {}
+    raw_symbol = str(symbol or "").strip().upper()
+    if raw_symbol in executor_snapshot:
+        return raw_symbol, executor_snapshot[raw_symbol] or {}
+    raw_root = normalize_symbol_root(raw_symbol)
+    for candidate, snapshot in executor_snapshot.items():
+        if normalize_symbol_root(candidate) == raw_root:
+            return candidate, snapshot or {}
+    return raw_symbol, {}
+
+
+def executor_order_oco_group(order):
+    if not isinstance(order, dict):
+        return None
+    group = order.get("oco_group") or order.get("oco_group_id")
+    return str(group).strip() if group else None
+
+
+def executor_order_is_working(order):
+    status = str((order or {}).get("status") or "").strip().lower()
+    return status in {"active", "open", "working", "submitted", "accepted"}
+
+
+def manual_exit_oco_link_confirmed(executor_orders, trade_id, symbol, oco_group):
+    expected_group = protective_oco_group(trade_id)
+    if not oco_group or oco_group != expected_group:
+        return False
+    symbol_root = normalize_symbol_root(symbol)
+    for order in executor_orders or []:
+        if order.get("trade_id") != trade_id:
+            continue
+        if order.get("type") != "stop":
+            continue
+        if not executor_order_is_working(order):
+            continue
+        if normalize_symbol_root(order.get("symbol")) != symbol_root:
+            continue
+        if executor_order_oco_group(order) == oco_group:
+            return True
+    return False
+
+
+def set_manual_exit_limit_order(trade_id, symbol, limit_price, qty, *, replace_existing_tp=False, level_label=None, oco_group=None):
+    payload = {
+        "trade_id": trade_id,
+        "symbol": symbol,
+        "limit_price": limit_price,
+        "qty": qty,
+        "manual_confirmation": True,
+        "intent": "manual_exit_limit",
+        "replace_existing_tp": bool(replace_existing_tp),
+        "oco_group": oco_group or protective_oco_group(trade_id),
+    }
+    if level_label:
+        payload["level_label"] = level_label
+    return dispatch_execution(
+        "set_manual_exit_limit",
+        payload,
+        watch_failures=False,
+    )
+
+
 def cancel_existing_order(trade_id, symbol, broker_order_id, watch_failures=True):
     return dispatch_execution(
         "cancel_order",
@@ -4639,6 +4790,130 @@ def receive_price():
         return jsonify({"ok": True, "symbol": symbol, "price": price})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/trades/<trade_id>/manual_exit_limit", methods=["POST"])
+def manual_exit_limit_route(trade_id):
+    data = request.get_json(force=True)
+    if not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "invalid_payload", "message": "invalid_payload"}), 400
+
+    if data.get("manual_confirmation") is not True:
+        return jsonify({
+            "ok": False,
+            "error": "manual_confirmation_required",
+            "message": "manual_confirmation_required",
+        }), 400
+    if data.get("intent") != "manual_exit_limit":
+        return jsonify({"ok": False, "error": "invalid_intent", "message": "invalid_intent"}), 400
+
+    state = load_state()
+    trade = (state.get("trades") or {}).get(trade_id)
+    if not trade:
+        return jsonify({"ok": False, "error": "trade_not_found", "message": "trade_not_found"}), 404
+    if str(trade.get("status") or "").lower() != "active":
+        return jsonify({"ok": False, "error": "trade_not_active", "message": "trade_not_active"}), 409
+
+    requested_symbol = str(data.get("symbol") or "").strip().upper()
+    trade_symbol = str(trade.get("symbol") or "").strip().upper()
+    if not requested_symbol:
+        return jsonify({"ok": False, "error": "missing_symbol", "message": "missing_symbol"}), 400
+    if normalize_symbol_root(requested_symbol) != normalize_symbol_root(trade_symbol):
+        return jsonify({"ok": False, "error": "symbol_mismatch", "message": "symbol_mismatch"}), 409
+
+    try:
+        quantity = float(data.get("quantity"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_quantity", "message": "invalid_quantity"}), 400
+    if not math.isfinite(quantity) or quantity <= 0:
+        return jsonify({"ok": False, "error": "quantity_must_be_positive", "message": "quantity_must_be_positive"}), 400
+
+    try:
+        limit_price = float(data.get("price"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_price", "message": "invalid_price"}), 400
+    if not math.isfinite(limit_price):
+        return jsonify({"ok": False, "error": "invalid_price", "message": "invalid_price"}), 400
+    if not price_is_valid_tick(limit_price, trade_symbol):
+        return jsonify({
+            "ok": False,
+            "error": "invalid_tick_increment",
+            "message": "invalid_tick_increment",
+        }), 400
+
+    executor_snapshot = fetch_executor_snapshot()
+    executor_symbol, symbol_snapshot = find_executor_symbol_snapshot(executor_snapshot, trade_symbol)
+    position_qty = float((symbol_snapshot or {}).get("position_qty", 0) or 0)
+    if position_qty == 0:
+        return jsonify({"ok": False, "error": "position_flat_or_missing", "message": "position_flat_or_missing"}), 409
+    if quantity > abs(position_qty):
+        return jsonify({
+            "ok": False,
+            "error": "manual_exit_qty_exceeds_position",
+            "message": "manual_exit_qty_exceeds_position",
+        }), 409
+
+    current_price = (symbol_snapshot or {}).get("last_price")
+    try:
+        current_price = float(current_price)
+    except (TypeError, ValueError):
+        current_price = None
+    if current_price is None or not math.isfinite(current_price):
+        return jsonify({"ok": False, "error": "current_price_unavailable", "message": "current_price_unavailable"}), 409
+    if position_qty > 0 and limit_price <= current_price:
+        return jsonify({
+            "ok": False,
+            "error": "invalid_exit_limit_direction",
+            "message": "long_exit_limit_must_be_above_current_price",
+        }), 409
+    if position_qty < 0 and limit_price >= current_price:
+        return jsonify({
+            "ok": False,
+            "error": "invalid_exit_limit_direction",
+            "message": "short_exit_limit_must_be_below_current_price",
+        }), 409
+
+    oco_group = trade.get("oco_group") or protective_oco_group(trade)
+    if not manual_exit_oco_link_confirmed(fetch_executor_orders(), trade_id, executor_symbol or trade_symbol, oco_group):
+        return jsonify({
+            "ok": False,
+            "error": "oco_linkage_not_confirmed",
+            "message": "oco_linkage_not_confirmed",
+        }), 409
+
+    level_label = str(data.get("level_label") or "").strip()
+    response = set_manual_exit_limit_order(
+        trade_id=trade_id,
+        symbol=executor_symbol or trade_symbol,
+        limit_price=limit_price,
+        qty=quantity,
+        replace_existing_tp=data.get("replace_existing_tp") is True,
+        level_label=level_label or None,
+        oco_group=oco_group,
+    )
+    if response.get("ok"):
+        trade["manual_exit_order_id"] = response.get("broker_order_id")
+        trade["manual_exit_price"] = limit_price
+        trade["manual_exit_qty"] = quantity
+        trade["manual_exit_level_label"] = level_label or None
+        trade["manual_exit_set_at"] = datetime.now().isoformat()
+        trade["manual_exit_replace_existing_tp"] = data.get("replace_existing_tp") is True
+        trade["manual_exit_oco_group"] = oco_group
+        if data.get("replace_existing_tp") is True:
+            trade["tp1_order_id"] = response.get("broker_order_id") or trade.get("tp1_order_id")
+            trade["tp1_price"] = limit_price
+        state["trades"][trade_id] = trade
+        save_state(state, reason="manual_exit_limit_set")
+    status_code = 200 if response.get("ok") else 409
+    return jsonify({
+        "ok": bool(response.get("ok")),
+        "message": response.get("message"),
+        "trade_id": trade_id,
+        "symbol": executor_symbol or trade_symbol,
+        "broker_order_id": response.get("broker_order_id"),
+        "order": response.get("order"),
+        "executor_response": response,
+    }), status_code
 
 
 @app.route("/trades", methods=["GET"])
