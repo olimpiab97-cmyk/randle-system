@@ -1099,6 +1099,11 @@ def build_step2_locked_owner(step_state: dict[str, Any], selected_liquidity: dic
         "side": side,
         "candle_a": step_state.get("candle_a"),
         "activated_at": candle_timestamp(step_state.get("candle_a") if isinstance(step_state.get("candle_a"), dict) else None) or step_state.get("last_evaluated_bar_time"),
+        "continuation_controlling_structure_high": step_state.get("continuation_controlling_structure_high"),
+        "continuation_controlling_structure_low": step_state.get("continuation_controlling_structure_low"),
+        "continuation_controlling_structure_start_time": step_state.get("continuation_controlling_structure_start_time"),
+        "continuation_controlling_structure_end_time": step_state.get("continuation_controlling_structure_end_time"),
+        "continuation_controlling_structure_source_step": step_state.get("continuation_controlling_structure_source_step"),
     }
 
 
@@ -1572,6 +1577,15 @@ def evaluate_live_step_2_1a(
     if selected_liquidity and isinstance(selected_group, dict):
         selected_liquidity = {**selected_liquidity, "group": selected_group}
     step_state["active_liquidity_group"] = selected_group
+    if step_state.get("step_2_activated") is True:
+        structure_bars = unique_bars_by_time(
+            recent_closed_bars(symbol_key, 120),
+            candle,
+        )
+        apply_step2_continuation_structure_fields(
+            step_state,
+            step2_continuation_controlling_structure(side, structure_bars, candle_timestamp(candle)),
+        )
     step_state["last_interacted_liquidity"] = (
         build_last_interacted_liquidity(selected_liquidity)
         or persisted_active_liquidity(persisted_state, symbol_key, snapshot.get("tv_context"))
@@ -2960,6 +2974,136 @@ def unique_bars_by_time(*sources: Any) -> list[dict[str, Any]]:
     return sorted(by_time.values(), key=lambda item: parse_candle_time(candle_timestamp(item)) or datetime.min.replace(tzinfo=timezone.utc))
 
 
+def step2_continuation_controlling_structure(
+    side: Any,
+    bars: list[dict[str, Any]],
+    confirmation_time: Any,
+) -> dict[str, Any] | None:
+    """Return the opposing control extreme that preceded the Step 2 rejection drive."""
+    confirmation_dt = parse_candle_time(confirmation_time)
+    if not confirmation_dt:
+        return None
+    ordered_bars = unique_bars_by_time(bars)
+    prior_bars = [candle for candle in ordered_bars if (parse_candle_time(candle_timestamp(candle)) or confirmation_dt) < confirmation_dt]
+    confirmation_candle = next(
+        (candle for candle in ordered_bars if same_candle_time(candle_timestamp(candle), confirmation_time)),
+        None,
+    )
+    if not prior_bars:
+        return None
+
+    def candle_prices(candle: dict[str, Any]) -> tuple[float | None, float | None, float | None, float | None]:
+        return (
+            optional_float(candle.get("open")),
+            optional_float(candle.get("high")),
+            optional_float(candle.get("low")),
+            optional_float(candle.get("close")),
+        )
+
+    def structure_from(candle: dict[str, Any]) -> dict[str, Any] | None:
+        _open, high, low, close = candle_prices(candle)
+        if high is None or low is None:
+            return None
+        return {
+            "high": high,
+            "low": low,
+            "start_time": candle_timestamp(candle),
+            "end_time": candle_timestamp(candle),
+            "last_directional_close": close,
+            "source_step": "Step 2",
+        }
+
+    def extend_structure(structure: dict[str, Any], candle: dict[str, Any]) -> None:
+        _open, high, low, close = candle_prices(candle)
+        if high is not None:
+            structure["high"] = max(float(structure["high"]), high)
+        if low is not None:
+            structure["low"] = min(float(structure["low"]), low)
+        structure["end_time"] = candle_timestamp(candle)
+        structure["last_directional_close"] = close
+
+    def public_structure(structure: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not isinstance(structure, dict):
+            return None
+        return {
+            "high": structure.get("high"),
+            "low": structure.get("low"),
+            "start_time": structure.get("start_time"),
+            "end_time": structure.get("end_time"),
+            "source_step": "Step 2",
+        }
+
+    if side == "lower":
+        active: dict[str, Any] | None = None
+        last_completed: dict[str, Any] | None = None
+        previous: dict[str, Any] | None = None
+        for candle in prior_bars:
+            open_price, _high, _low, close = candle_prices(candle)
+            _prev_open, prev_high, _prev_low, _prev_close = candle_prices(previous) if previous else (None, None, None, None)
+            if close is None:
+                previous = candle
+                continue
+            if active is not None and optional_float(active.get("low")) is not None and close < float(active["low"]):
+                last_completed = active
+                active = None
+            if (
+                active is None
+                and previous is not None
+                and open_price is not None
+                and prev_high is not None
+                and close > open_price
+                and close > prev_high
+            ):
+                active = structure_from(candle)
+            elif active is not None:
+                extend_structure(active, candle)
+            previous = candle
+        confirmation_close = optional_float(confirmation_candle.get("close")) if isinstance(confirmation_candle, dict) else None
+        if active is not None and confirmation_close is not None and optional_float(active.get("low")) is not None and confirmation_close < float(active["low"]):
+            last_completed = active
+        return public_structure(last_completed)
+    if side == "upper":
+        active = None
+        last_completed = None
+        previous = None
+        for candle in prior_bars:
+            open_price, _high, _low, close = candle_prices(candle)
+            _prev_open, _prev_high, prev_low, _prev_close = candle_prices(previous) if previous else (None, None, None, None)
+            if close is None:
+                previous = candle
+                continue
+            if active is not None and optional_float(active.get("high")) is not None and close > float(active["high"]):
+                last_completed = active
+                active = None
+            if (
+                active is None
+                and previous is not None
+                and open_price is not None
+                and prev_low is not None
+                and close < open_price
+                and close < prev_low
+            ):
+                active = structure_from(candle)
+            elif active is not None:
+                extend_structure(active, candle)
+            previous = candle
+        confirmation_close = optional_float(confirmation_candle.get("close")) if isinstance(confirmation_candle, dict) else None
+        if active is not None and confirmation_close is not None and optional_float(active.get("high")) is not None and confirmation_close > float(active["high"]):
+            last_completed = active
+        return public_structure(last_completed)
+    return None
+
+
+def apply_step2_continuation_structure_fields(step_state: dict[str, Any], structure: dict[str, Any] | None) -> None:
+    if not isinstance(structure, dict):
+        return
+    step_state["continuation_controlling_structure_high"] = structure.get("high")
+    step_state["continuation_controlling_structure_low"] = structure.get("low")
+    step_state["continuation_controlling_structure_start_time"] = structure.get("start_time")
+    step_state["continuation_controlling_structure_end_time"] = structure.get("end_time")
+    step_state["continuation_controlling_structure_source_step"] = structure.get("source_step") or "Step 2"
+
+
 def continuation_structure_condition(mode: str, candle: dict[str, Any], level: float) -> bool:
     close = optional_float(candle.get("close"))
     if close is None:
@@ -3066,8 +3210,6 @@ def continuation_controlling_structure_status(
     """Return continuation controlling-structure sweep status for S/R or R/S."""
     mode = normalized_pathway_name(interaction.get("controlling_mode") or interaction.get("current_controlling_mode"))
     if mode not in {"S/R", "R/S"}:
-        return {"required": False}
-    if interaction.get("continuation_step2_activated") is True:
         return {"required": False}
     level = optional_float(interaction.get("pathway_level") or interaction.get("level"))
     reclaim = interaction.get("reclaim_candle_a") if isinstance(interaction.get("reclaim_candle_a"), dict) else None
@@ -3890,6 +4032,7 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
     step5_state = step5.get("state") if isinstance(step5.get("state"), dict) else {}
     step6_state = step6.get("state") if isinstance(step6.get("state"), dict) else {}
+    step2_owner_state = step_2_1a.get("step2_locked_owner") if isinstance(step_2_1a.get("step2_locked_owner"), dict) else {}
     liquidity = snapshot.get("liquidity") if isinstance(snapshot.get("liquidity"), dict) else {}
     ohlc = snapshot.get("ohlc") if isinstance(snapshot.get("ohlc"), dict) else {}
     active_name, active_price = active_liquidity_from_snapshot(snapshot)
@@ -4211,10 +4354,11 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "step6_window_candle_index": step6_state.get("step6_window_candle_index") if step6_state.get("step6_window_candle_index") is not None else step5_state.get("step6_window_candle_index"),
         "step6_window_remaining": step6_state.get("step6_window_remaining") if step6_state.get("step6_window_remaining") is not None else step5_state.get("step6_window_remaining"),
         "step6_window_expires_at": step6_state.get("step6_window_expires_at") or step5_state.get("step6_window_expires_at"),
-        "continuation_controlling_structure_high": step6_state.get("continuation_controlling_structure_high") or step5_state.get("continuation_controlling_structure_high"),
-        "continuation_controlling_structure_low": step6_state.get("continuation_controlling_structure_low") or step5_state.get("continuation_controlling_structure_low"),
-        "continuation_controlling_structure_start_time": step6_state.get("continuation_controlling_structure_start_time") or step5_state.get("continuation_controlling_structure_start_time"),
-        "continuation_controlling_structure_end_time": step6_state.get("continuation_controlling_structure_end_time") or step5_state.get("continuation_controlling_structure_end_time"),
+        "continuation_controlling_structure_high": step6_state.get("continuation_controlling_structure_high") or step5_state.get("continuation_controlling_structure_high") or step2_owner_state.get("continuation_controlling_structure_high") or step_2_1a.get("continuation_controlling_structure_high"),
+        "continuation_controlling_structure_low": step6_state.get("continuation_controlling_structure_low") or step5_state.get("continuation_controlling_structure_low") or step2_owner_state.get("continuation_controlling_structure_low") or step_2_1a.get("continuation_controlling_structure_low"),
+        "continuation_controlling_structure_start_time": step6_state.get("continuation_controlling_structure_start_time") or step5_state.get("continuation_controlling_structure_start_time") or step2_owner_state.get("continuation_controlling_structure_start_time") or step_2_1a.get("continuation_controlling_structure_start_time"),
+        "continuation_controlling_structure_end_time": step6_state.get("continuation_controlling_structure_end_time") or step5_state.get("continuation_controlling_structure_end_time") or step2_owner_state.get("continuation_controlling_structure_end_time") or step_2_1a.get("continuation_controlling_structure_end_time"),
+        "continuation_controlling_structure_source_step": step6_state.get("continuation_controlling_structure_source_step") or step5_state.get("continuation_controlling_structure_source_step") or step2_owner_state.get("continuation_controlling_structure_source_step") or step_2_1a.get("continuation_controlling_structure_source_step"),
         "continuation_controlling_structure_swept": step6_state.get("continuation_controlling_structure_swept"),
         "continuation_controlling_structure_wait_reason": step6_state.get("continuation_controlling_structure_wait_reason"),
         "extended_retrace_entry_valid": step6_state.get("extended_retrace_entry_valid"),
