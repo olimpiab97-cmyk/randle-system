@@ -4183,7 +4183,9 @@ class EntryStatusEndpointTests(unittest.TestCase):
                 pass
 
         original_run_once = entry_agent.run_once
+        original_state_path = entry_agent.STATE_PATH
         self.addCleanup(setattr, entry_agent, "run_once", original_run_once)
+        self.addCleanup(setattr, entry_agent, "STATE_PATH", original_state_path)
 
         active_liquidity = {"name": "PMH", "display_name": "PMH", "price": 28937.75, "side": "upper"}
         reclaim = {"timestamp": "2026-05-19T13:42:00Z", "open": 28953.0, "high": 28965.5, "low": 28928.0, "close": 28929.25}
@@ -4258,7 +4260,17 @@ class EntryStatusEndpointTests(unittest.TestCase):
         }
         entry_agent.run_once = lambda _symbol="NQ", persist=True: copy.deepcopy(snapshot)
 
-        status = entry_agent.build_entry_status("NQ")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            entry_agent.STATE_PATH = Path(temp_dir) / "entry_agent_state.json"
+            entry_agent.STATE_PATH.write_text(
+                json.dumps({"state_by_symbol": {"NQ": {"consumed_liquidity_levels": [], "consumed_entry_setups": []}}}),
+                encoding="utf-8",
+            )
+            status = entry_agent.build_entry_status("NQ")
+            persisted_symbol_state = json.loads(entry_agent.STATE_PATH.read_text(encoding="utf-8"))["state_by_symbol"]["NQ"]
+
+        self.assertEqual(persisted_symbol_state["consumed_liquidity_levels"], [])
+        self.assertEqual(persisted_symbol_state["consumed_entry_setups"], [])
 
         self.assertEqual(status["selected_pathway"], "continuation")
         self.assertEqual(status["current_pathway_control"], "continuation")
@@ -4268,7 +4280,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(status["continuation_side"]["selected_pathway"], "continuation")
         self.assertEqual(status["continuation_side"]["pathway_status"], "controlling")
         self.assertNotEqual(status["rejection_side"]["setup_direction"], "SHORT")
-        self.assertEqual(status["rejection_side"]["entry_status"], "CONSUMED")
+        self.assertIsNone(status["rejection_side"]["entry_status"])
         self.assertIsNone(status["rejection_side"]["current_step"])
         self.assertEqual(status["rejection_side"]["pathway_status"], "frozen")
 
@@ -4324,8 +4336,9 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(status_1342["setup_direction"], "LONG")
         self.assertEqual(status_1342["continuation_side"]["pathway_status"], "controlling")
         self.assertEqual(status_1342["rejection_side"]["pathway_status"], "frozen")
-        self.assertEqual(status_1342["rejection_side"]["entry_status"], "CONSUMED")
+        self.assertIsNone(status_1342["rejection_side"]["entry_status"])
         self.assertIsNone(status_1342["rejection_side"]["current_step"])
+        self.assertEqual(status_1342["consumed_liquidity_levels"], [])
         self.assertEqual(status_1342["current_step_confirmed_at"], "2026-05-19T13:42:00Z")
         self.assertEqual(status_1342["leg1_window_started_at"], "2026-05-19T13:42:00Z")
         self.assertEqual(status_1342["leg1_window_candle_index"], 0)
@@ -4368,7 +4381,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(status_1345["selected_pathway"], "continuation")
         self.assertEqual(status_1345["setup_direction"], "LONG")
         self.assertNotEqual(status_1345["rejection_side"]["setup_direction"], "SHORT")
-        self.assertEqual(status_1345["rejection_side"]["entry_status"], "CONSUMED")
+        self.assertIsNone(status_1345["rejection_side"]["entry_status"])
         self.assertIsNone(status_1345["rejection_side"]["current_step"])
 
     def test_step4_proximity_threshold_uses_daily_atr_not_one_minute_atr(self):

@@ -3966,7 +3966,7 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "setup_direction": None if selected_pathway == "continuation" else (rejection.get("watch_side") if rejection_active and leg1_published else public_setup_direction),
         "leg1_status": None if continuation_selected else leg1_status,
         "leg2_status": None if continuation_selected else leg2_status,
-        "entry_status": "CONSUMED" if selected_pathway == "continuation" else entry_status,
+        "entry_status": None if continuation_selected else entry_status,
         "leg1_confirmed_at": None if continuation_selected else leg1_time,
         "leg2_confirmed_at": None if continuation_selected else leg2_time,
         "entry_status_confirmed_at": None if continuation_selected else entry_time,
