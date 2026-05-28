@@ -4384,6 +4384,77 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertIsNone(status_1345["rejection_side"]["entry_status"])
         self.assertIsNone(status_1345["rejection_side"]["current_step"])
 
+    def test_step6_window_expiration_publishes_past_step5_gate(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        snapshot = {
+            "latest_price": 50611.0,
+            "latest_bar_time": "2026-05-28T13:49:00Z",
+            "ohlc_is_closed": True,
+            "step6": {
+                "step": "Step 7",
+                "status": "TERMINATED",
+                "reason": "Phase 1 failed on Candle 4 with no valid Phase 2 failed-entry participation.",
+                "state": {
+                    "terminated_by": "Step 6",
+                    "step6_window_active": False,
+                    "step6_window_started_at": "2026-05-28T13:45:00Z",
+                    "step6_window_candle_index": 4,
+                    "step6_window_remaining": 0,
+                    "step6_window_expires_at": "2026-05-28T13:49:00Z",
+                },
+            },
+            "step5": {
+                "step": "Step 5",
+                "status": "READY",
+                "next_step": "Step 6",
+                "state": {
+                    "leg2_status": "VALIDATED",
+                    "step5_participation_validated": True,
+                    "leg2_candidate_candle_time": "2026-05-28T13:46:00Z",
+                    "step6_window_active": True,
+                    "step6_window_started_at": "2026-05-28T13:45:00Z",
+                    "step6_window_candle_index": 4,
+                    "step6_window_remaining": 0,
+                    "step6_window_expires_at": "2026-05-28T13:49:00Z",
+                },
+            },
+            "step4": {
+                "step": "Step 4",
+                "status": "READY",
+                "next_step": "Step 5",
+                "state": {
+                    "leg1_status": "COMPLETE",
+                    "leg1_state_locked": True,
+                    "setup_direction": "SHORT",
+                    "active_liquidity": {"name": "ONL", "price": 50576.0, "side": "lower"},
+                    "leg1_reference_price": 50578.0,
+                    "leg1_reference_candle_time": "2026-05-28T13:43:00Z",
+                    "leg1_completed_at": "2026-05-28T13:44:00Z",
+                    "candle_a": {"timestamp": "2026-05-28T13:43:00Z"},
+                    "candle_b": {"timestamp": "2026-05-28T13:44:00Z"},
+                },
+            },
+            "step3": {},
+        }
+
+        self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 5")
+        public_invalidation = entry_agent.public_invalidation_from_results(
+            "Step 6",
+            snapshot["step4"],
+            snapshot["step5"],
+            snapshot["step6"],
+        )
+        self.assertEqual(public_invalidation["source_step"], "Step 6")
+        self.assertIn("Candle 4", public_invalidation["reason"])
+
     def test_step4_proximity_threshold_uses_daily_atr_not_one_minute_atr(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:

@@ -53,6 +53,8 @@ OBSERVATION_RESET_MINUTE = 15
 ENTRY_AUTHORIZATION_HOUR = 6
 ENTRY_AUTHORIZATION_MINUTE = 30
 STEP_LABELS = {
+    "PRE_RTH_LOCK": "Pre-RTH Lock",
+    "SESSION_CLOSED": "Session Closed",
     "Step 1": "Step 1 (Session / Level Prep)",
     "Step 2": "Step 2 (Liquidity Close / Pathway Activation)",
     "Step 2.5": "Step 2.5 (S/R-R/S Continuation Logic)",
@@ -67,6 +69,35 @@ STEP_LABELS = {
 def current_step_label(current_step: Any) -> str | None:
     """Return the operator-facing label for a blueprint step."""
     return STEP_LABELS.get(str(current_step))
+
+
+def entry_window_lock_for_snapshot(snapshot: dict[str, Any]) -> tuple[str, str] | None:
+    market_time = local_market_time(snapshot.get("latest_bar_time"))
+    if market_time is None:
+        return None
+    if (market_time.hour, market_time.minute) < (OBSERVATION_RESET_HOUR, OBSERVATION_RESET_MINUTE):
+        return "PRE_RTH_LOCK", "Awaiting 6:15 RTH activation line."
+    if (market_time.hour, market_time.minute) >= (8, 0):
+        return "SESSION_CLOSED", "Entry window closed at 8:00 AM PT."
+    return None
+
+
+def has_stale_session_lifecycle(persisted_state: dict[str, Any], symbol: str, snapshot: dict[str, Any]) -> bool:
+    symbol_state = symbol_scoped_persisted_state(persisted_state, symbol)
+    if not isinstance(symbol_state, dict):
+        return False
+    if not any(isinstance(symbol_state.get(key), dict) for key in ("step4", "step5", "step6")):
+        return False
+    session_date = local_session_date(snapshot.get("latest_bar_time"))
+    recorded_date = symbol_state.get("observation_reset_session_date")
+    if recorded_date == session_date:
+        return False
+    tv_context = load_tv_context(symbol)
+    levels = tv_context.get("levels") if isinstance(tv_context, dict) else {}
+    return any(
+        isinstance(level, dict) and str(level.get("status") or "").upper() == "ACTIVE"
+        for level in (levels.values() if isinstance(levels, dict) else [])
+    )
 
 
 def load_entry_state() -> dict[str, Any]:
@@ -3380,7 +3411,7 @@ def result_invalidation_source_step(result: dict[str, Any]) -> str | None:
     if not isinstance(result, dict) or decision_status(result) != "INVALIDATE":
         return None
     state = result.get("state") if isinstance(result.get("state"), dict) else {}
-    source_step = state.get("invalidation_source_step") or result.get("step")
+    source_step = state.get("invalidation_source_step") or state.get("terminated_by") or result.get("step")
     return str(source_step) if source_step else None
 
 
@@ -3391,7 +3422,14 @@ def public_invalidation_from_results(current_step: str, *results: dict[str, Any]
         if decision_status(result) != "INVALIDATE":
             continue
         source_step = result_invalidation_source_step(result)
-        if step_order(source_step) <= public_order:
+        step6_window_expired = (
+            current_step == "Step 5"
+            and source_step == "Step 6"
+            and isinstance(result.get("state"), dict)
+            and result["state"].get("step6_window_candle_index") is not None
+            and result["state"].get("step6_window_remaining") == 0
+        )
+        if step_order(source_step) <= public_order or step6_window_expired:
             state = result.get("state") if isinstance(result.get("state"), dict) else {}
             return {
                 "reason": result_reason(result, "Invalidated by EntryAgent rule."),
@@ -3746,8 +3784,100 @@ def pathway_visibility_status(
     return "candidate" if step25_ready else "active"
 
 
+def locked_entry_status(symbol: str, snapshot: dict[str, Any], current_step: str, reason: str) -> dict[str, Any]:
+    side = {
+        "pathway_status": "inactive",
+        "current_pathway_control": None,
+        "current_controlling_mode": None,
+        "current_step": None,
+        "current_step_label": None,
+        "current_step_status": None,
+        "current_step_confirmed_at": None,
+        "selected_pathway": None,
+        "setup_direction": None,
+        "leg1_status": "WAIT",
+        "leg1_state": "WAIT",
+        "leg2_status": "WAIT",
+        "leg2_state": "WAIT",
+        "entry_status": "WAIT",
+        "leg1_confirmed_at": None,
+        "leg2_confirmed_at": None,
+        "entry_status_confirmed_at": None,
+    }
+    ohlc = snapshot.get("ohlc") if isinstance(snapshot.get("ohlc"), dict) else {}
+    return {
+        "symbol": str(snapshot.get("requested_symbol") or snapshot.get("symbol") or symbol).upper(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "candle_time": snapshot.get("latest_bar_time"),
+        "candle_open": ohlc.get("open"),
+        "candle_high": ohlc.get("high"),
+        "candle_low": ohlc.get("low"),
+        "candle_close": ohlc.get("close"),
+        "current_step": current_step,
+        "current_step_label": current_step_label(current_step),
+        "current_step_status": "WAIT",
+        "current_step_confirmed_at": None,
+        "selected_pathway": None,
+        "active_liquidity_name": None,
+        "active_liquidity_price": None,
+        "active_liquidity_group": None,
+        "liquidity_price": None,
+        "liquidity_group": None,
+        "close_vs_level": None,
+        "next_liquidity_above": None,
+        "next_liquidity_below": None,
+        "setup_direction": None,
+        "rejection_mode_entered": False,
+        "sr_rs_context": None,
+        "continuation_type": "none",
+        "current_pathway_control": None,
+        "current_controlling_mode": None,
+        "current_continuation_type": "none",
+        "rejection_pathway_status": "inactive",
+        "continuation_pathway_status": "inactive",
+        "rejection_side": dict(side),
+        "continuation_side": {**side, "continuation_type": "none"},
+        "leg1_status": "WAIT",
+        "leg1_state": "WAIT",
+        "leg1_confirmed_at": None,
+        "leg1_locked": False,
+        "leg1_state_locked": False,
+        "leg2_status": "WAIT",
+        "leg2_state": "WAIT",
+        "entry_status": "WAIT",
+        "wait_reason": reason,
+        "last_decision": f"WAIT: {reason}",
+        "invalidation_reason": None,
+        "internal_invalidation_reason": None,
+        "invalidation_source_candle_time": None,
+        "invalidation_source": None,
+        "invalidation_source_step": None,
+        "invalidated_at": None,
+        "invalidated_liquidity": None,
+        "publication_gate_debug": [],
+        "consumed_liquidity_levels": [],
+        "step6_window_active": False,
+        "step6_window_started_at": None,
+        "step6_window_candle_index": None,
+        "step6_window_remaining": None,
+        "step6_window_expires_at": None,
+    }
+
+
 def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     """Build the minimal read-only Entry Manager status for one symbol."""
+    requested_symbol = str(symbol or "NQ").strip().upper()
+    normalized_symbol = root_symbol(requested_symbol)
+    try:
+        pre_snapshot = get_latest_market_snapshot(normalized_symbol)
+    except Exception:
+        pre_snapshot = None
+    if isinstance(pre_snapshot, dict):
+        lock = entry_window_lock_for_snapshot(pre_snapshot)
+        if lock is not None and has_stale_session_lifecycle(load_entry_state(), normalized_symbol, pre_snapshot):
+            current_step, reason = lock
+            pre_snapshot["requested_symbol"] = requested_symbol
+            return locked_entry_status(symbol, pre_snapshot, current_step, reason)
     snapshot = run_once(symbol, persist=True)
     hide_unconfirmed_current_candle_advancement(snapshot)
     apply_consumed_entry_setup_guard(snapshot)

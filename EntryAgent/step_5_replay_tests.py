@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import sys
+import unittest
+from pathlib import Path
+
+if __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from step5_engine import evaluate_step5
 
 
@@ -57,6 +64,9 @@ def test_short_leg2_locks_and_validates_with_sweep_and_short_trigger() -> None:
     assert result["state"]["leg2_status"] == "VALIDATED"
     assert result["state"]["anchor_extreme_swept"] is True
     assert result["state"]["step5_trigger_valid"] is True
+    assert result["state"]["step6_window_active"] is True
+    assert result["state"]["step6_window_candle_index"] == 1
+    assert result["state"]["step6_window_remaining"] == 3
 
 
 def test_long_leg2_locks_and_validates_with_sweep_and_long_trigger() -> None:
@@ -70,6 +80,9 @@ def test_long_leg2_locks_and_validates_with_sweep_and_long_trigger() -> None:
     assert result["state"]["leg2_status"] == "VALIDATED"
     assert result["state"]["anchor_extreme_swept"] is True
     assert result["state"]["step5_trigger_valid"] is True
+    assert result["state"]["step6_window_active"] is True
+    assert result["state"]["step6_window_candle_index"] == 1
+    assert result["state"]["step6_window_remaining"] == 3
 
 
 def test_four_candle_window_expires_without_sweep_and_trigger() -> None:
@@ -157,6 +170,45 @@ def test_sr_provisional_step5_waits_for_acceptance_threshold_then_locks_leg2() -
     assert accepted["state"]["leg2_status"] == "CONFIRMED"
 
 
+def test_ym_2026_05_28_leg2_lock_starts_step6_window_and_validation_is_c1() -> None:
+    state = base_interaction("SHORT")
+    state.update(
+        {
+            "tick_size": 1.0,
+            "candle_a": candle(50556.0, 50584.0, 50552.0, 50578.0, timestamp="2026-05-28T13:43:00Z"),
+            "leg1_reference": 50578.0,
+            "leg1_reference_price": 50578.0,
+            "leg1_reference_candle_time": "2026-05-28T13:43:00Z",
+            "leg1_completed_at": "2026-05-28T13:44:00Z",
+            "anchor_extreme": 50610.0,
+            "leg1_extreme": 50610.0,
+            "active_liquidity": {"name": "ONL/PML Liquidity", "price": 50576.0},
+        }
+    )
+
+    locked = evaluate_step5(
+        state,
+        candle(50583.0, 50592.0, 50573.0, 50592.0, timestamp="2026-05-28T13:45:00Z"),
+    )
+    assert locked["status"] == "WAIT"
+    assert locked["state"]["leg2_status"] == "CONFIRMED"
+    assert locked["state"]["step6_window_active"] is True
+    assert locked["state"]["step6_window_started_at"] == "2026-05-28T13:45:00Z"
+    assert locked["state"]["step6_window_candle_index"] == 0
+    assert locked["state"]["step6_window_remaining"] == 4
+    assert locked["state"]["step6_window_expires_at"] == "2026-05-28T13:49:00Z"
+
+    validated = evaluate_step5(
+        locked["state"],
+        candle(50591.0, 50617.0, 50568.0, 50570.0, timestamp="2026-05-28T13:46:00Z"),
+    )
+    assert validated["status"] == "READY"
+    assert validated["next_step"] == "Step 6"
+    assert validated["state"]["leg2_status"] == "VALIDATED"
+    assert validated["state"]["step6_window_candle_index"] == 1
+    assert validated["state"]["step6_window_remaining"] == 3
+
+
 def run_tests() -> None:
     tests = [
         test_short_leg2_locks_and_validates_with_sweep_and_short_trigger,
@@ -166,10 +218,27 @@ def run_tests() -> None:
         test_long_close_below_anchor_extreme_invalidates,
         test_nq_2026_05_07_onl_sequence_qualifies_at_1021_not_1024,
         test_sr_provisional_step5_waits_for_acceptance_threshold_then_locks_leg2,
+        test_ym_2026_05_28_leg2_lock_starts_step6_window_and_validation_is_c1,
     ]
     for test in tests:
         test()
     print(f"{len(tests)} Step 5 replay tests passed")
+
+
+def load_tests(loader, tests, pattern):
+    suite = unittest.TestSuite()
+    for test in (
+        test_short_leg2_locks_and_validates_with_sweep_and_short_trigger,
+        test_long_leg2_locks_and_validates_with_sweep_and_long_trigger,
+        test_four_candle_window_expires_without_sweep_and_trigger,
+        test_short_close_above_anchor_extreme_invalidates,
+        test_long_close_below_anchor_extreme_invalidates,
+        test_nq_2026_05_07_onl_sequence_qualifies_at_1021_not_1024,
+        test_sr_provisional_step5_waits_for_acceptance_threshold_then_locks_leg2,
+        test_ym_2026_05_28_leg2_lock_starts_step6_window_and_validation_is_c1,
+    ):
+        suite.addTest(unittest.FunctionTestCase(test))
+    return suite
 
 
 if __name__ == "__main__":

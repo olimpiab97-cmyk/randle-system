@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from step6_engine import evaluate_entry_models
@@ -22,6 +23,42 @@ def as_float(value: Any) -> float | None:
 
 def result(status: str, state: dict[str, Any], next_step: str, reason: str, events: list[dict[str, Any]]) -> dict[str, Any]:
     return {"step": "Step 5", "status": status, "state": state, "next_step": next_step, "reason": reason, "events": events}
+
+
+def parse_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def add_minutes_iso(value: Any, minutes: int) -> str | None:
+    parsed = parse_timestamp(value)
+    if parsed is None:
+        return None
+    return (parsed + timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
+
+
+def minute_index(start: Any, current: Any) -> int | None:
+    start_time = parse_timestamp(start)
+    current_time = parse_timestamp(current)
+    if start_time is None or current_time is None:
+        return None
+    return max(0, int((current_time - start_time).total_seconds() // 60))
+
+
+def seed_step6_window(state: dict[str, Any], candle_time: Any, index: int = 0) -> None:
+    started_at = state.get("step6_window_started_at") or candle_time
+    state["step6_window_active"] = True
+    state["step6_window_started_at"] = started_at
+    state["step6_window_candle_index"] = index
+    state["step6_window_remaining"] = max(0, FINAL_CONFIRMATION_CANDLE_NUMBER - index)
+    state["step6_window_expires_at"] = state.get("step6_window_expires_at") or add_minutes_iso(started_at, FINAL_CONFIRMATION_CANDLE_NUMBER)
 
 
 def candle_close(candle: dict[str, Any]) -> float | None:
@@ -251,6 +288,7 @@ def lock_leg2_candle_a(state: dict[str, Any], candle: dict[str, Any], reference:
     state["step5_participation_candle_count"] = 0
     state["anchor_extreme_swept"] = False
     state["step5_trigger_valid"] = False
+    seed_step6_window(state, candle.get("timestamp"), 0)
     reason = "Leg 2 Candle A locked: close beyond fixed Leg 1 Candle A reference; 4-candle confirmation window started."
     events.append({"event": "step5_leg2_candle_a_locked", "reason": reason, "leg1_reference": reference})
     return result("WAIT", state, "Step 5", reason, events)
@@ -300,6 +338,8 @@ def validate_confirmation_window(state: dict[str, Any], candle: dict[str, Any], 
         state["step5_participation_window_active"] = False
         state["step5_participation_validated"] = True
         state["step6_active"] = True
+        index = minute_index(state.get("step6_window_started_at") or state.get("leg2_candle_a_time"), candle.get("timestamp"))
+        seed_step6_window(state, state.get("step6_window_started_at") or state.get("leg2_candle_a_time") or candle.get("timestamp"), index if index is not None else count)
         reason = f"Leg 2 validated: Anchor Extreme swept and valid trigger occurred within Candle {count} of 4."
         events.append(
             {
@@ -358,6 +398,9 @@ def evaluate_step5(interaction: dict[str, Any], leg2_candle: dict[str, Any] | No
         return terminate_interaction(state, "Step 5", "Step 5 requires a candle.")
 
     if state.get("leg2_status") == "VALIDATED" or state.get("step5_participation_validated") is True:
+        index = minute_index(state.get("step6_window_started_at") or state.get("leg2_candle_a_time"), candle.get("timestamp"))
+        if index is not None:
+            seed_step6_window(state, state.get("step6_window_started_at") or state.get("leg2_candle_a_time") or candle.get("timestamp"), index)
         reason = "Leg 2 already validated; Step 6 handoff remains active."
         events.append({"event": "step5_already_validated", "reason": reason})
         return result("READY", state, "Step 6", reason, events)

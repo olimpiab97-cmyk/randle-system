@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from step7_engine import STRUCTURE_FIELDS, terminate_interaction
+
+
+STEP6_PHASE_WINDOW_CANDLES = 4
 
 
 def as_float(value: Any) -> float | None:
@@ -20,6 +24,74 @@ def result(status: str, state: dict[str, Any], next_step: str, reason: str, even
     payload = {"step": "Step 6", "status": status, "state": state, "next_step": next_step, "reason": reason, "events": events}
     payload.update(extra)
     return payload
+
+
+def parse_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def add_minutes_iso(value: Any, minutes: int) -> str | None:
+    parsed = parse_timestamp(value)
+    if parsed is None:
+        return None
+    return (parsed + timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
+
+
+def candle_timestamp(candle: Any) -> Any:
+    return candle.get("timestamp") if isinstance(candle, dict) else None
+
+
+def update_step6_window(state: dict[str, Any], candidate: dict[str, Any], count: int, *, active: bool = True) -> None:
+    started_at = (
+        state.get("step6_window_started_at")
+        or state.get("leg2_candle_a_time")
+        or candle_timestamp(state.get("leg2_candle_a"))
+        or candle_timestamp(state.get("leg2_candle"))
+        or candle_timestamp(candidate)
+    )
+    state["step6_window_active"] = active
+    state["step6_window_started_at"] = started_at
+    state["step6_window_candle_index"] = count
+    state["step6_window_remaining"] = max(0, STEP6_PHASE_WINDOW_CANDLES - count)
+    state["step6_window_expires_at"] = state.get("step6_window_expires_at") or add_minutes_iso(started_at, STEP6_PHASE_WINDOW_CANDLES)
+
+
+def carried_phase1_count(state: dict[str, Any]) -> int:
+    phase_count = int(state.get("phase1_candle_count") or 0)
+    window_count = int(state.get("step6_window_candle_index") or 0)
+    return max(phase_count, window_count)
+
+
+def minute_index(start: Any, current: Any) -> int | None:
+    start_time = parse_timestamp(start)
+    current_time = parse_timestamp(current)
+    if start_time is None or current_time is None:
+        return None
+    return max(0, int((current_time - start_time).total_seconds() // 60))
+
+
+def next_phase1_count(state: dict[str, Any], candidate: dict[str, Any]) -> int:
+    carried = carried_phase1_count(state)
+    elapsed = minute_index(state.get("step6_window_started_at"), candle_timestamp(candidate))
+    if elapsed is not None and elapsed > 0:
+        return max(carried, elapsed)
+    if elapsed is None:
+        return carried + 1
+    return carried if carried > 0 else 1
+
+
+def close_step6_window(state: dict[str, Any], candidate: dict[str, Any], count: int = STEP6_PHASE_WINDOW_CANDLES) -> None:
+    update_step6_window(state, candidate, count, active=False)
+    state["step6_window_candle_index"] = count
+    state["step6_window_remaining"] = 0
 
 
 def body_high(candle: dict[str, Any]) -> float | None:
@@ -203,9 +275,9 @@ def close_beyond_anchor_extreme(candle: dict[str, Any], direction: str, anchor_e
     if close is None or anchor is None:
         return False
     if direction == "SHORT":
-        return close < anchor
-    if direction == "LONG":
         return close > anchor
+    if direction == "LONG":
+        return close < anchor
     return False
 
 
@@ -350,9 +422,10 @@ def evaluate_phase1(state: dict[str, Any], events: list[dict[str, Any]], candida
     if not isinstance(anchor, dict):
         return terminate_interaction(state, "Step 6", "Step 6 requires Leg 2 Candle A as Phase 1 anchor.")
 
-    count = int(state.get("phase1_candle_count") or 0) + 1
+    count = next_phase1_count(state, candidate)
     state["step6_phase"] = "PHASE1"
     state["phase1_candle_count"] = count
+    update_step6_window(state, candidate, count)
 
     if count < 4:
         reason = f"Phase 1 Candle {count}: entry blocked until required Candle 4."
@@ -360,9 +433,11 @@ def evaluate_phase1(state: dict[str, Any], events: list[dict[str, Any]], candida
         return result("WAIT", state, "Step 6", reason, events)
 
     if count > 4:
+        close_step6_window(state, candidate, count)
         return terminate_interaction(state, "Step 6", "Phase 1 timing expired; no late entry after Candle 4.")
 
     if required_leg_in_liquidity_gate_active(state):
+        close_step6_window(state, candidate)
         return terminate_interaction(state, "Step 6", "Required leg-in liquidity gate blocked entry until Phase 1 timing expired.")
 
     entry = evaluate_entry_models(state, events, anchor, candidate, direction, tick_size)
@@ -372,6 +447,7 @@ def evaluate_phase1(state: dict[str, Any], events: list[dict[str, Any]], candida
     if failed_entry_participation_exists(state, candidate) and state.get("phase2_attempt_used") is not True:
         return activate_phase2(state, events, candidate)
 
+    close_step6_window(state, candidate)
     return terminate_interaction(state, "Step 6", "Phase 1 failed on Candle 4 with no valid Phase 2 failed-entry participation.")
 
 
@@ -455,6 +531,10 @@ def evaluate_step6(interaction: dict[str, Any], entry_candle: dict[str, Any] | N
         return transfer_to_opposing_setup(state, events)
 
     if close_beyond_anchor_extreme(candidate, direction, state.get("anchor_extreme")):
+        count = next_phase1_count(state, candidate)
+        state["step6_phase"] = state.get("step6_phase") or "PHASE1"
+        state["phase1_candle_count"] = count
+        close_step6_window(state, candidate, count)
         return terminate_interaction(state, "Step 6", "Price closed beyond Anchor Extreme before entry.")
 
     phase = state.get("step6_phase") or "PHASE1"
