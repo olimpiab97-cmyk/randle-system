@@ -200,13 +200,51 @@ def selected_active_liquidity_from_context(
             return close <= close_boundary - tick_size
         return False
 
-    def combined_stack_name(components: list[dict[str, Any]], side: str | None) -> str:
-        if side == "lower":
-            ordered = sorted(components, key=lambda item: (float(item["price"]), str(item["name"])))
-        elif side == "upper":
-            ordered = sorted(components, key=lambda item: (-float(item["price"]), str(item["name"])))
+    def component_priority(name: Any) -> int:
+        return ACTIVE_LIQUIDITY_PRIORITY.get(str(name), 999)
+
+    def close_component_for_stack(components: list[dict[str, Any]], side: str | None) -> dict[str, Any]:
+        if side == "upper":
+            close_price = min(float(component["price"]) for component in components)
+        elif side == "lower":
+            close_price = max(float(component["price"]) for component in components)
         else:
-            ordered = sorted(components, key=lambda item: (item["priority"], str(item["name"])))
+            return min(components, key=lambda item: (component_priority(item["name"]), str(item["name"])))
+        close_components = [component for component in components if float(component["price"]) == close_price]
+        preferred_prefix = "PM" if side in {"upper", "lower"} else ""
+        return min(
+            close_components,
+            key=lambda item: (
+                0 if str(item["name"]).startswith(preferred_prefix) else 1,
+                component_priority(item["name"]),
+                str(item["name"]),
+            ),
+        )
+
+    def combined_stack_name(components: list[dict[str, Any]], side: str | None) -> str:
+        close_component = close_component_for_stack(components, side)
+        if side == "lower":
+            ordered = sorted(
+                components,
+                key=lambda item: (
+                    -float(item["price"]),
+                    0 if item["name"] == close_component["name"] else 1,
+                    component_priority(item["name"]),
+                    str(item["name"]),
+                ),
+            )
+        elif side == "upper":
+            ordered = sorted(
+                components,
+                key=lambda item: (
+                    float(item["price"]),
+                    0 if item["name"] == close_component["name"] else 1,
+                    component_priority(item["name"]),
+                    str(item["name"]),
+                ),
+            )
+        else:
+            ordered = sorted(components, key=lambda item: (component_priority(item["name"]), str(item["name"])))
         return f"{'/'.join(str(component['name']) for component in ordered)} Liquidity"
 
     grouped: dict[str, dict[str, Any]] = {}
@@ -255,7 +293,7 @@ def selected_active_liquidity_from_context(
             if not stack_close_beyond_close_boundary(side, close_boundary):
                 continue
             extreme_component = max(components, key=lambda item: item["price"]) if side == "upper" else min(components, key=lambda item: item["price"])
-            close_component = min(components, key=lambda item: item["price"]) if side == "upper" else max(components, key=lambda item: item["price"])
+            close_component = close_component_for_stack(components, side)
             group_payload = {
                 "name": group["stack_group"],
                 "components": [component["name"] for component in components],
@@ -353,8 +391,6 @@ def rotated_active_liquidity_after_inactive_acceptance(
             continue
         stack_text = str(details.get("stack_group") or "NONE").strip()
         same_stack = bool(previous_stack_group and stack_text == previous_stack_group)
-        if same_stack:
-            continue
         candidates.append(
             {
                 "name": name,
@@ -368,7 +404,13 @@ def rotated_active_liquidity_after_inactive_acceptance(
 
     if not candidates:
         return None
-    selected = min(candidates, key=lambda item: (item["priority"], item["distance"], item["name"]))
+    same_stack_candidates = [candidate for candidate in candidates if candidate.get("same_stack")]
+    if same_stack_candidates and previous_side == "lower":
+        selected = min(same_stack_candidates, key=lambda item: (item["price"], item["priority"], item["name"]))
+    elif same_stack_candidates and previous_side == "upper":
+        selected = max(same_stack_candidates, key=lambda item: (item["price"], -item["priority"], item["name"]))
+    else:
+        selected = min(candidates, key=lambda item: (item["priority"], item["distance"], item["name"]))
     selected["group"] = active_stack_from_context(tv_context, str(selected["name"]))
     selected.pop("priority", None)
     selected.pop("distance", None)
@@ -3524,7 +3566,7 @@ def current_step_from_snapshot(snapshot: dict[str, Any]) -> str:
             return "Step 4"
         reason = "Step 4 publication blocked until Leg 1 is close-confirmed."
         published = "Step 2"
-        add_publication_gate_debug(snapshot, "Step 5", published, reason)
+        add_publication_gate_debug(snapshot, "Step 4", published, reason)
         return "Step 2"
 
     if step4.get("next_step") == "Step 4" and not step3_publication_passed(step3):

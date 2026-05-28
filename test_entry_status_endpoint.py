@@ -325,7 +325,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         }
 
         self.assertEqual(entry_agent.current_step_from_snapshot(snapshot), "Step 2")
-        self.assertEqual(snapshot["publication_gate_debug"][0]["attempted_step"], "Step 5")
+        self.assertEqual(snapshot["publication_gate_debug"][0]["attempted_step"], "Step 4")
         self.assertIn("Leg 1 is close-confirmed", snapshot["publication_gate_debug"][0]["reason"])
 
     def test_nq_publication_gate_blocks_step6_until_leg2_locked(self):
@@ -650,6 +650,63 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(selected["name"], "ONL")
         self.assertEqual(selected["price"], 28995.0)
         self.assertEqual(selected["group"]["extreme_component"], "ONL")
+        self.assertEqual(selected["group"]["close_component"], "PML")
+
+    def test_ym_equal_price_pml_onl_stack_displays_close_boundary_owner_first(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        selected = entry_agent.selected_active_liquidity_from_context(
+            {
+                "levels": {
+                    "ONL": {"price": 50576.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+                    "PML": {"price": 50576.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+                }
+            },
+            50574.0,
+            {"open": 50578.0, "high": 50579.0, "low": 50572.0, "close": 50574.0},
+            tick_size=1.0,
+        )
+
+        self.assertEqual(selected["display_name"], "PML/ONL Liquidity")
+        self.assertEqual(selected["group"]["display_name"], "PML/ONL Liquidity")
+        self.assertEqual(selected["group"]["close_boundary"], 50576.0)
+        self.assertEqual(selected["group"]["extreme_boundary"], 50576.0)
+        self.assertEqual(selected["group"]["name"], "LOW 1")
+        self.assertEqual(selected["group"]["close_component"], "PML")
+
+    def test_lower_stack_exact_one_tick_beyond_close_boundary_activates(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        selected = entry_agent.selected_active_liquidity_from_context(
+            {
+                "levels": {
+                    "PML": {"price": 100.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+                    "ONL": {"price": 99.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+                }
+            },
+            99.75,
+            {"open": 100.25, "high": 100.5, "low": 99.5, "close": 99.75},
+            tick_size=0.25,
+        )
+
+        self.assertEqual(selected["display_name"], "PML/ONL Liquidity")
+        self.assertEqual(selected["name"], "ONL")
+        self.assertEqual(selected["group"]["close_boundary"], 100.0)
+        self.assertEqual(selected["group"]["extreme_boundary"], 99.0)
         self.assertEqual(selected["group"]["close_component"], "PML")
 
     def test_inactive_broken_pml_rotates_to_onl_same_stack_target(self):
@@ -2079,7 +2136,8 @@ class EntryStatusEndpointTests(unittest.TestCase):
         )
 
         self.assertIsNone(inside)
-        self.assertIsNone(exact_ll)
+        self.assertEqual(exact_ll["name"], "LL")
+        self.assertEqual(exact_ll["display_name"], "PML/LL Liquidity")
         self.assertEqual(beyond_ll["name"], "LL")
         self.assertEqual(beyond_ll["display_name"], "PML/LL Liquidity")
         self.assertEqual(beyond_ll["group"]["display_name"], "PML/LL Liquidity")

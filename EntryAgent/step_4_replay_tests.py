@@ -134,6 +134,29 @@ def test_failed_participation_wait_does_not_proceed_to_step5() -> None:
     assert "leg1_status" not in result["state"]
 
 
+def test_failed_participation_clears_stale_leg1_lock_fields() -> None:
+    interaction = base_interaction("SHORT")
+    interaction.update(
+        {
+            "leg1_status": "COMPLETE",
+            "leg1_state_locked": True,
+            "leg1_completed_at": "2026-05-28T13:30:00Z",
+            "leg1_reference_price": 100.5,
+            "leg1_reference_candle_time": "2026-05-28T13:30:00Z",
+            "opposite_participation": "PRESENT",
+        }
+    )
+
+    result = evaluate_step4(interaction, failed_short_participation_candle(1))
+
+    assert result["status"] == "WAIT"
+    assert result["next_step"] == "Step 4"
+    assert result["state"]["leg1_window_active"] is True
+    assert result["state"]["leg1_window_candle_index"] == 1
+    assert result["state"].get("leg1_state_locked") is not True
+    assert result["state"].get("leg1_status") != "COMPLETE"
+
+
 def test_live_step4_uses_current_candle_not_prior_failed_candle_b() -> None:
     first_failed = failed_short_participation_candle(1)
     next_current = valid_short_participation_candle(2)
@@ -440,6 +463,74 @@ def test_live_static_stack_assigns_post_extreme_candle_a_then_locks_leg1_on_futu
     assert third["state"]["candle_b"]["timestamp"] == "2026-05-12T13:45:00Z"
 
 
+def test_ym_2026_05_28_failed_c1_keeps_rejection_window_for_c2_wick() -> None:
+    activation = candle(50582.0, 50590.0, 50570.0, 50576.0, "2026-05-28T13:29:00Z")
+    c1_failed = candle(50569.0, 50570.0, 50560.0, 50561.0, "2026-05-28T13:30:00Z")
+    c2_wick_valid = candle(50568.0, 50570.0, 50550.0, 50566.0, "2026-05-28T13:31:00Z")
+    step25 = {
+        "status": "READY",
+        "next_step": "Step 3",
+        "state": {
+            "rejection_mode": "ON",
+            "interaction_state": "ACTIVE",
+            "step25_pathway_selection_complete": True,
+            "controlling_mode": "Normal Rejection Mode",
+            "candidate_modes": ["Normal Rejection Mode"],
+            "initial_candle_a": activation,
+        },
+        "events": [],
+    }
+    step3 = {
+        "status": "ALLOW_STEP_4",
+        "next_step": "Step 4",
+        "state": {
+            "step3_allows_structure": True,
+            "active_liquidity": {
+                "name": "PML",
+                "price": 50576.0,
+                "display_name": "PML/ONL Liquidity",
+                "side": "lower",
+            },
+        },
+        "events": [],
+    }
+    rejection = {"rejection_mode": "ON", "watch_side": "LONG", "trigger_level": "PML", "trigger_price": 50576.0}
+    liquidity = {"nearest_level_above": {"name": "PMH", "price": 50650.0}, "nearest_level_below": {"name": "LL", "price": 50500.0}, "tick_size": 1.0}
+
+    def snapshot(latest: dict) -> dict:
+        return {
+            "normalized_symbol": "YM",
+            "latest_bar_time": latest["timestamp"],
+            "latest_price": latest["close"],
+            "ohlc": latest,
+            "ohlc_is_closed": True,
+            "liquidity": liquidity,
+            "atr": {"atr_1m_14": 10.0},
+        }
+
+    started = evaluate_live_step4(snapshot(activation), rejection, step25, step3, {})
+    assert started["status"] == "WAIT"
+    assert started["state"]["leg1_window_candle_index"] == 0
+    assert started["state"]["leg1_window_active"] is True
+
+    first = evaluate_live_step4(snapshot(c1_failed), rejection, step25, step3, {"step4": started})
+    assert first["status"] == "WAIT"
+    assert first["next_step"] == "Step 4"
+    assert first["state"]["leg1_window_candle_index"] == 1
+    assert first["state"]["leg1_window_active"] is True
+    assert first["state"].get("leg1_state_locked") is not True
+    assert first["state"].get("leg1_status") != "COMPLETE"
+
+    second = evaluate_live_step4(snapshot(c2_wick_valid), rejection, step25, step3, {"step4": first})
+    assert second["status"] == "READY"
+    assert second["next_step"] == "Step 5"
+    assert second["state"]["leg1_window_candle_index"] == 2
+    assert second["state"]["leg1_status"] == "COMPLETE"
+    assert second["state"]["leg1_state_locked"] is True
+    assert second["state"]["opposite_participation"] == "PRESENT"
+    assert second["state"]["participation_candle_number"] == 2
+
+
 def test_proximity_hard_bypass_routes_step7() -> None:
     interaction = base_interaction("SHORT")
     interaction["nearest_opposing_liquidity"] = {"name": "PML", "price": 100.8}
@@ -459,6 +550,7 @@ def run_tests() -> None:
         test_participation_on_candle_4_is_valid,
         test_no_participation_by_candle_4_sets_gateway_without_leg1,
         test_failed_participation_wait_does_not_proceed_to_step5,
+        test_failed_participation_clears_stale_leg1_lock_fields,
         test_live_step4_uses_current_candle_not_prior_failed_candle_b,
         test_step3_blocked_does_not_build_leg1,
         test_step25_incomplete_does_not_build_leg1,
@@ -473,6 +565,7 @@ def run_tests() -> None:
         test_upper_static_stack_rejects_close_boundary_only_leg1,
         test_lower_static_stack_rejects_close_boundary_only_leg1,
         test_live_static_stack_assigns_post_extreme_candle_a_then_locks_leg1_on_future_b,
+        test_ym_2026_05_28_failed_c1_keeps_rejection_window_for_c2_wick,
         test_proximity_hard_bypass_routes_step7,
     ]
     for test in tests:

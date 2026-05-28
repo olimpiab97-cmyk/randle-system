@@ -349,6 +349,24 @@ def mark_gateway_no_participation(state: dict[str, Any], reason: str) -> None:
     state.pop("anchor_extreme", None)
 
 
+def clear_unconfirmed_leg1_fields(state: dict[str, Any]) -> None:
+    """Remove stale Leg 1 completion fields while Step 4 remains in WAIT."""
+    for key in (
+        "leg1_status",
+        "leg1_state_locked",
+        "leg1_completed_at",
+        "leg1_reference_price",
+        "leg1_reference_candle_time",
+        "leg1_direction",
+        "leg1_reference",
+        "leg1_extreme",
+        "leg1_extreme_owner",
+        "anchor_extreme",
+        "opposite_participation",
+    ):
+        state.pop(key, None)
+
+
 def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build Leg 1 from Candle A + Candle B and route to Step 5 or Step 7."""
     state = dict(interaction)
@@ -388,6 +406,7 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
     if not (close_pass or wick_pass):
         reason = "Candle B failed both close-based participation and 34% wick-based participation."
         if candidate_count < FINAL_PARTICIPATION_CANDLE_NUMBER:
+            clear_unconfirmed_leg1_fields(state)
             events.append(
                 {
                     "event": "step4_participation_window_wait",
@@ -424,7 +443,7 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
     if not stack_leg1_extreme_confirmed(state, extreme, direction):
         reason = "Step 4 waiting: static stack Leg 1 requires HH/LL beyond the Extreme Boundary; close-boundary Leg 1 is not tradable."
         state["step4_block_reason"] = reason
-        state.pop("leg1_status", None)
+        clear_unconfirmed_leg1_fields(state)
         events.append({"event": "step4_stack_extreme_required", "reason": reason})
         return result("WAIT", state, "Step 4", reason, events)
     update_continuation_acceptance_after_leg1(state, candidate_b, extreme)
@@ -436,6 +455,21 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
         state["level_state"] = "CONSUMED"
         state["invalidation_source"] = "leg1_50_percent_rule"
         state["invalidation_source_step"] = "Step 4"
+        return terminate_interaction(state, "Step 4", reason)
+
+    atr = as_float(state.get("atr_1m_14") or state.get("atr"))
+    distance = proximity_distance(extreme, state.get("nearest_opposing_liquidity"))
+    if atr is None:
+        return terminate_interaction(state, "Step 4", "Step 4 proximity filter requires ATR.")
+    if distance is None:
+        return terminate_interaction(state, "Step 4", "Step 4 proximity filter requires nearest opposing liquidity level.")
+
+    threshold = atr * 0.05
+    state["proximity_distance"] = distance
+    state["proximity_atr_threshold"] = threshold
+
+    if distance <= threshold:
+        reason = "Step 4 proximity filter hard bypass: distance from Anchor Extreme to nearest opposing liquidity is <= 5% ATR."
         return terminate_interaction(state, "Step 4", reason)
 
     state["candle_b"] = candidate_b
@@ -455,21 +489,6 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
         "remaining": 0,
         "completed_at": candidate_b.get("timestamp"),
     }
-
-    atr = as_float(state.get("atr_1m_14") or state.get("atr"))
-    distance = proximity_distance(extreme, state.get("nearest_opposing_liquidity"))
-    if atr is None:
-        return terminate_interaction(state, "Step 4", "Step 4 proximity filter requires ATR.")
-    if distance is None:
-        return terminate_interaction(state, "Step 4", "Step 4 proximity filter requires nearest opposing liquidity level.")
-
-    threshold = atr * 0.05
-    state["proximity_distance"] = distance
-    state["proximity_atr_threshold"] = threshold
-
-    if distance <= threshold:
-        reason = "Step 4 proximity filter hard bypass: distance from Anchor Extreme to nearest opposing liquidity is <= 5% ATR."
-        return terminate_interaction(state, "Step 4", reason)
 
     reason = "Leg 1 complete: Candle B participation valid; Anchor Extreme assigned; proximity distance > 5% ATR."
     events.append(
