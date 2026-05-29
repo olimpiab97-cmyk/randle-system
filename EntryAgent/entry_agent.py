@@ -34,6 +34,7 @@ STATE_PATH = BASE_DIR / "entry_agent_state.json"
 SIGNALS_PATH = BASE_DIR / "signals.json"
 TV_CONTEXT_PATH = BASE_DIR / "tv_context.json"
 TV_CONTEXT_BY_SYMBOL_PATH = BASE_DIR / "tv_context_by_symbol.json"
+STEP2_OWNER_DIAGNOSTICS_PATH = DATA_DIR / "entry_step2_owner_diagnostics.jsonl"
 RITHMIC_ATR_SNAPSHOT_PATH = DATA_DIR / "rithmic_atr_snapshot.json"
 PERSISTENCE_STATE_PATH = DATA_DIR / "persistence_state.json"
 EXECUTOR_STATE_PATH = DATA_DIR / "executor_state.json"
@@ -125,6 +126,133 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def compact_candle(candle: Any) -> dict[str, Any] | None:
+    if not isinstance(candle, dict):
+        return None
+    return {key: candle.get(key) for key in ("timestamp", "open", "high", "low", "close", "active_level", "level_price")}
+
+
+def compact_liquidity(liquidity: Any) -> dict[str, Any] | None:
+    if not isinstance(liquidity, dict):
+        return None
+    group = liquidity.get("group") if isinstance(liquidity.get("group"), dict) else None
+    return {
+        "name": liquidity.get("name"),
+        "price": liquidity.get("price"),
+        "display_name": liquidity.get("display_name"),
+        "side": liquidity.get("side"),
+        "group_name": group.get("name") if isinstance(group, dict) else liquidity.get("liquidity_group"),
+        "group_components": group.get("components") if isinstance(group, dict) else None,
+        "close_boundary": group.get("close_boundary") if isinstance(group, dict) else liquidity.get("close_boundary"),
+        "extreme_boundary": group.get("extreme_boundary") if isinstance(group, dict) else liquidity.get("extreme_boundary"),
+    }
+
+
+def compact_owner(owner: Any) -> dict[str, Any] | None:
+    if not isinstance(owner, dict):
+        return None
+    return {
+        "pathway": owner.get("pathway"),
+        "active_liquidity": compact_liquidity(owner.get("active_liquidity")),
+        "active_liquidity_name": owner.get("active_liquidity_name"),
+        "active_liquidity_price": owner.get("active_liquidity_price"),
+        "active_liquidity_display_name": owner.get("active_liquidity_display_name"),
+        "liquidity_group": owner.get("liquidity_group"),
+        "stack_components": owner.get("stack_components"),
+        "close_boundary": owner.get("close_boundary"),
+        "extreme_boundary": owner.get("extreme_boundary"),
+        "setup_direction": owner.get("setup_direction"),
+        "side": owner.get("side"),
+        "activated_at": owner.get("activated_at"),
+        "candle_a": compact_candle(owner.get("candle_a")),
+    }
+
+
+def step2_owner_lookup_diagnostics(persisted_state: dict[str, Any], selected_liquidity: dict[str, Any] | None) -> dict[str, Any]:
+    step2_state = persisted_state.get("step_2_1a") if isinstance(persisted_state.get("step_2_1a"), dict) else {}
+    direct_owner = persisted_state.get("step2_locked_owner")
+    nested_owner = step2_state.get("step2_locked_owner")
+    owner = direct_owner if isinstance(direct_owner, dict) else nested_owner
+    step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
+    step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+    step5 = persisted_state.get("step5") if isinstance(persisted_state.get("step5"), dict) else {}
+    step5_state = step5.get("state") if isinstance(step5.get("state"), dict) else {}
+    invalidation_seen = step2_owner_invalidation_seen(persisted_state)
+    rejection_reasons: list[str] = []
+    if invalidation_seen:
+        rejection_reasons.append("step2_owner_invalidation_seen")
+    if not isinstance(owner, dict):
+        rejection_reasons.append("no_step2_locked_owner")
+    elif owner.get("pathway") != "rejection":
+        rejection_reasons.append("owner_pathway_not_rejection")
+    else:
+        active = owner.get("active_liquidity")
+        if not (
+            isinstance(active, dict)
+            and valid_active_liquidity_selection(active.get("name"), active.get("price"))
+        ) and not valid_active_liquidity_selection(owner.get("active_liquidity_name"), owner.get("active_liquidity_price")):
+            rejection_reasons.append("owner_active_liquidity_invalid")
+    previous_step25 = persisted_state.get("step25") if isinstance(persisted_state.get("step25"), dict) else {}
+    step25_state = previous_step25.get("state") if isinstance(previous_step25.get("state"), dict) else {}
+    previous_step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
+    previous_step4_state = previous_step4.get("state") if isinstance(previous_step4.get("state"), dict) else {}
+    previous_liquidity = previous_step4_state.get("active_liquidity") if isinstance(previous_step4_state.get("active_liquidity"), dict) else None
+    if not isinstance(previous_liquidity, dict):
+        previous_liquidity = step25_state.get("active_liquidity") if isinstance(step25_state.get("active_liquidity"), dict) else None
+    pending_reasons: list[str] = []
+    if step25_state.get("step25_pathway_selection_complete") is not True:
+        pending_reasons.append("previous_step25_not_complete")
+    if normalized_pathway_name(step25_state.get("controlling_mode")) != "Normal":
+        pending_reasons.append("previous_controlling_mode_not_normal")
+    if previous_step4_state.get("leg1_state_locked") is True or previous_step4_state.get("leg1_status") == "COMPLETE":
+        pending_reasons.append("previous_leg1_complete")
+    if previous_step4_state.get("leg1_window_invalidated") is True or previous_step4_state.get("leg1_window_remaining") == 0:
+        pending_reasons.append("previous_leg1_window_inactive_or_expired")
+    if not previous_step4_state.get("leg1_window_started_at"):
+        pending_reasons.append("previous_leg1_window_missing_start")
+    if not same_active_liquidity(previous_liquidity, selected_liquidity):
+        pending_reasons.append("previous_active_liquidity_not_same")
+    return {
+        "direct_owner": compact_owner(direct_owner),
+        "nested_owner": compact_owner(nested_owner),
+        "locked_owner_rejection_reasons": rejection_reasons,
+        "step4_invalidation_fields": {
+            "leg1_window_invalidated": step4_state.get("leg1_window_invalidated"),
+            "invalidation_source": step4_state.get("invalidation_source"),
+            "invalidated_at": step4_state.get("invalidated_at"),
+        },
+        "step5_invalidation_fields": {
+            "invalidated_at": step5_state.get("invalidated_at"),
+            "invalidation_source": step5_state.get("invalidation_source"),
+            "invalidated_liquidity": step5_state.get("invalidated_liquidity"),
+        },
+        "pending_recovery": {
+            "rejection_reasons": pending_reasons,
+            "previous_active_liquidity": compact_liquidity(previous_liquidity),
+            "previous_controlling_mode": step25_state.get("controlling_mode"),
+            "previous_initial_candle_a": compact_candle(step25_state.get("initial_candle_a")),
+            "previous_leg1_window_started_at": previous_step4_state.get("leg1_window_started_at"),
+            "previous_leg1_window_candle_index": previous_step4_state.get("leg1_window_candle_index"),
+            "previous_leg1_window_remaining": previous_step4_state.get("leg1_window_remaining"),
+        },
+    }
+
+
+def log_step2_owner_diagnostic(event: str, payload: dict[str, Any]) -> None:
+    if os.environ.get("ENTRY_STEP2_OWNER_DIAGNOSTICS") != "1":
+        return
+    try:
+        record = {
+            "logged_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "event": event,
+            **payload,
+        }
+        with STEP2_OWNER_DIAGNOSTICS_PATH.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(record, separators=(",", ":"), default=str) + "\n")
+    except OSError:
+        return
 
 
 def load_tv_context(symbol: str | None = None) -> dict[str, Any] | None:
@@ -633,12 +761,21 @@ SESSION_SCOPED_TIME_KEYS = {
     "last_evaluated_candle_time",
     "current_active_sequence_started_at",
 }
+SESSION_HISTORY_COLLECTION_KEYS = {
+    "consumed_liquidity_levels",
+    "consumed_entry_setups",
+    "events",
+    "event_log",
+    "publication_gate_debug",
+}
 
 
 def _collect_session_dates(value: Any, dates: set[str]) -> None:
     """Collect PT session dates from persisted state timestamps."""
     if isinstance(value, dict):
         for key, item in value.items():
+            if key in SESSION_HISTORY_COLLECTION_KEYS:
+                continue
             if key in SESSION_SCOPED_TIME_KEYS:
                 session_date = local_session_date(item)
                 if session_date:
@@ -679,6 +816,32 @@ def sanitize_stale_session_state(
     symbol_state = symbol_scoped_persisted_state(persisted_state, symbol_key)
     if not symbol_key or not symbol_state or not persisted_step_state_session_stale(symbol_state, session_date):
         return persisted_state
+
+    stale_dates: set[str] = set()
+    for key in SESSION_SCOPED_STEP_KEYS:
+        if key in symbol_state:
+            _collect_session_dates(symbol_state.get(key), stale_dates)
+    for key in SESSION_SCOPED_TIME_KEYS:
+        if key in symbol_state:
+            found = local_session_date(symbol_state.get(key))
+            if found:
+                stale_dates.add(found)
+    log_step2_owner_diagnostic(
+        "session_state_sanitized_before_step2",
+        {
+            "symbol": symbol_key,
+            "target_session_date": session_date,
+            "collected_session_dates": sorted(stale_dates),
+            "removed_step_keys": [key for key in SESSION_SCOPED_STEP_KEYS if key in symbol_state],
+            "prior_owner": compact_owner(symbol_state.get("step2_locked_owner")),
+            "prior_nested_owner": compact_owner((symbol_state.get("step_2_1a") or {}).get("step2_locked_owner") if isinstance(symbol_state.get("step_2_1a"), dict) else None),
+            "prior_step4_window": {
+                "started_at": (((symbol_state.get("step4") or {}).get("state") or {}).get("leg1_window_started_at") if isinstance((symbol_state.get("step4") or {}).get("state"), dict) else None),
+                "candle_index": (((symbol_state.get("step4") or {}).get("state") or {}).get("leg1_window_candle_index") if isinstance((symbol_state.get("step4") or {}).get("state"), dict) else None),
+                "remaining": (((symbol_state.get("step4") or {}).get("state") or {}).get("leg1_window_remaining") if isinstance((symbol_state.get("step4") or {}).get("state"), dict) else None),
+            },
+        },
+    )
 
     cleaned_symbol_state = dict(symbol_state)
     for key in SESSION_SCOPED_STEP_KEYS:
@@ -1104,6 +1267,71 @@ def build_step2_locked_owner(step_state: dict[str, Any], selected_liquidity: dic
         "continuation_controlling_structure_start_time": step_state.get("continuation_controlling_structure_start_time"),
         "continuation_controlling_structure_end_time": step_state.get("continuation_controlling_structure_end_time"),
         "continuation_controlling_structure_source_step": step_state.get("continuation_controlling_structure_source_step"),
+    }
+
+
+def pending_normal_rejection_step2_owner(
+    persisted_state: dict[str, Any],
+    selected_liquidity: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Recover Step 2 ownership from a pending same-liquidity Normal Rejection window."""
+    if not isinstance(selected_liquidity, dict):
+        return None
+    previous_step25 = persisted_state.get("step25") if isinstance(persisted_state.get("step25"), dict) else {}
+    step25_state = previous_step25.get("state") if isinstance(previous_step25.get("state"), dict) else {}
+    previous_step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
+    step4_state = previous_step4.get("state") if isinstance(previous_step4.get("state"), dict) else {}
+    if step25_state.get("step25_pathway_selection_complete") is not True:
+        return None
+    if normalized_pathway_name(step25_state.get("controlling_mode")) != "Normal":
+        return None
+    if step4_state.get("leg1_state_locked") is True or step4_state.get("leg1_status") == "COMPLETE":
+        return None
+    if step4_state.get("leg1_window_invalidated") is True or step4_state.get("leg1_window_remaining") == 0:
+        return None
+    if not step4_state.get("leg1_window_started_at"):
+        return None
+
+    previous_liquidity = step4_state.get("active_liquidity") if isinstance(step4_state.get("active_liquidity"), dict) else None
+    if not isinstance(previous_liquidity, dict):
+        previous_liquidity = step25_state.get("active_liquidity") if isinstance(step25_state.get("active_liquidity"), dict) else None
+    if not same_active_liquidity(previous_liquidity, selected_liquidity):
+        return None
+
+    candle_a = step25_state.get("initial_candle_a") if isinstance(step25_state.get("initial_candle_a"), dict) else None
+    if candle_a is None:
+        candle_a = step4_state.get("initial_candle_a") if isinstance(step4_state.get("initial_candle_a"), dict) else None
+    activated_at = candle_timestamp(candle_a) or step4_state.get("leg1_window_started_at")
+    if not activated_at:
+        return None
+
+    side = selected_liquidity.get("side") or previous_liquidity.get("side") or side_for_level(str(selected_liquidity.get("name") or ""))
+    group = selected_liquidity.get("group") if isinstance(selected_liquidity.get("group"), dict) else previous_liquidity.get("group")
+    display_name = selected_liquidity.get("display_name") or previous_liquidity.get("display_name")
+    if not display_name and isinstance(group, dict):
+        display_name = group.get("display_name")
+    active = {
+        "name": selected_liquidity.get("name"),
+        "price": selected_liquidity.get("price"),
+        "display_name": display_name,
+        "side": side,
+        "group": group,
+    }
+    return {
+        "pathway": "rejection",
+        "active_liquidity": active,
+        "active_liquidity_name": active.get("name"),
+        "active_liquidity_price": active.get("price"),
+        "active_liquidity_display_name": active.get("display_name"),
+        "active_liquidity_group": group,
+        "liquidity_group": (group or {}).get("name") if isinstance(group, dict) else None,
+        "stack_components": (group or {}).get("components") if isinstance(group, dict) else None,
+        "close_boundary": (group or {}).get("close_boundary") if isinstance(group, dict) else None,
+        "extreme_boundary": (group or {}).get("extreme_boundary") if isinstance(group, dict) else None,
+        "setup_direction": "SHORT" if side == "upper" else "LONG" if side == "lower" else step4_state.get("setup_direction"),
+        "side": side,
+        "candle_a": candle_a,
+        "activated_at": activated_at,
     }
 
 
@@ -1540,6 +1768,24 @@ def evaluate_live_step_2_1a(
             "last_interacted_liquidity": None,
         }
 
+    locked_owner_before = locked_step2_owner(symbol_state)
+    pending_owner_before = None if isinstance(locked_owner_before, dict) else pending_normal_rejection_step2_owner(symbol_state, selected_liquidity)
+    recovered_locked_owner = locked_owner_before or pending_owner_before
+    owner_lookup_debug = step2_owner_lookup_diagnostics(symbol_state, selected_liquidity)
+    log_step2_owner_diagnostic(
+        "step2_owner_lookup",
+        {
+            "symbol": symbol_key,
+            "candle_time": candle_timestamp(current_candle),
+            "latest_price": snapshot.get("latest_price"),
+            "selected_liquidity": compact_liquidity(selected_liquidity),
+            "locked_owner_found": isinstance(locked_owner_before, dict),
+            "pending_owner_found": isinstance(pending_owner_before, dict),
+            "recovered_owner_found": isinstance(recovered_locked_owner, dict),
+            "recovered_owner": compact_owner(recovered_locked_owner),
+            "lookup": owner_lookup_debug,
+        },
+    )
     step_state = initial_or_persisted_step_2_1a_state(
         symbol_state,
         str(active_level),
@@ -1556,6 +1802,35 @@ def evaluate_live_step_2_1a(
         step_state["available"] = False
         step_state["reason"] = "No completed OHLC candle available for Step 2.1A."
         step_state["next_candle_index"] = persisted_candle_index
+        return step_state
+
+    if isinstance(recovered_locked_owner, dict):
+        owner_candle = recovered_locked_owner.get("candle_a") if isinstance(recovered_locked_owner.get("candle_a"), dict) else None
+        step_state["step_2_activated"] = True
+        step_state["blocked"] = False
+        step_state["candle_a"] = owner_candle or step_state.get("candle_a")
+        step_state["step2_locked_owner"] = recovered_locked_owner
+        step_state["active_liquidity_group"] = recovered_locked_owner.get("active_liquidity_group")
+        step_state["last_interacted_liquidity"] = build_last_interacted_liquidity(
+            recovered_locked_owner.get("active_liquidity") if isinstance(recovered_locked_owner.get("active_liquidity"), dict) else selected_liquidity
+        )
+        step_state["available"] = True
+        step_state["reason"] = "Step 2 already locked for this liquidity/pathway; preserving original activation owner."
+        step_state["last_evaluated_bar_time"] = candle["timestamp"]
+        step_state["candle_index"] = persisted_candle_index
+        step_state["next_candle_index"] = persisted_candle_index + 1
+        step_state["consumed_liquidity_levels"] = consumed_levels
+        log_step2_owner_diagnostic(
+            "step2_owner_reused",
+            {
+                "symbol": symbol_key,
+                "candle_time": candle.get("timestamp"),
+                "selected_liquidity": compact_liquidity(selected_liquidity),
+                "reused_owner": compact_owner(recovered_locked_owner),
+                "step_state_candle_a": compact_candle(step_state.get("candle_a")),
+                "reason": step_state.get("reason"),
+            },
+        )
         return step_state
 
     last_evaluated_bar_time = symbol_state.get("step_2_1a_last_evaluated_bar_time")
@@ -1590,7 +1865,22 @@ def evaluate_live_step_2_1a(
         build_last_interacted_liquidity(selected_liquidity)
         or persisted_active_liquidity(persisted_state, symbol_key, snapshot.get("tv_context"))
     )
-    locked_owner = locked_step2_owner(symbol_state) or build_step2_locked_owner(step_state, selected_liquidity)
+    new_owner_candidate = build_step2_locked_owner(step_state, selected_liquidity)
+    if isinstance(new_owner_candidate, dict):
+        log_step2_owner_diagnostic(
+            "step2_owner_created",
+            {
+                "symbol": symbol_key,
+                "candle_time": candle.get("timestamp"),
+                "selected_liquidity": compact_liquidity(selected_liquidity),
+                "new_owner": compact_owner(new_owner_candidate),
+                "step_state_candle_a": compact_candle(step_state.get("candle_a")),
+                "step_state_reason": step_state.get("reason"),
+                "step_state_events": step_state.get("events"),
+                "lookup_before_creation": owner_lookup_debug,
+            },
+        )
+    locked_owner = recovered_locked_owner or new_owner_candidate
     if locked_owner:
         step_state["step2_locked_owner"] = locked_owner
     step_state["consumed_liquidity_levels"] = consumed_levels
@@ -2292,6 +2582,22 @@ def build_step25_interaction(
     previous_step25 = persisted_state.get("step25") if isinstance(persisted_state.get("step25"), dict) else {}
     previous_state = previous_step25.get("state") if isinstance(previous_step25.get("state"), dict) else {}
     previous_initial = previous_state.get("initial_candle_a") if isinstance(previous_state, dict) else None
+    previous_liquidity = previous_state.get("active_liquidity") if isinstance(previous_state.get("active_liquidity"), dict) else None
+    previous_same_rejection_liquidity = (
+        previous_state.get("step25_pathway_selection_complete") is True
+        and normalized_pathway_name(previous_state.get("controlling_mode")) == "Normal"
+        and normalized_pathway_name(rejection.get("controlling_mode") or previous_state.get("controlling_mode")) == "Normal"
+        and valid_active_liquidity_selection((previous_liquidity or {}).get("name") or previous_state.get("active_liquidity_name"), (previous_liquidity or {}).get("price") or previous_state.get("active_liquidity_price"))
+        and same_active_liquidity(
+            {
+                "name": (previous_liquidity or {}).get("name") or previous_state.get("active_liquidity_name"),
+                "price": (previous_liquidity or {}).get("price") or previous_state.get("active_liquidity_price"),
+            },
+            {"name": active_level, "price": level_price},
+        )
+    )
+    if previous_same_rejection_liquidity and isinstance(previous_initial, dict):
+        initial_candle_a = previous_initial
     previous_continuation_locked = (
         previous_state.get("continuation_step2_activated") is True
         and normalized_pathway_name(previous_state.get("controlling_mode")) in {"S/R", "R/S"}
@@ -2319,6 +2625,9 @@ def build_step25_interaction(
         "continuation_pending_boundary": previous_state.get("continuation_pending_boundary"),
         "continuation_step2_pending": previous_state.get("continuation_step2_pending"),
         "active_liquidity_selected": active_level is not None and level_price is not None,
+        "active_liquidity": {"name": active_level, "price": level_price, "side": side},
+        "active_liquidity_name": active_level,
+        "active_liquidity_price": level_price,
         "rejection_step2_confirmed": step_2_1a.get("step_2_activated") is True,
         "events": list(previous_step25.get("events") or []) if previous_locked else [],
     }
@@ -3798,6 +4107,9 @@ def step2_confirmed_at(snapshot: dict[str, Any], step_2_1a: dict[str, Any], curr
     """Return the Step 2 liquidity-close confirmation candle time."""
     if current_step_status != "CONFIRMED" or step_2_1a.get("step_2_activated") is not True:
         return None
+    locked_owner = step_2_1a.get("step2_locked_owner") if isinstance(step_2_1a.get("step2_locked_owner"), dict) else None
+    if isinstance(locked_owner, dict) and locked_owner.get("pathway") == "rejection" and locked_owner.get("activated_at"):
+        return str(locked_owner.get("activated_at"))
     return (
         confirmed_time_from_candle(step_2_1a.get("candle_a"))
         or step_2_1a.get("last_evaluated_bar_time")

@@ -42,6 +42,7 @@ from symbol_resolution import (
 
 PERSISTENCE_FILE = os.path.join(BASE_DIR, "Data", "persistence_state.json")
 EXECUTOR_STATE_FILE = os.path.join(BASE_DIR, "Data", "executor_state.json")
+TRADE_MANAGEMENT_RESEARCH_FILE = os.path.join(BASE_DIR, "Data", "trade_management_research.jsonl")
 RITHMIC_ATR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "Data", "rithmic_atr_snapshot.json")
 RITHMIC_RECENT_BARS_FILE = os.path.join(BASE_DIR, "Data", "rithmic_recent_bars.json")
 RITHMIC_ATR_SHADOW_COMPARISON_FILE = os.path.join(BASE_DIR, "Data", "rithmic_atr_shadow_comparison.json")
@@ -754,6 +755,355 @@ def update_pnl_totals(trade, current_price=None):
     trade["unrealized_pnl"] = round(calculate_unrealized_pnl(trade, current_price=current_price), 2)
     trade["total_pnl"] = round(trade["realized_pnl"] + trade["unrealized_pnl"], 2)
     return trade
+
+
+def coerce_float(value):
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(result):
+        return None
+    return result
+
+
+def first_present_float(*values):
+    for value in values:
+        result = coerce_float(value)
+        if result is not None:
+            return result
+    return None
+
+
+def collect_entry_leg_extremes_from_source(source):
+    if not isinstance(source, dict):
+        return None, None, None
+
+    high = first_present_float(
+        source.get("entry_leg_high"),
+        source.get("entry_bar_high"),
+        source.get("current_1m_bar_high"),
+        source.get("bar_high"),
+        source.get("high"),
+    )
+    low = first_present_float(
+        source.get("entry_leg_low"),
+        source.get("entry_bar_low"),
+        source.get("current_1m_bar_low"),
+        source.get("bar_low"),
+        source.get("low"),
+    )
+    timestamp = (
+        source.get("entry_leg_timestamp")
+        or source.get("entry_bar_timestamp")
+        or source.get("current_1m_bar_timestamp")
+        or source.get("bar_timestamp")
+        or source.get("timestamp")
+    )
+    if high is not None or low is not None:
+        return high, low, timestamp
+
+    for key in ("entry_context", "entry_bar", "bar", "order", "fill_context"):
+        nested_high, nested_low, nested_timestamp = collect_entry_leg_extremes_from_source(source.get(key))
+        if nested_high is not None or nested_low is not None:
+            return nested_high, nested_low, nested_timestamp
+
+    bars = source.get("atr_completed_bars")
+    if isinstance(bars, list) and bars:
+        return collect_entry_leg_extremes_from_source(bars[-1])
+
+    return None, None, None
+
+
+def capture_entry_leg_extremes(trade, *sources):
+    if trade.get("entry_leg_high") is not None and trade.get("entry_leg_low") is not None:
+        return trade
+
+    for source in sources:
+        high, low, timestamp = collect_entry_leg_extremes_from_source(source)
+        if high is None and low is None:
+            continue
+        if trade.get("entry_leg_high") is None and high is not None:
+            trade["entry_leg_high"] = round_price(high)
+        if trade.get("entry_leg_low") is None and low is not None:
+            trade["entry_leg_low"] = round_price(low)
+        if timestamp and not trade.get("entry_leg_timestamp"):
+            trade["entry_leg_timestamp"] = normalize_timestamp(timestamp)
+        if not trade.get("entry_leg_source"):
+            trade["entry_leg_source"] = "entry_context"
+        return trade
+
+    return trade
+
+
+def structural_dynamic_research_levels(trade):
+    entry_price = coerce_float(trade.get("entry_price"))
+    tick_size = coerce_float(get_tick_size(trade.get("symbol")))
+    if entry_price is None or tick_size is None or tick_size <= 0:
+        return None, None, None
+
+    if trade.get("direction") == "short":
+        entry_leg_high = coerce_float(trade.get("entry_leg_high"))
+        if entry_leg_high is None:
+            return None, None, None
+        stop_price = round_to_nearest_tick(entry_leg_high + tick_size, trade.get("symbol"))
+        distance = stop_price - entry_price
+        if distance <= 0:
+            return None, None, None
+        tp1_price = round_to_nearest_tick(entry_price - distance, trade.get("symbol"))
+        return stop_price, tp1_price, round(distance, 4)
+
+    if trade.get("direction") == "long":
+        entry_leg_low = coerce_float(trade.get("entry_leg_low"))
+        if entry_leg_low is None:
+            return None, None, None
+        stop_price = round_to_nearest_tick(entry_leg_low - tick_size, trade.get("symbol"))
+        distance = entry_price - stop_price
+        if distance <= 0:
+            return None, None, None
+        tp1_price = round_to_nearest_tick(entry_price + distance, trade.get("symbol"))
+        return stop_price, tp1_price, round(distance, 4)
+
+    return None, None, None
+
+
+def fixed_research_distance_points(symbol, distance_id):
+    symbol_root = normalize_symbol_root(symbol)
+    tick_size = coerce_float(get_tick_size(symbol))
+    if symbol_root == "NQ" and tick_size and tick_size > 0:
+        return float(distance_id) * tick_size
+    if symbol_root == "YM":
+        return float(distance_id)
+    return None
+
+
+def fixed_research_levels(trade, distance_id):
+    entry_price = coerce_float(trade.get("entry_price"))
+    distance = fixed_research_distance_points(trade.get("symbol"), distance_id)
+    if entry_price is None or distance is None:
+        return None, None, None
+
+    if trade.get("direction") == "short":
+        return (
+            round_to_nearest_tick(entry_price + distance, trade.get("symbol")),
+            round_to_nearest_tick(entry_price - distance, trade.get("symbol")),
+            round(distance, 4),
+        )
+    if trade.get("direction") == "long":
+        return (
+            round_to_nearest_tick(entry_price - distance, trade.get("symbol")),
+            round_to_nearest_tick(entry_price + distance, trade.get("symbol")),
+            round(distance, 4),
+        )
+    return None, None, None
+
+
+def update_research_model_hits(trade, price, timestamp, prefix, stop_price, tp1_price, distance_points):
+    if stop_price is None or tp1_price is None:
+        return
+
+    trade[f"{prefix}_stop_price"] = stop_price
+    trade[f"{prefix}_tp1_price"] = tp1_price
+    if distance_points is not None:
+        trade[f"{prefix}_stop_distance_points"] = distance_points
+
+    direction = trade.get("direction")
+    tp1_hit = False
+    stop_hit = False
+    if direction == "short":
+        tp1_hit = price <= tp1_price
+        stop_hit = price >= stop_price
+    elif direction == "long":
+        tp1_hit = price >= tp1_price
+        stop_hit = price <= stop_price
+
+    if tp1_hit and not trade.get(f"{prefix}_tp1_first_hit_at"):
+        trade[f"{prefix}_tp1_first_hit_at"] = timestamp
+        trade[f"{prefix}_tp1_would_hit"] = True
+        if not trade.get(f"{prefix}_model_first_hit"):
+            trade[f"{prefix}_model_first_hit"] = "tp1"
+
+    if stop_hit and not trade.get(f"{prefix}_stop_first_hit_at"):
+        trade[f"{prefix}_stop_first_hit_at"] = timestamp
+        trade[f"{prefix}_stop_would_hit"] = True
+        if not trade.get(f"{prefix}_model_first_hit"):
+            trade[f"{prefix}_model_first_hit"] = "stop"
+
+
+def update_research_models(trade, price, timestamp):
+    structural_stop, structural_tp1, structural_distance = structural_dynamic_research_levels(trade)
+    update_research_model_hits(
+        trade,
+        price,
+        timestamp,
+        "structural_dynamic",
+        structural_stop,
+        structural_tp1,
+        structural_distance,
+    )
+
+    for distance_id in (8, 12, 16):
+        stop_price, tp1_price, distance = fixed_research_levels(trade, distance_id)
+        update_research_model_hits(
+            trade,
+            price,
+            timestamp,
+            f"fixed_{distance_id}",
+            stop_price,
+            tp1_price,
+            distance,
+        )
+
+
+def update_post_be_analytics(trade, price, timestamp):
+    if not trade.get("moved_to_be"):
+        return trade
+
+    current_price = coerce_float(price)
+    entry_price = coerce_float(trade.get("entry_price"))
+    if current_price is None or entry_price is None:
+        return trade
+
+    timestamp = normalize_timestamp(timestamp) or datetime.now().isoformat()
+    if not trade.get("post_be_first_seen_at"):
+        trade["post_be_first_seen_at"] = trade.get("be_hit_at") or timestamp
+
+    previous_best = coerce_float(trade.get("post_be_best_price"))
+    previous_worst = coerce_float(trade.get("post_be_worst_price"))
+    direction = trade.get("direction")
+
+    if direction == "short":
+        best_price = current_price if previous_best is None else min(previous_best, current_price)
+        worst_price = current_price if previous_worst is None else max(previous_worst, current_price)
+        mfe_points = max(0.0, entry_price - best_price)
+        mae_points = max(0.0, worst_price - entry_price)
+    elif direction == "long":
+        best_price = current_price if previous_best is None else max(previous_best, current_price)
+        worst_price = current_price if previous_worst is None else min(previous_worst, current_price)
+        mfe_points = max(0.0, best_price - entry_price)
+        mae_points = max(0.0, entry_price - worst_price)
+    else:
+        return trade
+
+    tick_size = coerce_float(get_tick_size(trade.get("symbol")))
+    trade["post_be_best_price"] = round_price(best_price)
+    trade["post_be_worst_price"] = round_price(worst_price)
+    trade["post_be_mfe_points"] = round(mfe_points, 4)
+    trade["post_be_mae_points"] = round(mae_points, 4)
+    if tick_size and tick_size > 0:
+        trade["post_be_mfe_ticks"] = round(mfe_points / tick_size, 4)
+        trade["post_be_mae_ticks"] = round(mae_points / tick_size, 4)
+    trade["post_be_last_updated_at"] = timestamp
+    update_research_models(trade, current_price, timestamp)
+    return trade
+
+
+def actual_trade_result(trade):
+    profit = coerce_float(trade.get("total_profit"))
+    if profit is None:
+        profit = coerce_float(trade.get("total_pnl"))
+    if profit is None:
+        return None
+    if profit > 0:
+        return "win"
+    if profit < 0:
+        return "loss"
+    return "flat"
+
+
+def research_model_result(trade, prefix):
+    first_hit = trade.get(f"{prefix}_model_first_hit")
+    if first_hit == "tp1":
+        return "tp1"
+    if first_hit == "stop":
+        return "stop"
+    if trade.get(f"{prefix}_tp1_would_hit") and trade.get(f"{prefix}_stop_would_hit"):
+        return "both_hit_order_unknown"
+    if trade.get(f"{prefix}_tp1_would_hit"):
+        return "tp1"
+    if trade.get(f"{prefix}_stop_would_hit"):
+        return "stop"
+    return "no_hit"
+
+
+def fixed_research_row_fields(trade):
+    fields = {}
+    for distance_id in (8, 12, 16):
+        prefix = f"fixed_{distance_id}"
+        stop_price, tp1_price, distance = fixed_research_levels(trade, distance_id)
+        fields.update({
+            f"{prefix}_stop_price": trade.get(f"{prefix}_stop_price") or stop_price,
+            f"{prefix}_tp1_price": trade.get(f"{prefix}_tp1_price") or tp1_price,
+            f"{prefix}_stop_distance_points": trade.get(f"{prefix}_stop_distance_points") or distance,
+            f"{prefix}_tp1_would_hit": bool(trade.get(f"{prefix}_tp1_would_hit")),
+            f"{prefix}_stop_would_hit": bool(trade.get(f"{prefix}_stop_would_hit")),
+            f"{prefix}_model_result": research_model_result(trade, prefix),
+        })
+    return fields
+
+
+def build_trade_management_research_row(trade):
+    structural_stop_price, structural_tp1_price, structural_distance = structural_dynamic_research_levels(trade)
+    row = {
+        "trade_id": trade.get("trade_id"),
+        "symbol": trade.get("symbol"),
+        "direction": trade.get("direction"),
+        "entry_price": trade.get("entry_price"),
+        "original_stop": trade.get("original_stop"),
+        "original_tp1_price": trade.get("original_tp1_price") or trade.get("tp1_price"),
+        "be_trigger": trade.get("be_trigger"),
+        "be_hit_at": trade.get("be_hit_at"),
+        "closed_at": trade.get("closed_at"),
+        "actual_exit_price": trade.get("exit_price"),
+        "actual_exit_reason": trade.get("exit_reason"),
+        "actual_result": actual_trade_result(trade),
+        "post_be_best_price": trade.get("post_be_best_price"),
+        "post_be_worst_price": trade.get("post_be_worst_price"),
+        "post_be_mfe_points": trade.get("post_be_mfe_points"),
+        "post_be_mae_points": trade.get("post_be_mae_points"),
+        "post_be_mfe_ticks": trade.get("post_be_mfe_ticks"),
+        "post_be_mae_ticks": trade.get("post_be_mae_ticks"),
+        "post_be_first_seen_at": trade.get("post_be_first_seen_at"),
+        "post_be_last_updated_at": trade.get("post_be_last_updated_at"),
+        "entry_leg_high": trade.get("entry_leg_high"),
+        "entry_leg_low": trade.get("entry_leg_low"),
+        "structural_dynamic_stop_price": trade.get("structural_dynamic_stop_price") or structural_stop_price,
+        "structural_dynamic_tp1_price": trade.get("structural_dynamic_tp1_price") or structural_tp1_price,
+        "structural_dynamic_stop_distance_points": (
+            trade.get("structural_dynamic_stop_distance_points") or structural_distance
+        ),
+        "structural_dynamic_tp1_would_hit": bool(trade.get("structural_dynamic_tp1_would_hit")),
+        "structural_dynamic_stop_would_hit": bool(trade.get("structural_dynamic_stop_would_hit")),
+        "structural_dynamic_model_result": research_model_result(trade, "structural_dynamic"),
+    }
+    row.update(fixed_research_row_fields(trade))
+    return row
+
+
+def append_trade_management_research_row(row):
+    target_dir = os.path.dirname(TRADE_MANAGEMENT_RESEARCH_FILE)
+    os.makedirs(target_dir, exist_ok=True)
+    with open(TRADE_MANAGEMENT_RESEARCH_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def record_trade_management_research_if_closed(trade):
+    if trade.get("status") != "closed" or not trade.get("moved_to_be"):
+        return False
+    if trade.get("post_be_research_logged_at"):
+        return False
+
+    try:
+        row = build_trade_management_research_row(trade)
+        append_trade_management_research_row(row)
+        trade["post_be_research_logged_at"] = datetime.now().isoformat()
+        return True
+    except Exception as exc:
+        print(
+            "RESEARCH WARNING trade_management_research_write_failed "
+            f"trade_id={trade.get('trade_id')} path={TRADE_MANAGEMENT_RESEARCH_FILE} error={exc}"
+        )
+        return False
 
 
 def repair_missing_be_trigger(trade):
@@ -2250,6 +2600,7 @@ def close_trade_from_executor_stop_fill(trade, stop_order):
             trade["be_hit_at"] = filled_at
         lock_be_state(trade, trade.get("be_hit_at"))
 
+    update_post_be_analytics(trade, trade.get("exit_price"), filled_at)
     update_profit_breakdown(trade, include_runner=True)
     print(
         f"SYNC: trade closed from executor stop fill [{trade['trade_id']}] "
@@ -2285,6 +2636,7 @@ def close_trade_from_executor_flatten_evidence(trade, evidence_order):
         if exit_price is not None:
             trade["exit_price"] = exit_price
 
+    update_post_be_analytics(trade, trade.get("exit_price"), closed_at)
     update_profit_breakdown(trade, include_runner=trade.get("exit_price") is not None)
     print(
         f"SYNC: trade closed from executor flatten evidence [{trade['trade_id']}] "
@@ -2610,6 +2962,8 @@ def reconcile_trade_with_executor_activity(trade, executor_orders, executor_snap
                 trade["fill_price_source"] = entry_order.get("fill_price_source") or trade.get("fill_price_source")
             elif symbol_snapshot.get("avg_entry_price"):
                 trade["entry_price"] = float(symbol_snapshot.get("avg_entry_price"))
+
+            capture_entry_leg_extremes(trade, entry_order, symbol_snapshot, trade)
 
             if active_stop:
                 trade["stop_order_id"] = active_stop.get("order_id")
@@ -4063,6 +4417,10 @@ def create_trade_state(packet, atr_snapshot, requested_symbol, execution_symbol)
         "atr_completed_bars": atr_snapshot.get("atr_completed_bars", []),
         "atr_recomputed_simple": atr_snapshot.get("atr_recomputed_simple"),
         "atr_abnormal_bar": atr_snapshot.get("atr_abnormal_bar"),
+        "entry_leg_high": None,
+        "entry_leg_low": None,
+        "entry_leg_timestamp": None,
+        "entry_leg_source": None,
         "execution_symbol": normalized_symbol,
         "fill_price_source": None,
         "status": "reserved",
@@ -4100,6 +4458,7 @@ def create_trade_state(packet, atr_snapshot, requested_symbol, execution_symbol)
 
 
 def persist_trade_state(trade):
+    record_trade_management_research_if_closed(trade)
     state = load_state()
     state["trades"][trade["trade_id"]] = serialize_trade(trade)
     state["system"]["last_update_at"] = datetime.now().isoformat()
@@ -4210,6 +4569,7 @@ def submit_trade(packet):
     validate_derived_levels(trade["direction"], derived_levels)
     trade.update(derived_levels)
     trade["fill_price_source"] = fill_price_source
+    capture_entry_leg_extremes(trade, packet, entry_response, atr_snapshot)
     log_trade_event(
         trade["trade_id"],
         "entry_filled",
@@ -4337,6 +4697,7 @@ def process_price_update(trade, price, timestamp):
         trade["last_price"] = price
         trade["last_price_at"] = timestamp
         update_pnl_totals(trade, current_price=price)
+        update_post_be_analytics(trade, price, timestamp)
         return trade
 
     if not lock_trade(trade):
@@ -4347,6 +4708,7 @@ def process_price_update(trade, price, timestamp):
         trade["last_price"] = price
         trade["last_price_at"] = timestamp
         update_pnl_totals(trade, current_price=price)
+        update_post_be_analytics(trade, price, timestamp)
         update_stop_state_from_active_stop(trade)
 
         if trade["status"] in ["closed", "error"]:
@@ -4403,6 +4765,7 @@ def process_price_update(trade, price, timestamp):
                     timestamp=timestamp,
                 )
                 handle_be_trigger(trade, timestamp)
+                update_post_be_analytics(trade, price, timestamp)
                 be_triggered = True
             elif trade["direction"] == "short":
                 log_trade_event(
@@ -4414,6 +4777,7 @@ def process_price_update(trade, price, timestamp):
                     timestamp=timestamp,
                 )
                 handle_be_trigger(trade, timestamp)
+                update_post_be_analytics(trade, price, timestamp)
                 be_triggered = True
 
         if not trade["tp1_hit"]:
@@ -4493,6 +4857,7 @@ def process_be_probe_update(trade, price, timestamp):
             timestamp=timestamp,
         )
         handle_be_trigger(trade, timestamp)
+        update_post_be_analytics(trade, price, timestamp)
         return trade
     finally:
         unlock_trade(trade)
@@ -5050,6 +5415,7 @@ def handle_stop_hit(trade, timestamp):
     trade["exit_reason"] = "stop_hit"
     trade["exit_price"] = trade.get("current_stop")
     trade["closed_at"] = timestamp
+    update_post_be_analytics(trade, trade.get("exit_price"), timestamp)
     update_profit_breakdown(trade, include_runner=True)
     print(
         f"TRADE CLOSED trade_id={trade['trade_id']} "

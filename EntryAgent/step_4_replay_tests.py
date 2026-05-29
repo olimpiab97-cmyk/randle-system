@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from entry_agent import build_step4_interaction, evaluate_live_step4
+from entry_agent import build_step4_interaction, evaluate_live_step_2_1a, evaluate_live_step4, evaluate_live_step25, rejection_from_step2_activation
 from step4_engine import evaluate_step4
 
 
@@ -531,6 +531,225 @@ def test_ym_2026_05_28_failed_c1_keeps_rejection_window_for_c2_wick() -> None:
     assert second["state"]["participation_candle_number"] == 2
 
 
+def test_ym_2026_05_29_same_pml_close_through_does_not_recreate_step2_window() -> None:
+    pml = 50836.0
+    candles = [
+        candle(50840.0, 50842.0, 50820.0, 50835.0, "2026-05-29T13:15:00Z"),
+        candle(50834.0, 50835.0, 50810.0, 50811.0, "2026-05-29T13:16:00Z"),
+        candle(50812.0, 50813.0, 50800.0, 50801.0, "2026-05-29T13:17:00Z"),
+        candle(50802.0, 50803.0, 50790.0, 50791.0, "2026-05-29T13:18:00Z"),
+        candle(50792.0, 50793.0, 50780.0, 50781.0, "2026-05-29T13:19:00Z"),
+        candle(50782.0, 50783.0, 50770.0, 50771.0, "2026-05-29T13:20:00Z"),
+        candle(50772.0, 50773.0, 50760.0, 50761.0, "2026-05-29T13:21:00Z"),
+    ]
+    rejection = {"rejection_mode": "ON", "watch_side": "LONG", "trigger_level": "PML", "trigger_price": pml}
+    step3 = {
+        "status": "ALLOW_STEP_4",
+        "next_step": "Step 4",
+        "state": {
+            "step3_allows_structure": True,
+            "active_liquidity": {"name": "PML", "price": pml, "display_name": "PML", "side": "lower"},
+        },
+        "events": [],
+    }
+    liquidity = {"nearest_level_above": {"name": "PMH", "price": 50950.0}, "nearest_level_below": {"name": "LL", "price": 50700.0}, "tick_size": 1.0}
+
+    def snapshot(latest: dict) -> dict:
+        return {
+            "normalized_symbol": "YM",
+            "latest_bar_time": latest["timestamp"],
+            "latest_price": latest["close"],
+            "ohlc": latest,
+            "ohlc_is_closed": True,
+            "liquidity": liquidity,
+            "atr": {"atr_1m_14": 10.0},
+        }
+
+    persisted: dict = {}
+    observed = []
+    for current in candles:
+        step_2_1a = {
+            "step_2_activated": True,
+            "candle_a": current,
+            "active_level": "PML",
+            "level_price": pml,
+            "side": "lower",
+        }
+        step25 = evaluate_live_step25(snapshot(current), rejection, step_2_1a, persisted)
+        step4 = evaluate_live_step4(snapshot(current), rejection, step25, step3, persisted)
+        observed.append(step4["state"])
+        persisted = {"step25": step25, "step4": step4}
+
+    assert observed[0]["leg1_window_started_at"] == "2026-05-29T13:15:00Z"
+    assert observed[0]["leg1_window_candle_index"] == 0
+    for state in observed[1:]:
+        assert state["initial_candle_a"]["timestamp"] == "2026-05-29T13:15:00Z"
+        assert state["leg1_window_started_at"] == "2026-05-29T13:15:00Z"
+        assert state["leg1_window_candle_index"] != 0
+    assert [state["leg1_window_candle_index"] for state in observed[1:4]] == [1, 2, 3]
+
+
+def test_nq_2026_05_29_stack_step2_owner_survives_repeated_close_through() -> None:
+    close_boundary = 30363.75
+    extreme_boundary = 30372.25
+    candles = [
+        candle(30360.0, 30375.0, 30358.0, 30373.0, "2026-05-29T13:33:00Z"),
+        candle(30374.0, 30380.0, 30370.0, 30379.0, "2026-05-29T13:34:00Z"),
+        candle(30378.0, 30381.0, 30374.0, 30380.0, "2026-05-29T13:35:00Z"),
+        candle(30379.0, 30382.0, 30375.0, 30381.0, "2026-05-29T13:36:00Z"),
+    ]
+    tv_context = {
+        "levels": {
+            "ONH": {"status": "ACTIVE", "price": close_boundary, "stack_group": "HIGH 1"},
+            "LH": {"status": "ACTIVE", "price": 30368.0, "stack_group": "HIGH 1"},
+            "PMH": {"status": "ACTIVE", "price": extreme_boundary, "stack_group": "HIGH 1"},
+        }
+    }
+    liquidity = {"nearest_level_above": {"name": "YH", "price": 30450.0}, "nearest_level_below": {"name": "PML", "price": 30200.0}, "tick_size": 0.25}
+
+    def snapshot(latest: dict) -> dict:
+        return {
+            "normalized_symbol": "NQ",
+            "latest_bar_time": latest["timestamp"],
+            "latest_price": latest["close"],
+            "ohlc": latest,
+            "ohlc_is_closed": True,
+            "liquidity": liquidity,
+            "tv_context": tv_context,
+            "atr": {"atr_1m_14": 20.0},
+        }
+
+    persisted: dict = {}
+    observed = []
+    for index, current in enumerate(candles):
+        step2 = evaluate_live_step_2_1a(snapshot(current), {}, liquidity, persisted)
+        rejection = rejection_from_step2_activation(step2, "NQ")
+        symbol_persisted = persisted.get("state_by_symbol", {}).get("NQ", {}) if isinstance(persisted.get("state_by_symbol"), dict) else {}
+        step25 = evaluate_live_step25(snapshot(current), rejection, step2, symbol_persisted)
+        step3 = {
+            "status": "ALLOW_STEP_4",
+            "next_step": "Step 4",
+            "state": {
+                "step3_allows_structure": True,
+                "active_liquidity": {
+                    "name": step2["active_level"],
+                    "price": step2["level_price"],
+                    "display_name": (step2.get("active_liquidity_group") or {}).get("display_name"),
+                    "side": "upper",
+                    "group": step2.get("active_liquidity_group"),
+                },
+            },
+            "events": [],
+        }
+        step4 = evaluate_live_step4(snapshot(current), rejection, step25, step3, symbol_persisted)
+        observed.append((step2, step25, step4))
+        symbol_state = {"normalized_symbol": "NQ", "step25": step25, "step4": step4}
+        if index == 0:
+            symbol_state["step_2_1a"] = step2
+            symbol_state["step2_locked_owner"] = step2.get("step2_locked_owner")
+        persisted = {"state_by_symbol": {"NQ": symbol_state}}
+
+    assert observed[0][0]["active_liquidity_group"]["name"] == "HIGH 1"
+    assert observed[0][0]["active_liquidity_group"]["close_boundary"] == close_boundary
+    assert observed[0][0]["active_liquidity_group"]["extreme_boundary"] == extreme_boundary
+    assert observed[0][2]["state"]["setup_direction"] == "SHORT"
+    assert observed[0][2]["state"]["leg1_window_started_at"] == "2026-05-29T13:33:00Z"
+    assert observed[0][2]["state"]["leg1_window_candle_index"] == 0
+
+    for step2, step25, step4 in observed[1:]:
+        assert step2["candle_a"]["timestamp"] == "2026-05-29T13:33:00Z"
+        assert step25["state"]["initial_candle_a"]["timestamp"] == "2026-05-29T13:33:00Z"
+        assert step4["state"]["leg1_window_started_at"] == "2026-05-29T13:33:00Z"
+        assert step4["state"]["leg1_window_candle_index"] != 0
+        assert step4["state"]["leg1_window_expires_at"] == "2026-05-29T13:37:00Z"
+    assert [step4["state"]["leg1_window_candle_index"] for _, _, step4 in observed[1:]] == [1, 2, 3]
+
+
+def test_sanitize_preserves_current_day_step2_owner_with_old_consumed_history() -> None:
+    import entry_agent
+
+    owner_candle = candle(30360.0, 30375.0, 30358.0, 30373.0, "2026-05-29T13:33:00Z")
+    owner = {
+        "pathway": "rejection",
+        "active_liquidity": {
+            "name": "ONH",
+            "price": 30372.25,
+            "display_name": "PMH/ONH/LH Liquidity",
+            "side": "upper",
+            "group": {
+                "name": "HIGH 1",
+                "components": ["ONH", "LH", "PMH"],
+                "close_boundary": 30363.75,
+                "extreme_boundary": 30372.25,
+            },
+        },
+        "active_liquidity_name": "ONH",
+        "active_liquidity_price": 30372.25,
+        "liquidity_group": "HIGH 1",
+        "setup_direction": "SHORT",
+        "side": "upper",
+        "candle_a": owner_candle,
+        "activated_at": "2026-05-29T13:33:00Z",
+    }
+    old_history = {
+        "key": "PML:29171.75",
+        "name": "PML",
+        "price": 29171.75,
+        "exhausted_at_candle_time": "2026-05-18T14:33:00Z",
+        "reason": "Historical consumed-liquidity record must not stale active state.",
+    }
+    symbol_state = {
+        "normalized_symbol": "NQ",
+        "latest_bar_time": "2026-05-29T13:34:00Z",
+        "step_2_1a": {
+            "step_2_activated": True,
+            "candle_a": owner_candle,
+            "active_level": "ONH",
+            "level_price": 30372.25,
+            "side": "upper",
+            "pre_activation_probe_boundary": {"active": False, "side": "upper"},
+            "step2_locked_owner": owner,
+            "consumed_liquidity_levels": [old_history],
+        },
+        "step2_locked_owner": owner,
+        "step25": {
+            "status": "READY",
+            "state": {
+                "step25_pathway_selection_complete": True,
+                "controlling_mode": "Normal Rejection Mode",
+                "initial_candle_a": owner_candle,
+                "active_liquidity": {"name": "ONH", "price": 30372.25},
+                "consumed_liquidity_levels": [old_history],
+            },
+        },
+        "step4": {
+            "status": "WAIT",
+            "state": {
+                "initial_candle_a": owner_candle,
+                "active_liquidity": {"name": "ONH", "price": 30372.25},
+                "leg1_window_active": True,
+                "leg1_window_started_at": "2026-05-29T13:33:00Z",
+                "leg1_window_candle_index": 1,
+                "leg1_window_remaining": 3,
+                "leg1_window_expires_at": "2026-05-29T13:37:00Z",
+                "consumed_liquidity_levels": [old_history],
+            },
+        },
+        "consumed_liquidity_levels": [old_history],
+    }
+    persisted = {"state_by_symbol": {"NQ": symbol_state}}
+
+    sanitized = entry_agent.sanitize_stale_session_state(persisted, "NQ", "2026-05-29")
+    sanitized_nq = sanitized["state_by_symbol"]["NQ"]
+
+    assert sanitized_nq["step2_locked_owner"]["activated_at"] == "2026-05-29T13:33:00Z"
+    assert sanitized_nq["step_2_1a"]["candle_a"]["timestamp"] == "2026-05-29T13:33:00Z"
+    assert sanitized_nq["step25"]["state"]["initial_candle_a"]["timestamp"] == "2026-05-29T13:33:00Z"
+    assert sanitized_nq["step4"]["state"]["leg1_window_started_at"] == "2026-05-29T13:33:00Z"
+    assert sanitized_nq["step4"]["state"]["leg1_window_candle_index"] == 1
+    assert sanitized_nq["consumed_liquidity_levels"][0]["exhausted_at_candle_time"] == "2026-05-18T14:33:00Z"
+
+
 def test_proximity_hard_bypass_routes_step7() -> None:
     interaction = base_interaction("SHORT")
     interaction["nearest_opposing_liquidity"] = {"name": "PML", "price": 100.8}
@@ -566,6 +785,9 @@ def run_tests() -> None:
         test_lower_static_stack_rejects_close_boundary_only_leg1,
         test_live_static_stack_assigns_post_extreme_candle_a_then_locks_leg1_on_future_b,
         test_ym_2026_05_28_failed_c1_keeps_rejection_window_for_c2_wick,
+        test_ym_2026_05_29_same_pml_close_through_does_not_recreate_step2_window,
+        test_nq_2026_05_29_stack_step2_owner_survives_repeated_close_through,
+        test_sanitize_preserves_current_day_step2_owner_with_old_consumed_history,
         test_proximity_hard_bypass_routes_step7,
     ]
     for test in tests:
