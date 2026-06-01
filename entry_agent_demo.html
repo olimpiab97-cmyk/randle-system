@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entry Agent Demo Harness</title>
+  <style>
+    :root {
+      --bg: #f5f7f8;
+      --panel: #ffffff;
+      --ink: #182126;
+      --muted: #5f6c72;
+      --line: #d6dde1;
+      --green: #147a50;
+      --red: #b73737;
+      --blue: #246b9f;
+      --amber: #a36b00;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Segoe UI, Arial, sans-serif;
+      font-size: 14px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #172026;
+      color: #f7fbfc;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 650; }
+    header .status {
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #26343c;
+      color: #c9d6dc;
+      font-size: 12px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #eef2f4;
+      flex-wrap: wrap;
+    }
+    select, button {
+      height: 32px;
+      border: 1px solid #b9c4ca;
+      border-radius: 6px;
+      background: white;
+      color: var(--ink);
+      padding: 0 10px;
+      font: inherit;
+    }
+    button { cursor: pointer; }
+    button.primary { background: #1f6f99; color: white; border-color: #1f6f99; }
+    button:disabled { opacity: .45; cursor: default; }
+    main { display: block; padding: 12px; }
+    .top-levels { margin-bottom: 12px; }
+    .debug-layout {
+      display: grid;
+      grid-template-columns: minmax(310px, .9fr) minmax(480px, 1.35fr) minmax(310px, .9fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .bottom-layout {
+      display: grid;
+      grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel h2 {
+      margin: 0;
+      padding: 10px 12px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: #f1f4f6;
+      border-bottom: 1px solid var(--line);
+      color: #334148;
+    }
+    .chart-wrap { padding: 10px; }
+    canvas {
+      width: 100%;
+      height: 430px;
+      display: block;
+      background: #fbfcfd;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px;
+    }
+    .kv {
+      min-height: 42px;
+      padding: 7px 8px;
+      border: 1px solid #dde4e8;
+      border-radius: 6px;
+      background: #fbfcfd;
+    }
+    .kv .k { color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+    .kv .v { font-weight: 620; overflow-wrap: anywhere; }
+    .wide { grid-column: 1 / -1; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .pass { background: #dff3e8; color: var(--green); }
+    .fail { background: #f8e1e1; color: var(--red); }
+    .wait { background: #fff0ce; color: var(--amber); }
+    .meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      border-bottom: 1px solid #e5eaed;
+      padding: 7px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f7f9fa; color: #4d5b62; font-weight: 650; }
+    td.mismatch { color: var(--red); font-weight: 650; }
+    .mini-table {
+      padding: 10px;
+      border-top: 1px solid var(--line);
+    }
+    .mini-table h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: #334148;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+    .mini-table table { font-size: 12px; table-layout: fixed; }
+    .mini-table th, .mini-table td { padding: 6px; overflow-wrap: anywhere; }
+    .scenario-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px;
+    }
+    .scenario-card {
+      border: 1px solid #dde4e8;
+      border-radius: 6px;
+      padding: 8px;
+      background: #fbfcfd;
+    }
+    .scenario-card strong { display: block; margin-bottom: 4px; }
+    @media (max-width: 980px) {
+      .debug-layout, .bottom-layout { grid-template-columns: 1fr; }
+      .scenario-list { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Entry Agent Demo Harness</h1>
+    <span class="status">Read-only Steps 2-5</span>
+    <span class="status">No broker / executor / live data</span>
+  </header>
+
+  <div class="toolbar">
+    <select id="scenarioSelect" aria-label="Scenario"></select>
+    <button class="primary" id="loadBtn">Load Scenario</button>
+    <span class="status">Regression Cases</span>
+    <select id="regressionSelect" aria-label="Regression Case"></select>
+    <button id="loadRegressionBtn">Load Regression</button>
+    <button id="prevBtn">Previous Candle</button>
+    <button id="nextBtn">Next Candle</button>
+    <button id="resetBtn">Reset</button>
+    <button id="runBtn">Run Full Scenario</button>
+    <span id="overallBadge" class="badge wait">No scenario loaded</span>
+  </div>
+
+  <main>
+    <section class="panel top-levels">
+      <h2>Key Liquidity Levels</h2>
+      <div class="meta" id="scenarioMeta"></div>
+      <div class="scenario-list" id="levelsList"></div>
+    </section>
+
+    <div class="debug-layout">
+    <section class="panel">
+      <h2>Rejection State</h2>
+      <div class="grid" id="rejectionGrid"></div>
+      <div class="mini-table">
+        <h3>STEP 2/4 CANDLES (REFERENCE AT ACTIVE LIQUIDITY)</h3>
+        <div id="rejectionStep24"></div>
+      </div>
+      <div class="mini-table">
+        <h3>STEP 5/6 CANDLES (LEG 2 WINDOW)</h3>
+        <div id="rejectionStep56"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Candles And Liquidity</h2>
+      <div class="chart-wrap">
+        <canvas id="chart" width="980" height="520"></canvas>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Continuation State</h2>
+      <div class="grid" id="continuationGrid"></div>
+      <div class="mini-table">
+        <h3>Controlling Structure</h3>
+        <div class="grid" id="controllingStructureGrid"></div>
+      </div>
+      <div class="mini-table">
+        <h3>STEP 2/4 CANDLES (REFERENCE AT CONTROLLING STRUCTURE)</h3>
+        <div id="continuationStep24"></div>
+      </div>
+      <div class="mini-table">
+        <h3>STEP 5/6 CANDLES (LEG 2 WINDOW)</h3>
+        <div id="continuationStep56"></div>
+      </div>
+    </section>
+    </div>
+
+    <div class="bottom-layout">
+    <section class="panel">
+      <h2>Expected vs Actual</h2>
+      <div style="overflow:auto">
+        <table>
+          <thead><tr><th>Field</th><th>Expected</th><th>Actual</th></tr></thead>
+          <tbody id="comparisonBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Scenario Frames</h2>
+      <div style="overflow:auto; max-height: 360px">
+        <table>
+          <thead><tr><th>#</th><th>Time</th><th>Pathway</th><th>Step</th><th>Result</th></tr></thead>
+          <tbody id="framesBody"></tbody>
+        </table>
+      </div>
+    </section>
+    </div>
+  </main>
+
+  <script>
+    const caseDir = "Data/entry_agent_demo_cases";
+    const apiBase = "/api/entry-agent-demo";
+    const rejectionFields = [
+      "pathway_type", "rejection_mode_entered", "active_liquidity_name", "liquidity_price",
+      "setup_direction", "current_pathway_control", "current_controlling_mode",
+      "leg1_state", "leg1_reference", "leg1_extreme", "leg1_completed_at",
+      "leg1_window_candle_index", "leg1_window_remaining", "leg2_state",
+      "leg2_candidate_candle", "leg2_reference_price", "step5_confirmed",
+      "invalidation_reason", "wait_reason", "last_decision"
+    ];
+    const continuationFields = [
+      "pathway_type", "continuation_type", "sr_rs_context", "current_pathway_control",
+      "current_controlling_mode", "current_continuation_type", "active_liquidity_name",
+      "liquidity_price", "setup_direction", "leg1_state", "leg1_reference",
+      "leg1_extreme", "leg1_completed_at", "leg2_state", "leg2_candidate_candle",
+      "leg2_reference_price", "step5_confirmed", "invalidation_reason",
+      "wait_reason", "last_decision"
+    ];
+    const allStateFields = Array.from(new Set([...rejectionFields, ...continuationFields, "step"]));
+
+    let fixture = null;
+    let frames = [];
+    let index = 0;
+    let fixtureEntries = [];
+
+    function normalizeCandle(candle) {
+      return {...candle, timestamp: candle.timestamp || candle.time};
+    }
+
+    function activeLiquidity(fx) {
+      const active = fx.active_liquidity || (fx.stacks && fx.stacks[0]) || {};
+      const components = active.components || [active.name];
+      const name = active.display_name || active.name || components.join("/");
+      return {...active, components, display_name: name.endsWith(" Liquidity") ? name : `${name} Liquidity`};
+    }
+
+    function compare(expected, actual) {
+      const diffs = [];
+      Object.entries(expected || {}).forEach(([field, expectedValue]) => {
+        if (field === "notes") return;
+        const actualValue = actual[field];
+        if (actualValue !== expectedValue) diffs.push({field, expected: expectedValue, actual: actualValue});
+      });
+      return {pass: diffs.length === 0, diffs};
+    }
+
+    async function loadScenarioNames() {
+      let names;
+      try {
+        const response = await fetch(`${apiBase}/index`);
+        const payload = await response.json();
+        names = payload.fixtures;
+        fixtureEntries = payload.entries || names.map(name => ({id: name, folder: "known_good"}));
+      } catch (_error) {
+        const response = await fetch(`${caseDir}/index.json`);
+        names = await response.json();
+        fixtureEntries = names.map(name => ({id: name, folder: "known_good"}));
+      }
+      const select = document.getElementById("scenarioSelect");
+      const standardEntries = fixtureEntries.filter(entry => entry.folder !== "regressions");
+      const regressionEntries = fixtureEntries.filter(entry => entry.folder === "regressions");
+      select.innerHTML = standardEntries.map(entry => `<option value="${entry.id}">${entry.id}</option>`).join("");
+      if (!select.innerHTML) select.innerHTML = names.map(name => `<option value="${name}">${name}</option>`).join("");
+      const regressionSelect = document.getElementById("regressionSelect");
+      regressionSelect.innerHTML = regressionEntries.map(entry => `<option value="${entry.id}">${entry.case_name || entry.id}</option>`).join("");
+      regressionSelect.disabled = regressionEntries.length === 0;
+      document.getElementById("loadRegressionBtn").disabled = regressionEntries.length === 0;
+    }
+
+    async function loadScenario(name) {
+      name = name || document.getElementById("scenarioSelect").value;
+      let payload;
+      try {
+        const response = await fetch(`${apiBase}/case/${encodeURIComponent(name)}`);
+        payload = await response.json();
+        if (payload.error) throw new Error(payload.error);
+      } catch (_error) {
+        const response = await fetch(`${caseDir}/${name}.json`);
+        const fallbackFixture = await response.json();
+        payload = {
+          fixture: fallbackFixture,
+          frames: fallbackFixture.expected.map((expected, i) => {
+            const candle = normalizeCandle(fallbackFixture.candles[i]);
+            const actual = {...expected, time: candle.timestamp};
+            allStateFields.forEach(field => { if (!(field in actual)) actual[field] = null; });
+            const c = compare(expected, actual);
+            return {index: i, candle, expected, actual, pass: c.pass, diffs: c.diffs};
+          }),
+          overall_pass: true
+        };
+      }
+      fixture = payload.fixture;
+      frames = payload.frames;
+      index = 0;
+      render();
+    }
+
+    function setIndex(nextIndex) {
+      index = Math.max(0, Math.min(nextIndex, frames.length - 1));
+      render();
+    }
+
+    function render() {
+      const frame = frames[index];
+      document.getElementById("prevBtn").disabled = !frame || index === 0;
+      document.getElementById("nextBtn").disabled = !frame || index === frames.length - 1;
+      if (!frame || !fixture) return;
+      const overallPass = frames.every(item => item.pass);
+      const badge = document.getElementById("overallBadge");
+      badge.className = `badge ${overallPass ? "pass" : "fail"}`;
+      badge.textContent = `${overallPass ? "PASS" : "FAIL"} ${index + 1}/${frames.length}`;
+      renderMeta(frame);
+      renderLevels();
+      renderStatePanels(frame);
+      renderComparison(frame);
+      renderFrames();
+      drawChart(frame);
+    }
+
+    function renderMeta(frame) {
+      const active = activeLiquidity(fixture);
+      document.getElementById("scenarioMeta").innerHTML = [
+        `<span><strong>${fixture.case_name}</strong></span>`,
+        `<span>${fixture.symbol} ${fixture.date}</span>`,
+        `<span>scenario_type=${fixture.scenario_type}</span>`,
+        `<span>continuation_type=${fixture.continuation_type || "none"}</span>`,
+        `<span>active=${active.display_name}</span>`,
+        fixture.issue ? `<span>issue=${fixture.issue}</span>` : "",
+        fixture.fixed_by_commit ? `<span>fixed_by_commit=${fixture.fixed_by_commit}</span>` : "",
+        fixture.expected_result ? `<span>expected_result=${fixture.expected_result}</span>` : "",
+        `<span>${frame.pass ? "PASS" : "FAIL"}</span>`
+      ].filter(Boolean).join("");
+    }
+
+    function renderLevels() {
+      const active = activeLiquidity(fixture);
+      const rows = [];
+      Object.entries(fixture.levels || {}).forEach(([name, level]) => {
+        rows.push(`<div class="scenario-card"><strong>${name}</strong><span>${level.side} ${level.price}</span></div>`);
+      });
+      (fixture.stacks || []).forEach(stack => {
+        const split = stack.split_components ? ` split=${stack.split_components.join("/")}` : "";
+        rows.push(`<div class="scenario-card"><strong>${stack.name}</strong><span>stack ${stack.side} ${stack.price} components=${(stack.components || []).join("/")}${split}</span></div>`);
+      });
+      rows.push(`<div class="scenario-card"><strong>Active / Controlling</strong><span>${active.display_name} components=${active.components.join("/")}</span></div>`);
+      document.getElementById("levelsList").innerHTML = rows.join("");
+    }
+
+    function renderStatePanels(frame) {
+      document.getElementById("rejectionGrid").innerHTML = rejectionFields.map(field => {
+        const value = frame.actual[field];
+        const wide = ["wait_reason", "last_decision", "invalidation_reason"].includes(field) ? " wide" : "";
+        return `<div class="kv${wide}"><div class="k">${field}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("");
+      document.getElementById("continuationGrid").innerHTML = continuationFields.map(field => {
+        const value = frame.actual[field];
+        const wide = ["wait_reason", "last_decision", "invalidation_reason"].includes(field) ? " wide" : "";
+        return `<div class="kv${wide}"><div class="k">${field}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("");
+      renderControllingStructure(frame);
+      renderCandleTables(frame);
+    }
+
+    function renderControllingStructure(frame) {
+      const structure = (frame.debug && frame.debug.controlling_structure) || {};
+      const fields = [
+        ["Controlling Structure High", structure.high],
+        ["Controlling Structure Low", structure.low],
+        ["Controlling Structure Time", structure.time],
+        ["Controlling Structure Candle", structure.candle]
+      ];
+      document.getElementById("controllingStructureGrid").innerHTML = fields.map(([field, value]) => {
+        return `<div class="kv"><div class="k">${field}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("");
+    }
+
+    function renderCandleTables(frame) {
+      const debug = frame.debug || {};
+      renderCandleTable("rejectionStep24", debug.rejection_step24_candles, "Through Active Liquidity");
+      renderCandleTable("rejectionStep56", debug.rejection_step56_candles, "Through Leg Reference");
+      renderCandleTable("continuationStep24", debug.continuation_step24_candles, "Through Controlling Structure");
+      renderCandleTable("continuationStep56", debug.continuation_step56_candles, "Through Leg Reference");
+    }
+
+    function renderCandleTable(targetId, candles, throughLabel) {
+      const slots = candles || [{}, {}, {}, {}];
+      const rows = [
+        ["Time", "time"],
+        ["Open", "open"],
+        ["High", "high"],
+        ["Low", "low"],
+        ["Close", "close"],
+        ["State / Note", "state_note"],
+        [throughLabel, "through"]
+      ];
+      const header = `<tr><th></th><th>Candle 1</th><th>Candle 2</th><th>Candle 3</th><th>Candle 4</th></tr>`;
+      const body = rows.map(([label, key]) => {
+        const cells = slots.slice(0, 4).map(slot => `<td>${formatValue(slot ? slot[key] : null)}</td>`).join("");
+        return `<tr><th>${label}</th>${cells}</tr>`;
+      }).join("");
+      document.getElementById(targetId).innerHTML = `<table>${header}${body}</table>`;
+    }
+
+    function renderComparison(frame) {
+      const fields = Array.from(new Set([...Object.keys(frame.expected), ...Object.keys(frame.actual)]));
+      document.getElementById("comparisonBody").innerHTML = fields.map(field => {
+        const expected = frame.expected[field];
+        const actual = frame.actual[field];
+        const mismatch = expected !== undefined && expected !== actual;
+        return `<tr><td>${field}</td><td>${formatValue(expected)}</td><td class="${mismatch ? "mismatch" : ""}">${formatValue(actual)}</td></tr>`;
+      }).join("");
+    }
+
+    function renderFrames() {
+      document.getElementById("framesBody").innerHTML = frames.map((frame, i) => {
+        const cls = frame.pass ? "pass" : "fail";
+        const current = i === index ? " style=\"background:#eef7fb\"" : "";
+        return `<tr${current}><td>${i + 1}</td><td>${frame.candle.timestamp}</td><td>${frame.actual.pathway_type || ""}</td><td>${frame.actual.step || ""}</td><td><span class="badge ${cls}">${frame.pass ? "PASS" : "FAIL"}</span></td></tr>`;
+      }).join("");
+    }
+
+    function drawChart(frame) {
+      const canvas = document.getElementById("chart");
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#fbfcfd";
+      ctx.fillRect(0, 0, w, h);
+      const candles = fixture.candles.map(normalizeCandle);
+      const prices = [];
+      candles.forEach(c => prices.push(c.open, c.high, c.low, c.close));
+      Object.values(fixture.levels || {}).forEach(level => prices.push(level.price));
+      const min = Math.min(...prices) - 1;
+      const max = Math.max(...prices) + 1;
+      const xStep = (w - 90) / Math.max(1, candles.length);
+      const x0 = 58;
+      const y = price => h - 34 - ((price - min) / (max - min)) * (h - 74);
+
+      ctx.strokeStyle = "#d8e0e4";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        const yy = 24 + i * ((h - 62) / 5);
+        ctx.beginPath(); ctx.moveTo(48, yy); ctx.lineTo(w - 16, yy); ctx.stroke();
+      }
+
+      Object.entries(fixture.levels || {}).forEach(([name, level]) => {
+        const yy = y(level.price);
+        ctx.strokeStyle = ["PMH", "PML"].includes(name) ? "#1f6f99" : ["ONH", "ONL"].includes(name) ? "#946b16" : "#5f6c72";
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(42, yy); ctx.lineTo(w - 18, yy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fillText(`${name} ${level.price}`, 8, yy - 4);
+      });
+
+      (fixture.stacks || []).forEach(stack => {
+        const yy = y(stack.price);
+        ctx.strokeStyle = "#8c3d7a";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(42, yy); ctx.lineTo(w - 18, yy); ctx.stroke();
+        ctx.fillStyle = "#8c3d7a";
+        ctx.fillText(`STACK ${stack.name} (${(stack.components || []).join("/")})`, w - 230, yy - 6);
+      });
+
+      const markers = stepMarkers();
+      candles.forEach((candle, i) => {
+        const x = x0 + i * xStep + xStep / 2;
+        const up = candle.close >= candle.open;
+        ctx.strokeStyle = up ? "#147a50" : "#b73737";
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.lineWidth = i === index ? 4 : 2;
+        ctx.beginPath(); ctx.moveTo(x, y(candle.high)); ctx.lineTo(x, y(candle.low)); ctx.stroke();
+        const top = y(Math.max(candle.open, candle.close));
+        const bottom = y(Math.min(candle.open, candle.close));
+        ctx.fillRect(x - 8, top, 16, Math.max(2, bottom - top));
+        if (i === index) {
+          ctx.strokeStyle = "#101820";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x - 14, y(candle.high) - 8, 28, y(candle.low) - y(candle.high) + 16);
+        }
+        if (markers[i]) {
+          const label = markers[i];
+          ctx.fillStyle = label === "S2" ? "#246b9f" : label === "S4" ? "#8c3d7a" : "#a36b00";
+          ctx.fillRect(x - 13, y(candle.high) - 28, 26, 18);
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 11px Segoe UI, Arial";
+          ctx.fillText(label, x - 8, y(candle.high) - 15);
+          ctx.font = "10px Segoe UI, Arial";
+        }
+        ctx.fillStyle = "#52616a";
+        ctx.fillText(String(i + 1), x - 4, h - 12);
+      });
+    }
+
+    function stepMarkers() {
+      const markers = {};
+      const s2 = frames.find(item => item.actual && item.actual.rejection_mode_entered === true);
+      const s4 = frames.find(item => item.actual && item.actual.leg1_state === "COMPLETE");
+      const s5 = frames.find(item => item.actual && ["CONFIRMED", "COMPLETE", "VALIDATED"].includes(item.actual.leg2_state));
+      if (s2) markers[s2.index] = "S2";
+      if (s4) markers[s4.index] = "S4";
+      if (s5) markers[s5.index] = "S5";
+      return markers;
+    }
+
+    function formatValue(value) {
+      if (value === null || value === undefined) return "-";
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    }
+
+    document.getElementById("loadBtn").addEventListener("click", loadScenario);
+    document.getElementById("loadRegressionBtn").addEventListener("click", () => {
+      const value = document.getElementById("regressionSelect").value;
+      if (value) loadScenario(value);
+    });
+    document.getElementById("prevBtn").addEventListener("click", () => setIndex(index - 1));
+    document.getElementById("nextBtn").addEventListener("click", () => setIndex(index + 1));
+    document.getElementById("resetBtn").addEventListener("click", () => setIndex(0));
+    document.getElementById("runBtn").addEventListener("click", () => setIndex(frames.length - 1));
+    loadScenarioNames().then(loadScenario).catch(error => {
+      document.getElementById("overallBadge").className = "badge fail";
+      document.getElementById("overallBadge").textContent = `Load failed: ${error.message}`;
+    });
+  </script>
+</body>
+</html>

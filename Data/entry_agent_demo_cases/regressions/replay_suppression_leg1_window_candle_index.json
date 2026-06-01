@@ -1,0 +1,31 @@
+{
+  "case_name": "Regression - Replay suppression leg1 window candle index",
+  "scenario_type": "rejection",
+  "issue": "Replay suppression / leg1_window_candle_index",
+  "fixed_by_commit": "unknown-local-history",
+  "expected_result": "Published Leg 1 window state is preserved; at least one evaluated frame has leg1_window_candle_index = 1.",
+  "symbol": "NQ",
+  "date": "2026-05-14",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "candles": [
+    {"time": "2026-05-14T13:38:00Z", "open": 100.5, "high": 100.75, "low": 99.25, "close": 99.5},
+    {"time": "2026-05-14T13:39:00Z", "open": 99.5, "high": 101.25, "low": 99.25, "close": 100.75},
+    {"time": "2026-05-14T13:40:00Z", "open": 100.75, "high": 101.0, "low": 99.0, "close": 99.25},
+    {"time": "2026-05-14T13:41:00Z", "open": 99.25, "high": 100.75, "low": 98.75, "close": 100.25}
+  ],
+  "expected": [
+    {"time": "2026-05-14T13:38:00Z", "step": "Step 4", "pathway_type": "Rejection", "current_pathway_control": "rejection", "active_liquidity_name": "PML Liquidity", "setup_direction": "LONG", "leg1_state": "WAIT", "leg2_state": "WAIT", "leg1_window_candle_index": 0},
+    {"time": "2026-05-14T13:39:00Z", "step": "Step 5", "pathway_type": "Rejection", "current_pathway_control": "rejection", "active_liquidity_name": "PML Liquidity", "setup_direction": "LONG", "leg1_state": "COMPLETE", "leg2_state": "WAIT", "leg1_window_candle_index": 1},
+    {"time": "2026-05-14T13:40:00Z", "step": "Step 5", "pathway_type": "Rejection", "current_pathway_control": "rejection", "active_liquidity_name": "PML Liquidity", "setup_direction": "LONG", "leg1_state": "COMPLETE", "leg2_state": "CONFIRMED", "leg1_window_candle_index": 1},
+    {"time": "2026-05-14T13:41:00Z", "step": "Step 5", "pathway_type": "Rejection", "current_pathway_control": "rejection", "active_liquidity_name": "PML Liquidity", "setup_direction": "LONG", "leg1_state": "COMPLETE", "leg2_state": "COMPLETE", "step5_confirmed": true, "leg1_window_candle_index": 1}
+  ],
+  "notes": "Historical replay-audit regression fixture for published Leg 1 window fields."
+}

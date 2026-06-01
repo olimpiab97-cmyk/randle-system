@@ -70,6 +70,11 @@ Data/*
 !Data/
 !Data/entry_replay_audit_*.md
 !Data/entry_replay_regression_cases_*.json
+!Data/entry_agent_demo_cases/
+!Data/entry_agent_demo_cases/*.json
+!Data/entry_agent_demo_cases/**/
+!Data/entry_agent_demo_cases/**/*.json
+!Data/entry_agent_demo_cases/**/.gitkeep
 Data/*runtime*
 Data/*snapshot*
 Data/*state*

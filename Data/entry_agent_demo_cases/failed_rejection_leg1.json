@@ -1,0 +1,26 @@
+{
+  "case_name": "Failed rejection Leg 1 window invalidation",
+  "scenario_type": "rejection",
+  "symbol": "YM",
+  "date": "2026-05-28",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "candles": [
+    {"time": "2026-05-28T13:29:00Z", "open": 100.5, "high": 100.75, "low": 99.25, "close": 99.5},
+    {"time": "2026-05-28T13:30:00Z", "open": 99.5, "high": 99.75, "low": 99.25, "close": 99.4},
+    {"time": "2026-05-28T13:31:00Z", "open": 99.4, "high": 99.6, "low": 98.5, "close": 98.75}
+  ],
+  "expected": [
+    {"time": "2026-05-28T13:29:00Z", "step": "Step 4", "pathway_type": "Rejection", "current_pathway_control": "rejection", "setup_direction": "LONG", "leg1_state": "WAIT", "leg2_state": "WAIT"},
+    {"time": "2026-05-28T13:30:00Z", "step": "Step 5", "pathway_type": "Rejection", "current_pathway_control": "rejection", "setup_direction": "LONG", "leg1_state": "COMPLETE", "leg2_state": "WAIT"},
+    {"time": "2026-05-28T13:31:00Z", "step": "Step 5", "pathway_type": "Rejection", "current_pathway_control": "rejection", "setup_direction": "LONG", "leg1_state": "WAIT", "leg2_state": "WAIT", "invalidation_reason": "Anchor Extreme close invalidation occurred before Leg 2 activation."}
+  ],
+  "notes": "Synthetic failed rejection case where Leg 2 invalidates by closing through the Anchor Extreme before activation."
+}
