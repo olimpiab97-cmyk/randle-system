@@ -178,6 +178,9 @@ def suppress_unconfirmed_step2_pathway(record: dict[str, Any], close_confirmed: 
     record["current_pathway_control"] = "inactive"
     record["current_controlling_mode"] = None
     record["current_continuation_type"] = "none"
+    has_published_window = record.get("leg1_window_candle_index") is not None
+    if has_published_window:
+        return
     record["leg1_window_active"] = False
     record["leg1_window_started_at"] = None
     record["leg1_window_candle_index"] = None
@@ -494,6 +497,19 @@ def audit_records(
         close_confirmed = bool(candle_minute and bar)
         record = project_public_record(record, bars_for_symbol, candle_minute, last_leg1_complete_minute.get(symbol))
         record["active_liquidity_name"] = ordered_stack_display_name(record.get("active_liquidity_name"))
+        step2_window_seed = None
+        if (
+            record.get("step") == "Step 2"
+            and record.get("active_liquidity_name")
+            and record.get("rejection_mode_entered")
+            and candle_minute
+        ):
+            step2_window_seed = {
+                "active_liquidity_name": record.get("active_liquidity_name"),
+                "liquidity_price": record.get("liquidity_price"),
+                "side": level_side(str(record.get("active_liquidity_name") or "")),
+                "candle": record_candle(record),
+            }
         suppress_unconfirmed_step2_pathway(record, close_confirmed)
         window_state = leg1_window_state.get(symbol)
         has_logged_window = record.get("leg1_window_candle_index") is not None
@@ -569,7 +585,7 @@ def audit_records(
                             record["leg1_window_invalidation_reason"] = record.get("invalidation_reason")
                 if record.get("leg1_window_invalidated") is True:
                     leg1_window_state.pop(symbol, None)
-            elif record.get("step") == "Step 2" and record.get("active_liquidity_name") and record.get("rejection_mode_entered") and candle_minute:
+            elif record.get("step") == "Step 2" and step2_window_seed and candle_minute:
                 existing_delta = minute_delta(window_state.get("activation_minute"), candle_minute) if window_state else None
                 if existing_delta is not None and existing_delta > 4:
                     window_state = None
@@ -582,10 +598,10 @@ def audit_records(
                         "activation_minute": candle_minute,
                         "started_at": started_at,
                         "expires_at": expires_at,
-                        "candle_a": record_candle(record),
-                        "active_liquidity_name": record.get("active_liquidity_name"),
-                        "liquidity_price": record.get("liquidity_price"),
-                        "side": level_side(str(record.get("active_liquidity_name") or "")),
+                        "candle_a": step2_window_seed.get("candle"),
+                        "active_liquidity_name": step2_window_seed.get("active_liquidity_name"),
+                        "liquidity_price": step2_window_seed.get("liquidity_price"),
+                        "side": step2_window_seed.get("side"),
                     }
                     leg1_window_state[symbol] = window_state
                 index = minute_delta(window_state.get("activation_minute"), candle_minute)
