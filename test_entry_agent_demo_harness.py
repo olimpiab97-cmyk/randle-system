@@ -155,15 +155,23 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
 
         actual = [frame["actual"] for frame in result["frames"]]
 
-        self.assertEqual(actual[0]["rejection_leg1_progress_pct"], 30)
-        self.assertEqual(actual[0]["rejection_leg1_50_reached"], "NO")
-        self.assertEqual(actual[1]["rejection_leg1_progress_pct"], 60)
-        self.assertEqual(actual[1]["rejection_leg1_50_reached"], "YES")
-        self.assertLess(actual[1]["rejection_leg1_progress_pct"], 75)
+        candle0 = result["frames"][0]["candle"]
+        close_based_leg1_frame0 = self.harness.travel_progress_percent(100.0, 90.0, candle0["close"])
+        self.assertEqual(actual[0]["leg1_state"], "WAIT")
+        self.assertLess(close_based_leg1_frame0, 50)
+        self.assertEqual(actual[0]["rejection_leg1_progress_pct"], 50)
+        self.assertEqual(actual[0]["rejection_leg1_50_reached"], "YES")
+        self.assertLess(actual[0]["rejection_leg1_progress_pct"], 75)
 
-        self.assertEqual(actual[1]["rejection_leg2_progress_pct"], 58)
-        self.assertEqual(actual[1]["rejection_leg2_75_reached"], "NO")
-        self.assertGreaterEqual(actual[1]["rejection_leg2_progress_pct"], 50)
+        self.assertEqual(actual[1]["rejection_leg1_progress_pct"], 80)
+        self.assertEqual(actual[1]["rejection_leg1_50_reached"], "YES")
+
+        candle1 = result["frames"][1]["candle"]
+        close_based_leg2_frame1 = self.harness.travel_progress_percent(99.5, 90.0, candle1["close"])
+        self.assertEqual(actual[1]["leg2_state"], "WAIT")
+        self.assertLess(close_based_leg2_frame1, 75)
+        self.assertEqual(actual[1]["rejection_leg2_progress_pct"], 79)
+        self.assertEqual(actual[1]["rejection_leg2_75_reached"], "YES")
         self.assertEqual(actual[2]["rejection_leg2_progress_pct"], 79)
         self.assertEqual(actual[2]["rejection_leg2_75_reached"], "YES")
 
