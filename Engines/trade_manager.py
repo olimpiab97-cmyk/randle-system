@@ -777,7 +777,8 @@ def update_pnl_totals(trade, current_price=None):
 
 
 def apply_closed_trade_accounting(trade):
-    if trade.get("status") != "closed":
+    status = str(trade.get("status") or "").lower()
+    if status not in {"closed", "archived"} and trade.get("archived") is not True:
         return trade
     update_profit_breakdown(trade, include_runner=trade.get("exit_price") is not None)
     total = coerce_float(trade.get("total_profit"))
@@ -1424,7 +1425,8 @@ def public_trade_dict(trade):
                 has_profit = True
         if has_profit:
             normalized["total_profit"] = round(total, 2)
-    if normalized.get("status") == "closed":
+    status = str(normalized.get("status") or "").lower()
+    if status in {"closed", "archived"} or normalized.get("archived") is True:
         apply_closed_trade_accounting(normalized)
     else:
         update_pnl_totals(normalized)
