@@ -75,6 +75,8 @@ class TradeManagerPnlAccountingTests(unittest.TestCase):
         self.assertEqual(closed["status"], "closed")
         self.assertEqual(closed["exit_reason"], "flatten_symbol")
         self.assertEqual(closed["exit_price"], 20720.0)
+        self.assertEqual(closed["runner_exit_price"], 20720.0)
+        self.assertEqual(closed["runner_exit_price_source"], "last_price")
         self.assertEqual(closed["tp1_profit"], 560.0)
         self.assertEqual(closed["runner_profit"], 5600.0)
         self.assertEqual(closed["total_profit"], 6160.0)
@@ -118,6 +120,8 @@ class TradeManagerPnlAccountingTests(unittest.TestCase):
         archived = manager.public_trade_dict(closed)
 
         self.assertEqual(closed["exit_reason"], "flatten_symbol")
+        self.assertEqual(closed["runner_exit_price"], 30439.75)
+        self.assertEqual(closed["runner_exit_price_source"], "filled_price")
         self.assertEqual(closed["tp1_profit"], 480.0)
         self.assertEqual(closed["runner_profit"], 0.0)
         self.assertEqual(closed["realized_pnl"], 480.0)
@@ -129,6 +133,57 @@ class TradeManagerPnlAccountingTests(unittest.TestCase):
         self.assertEqual(archived["total_profit"], 480.0)
         self.assertEqual(archived["result"], "WIN")
         self.assertEqual(archived["r_multiple"], 1.0)
+
+    def test_tp1_then_runner_flatten_uses_actual_fill_for_full_trade_pnl(self):
+        manager = self._load_manager()
+        trade = {
+            "trade_id": "T-NQ-FULL-FLATTEN-PNL",
+            "status": "active",
+            "symbol": "NQ",
+            "direction": "long",
+            "entry_price": 30439.75,
+            "original_stop": 30415.75,
+            "current_stop": 30415.75,
+            "position_size": 2,
+            "remaining_size": 1,
+            "tp1_hit": True,
+            "tp1_filled_qty": 1,
+            "tp1_exit_price": 30463.75,
+            "tp1_price": 30463.75,
+            "realized_pnl": 0.0,
+            "total_pnl": 0.0,
+            "total_profit": 0.0,
+        }
+        evidence_order = {
+            "order_id": "FLAT-NQ-ACTUAL",
+            "trade_id": trade["trade_id"],
+            "status": "closed",
+            "closed_reason": "flatten_symbol",
+            "closed_at": "2026-06-02T16:03:12Z",
+            "filled_price": 30611.0,
+        }
+
+        closed = manager.close_trade_from_executor_flatten_evidence(trade, evidence_order)
+        archived = manager.public_trade_dict(closed)
+
+        self.assertEqual(closed["exit_reason"], "flatten_symbol")
+        self.assertEqual(closed["exit_price"], 30611.0)
+        self.assertEqual(closed["runner_exit_price"], 30611.0)
+        self.assertEqual(closed["runner_exit_price_source"], "filled_price")
+        self.assertEqual(closed["tp1_profit"], 480.0)
+        self.assertEqual(closed["runner_profit"], 3425.0)
+        self.assertEqual(closed["total_profit"], 3905.0)
+        self.assertEqual(closed["realized_pnl"], 3905.0)
+        self.assertEqual(closed["total_pnl"], 3905.0)
+        self.assertEqual(closed["result"], "WIN")
+        self.assertEqual(closed["r_multiple"], 4.0677)
+        self.assertEqual(archived["runner_exit_price"], 30611.0)
+        self.assertEqual(archived["runner_profit"], 3425.0)
+        self.assertEqual(archived["total_profit"], 3905.0)
+        self.assertEqual(archived["realized_pnl"], 3905.0)
+        self.assertEqual(archived["total_pnl"], 3905.0)
+        self.assertEqual(archived["result"], "WIN")
+        self.assertEqual(archived["r_multiple"], 4.0677)
 
     def test_tp1_then_runner_original_stop_archives_tp1_profit_plus_runner_loss(self):
         manager = self._load_manager()
@@ -261,6 +316,63 @@ class TradeManagerPnlAccountingTests(unittest.TestCase):
         self.assertEqual(serialized["total_pnl"], 480.0)
         self.assertEqual(serialized["result"], "WIN")
         self.assertEqual(serialized["r_multiple"], 0.5)
+
+    def test_kpi_serialization_repairs_stale_flatten_stop_exit_from_last_price(self):
+        manager = self._load_manager()
+        stale_closed = {
+            "trade_id": "T-ce62f567",
+            "status": "closed",
+            "archived": True,
+            "symbol": "NQM6",
+            "direction": "long",
+            "entry_price": 30439.75,
+            "original_stop": 30415.75,
+            "current_stop": 30415.75,
+            "position_size": 2,
+            "remaining_size": 0,
+            "exit_reason": "flatten_symbol",
+            "exit_price": 30415.75,
+            "closed_at": "2026-06-02T09:03:12.390174",
+            "last_price": 30611.0,
+            "last_price_at": "2026-06-02T16:03:12Z",
+            "tp1_hit": True,
+            "tp1_filled_qty": 1,
+            "tp1_exit_price": 30463.75,
+            "tp1_price": 30463.75,
+            "tp1_profit": 480.0,
+            "runner_profit": -480.0,
+            "total_profit": 0.0,
+            "realized_pnl": 0.0,
+            "total_pnl": 0.0,
+            "result": "BE",
+            "r_multiple": 0.0,
+        }
+
+        serialized = manager.public_trade_dict(stale_closed)
+
+        self.assertEqual(serialized["exit_price"], 30611.0)
+        self.assertEqual(serialized["runner_exit_price"], 30611.0)
+        self.assertEqual(serialized["runner_exit_price_source"], "trade_last_price")
+        self.assertEqual(serialized["tp1_profit"], 480.0)
+        self.assertEqual(serialized["runner_profit"], 3425.0)
+        self.assertEqual(serialized["total_profit"], 3905.0)
+        self.assertEqual(serialized["realized_pnl"], 3905.0)
+        self.assertEqual(serialized["total_pnl"], 3905.0)
+        self.assertEqual(serialized["result"], "WIN")
+        self.assertEqual(serialized["r_multiple"], 4.0677)
+
+        rows = [{"pnl": serialized["total_profit"]}]
+        total_pnl = sum(row["pnl"] for row in rows)
+        starting_equity = 100000.0
+        equity_points = [starting_equity]
+        cumulative = 0.0
+        for row in rows:
+            cumulative += row["pnl"]
+            equity_points.append(starting_equity + cumulative)
+
+        self.assertEqual(total_pnl, 3905.0)
+        self.assertEqual(equity_points[-1], 103905.0)
+        self.assertEqual(max(row["pnl"] for row in rows), 3905.0)
 
     def test_archived_tp1_runner_flatten_backfills_full_accounting(self):
         manager = self._load_manager()

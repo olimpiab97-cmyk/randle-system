@@ -274,6 +274,16 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .kpi-link-button {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #67e8f9;
+      font-size: 12px;
+      text-decoration: underline;
+    }
     .kpi-screenshot-thumb {
       display: block;
       width: 74px;
@@ -284,6 +294,14 @@
       border: 1px solid #334155;
       background: #0a111b;
       cursor: zoom-in;
+    }
+    .kpi-screenshot-debug {
+      margin-top: 6px;
+      max-width: 260px;
+      white-space: normal;
+      color: #facc15;
+      font-size: 11px;
+      line-height: 1.35;
     }
     .kpi-lightbox {
       position: fixed;
@@ -1225,6 +1243,11 @@
       <div class="metric-subtext" id="metricWorkingOrdersSub">Waiting for data</div>
     </div>
     <div class="metric-card">
+      <div class="metric-label">Profit</div>
+      <div class="metric-value" id="metricProfit">--</div>
+      <div class="metric-subtext" id="metricProfitSub">Waiting for data</div>
+    </div>
+    <div class="metric-card">
       <div class="metric-label">Paper Balance</div>
       <div class="metric-value" id="metricPaperBalance">--</div>
       <div class="metric-subtext" id="metricPaperBalanceSub">Waiting for data</div>
@@ -1460,7 +1483,8 @@
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Time</th>
+                <th>Entry Time</th>
+                <th>Exit Time</th>
                 <th>Symbol</th>
                 <th>Rejection/Continuation</th>
                 <th>Pathway</th>
@@ -1541,6 +1565,7 @@
     const previousLivePriceBySymbol = {};
     const livePulseBySymbol = {};
     const kpiScreenshotByTradeId = {};
+    const kpiScreenshotDebugByTradeId = {};
     const DEMO_LIVE_MAP_TRADES = [
       {
         trade_id: "DEMO-NQ",
@@ -1922,6 +1947,29 @@
       ]);
     }
 
+    function getKpiEntryTimeValue(trade) {
+      return firstKpiValue(trade, [
+        "created_at",
+        "opened_at",
+        "entry_time",
+        "submitted_at",
+        "entry_filled_at",
+        "filled_at",
+        "last_price_at",
+        "closed_at"
+      ]);
+    }
+
+    function getKpiExitTimeValue(trade) {
+      return firstKpiValue(trade, [
+        "closed_at",
+        "exit_at",
+        "exited_at",
+        "close_time",
+        "exit_time"
+      ]);
+    }
+
     function formatKpiDate(value) {
       if (!value) return EMPTY_FIELD;
       const date = new Date(value);
@@ -2029,11 +2077,36 @@
     }
 
     function getCurrentSyntheticEquity(startingEquity, totalPnl) {
-      if (latestAccountSnapshot && latestAccountSnapshot.ok === true) {
-        const candidate = toFiniteNumber(firstKpiValue(latestAccountSnapshot, ["balance", "net_liq", "cash_balance"]));
-        if (candidate !== null) return candidate;
-      }
       return startingEquity + totalPnl;
+    }
+
+    function getNormalizedClosedKpiRows(payload = latestTradesPayload) {
+      return buildKpiRows(getClosedJournalTrades(payload) || []);
+    }
+
+    function getNormalizedClosedProfit(payload = latestTradesPayload) {
+      return getNormalizedClosedKpiRows(payload)
+        .map((row) => row.pnl)
+        .filter((value) => value !== null)
+        .reduce((sum, value) => sum + value, 0);
+    }
+
+    function isPaperOrLocalAccounting(snapshot = latestAccountSnapshot) {
+      const mode = String(
+        firstKpiValue(latestRiskPayload || {}, ["operating_mode", "mode", "environment"])
+        || firstKpiValue(snapshot || {}, ["operating_mode", "mode", "environment", "account_mode"])
+        || ""
+      ).toLowerCase();
+      const broker = String(
+        firstKpiValue(snapshot || {}, ["broker", "broker_adapter", "adapter", "execution_adapter"])
+        || ""
+      ).toLowerCase();
+      const source = String(firstKpiValue(snapshot || {}, ["source", "reason"]) || "").toLowerCase();
+      if (mode.includes("paper") || mode.includes("local") || mode.includes("qa")) return true;
+      if (broker.includes("local") || broker.includes("paper")) return true;
+      if (source.includes("paper") || source.includes("synthetic")) return true;
+      return Object.values((latestTradesPayload && latestTradesPayload.trades) || {})
+        .some((trade) => String(firstKpiValue(trade, ["broker_adapter", "execution_adapter"]) || "").toLowerCase().includes("local"));
     }
 
     function renderKpiSummary(items) {
@@ -2053,9 +2126,64 @@
       container.replaceChildren(fragment);
     }
 
+    function normalizeKpiScreenshot(trade) {
+      const screenshot = trade && trade.screenshot && typeof trade.screenshot === "object"
+        ? trade.screenshot
+        : null;
+      const filename = firstKpiValue(screenshot || {}, ["filename", "original_filename"])
+        || firstKpiValue(trade, ["screenshot_filename"]);
+      const url = firstKpiValue(screenshot || {}, ["url"])
+        || firstKpiValue(trade, ["screenshot_url"]);
+      if (!filename && !url) return null;
+      return {
+        filename: filename || "Screenshot",
+        url: url && String(url).startsWith("/") ? `${TM_BASE}${url}` : url,
+        objectUrl: false
+      };
+    }
+
+    function hydrateKpiScreenshotsFromTrades(trades) {
+      for (const trade of trades) {
+        const tradeId = firstKpiValue(trade, ["trade_id", "id"]);
+        if (tradeId === null) continue;
+        const key = String(tradeId);
+        const screenshot = normalizeKpiScreenshot(trade);
+        if (screenshot) {
+          const existing = kpiScreenshotByTradeId[key];
+          if (existing && existing.objectUrl && existing.url) {
+            URL.revokeObjectURL(existing.url);
+          }
+          kpiScreenshotByTradeId[key] = screenshot;
+        }
+      }
+    }
+
+    function applyUploadedScreenshotToTradePayload(tradeId, screenshot) {
+      const key = String(tradeId || "");
+      if (!key || !screenshot || !latestTradesPayload || !latestTradesPayload.trades) return;
+      const trade = latestTradesPayload.trades[key];
+      if (!trade) return;
+      trade.screenshot = screenshot;
+      trade.screenshot_filename = screenshot.filename || null;
+      trade.screenshot_url = screenshot.url || null;
+      trade.screenshot_path = screenshot.path || null;
+      trade.screenshot_uploaded_at = screenshot.uploaded_at || null;
+    }
+
+    function setKpiScreenshotDebug(tradeId, message, details = null) {
+      const key = String(tradeId || "");
+      if (!key) return;
+      const suffix = details === null ? "" : ` | ${typeof details === "string" ? details : JSON.stringify(details)}`;
+      kpiScreenshotDebugByTradeId[key] = `${new Date().toLocaleTimeString()} ${message}${suffix}`;
+      console.info("[KPI screenshot]", key, message, details || "");
+      renderKpiJournal(buildKpiRows(getClosedJournalTrades() || []));
+    }
+
     function buildKpiRows(trades) {
       return trades.map((trade, index) => {
         const timestamp = getClosedTradeTimeValue(trade);
+        const entryTime = getKpiEntryTimeValue(trade);
+        const exitTime = getKpiExitTimeValue(trade);
         const pnl = getKpiPnl(trade);
         const rMultiple = getKpiRMultiple(trade, pnl);
         const pathwayRaw = firstKpiValue(trade, ["pathway", "continuation_type", "sr_rs_context", "setup_pathway"]);
@@ -2067,7 +2195,8 @@
           rMultiple,
           cells: [
             formatKpiDate(timestamp),
-            formatKpiTime(timestamp),
+            formatKpiTime(entryTime),
+            formatKpiTime(exitTime),
             displayKpiField(firstKpiValue(trade, ["symbol", "execution_symbol", "requested_symbol"])),
             displayKpiField(firstKpiValue(trade, ["rejection_continuation", "setup_type", "entry_type", "trade_type"])),
             displayKpiField(pathwayRaw === null ? null : entryAgentPathwayDisplay(pathwayRaw)),
@@ -2079,7 +2208,7 @@
             formatKpiPrice(firstKpiValue(trade, ["original_stop", "initial_stop", "stop_price", "current_stop"])),
             formatKpiPrice(beValue),
             formatKpiPrice(firstKpiValue(trade, ["tp1_price", "target_price", "take_profit_price"])),
-            formatKpiPrice(firstKpiValue(trade, ["exit_price", "close_price", "last_price", "avg_exit_price"])),
+            formatKpiPrice(firstKpiValue(trade, ["runner_exit_price", "exit_price", "close_price", "last_price", "avg_exit_price"])),
             displayKpiField(firstKpiValue(trade, ["exit_reason", "close_reason", "reason"])),
             displayKpiField(tradeIdValue)
           ],
@@ -2091,15 +2220,21 @@
     function renderKpiScreenshotCell(tradeId) {
       const key = String(tradeId || "");
       const screenshot = kpiScreenshotByTradeId[key] || null;
-      const label = screenshot ? screenshot.filename : "No screenshot";
+      const label = screenshot ? "View" : "No screenshot";
+      const title = screenshot ? (screenshot.filename || "Screenshot") : "No screenshot";
       const thumbMarkup = screenshot && screenshot.url
         ? `<img class="kpi-screenshot-thumb" src="${escapeHtml(screenshot.url)}" alt="${escapeHtml(screenshot.filename)}" data-kpi-screenshot-preview="${escapeHtml(key)}" />`
         : "";
+      const linkMarkup = screenshot && screenshot.url
+        ? `<button type="button" class="kpi-link-button" data-kpi-screenshot-preview="${escapeHtml(key)}">${escapeHtml(label)}</button>`
+        : `<div class="kpi-screenshot-placeholder" title="${escapeHtml(title)}">${escapeHtml(label)}</div>`;
+      const debug = kpiScreenshotDebugByTradeId[key] || "";
       return `
         <td class="kpi-screenshot-cell">
           <button type="button" class="kpi-attach-button" data-kpi-attach="${escapeHtml(key)}">Attach</button>
-          <div class="kpi-screenshot-placeholder" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+          <div class="kpi-screenshot-placeholder" title="${escapeHtml(title)}">${linkMarkup}</div>
           ${thumbMarkup}
+          ${debug ? `<div class="kpi-screenshot-debug">${escapeHtml(debug)}</div>` : ""}
           <input type="file" accept="image/*" data-kpi-file-input="${escapeHtml(key)}" hidden />
         </td>
       `;
@@ -2111,7 +2246,7 @@
       const fragment = document.createDocumentFragment();
       if (!rows.length) {
         const row = document.createElement("tr");
-        row.innerHTML = `<td colspan="17">${EMPTY_FIELD}</td>`;
+        row.innerHTML = `<td colspan="18">${EMPTY_FIELD}</td>`;
         fragment.appendChild(row);
       } else {
         for (const item of rows) {
@@ -2215,20 +2350,105 @@
       lightbox.setAttribute("aria-hidden", "false");
     }
 
-    function handleKpiScreenshotFile(tradeId, file) {
+    async function uploadKpiScreenshotFile(tradeId, file) {
+      const key = String(tradeId || "");
+      const form = new FormData();
+      form.append("screenshot", file);
+      const formFile = form.get("screenshot");
+      const url = `${TM_BASE}/trades/${encodeURIComponent(key)}/screenshot`;
+      setKpiScreenshotDebug(key, "upload started", {
+        url,
+        hasFile: Boolean(formFile),
+        filename: formFile && formFile.name,
+        size: formFile && formFile.size
+      });
+      const res = await fetch(url, {
+        method: "POST",
+        body: form,
+        cache: "no-store"
+      });
+      setKpiScreenshotDebug(key, "POST completed", { status: res.status, ok: res.ok });
+      const text = await res.text();
+      let response = null;
+      try {
+        response = JSON.parse(text);
+      } catch {
+        response = { ok: false, raw: text, status: res.status };
+      }
+      setKpiScreenshotDebug(key, "backend JSON response", response);
+      if (!response || response.ok === false) {
+        throw new Error((response && (response.error || response.message || response.raw)) || "screenshot_upload_failed");
+      }
+      setKpiScreenshotDebug(key, response.screenshot && response.screenshot.url ? "screenshot_url received" : "screenshot_url missing", {
+        screenshot_url: response.screenshot && response.screenshot.url
+      });
+      return response.screenshot || null;
+    }
+
+    async function verifyKpiScreenshotFromTrades(tradeId) {
+      const key = String(tradeId || "");
+      const data = await fetchJson(`${TM_BASE}/trades`);
+      if (data && data.ok !== false) {
+        latestTradesPayload = data;
+      }
+      const trade = data && data.trades && data.trades[key];
+      const screenshotUrl = trade && (trade.screenshot_url || (trade.screenshot && trade.screenshot.url));
+      setKpiScreenshotDebug(key, screenshotUrl ? "/trades returned screenshot_url" : "/trades missing screenshot_url", {
+        screenshot_url: screenshotUrl || null
+      });
+      return { data, trade, screenshotUrl };
+    }
+
+    async function handleKpiScreenshotFile(tradeId, file) {
       const key = String(tradeId || "");
       if (!key || !file || !String(file.type || "").startsWith("image/")) {
+        setKpiScreenshotDebug(key, "file selection ignored", {
+          hasTradeId: Boolean(key),
+          hasFile: Boolean(file),
+          type: file && file.type
+        });
         return;
       }
+      setKpiScreenshotDebug(key, "file selected", { filename: file.name, type: file.type, size: file.size });
       const existing = kpiScreenshotByTradeId[key];
-      if (existing && existing.url) {
+      if (existing && existing.url && existing.objectUrl) {
         URL.revokeObjectURL(existing.url);
       }
       kpiScreenshotByTradeId[key] = {
         filename: file.name || "Selected image",
-        url: URL.createObjectURL(file)
+        url: URL.createObjectURL(file),
+        objectUrl: true
       };
       renderKpiPanel();
+      try {
+        const uploaded = await uploadKpiScreenshotFile(key, file);
+        if (uploaded) {
+          const preview = kpiScreenshotByTradeId[key];
+          if (preview && preview.objectUrl && preview.url) {
+            URL.revokeObjectURL(preview.url);
+          }
+          kpiScreenshotByTradeId[key] = {
+            filename: uploaded.original_filename || uploaded.filename || file.name || "Screenshot",
+            url: uploaded.url && String(uploaded.url).startsWith("/") ? `${TM_BASE}${uploaded.url}` : uploaded.url,
+            objectUrl: false
+          };
+          applyUploadedScreenshotToTradePayload(key, uploaded);
+          setKpiScreenshotDebug(key, "rerender triggered after upload");
+          renderKpiPanel();
+          await verifyKpiScreenshotFromTrades(key);
+          setKpiScreenshotDebug(key, "rerender triggered after /trades verification");
+          renderKpiPanel();
+        }
+      } catch (error) {
+        console.error("[KPI screenshot] upload failed", error);
+        const current = kpiScreenshotByTradeId[key];
+        if (current && current.objectUrl && current.url) {
+          URL.revokeObjectURL(current.url);
+        }
+        delete kpiScreenshotByTradeId[key];
+        renderKpiPanel();
+        window.alert(`Screenshot upload failed: ${error.message || error}`);
+      }
     }
 
     function getKpiFileInput(tradeId) {
@@ -2248,6 +2468,7 @@
       }
 
       const trades = getClosedJournalTrades(payload) || [];
+      hydrateKpiScreenshotsFromTrades(trades);
       const rows = buildKpiRows(trades);
       const pnls = rows.map((row) => row.pnl).filter((value) => value !== null);
       const rValues = rows.map((row) => row.rMultiple).filter((value) => value !== null);
@@ -2655,24 +2876,33 @@
     }
 
     function renderAccountSnapshot(snapshot) {
-      if (!snapshot || snapshot.ok !== true) {
-        setMetric("metricPaperBalance", "--", "Paper balance unavailable");
+      const closedProfit = getNormalizedClosedProfit();
+      const startingEquity = getKpiStartingEquity();
+      const syntheticBalance = getCurrentSyntheticEquity(startingEquity, closedProfit);
+      const paperOrLocal = isPaperOrLocalAccounting(snapshot);
+      const details = [];
+      details.push(`Profit ${formatMoney(closedProfit)}`);
+      setMetric("metricProfit", formatMoney(closedProfit), "Normalized closed trades");
+
+      if (!paperOrLocal && snapshot && snapshot.ok === true) {
+        const balance = toFiniteNumber(snapshot.balance);
+        const cashBalance = toFiniteNumber(snapshot.cash_balance);
+        const netLiq = toFiniteNumber(snapshot.net_liq);
+        const displayBalance = balance !== null ? balance : (cashBalance !== null ? cashBalance : netLiq);
+        if (netLiq !== null) details.unshift(`Net liq ${formatMoney(netLiq)}`);
+        setMetric(
+          "metricPaperBalance",
+          displayBalance === null ? formatMoney(syntheticBalance) : formatMoney(displayBalance),
+          details.join(" | ")
+        );
         renderKpiPanel();
         return;
       }
 
-      const balance = toFiniteNumber(snapshot.balance);
-      const cashBalance = toFiniteNumber(snapshot.cash_balance);
-      const netLiq = toFiniteNumber(snapshot.net_liq);
-      const unrealizedPnl = toFiniteNumber(snapshot.unrealized_pnl);
-      const displayBalance = balance !== null ? balance : (cashBalance !== null ? cashBalance : netLiq);
-      const details = [];
-      if (netLiq !== null) details.push(`Net liq ${formatMoney(netLiq)}`);
-      if (unrealizedPnl !== null) details.push(`Open P/L ${formatMoney(unrealizedPnl)}`);
       setMetric(
         "metricPaperBalance",
-        displayBalance === null ? "--" : formatMoney(displayBalance),
-        details.length ? details.join(" | ") : "Paper account telemetry"
+        formatMoney(syntheticBalance),
+        details.join(" | ")
       );
       renderKpiPanel();
     }
@@ -3517,6 +3747,7 @@
       const sequence = metadata.sequence ?? "n/a";
       $("tradesRenderMeta").textContent = `Polling active | last render ${renderedAt} | payload ${payloadSize} trades | ${orphanTrades.length} orphan | seq ${sequence}`;
       renderKpiPanel(data);
+      renderAccountSnapshot(latestAccountSnapshot);
       updateDashboardSummary();
     }
 
@@ -4283,11 +4514,11 @@
         openKpiLightbox(preview.getAttribute("data-kpi-screenshot-preview"));
       }
     });
-    $("kpiJournalBody").addEventListener("change", (event) => {
+    $("kpiJournalBody").addEventListener("change", async (event) => {
       const input = event.target.closest("[data-kpi-file-input]");
       if (!input) return;
       const file = input.files && input.files[0];
-      handleKpiScreenshotFile(input.getAttribute("data-kpi-file-input"), file);
+      await handleKpiScreenshotFile(input.getAttribute("data-kpi-file-input"), file);
       input.value = "";
     });
     $("kpiJournalBody").addEventListener("error", (event) => {
@@ -4295,7 +4526,7 @@
       if (!image) return;
       const tradeId = image.getAttribute("data-kpi-screenshot-preview");
       const screenshot = kpiScreenshotByTradeId[String(tradeId || "")];
-      if (screenshot && screenshot.url) {
+      if (screenshot && screenshot.url && screenshot.objectUrl) {
         URL.revokeObjectURL(screenshot.url);
       }
       delete kpiScreenshotByTradeId[String(tradeId || "")];

@@ -645,6 +645,8 @@ TRADE_PUBLIC_FIELDS = [
     "be_trigger_processed_at",
     "be_duplicate_trigger_suppressed_count",
     "remaining_size",
+    "runner_exit_price",
+    "runner_exit_price_source",
     "exit_price",
     "exit_reason",
     "closed_at",
@@ -780,7 +782,16 @@ def apply_closed_trade_accounting(trade):
     status = str(trade.get("status") or "").lower()
     if status not in {"closed", "archived"} and trade.get("archived") is not True:
         return trade
-    update_profit_breakdown(trade, include_runner=trade.get("exit_price") is not None)
+    repair_flatten_runner_exit_price(trade)
+    exit_reason = str(trade.get("exit_reason") or trade.get("closed_reason") or "").strip().lower()
+    update_profit_breakdown(
+        trade,
+        include_runner=(
+            trade.get("exit_price") is not None
+            or trade.get("runner_exit_price") is not None
+            or exit_reason in FLATTEN_EXIT_REASONS
+        ),
+    )
     total = coerce_float(trade.get("total_profit"))
     if total is None:
         total = coerce_float(trade.get("realized_pnl"))
@@ -1219,7 +1230,10 @@ def calculate_tp1_profit(trade):
 
 
 def calculate_runner_profit(trade):
-    if trade.get("exit_price") is None:
+    exit_price = trade.get("runner_exit_price")
+    if exit_price is None:
+        exit_price = trade.get("exit_price")
+    if exit_price is None:
         return None
 
     try:
@@ -1232,11 +1246,11 @@ def calculate_runner_profit(trade):
     if runner_qty <= 0:
         return 0.0
 
-    return calculate_trade_leg_profit(trade, trade.get("exit_price"), runner_qty)
+    return calculate_trade_leg_profit(trade, exit_price, runner_qty)
 
 
-def resolve_runner_flatten_exit_price(trade, evidence_order):
-    """Return the price to use for a runner closed by flatten evidence."""
+def resolve_runner_flatten_exit_price_with_source(trade, evidence_order):
+    """Return the price and source to use for a runner closed by flatten evidence."""
     for field in (
         "filled_price",
         "fill_price",
@@ -1250,19 +1264,24 @@ def resolve_runner_flatten_exit_price(trade, evidence_order):
         if value is None:
             continue
         try:
-            return float(value)
+            return float(value), field
         except (TypeError, ValueError):
             continue
 
-    for field in ("last_price", "exit_price"):
+    for field in ("last_price",):
         value = trade.get(field)
         if value is None:
             continue
         try:
-            return float(value)
+            return float(value), f"trade_{field}"
         except (TypeError, ValueError):
             continue
-    return None
+    return None, None
+
+
+def resolve_runner_flatten_exit_price(trade, evidence_order):
+    price, _source = resolve_runner_flatten_exit_price_with_source(trade, evidence_order)
+    return price
 
 
 FLATTEN_EXIT_REASONS = {
@@ -1287,7 +1306,10 @@ def prices_match(price_a, price_b, symbol=None):
 
 
 def runner_exit_price_is_reliable(trade):
-    if trade.get("exit_price") is None:
+    exit_price = trade.get("runner_exit_price")
+    if exit_price is None:
+        exit_price = trade.get("exit_price")
+    if exit_price is None:
         return False
 
     exit_reason = str(trade.get("exit_reason") or trade.get("closed_reason") or "").strip().lower()
@@ -1295,13 +1317,56 @@ def runner_exit_price_is_reliable(trade):
         return True
 
     source = str(trade.get("runner_exit_price_source") or trade.get("exit_price_source") or "").strip().lower()
-    if source in {"flatten_evidence", "filled_price", "fill_price", "avg_fill_price", "average_fill_price", "closed_price", "last_price"}:
+    if source in {
+        "filled_price",
+        "fill_price",
+        "avg_fill_price",
+        "average_fill_price",
+        "closed_price",
+        "exit_price",
+        "last_price",
+        "trade_last_price",
+        "executor_snapshot_last_price",
+    }:
         return True
 
     for stop_field in ("original_stop", "current_stop", "stop_price"):
-        if prices_match(trade.get("exit_price"), trade.get(stop_field), trade.get("symbol")):
+        if prices_match(exit_price, trade.get(stop_field), trade.get("symbol")):
             return False
     return True
+
+
+def repair_flatten_runner_exit_price(trade):
+    exit_reason = str(trade.get("exit_reason") or trade.get("closed_reason") or "").strip().lower()
+    if exit_reason not in FLATTEN_EXIT_REASONS:
+        return trade
+
+    if trade.get("runner_exit_price") is not None and runner_exit_price_is_reliable(trade):
+        trade["exit_price"] = trade["runner_exit_price"]
+        return trade
+
+    source = str(trade.get("runner_exit_price_source") or trade.get("exit_price_source") or "").strip().lower()
+    if source and runner_exit_price_is_reliable(trade):
+        trade["runner_exit_price"] = trade.get("exit_price")
+        return trade
+
+    last_price = coerce_float(trade.get("last_price"))
+    if last_price is not None:
+        matches_stop = any(
+            prices_match(last_price, trade.get(stop_field), trade.get("symbol"))
+            for stop_field in ("original_stop", "current_stop", "stop_price")
+        )
+        if not matches_stop:
+            trade["runner_exit_price"] = last_price
+            trade["runner_exit_price_source"] = "trade_last_price"
+            trade["exit_price"] = last_price
+            return trade
+
+    if not runner_exit_price_is_reliable(trade):
+        trade["runner_exit_price"] = None
+        trade["runner_exit_price_source"] = None
+        trade["exit_price"] = None
+    return trade
 
 
 def update_profit_breakdown(trade, include_runner=False):
@@ -2752,13 +2817,17 @@ def close_trade_from_executor_flatten_evidence(trade, evidence_order):
         trade["exit_reason"] = "executor_flatten"
 
     if trade.get("exit_reason") == "target_filled":
-        trade["exit_price"] = resolve_runner_flatten_exit_price(trade, evidence_order) or trade.get("tp1_price")
-        trade["runner_exit_price_source"] = "flatten_evidence"
+        exit_price, source = resolve_runner_flatten_exit_price_with_source(trade, evidence_order)
+        trade["exit_price"] = exit_price or trade.get("tp1_price")
+        if exit_price is not None:
+            trade["runner_exit_price"] = exit_price
+            trade["runner_exit_price_source"] = source
     else:
-        exit_price = resolve_runner_flatten_exit_price(trade, evidence_order)
+        exit_price, source = resolve_runner_flatten_exit_price_with_source(trade, evidence_order)
         if exit_price is not None:
             trade["exit_price"] = exit_price
-            trade["runner_exit_price_source"] = "flatten_evidence"
+            trade["runner_exit_price"] = exit_price
+            trade["runner_exit_price_source"] = source
 
     update_post_be_analytics(trade, trade.get("exit_price"), closed_at)
     update_profit_breakdown(trade, include_runner=trade.get("exit_price") is not None)
@@ -3474,10 +3543,10 @@ def run_noon_runner_flatten_if_due(reference_time=None):
 
         symbol_snapshot = (executor_snapshot or {}).get(trade.get("symbol"), {})
         exit_price = symbol_snapshot.get("last_price")
+        exit_price_source = "executor_snapshot_last_price"
         if exit_price is None:
             exit_price = trade.get("last_price")
-        if exit_price is None:
-            exit_price = trade.get("current_stop")
+            exit_price_source = "trade_last_price"
 
         flatten_trade_symbol(trade_id=trade["trade_id"], symbol=trade["symbol"])
         trade["status"] = "closed"
@@ -3487,6 +3556,8 @@ def run_noon_runner_flatten_if_due(reference_time=None):
         trade["stop_state"] = "flat"
         if exit_price is not None:
             trade["exit_price"] = float(exit_price)
+            trade["runner_exit_price"] = float(exit_price)
+            trade["runner_exit_price_source"] = exit_price_source
         update_profit_breakdown(trade, include_runner=True)
         apply_closed_trade_accounting(trade)
         state["trades"][trade_id] = serialize_trade(trade)
