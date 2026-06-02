@@ -76,6 +76,13 @@
       gap: 12px;
       margin-top: 12px;
     }
+    .step2-layout {
+      display: grid;
+      grid-template-columns: minmax(340px, .85fr) minmax(420px, 1fr) minmax(520px, 1.35fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .hidden { display: none !important; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -117,6 +124,34 @@
     .kv .k { color: var(--muted); font-size: 12px; margin-bottom: 3px; }
     .kv .v { font-weight: 620; overflow-wrap: anywhere; }
     .wide { grid-column: 1 / -1; }
+    .result-card {
+      margin: 10px;
+      padding: 14px;
+      border-radius: 8px;
+      border: 2px solid var(--line);
+      background: #fbfcfd;
+    }
+    .result-card.pass { border-color: #23a267; background: #e7f7ef; color: #0f6a42; }
+    .result-card.fail { border-color: #cc4a4a; background: #fae8e8; color: #9e2f2f; }
+    .result-label { font-size: 12px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .result-value { margin-top: 4px; font-size: 34px; line-height: 1; font-weight: 800; }
+    .decision-flow {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+    }
+    .flow-row {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid #dde4e8;
+      border-radius: 6px;
+      background: #fbfcfd;
+    }
+    .flow-row .label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .flow-row .value { font-size: 16px; font-weight: 750; overflow-wrap: anywhere; }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -129,6 +164,18 @@
     .pass { background: #dff3e8; color: var(--green); }
     .fail { background: #f8e1e1; color: var(--red); }
     .wait { background: #fff0ce; color: var(--amber); }
+    .review-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 9px;
+      border-radius: 6px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+    }
+    .review-approved { background: #e7f7ef; color: #0f6a42; border-color: #23a267; }
+    .review-pending { background: #fff4d8; color: #936200; border-color: #d49a22; }
+    .review-investigation { background: #eee9ff; color: #5b3aa4; border-color: #8d75d6; }
+    .review-retracted { background: #fae8e8; color: #9e2f2f; border-color: #cc4a4a; }
     .meta {
       display: flex;
       gap: 8px;
@@ -178,7 +225,7 @@
     }
     .scenario-card strong { display: block; margin-bottom: 4px; }
     @media (max-width: 980px) {
-      .debug-layout, .bottom-layout { grid-template-columns: 1fr; }
+      .debug-layout, .bottom-layout, .step2-layout { grid-template-columns: 1fr; }
       .scenario-list { grid-template-columns: 1fr; }
     }
   </style>
@@ -196,6 +243,12 @@
     <span class="status">Regression Cases</span>
     <select id="regressionSelect" aria-label="Regression Case"></select>
     <button id="loadRegressionBtn">Load Regression</button>
+    <span class="status">Investigations</span>
+    <select id="investigationSelect" aria-label="Investigation Case"></select>
+    <button id="loadInvestigationBtn">Load Investigation</button>
+    <span class="status">Step 2 Rejection</span>
+    <select id="step2RejectionSelect" aria-label="Step 2 Rejection Case"></select>
+    <button id="loadStep2RejectionBtn">Load Step 2 Case</button>
     <button id="prevBtn">Previous Candle</button>
     <button id="nextBtn">Next Candle</button>
     <button id="resetBtn">Reset</button>
@@ -207,10 +260,50 @@
     <section class="panel top-levels">
       <h2>Key Liquidity Levels</h2>
       <div class="meta" id="scenarioMeta"></div>
+      <div class="scenario-list" id="stackSummary"></div>
       <div class="scenario-list" id="levelsList"></div>
     </section>
 
-    <div class="debug-layout">
+    <div class="step2-layout hidden" id="step2DebugLayout">
+    <section class="panel">
+      <h2>Step 2 Qualification</h2>
+      <div id="step2ResultCard"></div>
+      <div class="decision-flow" id="step2DecisionFlow"></div>
+      <div class="grid" id="step2QualificationGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Stack Anatomy</h2>
+      <div class="grid" id="step2StackAnatomyGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Step 2 Candle And Boundary</h2>
+      <div class="chart-wrap">
+        <canvas id="step2Chart" width="980" height="520"></canvas>
+      </div>
+    </section>
+    </div>
+
+    <div class="step2-layout hidden" id="continuationStructureLayout">
+    <section class="panel">
+      <h2>6.3B Permission</h2>
+      <div id="continuationPermissionCard"></div>
+      <div class="grid" id="continuationPermissionGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Controlling Structure</h2>
+      <div class="grid" id="continuationStructureGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Sweep Requirement</h2>
+      <div class="grid" id="continuationSweepGrid"></div>
+    </section>
+    </div>
+
+    <div class="debug-layout" id="debugLayout">
     <section class="panel">
       <h2>Rejection State</h2>
       <div class="grid" id="rejectionGrid"></div>
@@ -249,7 +342,7 @@
     </section>
     </div>
 
-    <div class="bottom-layout">
+    <div class="bottom-layout" id="bottomLayout">
     <section class="panel">
       <h2>Expected vs Actual</h2>
       <div style="overflow:auto">
@@ -279,8 +372,9 @@
       "pathway_type", "rejection_mode_entered", "active_liquidity_name", "liquidity_price",
       "setup_direction", "current_pathway_control", "current_controlling_mode",
       "leg1_state", "leg1_reference", "leg1_extreme", "leg1_completed_at",
-      "leg1_window_candle_index", "leg1_window_remaining", "leg2_state",
-      "leg2_candidate_candle", "leg2_reference_price", "step5_confirmed",
+      "leg1_window_candle_index", "leg1_window_remaining", "rejection_leg1_progress_pct",
+      "rejection_leg1_50_reached", "leg2_state", "leg2_candidate_candle",
+      "leg2_reference_price", "rejection_leg2_progress_pct", "rejection_leg2_75_reached", "step5_confirmed",
       "invalidation_reason", "wait_reason", "last_decision"
     ];
     const continuationFields = [
@@ -291,22 +385,112 @@
       "leg2_reference_price", "step5_confirmed", "invalidation_reason",
       "wait_reason", "last_decision"
     ];
+    const stateFieldLabels = {
+      rejection_leg1_progress_pct: "Rejection Leg 1 Progress %",
+      rejection_leg1_50_reached: "Rejection Leg 1 50% Reached",
+      rejection_leg2_progress_pct: "Rejection Leg 2 Progress %",
+      rejection_leg2_75_reached: "Rejection Leg 2 75% Reached"
+    };
     const allStateFields = Array.from(new Set([...rejectionFields, ...continuationFields, "step"]));
+    const step2QualificationFields = [
+      ["Active Liquidity", "active_liquidity"],
+      ["Liquidity Type", "liquidity_type"],
+      ["Liquidity Group", "liquidity_group"],
+      ["Stack Components", "stack_components"],
+      ["Close Boundary Level", "close_boundary_level"],
+      ["Close Boundary Price", "close_boundary_price"],
+      ["Extreme Boundary Level", "extreme_boundary_level"],
+      ["Extreme Boundary Price", "extreme_boundary_price"],
+      ["Qualification Boundary", "qualification_boundary_price"],
+      ["Distance Beyond Boundary", "distance_beyond_boundary"],
+      ["Wick Beyond Boundary", "wick_beyond_boundary"],
+      ["Close Beyond Boundary", "close_beyond_boundary"],
+      ["Inactive Reason", "inactive_reason"],
+      ["Is Active Liquidity?", "is_active_liquidity"],
+      ["Close Through Inactive Level?", "close_through_inactive_level"],
+      ["Expected Result", "expected_result"],
+      ["Actual Result", "actual_result"],
+      ["Review Status", "review_status"]
+    ];
 
     let fixture = null;
     let frames = [];
     let index = 0;
     let fixtureEntries = [];
+    let stackAnalysis = null;
+    let loadSequence = 0;
+    let loadedFixtureId = null;
 
     function normalizeCandle(candle) {
       return {...candle, timestamp: candle.timestamp || candle.time};
     }
 
     function activeLiquidity(fx) {
+      if (stackAnalysis && fx.active_liquidity) {
+        const activeName = fx.active_liquidity.name;
+        const detected = (stackAnalysis.detected_groups || []).find(group => group.name === activeName || (group.components || []).includes(activeName));
+        if (detected && !((fx.stacks || []).length)) {
+          return {...detected, display_name: detected.display_name || `${detected.name} Liquidity`};
+        }
+      }
+      if (stackAnalysis && !(fx.stacks || []).length && (stackAnalysis.detected_stacks || []).length && !fx.active_liquidity) {
+        const detected = stackAnalysis.detected_stacks[0];
+        return {...detected, display_name: detected.display_name || `${detected.name} Liquidity`};
+      }
       const active = fx.active_liquidity || (fx.stacks && fx.stacks[0]) || {};
       const components = active.components || [active.name];
       const name = active.display_name || active.name || components.join("/");
-      return {...active, components, display_name: name.endsWith(" Liquidity") ? name : `${name} Liquidity`};
+      const inferred = inferStackBoundaries(fx, {...active, components});
+      return {
+        ...active,
+        components,
+        display_name: name.endsWith(" Liquidity") ? name : `${name} Liquidity`,
+        close_boundary: firstPresent(active.close_boundary, inferred.close_boundary_price, active.price),
+        extreme_boundary: firstPresent(active.extreme_boundary, inferred.extreme_boundary_price, active.price),
+        close_boundary_level: firstPresent(active.close_boundary_level, inferred.close_boundary_level, components.length ? components[0] : active.name),
+        close_boundary_price: firstPresent(active.close_boundary_price, inferred.close_boundary_price, active.close_boundary, active.price),
+        extreme_boundary_level: firstPresent(active.extreme_boundary_level, inferred.extreme_boundary_level, components.length ? components[components.length - 1] : active.name),
+        extreme_boundary_price: firstPresent(active.extreme_boundary_price, inferred.extreme_boundary_price, active.extreme_boundary, active.price),
+        qualification_boundary_price: firstPresent(active.qualification_boundary_price, inferred.qualification_boundary_price, active.price),
+        liquidity_group: active.liquidity_group || "fixture-defined",
+        level_type: active.level_type || (components.length > 1 ? "stacked" : "regular")
+      };
+    }
+
+    function firstPresent(...values) {
+      return values.find(value => value !== undefined && value !== null && value !== "");
+    }
+
+    function inferStackBoundaries(fx, active) {
+      const components = active.components || [];
+      const rows = components
+        .map(name => {
+          const level = (fx.levels || {})[name];
+          if (!level || level.price === undefined || level.price === null) return null;
+          return {name, price: Number(level.price), side: String(level.side || active.side || "").toUpperCase()};
+        })
+        .filter(Boolean)
+        .filter(row => Number.isFinite(row.price));
+      if (!rows.length) return {};
+      const side = String(active.side || rows[0].side || "").toUpperCase();
+      let closeRow;
+      let extremeRow;
+      if (side === "HIGH") {
+        closeRow = rows.reduce((best, row) => row.price < best.price ? row : best, rows[0]);
+        extremeRow = rows.reduce((best, row) => row.price > best.price ? row : best, rows[0]);
+      } else if (side === "LOW") {
+        closeRow = rows.reduce((best, row) => row.price > best.price ? row : best, rows[0]);
+        extremeRow = rows.reduce((best, row) => row.price < best.price ? row : best, rows[0]);
+      } else {
+        return {};
+      }
+      return {
+        close_boundary_level: closeRow.name,
+        close_boundary_price: closeRow.price,
+        extreme_boundary_level: extremeRow.name,
+        extreme_boundary_price: extremeRow.price,
+        qualification_boundary_price: extremeRow.price
+      };
     }
 
     function compare(expected, actual) {
@@ -332,17 +516,54 @@
         fixtureEntries = names.map(name => ({id: name, folder: "known_good"}));
       }
       const select = document.getElementById("scenarioSelect");
-      const standardEntries = fixtureEntries.filter(entry => entry.folder !== "regressions");
+      const rootEntries = fixtureEntries.filter(entry => !entry.id.includes("/"));
       const regressionEntries = fixtureEntries.filter(entry => entry.folder === "regressions");
-      select.innerHTML = standardEntries.map(entry => `<option value="${entry.id}">${entry.id}</option>`).join("");
-      if (!select.innerHTML) select.innerHTML = names.map(name => `<option value="${name}">${name}</option>`).join("");
+      const investigationEntries = fixtureEntries.filter(entry => entry.folder === "investigations" || entry.case_type === "investigation");
+      const step2RejectionEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_rejection/") && !entry.hidden_from_review && !entry.deprecated);
+      select.innerHTML = rootEntries.map(entry => `<option value="${entry.id}">${entry.id}</option>`).join("");
+      if (!select.innerHTML) select.innerHTML = names.filter(name => !name.includes("/")).map(name => `<option value="${name}">${name}</option>`).join("");
       const regressionSelect = document.getElementById("regressionSelect");
       regressionSelect.innerHTML = regressionEntries.map(entry => `<option value="${entry.id}">${entry.case_name || entry.id}</option>`).join("");
       regressionSelect.disabled = regressionEntries.length === 0;
       document.getElementById("loadRegressionBtn").disabled = regressionEntries.length === 0;
+      const investigationSelect = document.getElementById("investigationSelect");
+      investigationSelect.innerHTML = investigationEntries.map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`).join("");
+      investigationSelect.disabled = investigationEntries.length === 0;
+      document.getElementById("loadInvestigationBtn").disabled = investigationEntries.length === 0;
+      const step2Select = document.getElementById("step2RejectionSelect");
+      step2Select.innerHTML = step2RejectionEntries.map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`).join("");
+      step2Select.disabled = step2RejectionEntries.length === 0;
+      document.getElementById("loadStep2RejectionBtn").disabled = step2RejectionEntries.length === 0;
+    }
+
+    function reviewStatus(entryOrFixture) {
+      if (!entryOrFixture) return "PENDING REVIEW";
+      if (entryOrFixture.deprecated || entryOrFixture.hidden_from_review) return entryOrFixture.review_status || "RETRACTED / NOT APPROVED";
+      return entryOrFixture.review_status || entryOrFixture.user_review || entryOrFixture.status || (entryOrFixture.case_type === "investigation" ? "INVESTIGATION" : "PENDING REVIEW");
+    }
+
+    function reviewPrefix(status) {
+      const normalized = String(status || "").toUpperCase();
+      if (normalized.includes("APPROVED") && !normalized.includes("NOT APPROVED") && !normalized.includes("RETRACTED")) return "[APPROVED]";
+      if (normalized.includes("RETRACTED") || normalized.includes("NOT APPROVED")) return "[RETRACTED]";
+      if (normalized.includes("INVESTIGATION")) return "[INVESTIGATION]";
+      return "[PENDING]";
+    }
+
+    function reviewClass(status) {
+      const normalized = String(status || "").toUpperCase();
+      if (normalized.includes("APPROVED") && !normalized.includes("NOT APPROVED") && !normalized.includes("RETRACTED")) return "review-approved";
+      if (normalized.includes("RETRACTED") || normalized.includes("NOT APPROVED")) return "review-retracted";
+      if (normalized.includes("INVESTIGATION")) return "review-investigation";
+      return "review-pending";
+    }
+
+    function formatReviewDropdownLabel(entry) {
+      return entry.review_label || `${reviewPrefix(reviewStatus(entry))} ${entry.id.replace("known_good/step2_rejection/", "")}`;
     }
 
     async function loadScenario(name) {
+      const sequence = ++loadSequence;
       name = name || document.getElementById("scenarioSelect").value;
       let payload;
       try {
@@ -364,7 +585,10 @@
           overall_pass: true
         };
       }
+      if (sequence !== loadSequence) return;
       fixture = payload.fixture;
+      loadedFixtureId = name;
+      stackAnalysis = payload.stack_analysis || null;
       frames = payload.frames;
       index = 0;
       render();
@@ -386,20 +610,59 @@
       badge.textContent = `${overallPass ? "PASS" : "FAIL"} ${index + 1}/${frames.length}`;
       renderMeta(frame);
       renderLevels();
-      renderStatePanels(frame);
-      renderComparison(frame);
-      renderFrames();
-      drawChart(frame);
+      if (isStep2DebugFixture()) {
+        document.getElementById("step2DebugLayout").classList.remove("hidden");
+        document.getElementById("continuationStructureLayout").classList.add("hidden");
+        document.getElementById("debugLayout").classList.add("hidden");
+        document.getElementById("bottomLayout").classList.add("hidden");
+        renderStep2Qualification(frame);
+        drawStep2Chart(frame);
+      } else if (isContinuationStructureFixture()) {
+        document.getElementById("step2DebugLayout").classList.add("hidden");
+        document.getElementById("continuationStructureLayout").classList.remove("hidden");
+        document.getElementById("debugLayout").classList.add("hidden");
+        document.getElementById("bottomLayout").classList.add("hidden");
+        renderContinuationStructure(frame);
+      } else {
+        document.getElementById("step2DebugLayout").classList.add("hidden");
+        document.getElementById("continuationStructureLayout").classList.add("hidden");
+        document.getElementById("debugLayout").classList.remove("hidden");
+        document.getElementById("bottomLayout").classList.remove("hidden");
+        renderStatePanels(frame);
+        renderComparison(frame);
+        renderFrames();
+        drawChart(frame);
+      }
+    }
+
+    function isStep2DebugFixture() {
+      return Boolean(
+        fixture &&
+        (fixture.scope === "step2_rejection_only" || (loadedFixtureId || "").startsWith("known_good/step2_rejection/")) &&
+        frames.some(frame => frame.debug && frame.debug.step2_qualification)
+      );
+    }
+
+    function isContinuationStructureFixture() {
+      return Boolean(fixture && fixture.scope === "continuation_controlling_structure");
     }
 
     function renderMeta(frame) {
       const active = activeLiquidity(fixture);
+      const status = reviewStatus(fixture);
       document.getElementById("scenarioMeta").innerHTML = [
+        `<span class="review-badge ${reviewClass(status)}">${reviewPrefix(status)} ${status}</span>`,
         `<span><strong>${fixture.case_name}</strong></span>`,
         `<span>${fixture.symbol} ${fixture.date}</span>`,
         `<span>scenario_type=${fixture.scenario_type}</span>`,
+        fixture.scope ? `<span>scope=${fixture.scope}</span>` : "",
+        fixture.case_type ? `<span>case_type=${fixture.case_type}</span>` : "",
+        fixture.direction ? `<span>direction=${fixture.direction}</span>` : "",
+        fixture.level_type ? `<span>level_type=${fixture.level_type}</span>` : "",
         `<span>continuation_type=${fixture.continuation_type || "none"}</span>`,
         `<span>active=${active.display_name}</span>`,
+        stackAnalysis && stackAnalysis.simulated_daily_atr !== null ? `<span>simulated_daily_atr=${stackAnalysis.simulated_daily_atr}</span>` : "",
+        stackAnalysis && stackAnalysis.stack_threshold !== null ? `<span>stack_threshold=${stackAnalysis.stack_threshold}</span>` : "",
         fixture.issue ? `<span>issue=${fixture.issue}</span>` : "",
         fixture.fixed_by_commit ? `<span>fixed_by_commit=${fixture.fixed_by_commit}</span>` : "",
         fixture.expected_result ? `<span>expected_result=${fixture.expected_result}</span>` : "",
@@ -410,6 +673,7 @@
     function renderLevels() {
       const active = activeLiquidity(fixture);
       const rows = [];
+      renderStackSummary(active);
       Object.entries(fixture.levels || {}).forEach(([name, level]) => {
         rows.push(`<div class="scenario-card"><strong>${name}</strong><span>${level.side} ${level.price}</span></div>`);
       });
@@ -417,23 +681,137 @@
         const split = stack.split_components ? ` split=${stack.split_components.join("/")}` : "";
         rows.push(`<div class="scenario-card"><strong>${stack.name}</strong><span>stack ${stack.side} ${stack.price} components=${(stack.components || []).join("/")}${split}</span></div>`);
       });
+      if (stackAnalysis) {
+        (stackAnalysis.detected_stacks || []).forEach(stack => {
+          rows.push(`<div class="scenario-card"><strong>Detected ${stack.liquidity_group}</strong><span>${stack.name} ${stack.side} close=${stack.close_boundary_level} ${stack.close_boundary_price} extreme=${stack.extreme_boundary_level} ${stack.extreme_boundary_price} qualification=${stack.qualification_boundary_price} distance=${formatValue(stack.outer_distance)}</span></div>`);
+        });
+        (stackAnalysis.non_stacked_levels || []).forEach(level => {
+          rows.push(`<div class="scenario-card"><strong>Non-stacked ${level.liquidity_group}</strong><span>${level.name} ${level.side} close=${level.close_boundary_price} extreme=${level.extreme_boundary_price} qualification=${level.qualification_boundary_price}</span></div>`);
+        });
+      }
       rows.push(`<div class="scenario-card"><strong>Active / Controlling</strong><span>${active.display_name} components=${active.components.join("/")}</span></div>`);
       document.getElementById("levelsList").innerHTML = rows.join("");
+    }
+
+    function renderStackSummary(active) {
+      const distances = stackAnalysis ? (stackAnalysis.distances || []) : [];
+      const distanceText = distances.length
+        ? distances.map(item => `${item.levels.join("/")}=${item.distance}${item.within_threshold === null ? "" : item.within_threshold ? " stacked" : " split"}`).join("; ")
+        : "-";
+      const cards = [
+        ["Active Liquidity / Stack Owner", active.display_name],
+        ["Liquidity Group", active.liquidity_group],
+        ["Stack Components", active.components],
+        ["Close Boundary Level", active.close_boundary_level],
+        ["Close Boundary Price", active.close_boundary_price],
+        ["Extreme Boundary Level", active.extreme_boundary_level],
+        ["Extreme Boundary Price", active.extreme_boundary_price],
+        ["Qualification Boundary", active.qualification_boundary_price],
+        ["Selected Liquidity Type", active.level_type],
+        ["Simulated Daily ATR", stackAnalysis ? stackAnalysis.simulated_daily_atr : null],
+        ["Stack Threshold", stackAnalysis ? stackAnalysis.stack_threshold : null],
+        ["Detected Stack Distance(s)", distanceText],
+        ["Detected Stacks", stackAnalysis ? (stackAnalysis.detected_stacks || []).map(stack => stack.name).join("; ") : null],
+        ["Non-stacked Levels", stackAnalysis ? (stackAnalysis.non_stacked_levels || []).map(level => level.name).join("; ") : null]
+      ];
+      document.getElementById("stackSummary").innerHTML = cards.map(([label, value]) => {
+        return `<div class="scenario-card"><strong>${label}</strong><span>${formatValue(value)}</span></div>`;
+      }).join("");
     }
 
     function renderStatePanels(frame) {
       document.getElementById("rejectionGrid").innerHTML = rejectionFields.map(field => {
         const value = frame.actual[field];
         const wide = ["wait_reason", "last_decision", "invalidation_reason"].includes(field) ? " wide" : "";
-        return `<div class="kv${wide}"><div class="k">${field}</div><div class="v">${formatValue(value)}</div></div>`;
+        return `<div class="kv${wide}"><div class="k">${stateFieldLabels[field] || field}</div><div class="v">${formatProgressValue(field, value)}</div></div>`;
       }).join("");
       document.getElementById("continuationGrid").innerHTML = continuationFields.map(field => {
         const value = frame.actual[field];
         const wide = ["wait_reason", "last_decision", "invalidation_reason"].includes(field) ? " wide" : "";
-        return `<div class="kv${wide}"><div class="k">${field}</div><div class="v">${formatValue(value)}</div></div>`;
+        return `<div class="kv${wide}"><div class="k">${stateFieldLabels[field] || field}</div><div class="v">${formatProgressValue(field, value)}</div></div>`;
       }).join("");
       renderControllingStructure(frame);
       renderCandleTables(frame);
+    }
+
+    function formatProgressValue(field, value) {
+      if (field === "rejection_leg1_progress_pct" || field === "rejection_leg2_progress_pct") {
+        return value === null || value === undefined ? "-" : `${value}%`;
+      }
+      return formatValue(value);
+    }
+
+    function renderStep2Qualification(frame) {
+      const qualification = (frame.debug && frame.debug.step2_qualification) || {};
+      const passed = qualification.pass === true;
+      document.getElementById("step2ResultCard").innerHTML = `
+        <div class="result-card ${passed ? "pass" : "fail"}">
+          <div class="result-label">Step 2 Result</div>
+          <div class="result-value">${passed ? "PASS" : "FAIL"}</div>
+          <div>${formatValue(qualification.actual_result)} / expected ${formatValue(qualification.expected_result)}</div>
+        </div>
+      `;
+      renderStep2DecisionFlow(qualification);
+      renderStep2StackAnatomy(qualification);
+      document.getElementById("step2QualificationGrid").innerHTML = step2QualificationFields.map(([label, key]) => {
+        const value = qualification[key];
+        const displayValue = key === "pass" ? (value ? "PASS" : "FAIL") : value;
+        const wide = ["stack_components", "expected_result", "actual_result", "inactive_reason", "review_status"].includes(key) ? " wide" : "";
+        return `<div class="kv${wide}"><div class="k">${label}</div><div class="v">${formatValue(displayValue)}</div></div>`;
+      }).join("")
+        + `<div class="kv wide"><div class="k">Inactive Level</div><div class="v">${formatValue(qualification.inactive_level_name)} ${formatValue(qualification.inactive_level_price)}</div></div>`
+        + `<div class="kv wide"><div class="k">Inactive Close-through Note</div><div class="v">${formatValue(qualification.inactive_close_through_note)}</div></div>`
+        + `<div class="kv wide"><div class="k">Why</div><div class="v">${formatValue(qualification.why)}</div></div>`;
+    }
+
+    function renderStep2DecisionFlow(qualification) {
+      const result = qualification.pass ? "PASS" : "FAIL";
+      const rows = [
+        ["Close Boundary", `${formatValue(qualification.close_boundary_level)} ${formatValue(qualification.close_boundary_price)}`],
+        ["Qualification Boundary", `${formatValue(qualification.extreme_boundary_level)} ${formatValue(qualification.qualification_boundary_price)}`],
+        ["Close", qualification.close_price],
+        ["Result", result]
+      ];
+      document.getElementById("step2DecisionFlow").innerHTML = rows.map(([label, value]) => {
+        return `<div class="flow-row"><div class="label">${label}</div><div class="value">${formatValue(value)}</div></div>`;
+      }).join("");
+    }
+
+    function renderStep2StackAnatomy(qualification) {
+      const distance = stackAnalysis && stackAnalysis.detected_stacks
+        ? ((stackAnalysis.detected_stacks.find(stack => stack.display_name === qualification.active_liquidity) || {}).outer_distance)
+        : null;
+      const threshold = stackAnalysis ? stackAnalysis.stack_threshold : null;
+      const fields = [
+        ["Owner", qualification.active_liquidity],
+        ["Close Boundary", `${formatValue(qualification.close_boundary_level)} ${formatValue(qualification.close_boundary_price)}`],
+        ["Extreme Boundary", `${formatValue(qualification.extreme_boundary_level)} ${formatValue(qualification.extreme_boundary_price)}`],
+        ["Qualification Boundary", `${formatValue(qualification.extreme_boundary_level)} ${formatValue(qualification.qualification_boundary_price)}`],
+        ["Distance", distance],
+        ["ATR Threshold", threshold],
+        ["Stacked", qualification.liquidity_type === "stacked" ? "YES" : "NO"]
+      ];
+      document.getElementById("step2StackAnatomyGrid").innerHTML = fields.map(([label, value]) => {
+        return `<div class="kv"><div class="k">${label}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("") + renderPreCloseStructure(qualification);
+    }
+
+    function renderPreCloseStructure(qualification) {
+      const structure = qualification.pre_close_structure || {};
+      const closeCandle = qualification.close_through_candle || {};
+      const investigation = fixture && fixture.case_type === "investigation"
+        ? `<div class="kv wide"><div class="k">Review Status</div><div class="v">INVESTIGATION - not approved known-good</div></div>`
+        : "";
+      const rows = [
+        ["Close-through Candle", closeCandle.timestamp || closeCandle.time],
+        ["Prior Controlling Structure Candle", structure.controlling_boundary_time],
+        ["Stored Continuation Controlling Boundary", `${formatValue(structure.controlling_boundary_level)} ${formatValue(structure.controlling_boundary_price)}`],
+        ["Controlling Boundary Candle Index", structure.controlling_boundary_candle_index],
+        ["Controlling Boundary Source", structure.source]
+      ];
+      return investigation + rows.map(([label, value]) => {
+        return `<div class="kv wide"><div class="k">${label}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("");
     }
 
     function renderControllingStructure(frame) {
@@ -446,6 +824,53 @@
       ];
       document.getElementById("controllingStructureGrid").innerHTML = fields.map(([field, value]) => {
         return `<div class="kv"><div class="k">${field}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("");
+    }
+
+    function renderContinuationStructure(frame) {
+      const actual = frame.actual || {};
+      const allowed = actual.entry_permission === "CONTINUATION_ENTRY_ALLOWED_AFTER_SWEEP";
+      document.getElementById("continuationPermissionCard").innerHTML = `
+        <div class="result-card ${allowed ? "pass" : "fail"}">
+          <div class="result-label">Entry Permission</div>
+          <div class="result-value">${allowed ? "ALLOWED" : "WAIT"}</div>
+          <div>${formatValue(actual.entry_permission)}</div>
+        </div>
+      `;
+      const permissionFields = [
+        ["Rule", actual.rule],
+        ["Continuation Type", actual.continuation_type],
+        ["Liquidity Level / Stack", `${formatValue(actual.liquidity_name)} ${formatValue(actual.liquidity_price)}`],
+        ["Shared Leg 1 Valid", actual.shared_leg1_valid],
+        ["Shared Leg 2 Valid", actual.shared_leg2_valid],
+        ["Case Type", actual.case_type]
+      ];
+      document.getElementById("continuationPermissionGrid").innerHTML = permissionFields.map(([label, value]) => {
+        return `<div class="kv"><div class="k">${label}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("");
+
+      const structureFields = [
+        ["Close-through Candle", actual.close_through_candle],
+        ["Reclaim Close Candle", actual.reclaim_close_candle],
+        ["Current Controlling Structure", actual.controlling_structure_time],
+        ["High", actual.controlling_structure_high],
+        ["Low", actual.controlling_structure_low],
+        ["Close", actual.controlling_structure_close],
+        ["Candle Range", actual.controlling_structure_candle_range],
+        ["Was Reset", actual.controlling_structure_reset],
+        ["Reset Candle", actual.reset_candle]
+      ];
+      document.getElementById("continuationStructureGrid").innerHTML = structureFields.map(([label, value]) => {
+        return `<div class="kv"><div class="k">${label}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("");
+
+      const sweepFields = [
+        ["Required Sweep Direction", actual.required_sweep_direction],
+        ["Sweep Occurred", actual.sweep_occurred],
+        ["Entry Permission", actual.entry_permission]
+      ];
+      document.getElementById("continuationSweepGrid").innerHTML = sweepFields.map(([label, value]) => {
+        return `<div class="kv wide"><div class="k">${label}</div><div class="v">${formatValue(value)}</div></div>`;
       }).join("");
     }
 
@@ -567,6 +992,200 @@
       });
     }
 
+    function drawStep2Chart(frame) {
+      const canvas = document.getElementById("step2Chart");
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#fbfcfd";
+      ctx.fillRect(0, 0, w, h);
+
+      const candle = normalizeCandle(frame.candle);
+      const active = activeLiquidity(fixture);
+      const boundary = Number(active.qualification_boundary_price || active.extreme_boundary_price || active.close_boundary_price || active.price);
+      const allLines = (frame.debug && frame.debug.step2_chart_lines) || fallbackStep2ChartLines(active);
+      const chartLines = focusedStep2ChartLines(allLines, candle, boundary);
+      const prices = [candle.open, candle.high, candle.low, candle.close, boundary, ...chartLines.map(line => line.price)].map(Number);
+      const span = Math.max(1, Math.max(...prices) - Math.min(...prices));
+      const buffer = Math.max(0.5, span * 0.12);
+      const min = Math.min(...prices) - buffer;
+      const max = Math.max(...prices) + buffer;
+      const y = price => h - 42 - ((price - min) / (max - min)) * (h - 84);
+      const x = Math.round(w * 0.55);
+
+      ctx.strokeStyle = "#d8e0e4";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        const yy = 28 + i * ((h - 70) / 5);
+        ctx.beginPath(); ctx.moveTo(150, yy); ctx.lineTo(w - 135, yy); ctx.stroke();
+      }
+
+      const levelLabelRows = labelRows(chartLines.map(line => ({...line, rawY: y(Number(line.price))})), "rawY", 18, 26, h - 42);
+      chartLines.forEach(line => {
+        const yy = y(Number(line.price));
+        applyLevelLineStyle(ctx, line);
+        ctx.beginPath(); ctx.moveTo(150, yy); ctx.lineTo(w - 135, yy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = levelTextColor(line);
+        ctx.font = line.is_stack_component ? "bold 13px Segoe UI, Arial" : "12px Segoe UI, Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        const qualifier = line.is_qualification_boundary ? " (Q)" : "";
+        const labelY = levelLabelRows.get(line.name) ?? yy;
+        ctx.fillText(`${line.price} ${line.name}${qualifier}`, 12, labelY);
+        if (Math.abs(labelY - yy) > 2) {
+          ctx.strokeStyle = "#aeb8bd";
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(118, labelY); ctx.lineTo(145, yy); ctx.stroke();
+        }
+      });
+
+      if (!chartLines.some(line => Number(line.price) === boundary)) {
+        const boundaryY = y(boundary);
+        ctx.strokeStyle = "#1f6f99";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath(); ctx.moveTo(150, boundaryY); ctx.lineTo(w - 135, boundaryY); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#1f6f99";
+        ctx.font = "bold 13px Segoe UI, Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`${boundary} (Q)`, 12, boundaryY);
+      }
+
+      drawStackDistanceBracket(ctx, chartLines, y);
+
+      const up = candle.close >= candle.open;
+      ctx.strokeStyle = up ? "#147a50" : "#b73737";
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(x, y(candle.high)); ctx.lineTo(x, y(candle.low)); ctx.stroke();
+      const bodyTop = y(Math.max(candle.open, candle.close));
+      const bodyBottom = y(Math.min(candle.open, candle.close));
+      ctx.fillRect(x - 34, bodyTop, 68, Math.max(3, bodyBottom - bodyTop));
+
+      const closeY = y(candle.close);
+      ctx.strokeStyle = priceMarkerColor();
+      ctx.lineWidth = 2;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(150, closeY); ctx.lineTo(w - 135, closeY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = priceMarkerColor();
+      ctx.font = "12px Segoe UI, Arial";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      const candleRows = labelRows([
+        {name: "H", rawY: y(candle.high), text: `H ${candle.high}`},
+        {name: "O", rawY: y(candle.open), text: `O ${candle.open}`},
+        {name: "C", rawY: closeY, text: `C ${candle.close}`},
+        {name: "L", rawY: y(candle.low), text: `L ${candle.low}`}
+      ], "rawY", 16, 26, h - 42);
+      [
+        {name: "H", rawY: y(candle.high), text: `H ${candle.high}`},
+        {name: "O", rawY: y(candle.open), text: `O ${candle.open}`},
+        {name: "C", rawY: closeY, text: `C ${candle.close}`},
+        {name: "L", rawY: y(candle.low), text: `L ${candle.low}`}
+      ].forEach(item => {
+        const labelY = candleRows.get(item.name) ?? item.rawY;
+        ctx.fillText(item.text, w - 12, labelY);
+        if (Math.abs(labelY - item.rawY) > 2) {
+          ctx.strokeStyle = priceMarkerColor();
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath(); ctx.moveTo(w - 118, labelY); ctx.lineTo(w - 142, item.rawY); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      });
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+    }
+
+    function labelRows(items, yKey, minGap, minY, maxY) {
+      const sorted = [...items].sort((a, b) => Number(a[yKey]) - Number(b[yKey]));
+      const placed = [];
+      sorted.forEach(item => {
+        let nextY = Math.max(minY, Math.min(maxY, Number(item[yKey])));
+        if (placed.length && nextY - placed[placed.length - 1].y < minGap) {
+          nextY = placed[placed.length - 1].y + minGap;
+        }
+        placed.push({name: item.name, y: nextY});
+      });
+      for (let i = placed.length - 1; i >= 0; i--) {
+        if (placed[i].y > maxY) placed[i].y = maxY;
+        if (i < placed.length - 1 && placed[i + 1].y - placed[i].y < minGap) {
+          placed[i].y = placed[i + 1].y - minGap;
+        }
+      }
+      const output = new Map();
+      placed.forEach(item => output.set(item.name, Math.max(minY, Math.min(maxY, item.y))));
+      return output;
+    }
+
+    function drawStackDistanceBracket(ctx, chartLines, y) {
+      const stackLines = chartLines.filter(line => line.is_stack_component);
+      if (stackLines.length < 2) return;
+      const prices = stackLines.map(line => Number(line.price));
+      const high = Math.max(...prices);
+      const low = Math.min(...prices);
+      const yHigh = y(high);
+      const yLow = y(low);
+      const x = 138;
+      ctx.strokeStyle = "#6f7a80";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(x, yHigh);
+      ctx.lineTo(x - 8, yHigh);
+      ctx.moveTo(x, yHigh);
+      ctx.lineTo(x, yLow);
+      ctx.moveTo(x, yLow);
+      ctx.lineTo(x - 8, yLow);
+      ctx.stroke();
+      ctx.fillStyle = "#6f7a80";
+      ctx.font = "11px Segoe UI, Arial";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`d ${Math.abs(high - low)}`, x + 4, (yHigh + yLow) / 2);
+    }
+
+    function priceMarkerColor() {
+      return "#6bb7e8";
+    }
+
+    function focusedStep2ChartLines(lines, candle, boundary) {
+      const stackLines = lines.filter(line => line.is_stack_component || Number(line.price) === Number(boundary));
+      const selected = new Map(stackLines.map(line => [line.name, line]));
+      const context = lines
+        .filter(line => !selected.has(line.name))
+        .map(line => ({...line, distance: Math.min(Math.abs(Number(line.price) - Number(candle.high)), Math.abs(Number(line.price) - Number(candle.low)), Math.abs(Number(line.price) - Number(boundary)))}))
+        .sort((a, b) => a.distance - b.distance);
+      context.slice(0, 2).forEach(line => selected.set(line.name, line));
+      return Array.from(selected.values()).sort((a, b) => Number(b.price) - Number(a.price));
+    }
+
+    function fallbackStep2ChartLines(active) {
+      return [{name: active.name || active.display_name, price: active.price, color: "gray", width: 1, dash: "solid", is_stack_component: true}];
+    }
+
+    function applyLevelLineStyle(ctx, line) {
+      ctx.strokeStyle = levelCanvasColor(line.color);
+      ctx.lineWidth = Number(line.width || 1);
+      ctx.setLineDash(line.dash === "dotted" ? [2, 4] : []);
+    }
+
+    function levelTextColor(line) {
+      return levelCanvasColor(line.color);
+    }
+
+    function levelCanvasColor(color) {
+      if (color === "black") return "#111111";
+      if (color === "red") return "#b73737";
+      if (color === "green") return "#147a50";
+      return "#5f6c72";
+    }
+
     function stepMarkers() {
       const markers = {};
       const s2 = frames.find(item => item.actual && item.actual.rejection_mode_entered === true);
@@ -587,6 +1206,14 @@
     document.getElementById("loadBtn").addEventListener("click", loadScenario);
     document.getElementById("loadRegressionBtn").addEventListener("click", () => {
       const value = document.getElementById("regressionSelect").value;
+      if (value) loadScenario(value);
+    });
+    document.getElementById("loadInvestigationBtn").addEventListener("click", () => {
+      const value = document.getElementById("investigationSelect").value;
+      if (value) loadScenario(value);
+    });
+    document.getElementById("loadStep2RejectionBtn").addEventListener("click", () => {
+      const value = document.getElementById("step2RejectionSelect").value;
       if (value) loadScenario(value);
     });
     document.getElementById("prevBtn").addEventListener("click", () => setIndex(index - 1));
