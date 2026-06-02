@@ -222,6 +222,46 @@ class TradeManagerPnlAccountingTests(unittest.TestCase):
         self.assertEqual(archived["result"], "WIN")
         self.assertEqual(archived["r_multiple"], 1.0)
 
+    def test_kpi_serialization_backfills_stale_flatten_stop_price_record(self):
+        manager = self._load_manager()
+        stale_closed = {
+            "trade_id": "T-ce62f567",
+            "status": "closed",
+            "archived": True,
+            "symbol": "NQM6",
+            "direction": "long",
+            "entry_price": 30439.75,
+            "original_stop": 30415.75,
+            "current_stop": 30415.75,
+            "position_size": 2,
+            "remaining_size": 0,
+            "exit_reason": "flatten_symbol",
+            "exit_price": 30415.75,
+            "closed_at": "2026-06-02T09:03:12.390174",
+            "tp1_hit": True,
+            "tp1_filled_qty": 1,
+            "tp1_exit_price": 30463.75,
+            "tp1_price": 30463.75,
+            "tp1_profit": 480.0,
+            "runner_profit": -480.0,
+            "total_profit": 0.0,
+            "realized_pnl": 0.0,
+            "total_pnl": 0.0,
+            "result": "BE",
+            "r_multiple": 0.0,
+        }
+
+        serialized = manager.public_trade_dict(stale_closed)
+
+        self.assertEqual(serialized["exit_reason"], "flatten_symbol")
+        self.assertEqual(serialized["tp1_profit"], 480.0)
+        self.assertEqual(serialized["runner_profit"], 0.0)
+        self.assertEqual(serialized["total_profit"], 480.0)
+        self.assertEqual(serialized["realized_pnl"], 480.0)
+        self.assertEqual(serialized["total_pnl"], 480.0)
+        self.assertEqual(serialized["result"], "WIN")
+        self.assertEqual(serialized["r_multiple"], 0.5)
+
     def test_archived_tp1_runner_flatten_backfills_full_accounting(self):
         manager = self._load_manager()
         archived = manager.public_trade_dict(self._stale_archived_nq_long(

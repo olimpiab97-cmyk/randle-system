@@ -1245,8 +1245,6 @@ def resolve_runner_flatten_exit_price(trade, evidence_order):
         "closed_price",
         "exit_price",
         "last_price",
-        "stop_price",
-        "limit_price",
     ):
         value = evidence_order.get(field)
         if value is None:
@@ -1256,7 +1254,7 @@ def resolve_runner_flatten_exit_price(trade, evidence_order):
         except (TypeError, ValueError):
             continue
 
-    for field in ("last_price", "exit_price", "current_stop"):
+    for field in ("last_price", "exit_price"):
         value = trade.get(field)
         if value is None:
             continue
@@ -1267,13 +1265,55 @@ def resolve_runner_flatten_exit_price(trade, evidence_order):
     return None
 
 
+FLATTEN_EXIT_REASONS = {
+    "flatten_symbol",
+    "flatten_trade",
+    "executor_flatten",
+    "noon_runner_flatten",
+}
+
+
+def prices_match(price_a, price_b, symbol=None):
+    first = coerce_float(price_a)
+    second = coerce_float(price_b)
+    if first is None or second is None:
+        return False
+    try:
+        first = round_to_nearest_tick(first, symbol)
+        second = round_to_nearest_tick(second, symbol)
+    except Exception:
+        pass
+    return abs(float(first) - float(second)) < 1e-9
+
+
+def runner_exit_price_is_reliable(trade):
+    if trade.get("exit_price") is None:
+        return False
+
+    exit_reason = str(trade.get("exit_reason") or trade.get("closed_reason") or "").strip().lower()
+    if exit_reason not in FLATTEN_EXIT_REASONS:
+        return True
+
+    source = str(trade.get("runner_exit_price_source") or trade.get("exit_price_source") or "").strip().lower()
+    if source in {"flatten_evidence", "filled_price", "fill_price", "avg_fill_price", "average_fill_price", "closed_price", "last_price"}:
+        return True
+
+    for stop_field in ("original_stop", "current_stop", "stop_price"):
+        if prices_match(trade.get("exit_price"), trade.get(stop_field), trade.get("symbol")):
+            return False
+    return True
+
+
 def update_profit_breakdown(trade, include_runner=False):
     tp1_profit = calculate_tp1_profit(trade)
     if tp1_profit is not None:
         trade["tp1_profit"] = tp1_profit
 
     if include_runner:
-        trade["runner_profit"] = calculate_runner_profit(trade)
+        if runner_exit_price_is_reliable(trade):
+            trade["runner_profit"] = calculate_runner_profit(trade)
+        else:
+            trade["runner_profit"] = 0.0
 
     total = 0.0
     has_profit = False
@@ -2713,10 +2753,12 @@ def close_trade_from_executor_flatten_evidence(trade, evidence_order):
 
     if trade.get("exit_reason") == "target_filled":
         trade["exit_price"] = resolve_runner_flatten_exit_price(trade, evidence_order) or trade.get("tp1_price")
+        trade["runner_exit_price_source"] = "flatten_evidence"
     else:
         exit_price = resolve_runner_flatten_exit_price(trade, evidence_order)
         if exit_price is not None:
             trade["exit_price"] = exit_price
+            trade["runner_exit_price_source"] = "flatten_evidence"
 
     update_post_be_analytics(trade, trade.get("exit_price"), closed_at)
     update_profit_breakdown(trade, include_runner=trade.get("exit_price") is not None)
