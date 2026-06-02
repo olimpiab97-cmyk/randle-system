@@ -10,7 +10,7 @@ import re
 import threading
 import tempfile
 from zoneinfo import ZoneInfo
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -43,6 +43,7 @@ from symbol_resolution import (
 PERSISTENCE_FILE = os.path.join(BASE_DIR, "Data", "persistence_state.json")
 EXECUTOR_STATE_FILE = os.path.join(BASE_DIR, "Data", "executor_state.json")
 TRADE_MANAGEMENT_RESEARCH_FILE = os.path.join(BASE_DIR, "Data", "trade_management_research.jsonl")
+TRADE_SCREENSHOT_DIR = os.path.join(BASE_DIR, "Data", "trade_screenshots")
 RITHMIC_ATR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "Data", "rithmic_atr_snapshot.json")
 RITHMIC_RECENT_BARS_FILE = os.path.join(BASE_DIR, "Data", "rithmic_recent_bars.json")
 RITHMIC_ATR_SHADOW_COMPARISON_FILE = os.path.join(BASE_DIR, "Data", "rithmic_atr_shadow_comparison.json")
@@ -625,6 +626,10 @@ TRADE_PUBLIC_FIELDS = [
     "trade_id",
     "status",
     "symbol",
+    "created_at",
+    "opened_at",
+    "entry_time",
+    "submitted_at",
     "direction",
     "entry_price",
     "original_stop",
@@ -651,6 +656,13 @@ TRADE_PUBLIC_FIELDS = [
     "tp1_profit",
     "runner_profit",
     "total_profit",
+    "result",
+    "r_multiple",
+    "screenshot",
+    "screenshot_filename",
+    "screenshot_path",
+    "screenshot_url",
+    "screenshot_uploaded_at",
 ]
 
 
@@ -659,6 +671,13 @@ def primitive_value(value):
         return value.isoformat()
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
+    if isinstance(value, dict):
+        return {
+            str(key): primitive_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [primitive_value(item) for item in value]
     return str(value)
 
 
@@ -754,6 +773,45 @@ def update_pnl_totals(trade, current_price=None):
     trade["realized_pnl"] = round(float(realized), 2)
     trade["unrealized_pnl"] = round(calculate_unrealized_pnl(trade, current_price=current_price), 2)
     trade["total_pnl"] = round(trade["realized_pnl"] + trade["unrealized_pnl"], 2)
+    return trade
+
+
+def apply_closed_trade_accounting(trade):
+    if trade.get("status") != "closed":
+        return trade
+    update_profit_breakdown(trade, include_runner=trade.get("exit_price") is not None)
+    total = coerce_float(trade.get("total_profit"))
+    if total is None:
+        total = coerce_float(trade.get("realized_pnl"))
+    if total is None:
+        total = 0.0
+    trade["realized_pnl"] = round(total, 2)
+    trade["total_pnl"] = round(total, 2)
+    trade["unrealized_pnl"] = 0.0
+    if total > 0:
+        trade["result"] = "WIN"
+    elif total < 0:
+        trade["result"] = "LOSS"
+    else:
+        trade["result"] = "BE"
+
+    risk = first_present_float(
+        trade.get("initial_risk_dollars"),
+        trade.get("risk_dollars"),
+        trade.get("initial_risk"),
+        trade.get("risk_amount"),
+        trade.get("dollar_risk"),
+    )
+    if risk is None:
+        try:
+            entry = float(trade.get("entry_price"))
+            stop = float(trade.get("original_stop"))
+            size = float(trade.get("position_size"))
+            risk = abs(entry - stop) * get_point_value(trade.get("symbol")) * size
+        except (TypeError, ValueError):
+            risk = None
+    if risk is not None and risk != 0:
+        trade["r_multiple"] = round(total / risk, 4)
     return trade
 
 
@@ -999,6 +1057,7 @@ def update_post_be_analytics(trade, price, timestamp):
 
 
 def actual_trade_result(trade):
+    apply_closed_trade_accounting(trade)
     profit = coerce_float(trade.get("total_profit"))
     if profit is None:
         profit = coerce_float(trade.get("total_pnl"))
@@ -1104,6 +1163,24 @@ def record_trade_management_research_if_closed(trade):
             f"trade_id={trade.get('trade_id')} path={TRADE_MANAGEMENT_RESEARCH_FILE} error={exc}"
         )
         return False
+
+
+def safe_screenshot_filename(trade_id, filename):
+    base_name = os.path.basename(str(filename or "screenshot.png"))
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", base_name).strip("._")
+    if not safe_name:
+        safe_name = "screenshot.png"
+    stem, ext = os.path.splitext(safe_name)
+    if ext.lower() not in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+        ext = ".png"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"{trade_id}_{timestamp}_{stem[:80]}{ext}"
+
+
+def trade_screenshot_url(filename):
+    if not filename:
+        return None
+    return f"/trade_screenshots/{filename}"
 
 
 def repair_missing_be_trigger(trade):
@@ -1347,8 +1424,8 @@ def public_trade_dict(trade):
                 has_profit = True
         if has_profit:
             normalized["total_profit"] = round(total, 2)
-    if normalized.get("status") == "closed" and normalized.get("exit_price") is not None:
-        update_profit_breakdown(normalized, include_runner=True)
+    if normalized.get("status") == "closed":
+        apply_closed_trade_accounting(normalized)
     else:
         update_pnl_totals(normalized)
 
@@ -2252,6 +2329,8 @@ def apply_manual_exit_limit_fill_from_executor(trade, manual_order, live_qty):
         trade["recovery_status"] = "partial_manual_exit_limit_reconciled"
 
     update_profit_breakdown(trade, include_runner=False)
+    if trade.get("status") == "closed":
+        apply_closed_trade_accounting(trade)
     return trade
 
 
@@ -2602,6 +2681,7 @@ def close_trade_from_executor_stop_fill(trade, stop_order):
 
     update_post_be_analytics(trade, trade.get("exit_price"), filled_at)
     update_profit_breakdown(trade, include_runner=True)
+    apply_closed_trade_accounting(trade)
     print(
         f"SYNC: trade closed from executor stop fill [{trade['trade_id']}] "
         f"stop_id={trade.get('stop_order_id')} exit_price={trade.get('exit_price')}"
@@ -2638,6 +2718,7 @@ def close_trade_from_executor_flatten_evidence(trade, evidence_order):
 
     update_post_be_analytics(trade, trade.get("exit_price"), closed_at)
     update_profit_breakdown(trade, include_runner=trade.get("exit_price") is not None)
+    apply_closed_trade_accounting(trade)
     print(
         f"SYNC: trade closed from executor flatten evidence [{trade['trade_id']}] "
         f"reason={trade.get('exit_reason')} order_id={evidence_order.get('order_id')}"
@@ -3363,6 +3444,7 @@ def run_noon_runner_flatten_if_due(reference_time=None):
         if exit_price is not None:
             trade["exit_price"] = float(exit_price)
         update_profit_breakdown(trade, include_runner=True)
+        apply_closed_trade_accounting(trade)
         state["trades"][trade_id] = serialize_trade(trade)
         flattened_trades.append(trade_id)
         log_trade_event(
@@ -5301,6 +5383,68 @@ def get_trades():
     })
 
 
+@app.route("/trade_screenshots/<path:filename>", methods=["GET"])
+def get_trade_screenshot(filename):
+    return send_from_directory(TRADE_SCREENSHOT_DIR, filename)
+
+
+@app.route("/trades/<trade_id>/screenshot", methods=["POST"])
+def attach_trade_screenshot(trade_id):
+    print(
+        "KPI SCREENSHOT upload_received "
+        f"trade_id={trade_id} files={list(request.files.keys())}"
+    )
+    uploaded = request.files.get("screenshot") or request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        print(f"KPI SCREENSHOT missing_file trade_id={trade_id}")
+        return jsonify({"ok": False, "error": "missing_screenshot"}), 400
+
+    content_type = str(uploaded.content_type or "").lower()
+    if content_type and not content_type.startswith("image/"):
+        print(f"KPI SCREENSHOT invalid_file_type trade_id={trade_id} content_type={uploaded.content_type}")
+        return jsonify({"ok": False, "error": "invalid_file_type"}), 400
+
+    state = load_state()
+    trade = state.get("trades", {}).get(trade_id)
+    if not trade:
+        print(f"KPI SCREENSHOT trade_not_found trade_id={trade_id}")
+        return jsonify({"ok": False, "error": "trade_not_found"}), 404
+
+    os.makedirs(TRADE_SCREENSHOT_DIR, exist_ok=True)
+    filename = safe_screenshot_filename(trade_id, uploaded.filename)
+    target_path = os.path.join(TRADE_SCREENSHOT_DIR, filename)
+    uploaded.save(target_path)
+    file_written = os.path.exists(target_path)
+
+    screenshot = {
+        "filename": filename,
+        "original_filename": uploaded.filename,
+        "path": target_path,
+        "url": trade_screenshot_url(filename),
+        "content_type": uploaded.content_type,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    trade["screenshot"] = screenshot
+    trade["screenshot_filename"] = filename
+    trade["screenshot_path"] = target_path
+    trade["screenshot_url"] = screenshot["url"]
+    trade["screenshot_uploaded_at"] = screenshot["uploaded_at"]
+    state["trades"][trade_id] = serialize_trade(trade)
+    save_state(state, reason=f"attach_trade_screenshot:{trade_id}")
+    print(
+        "KPI SCREENSHOT saved "
+        f"trade_id={trade_id} path={target_path} file_written={file_written} url={screenshot['url']}"
+    )
+
+    return jsonify({
+        "ok": True,
+        "trade_id": trade_id,
+        "screenshot": screenshot,
+        "file_written": file_written,
+        "trade": public_trade_dict(trade),
+    })
+
+
 @app.route("/events", methods=["GET"])
 def get_events():
     state = load_state()
@@ -5417,6 +5561,7 @@ def handle_stop_hit(trade, timestamp):
     trade["closed_at"] = timestamp
     update_post_be_analytics(trade, trade.get("exit_price"), timestamp)
     update_profit_breakdown(trade, include_runner=True)
+    apply_closed_trade_accounting(trade)
     print(
         f"TRADE CLOSED trade_id={trade['trade_id']} "
         f"trade_closed_exit_reason={trade['exit_reason']} "
