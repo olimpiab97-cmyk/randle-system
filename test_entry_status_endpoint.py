@@ -3985,23 +3985,34 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(step2_status["current_step_status"], "CONFIRMED")
         self.assertEqual(step2_status["active_liquidity_name"], "PML/LL/ONL/YL Liquidity")
         self.assertEqual(step2_status["active_liquidity_price"], 50082.0)
+        self.assertEqual(step2_status["active_liquidity_group"]["components"], ["PML", "LL", "ONL", "YL"])
+        self.assertEqual(step2_status["active_liquidity_group"]["display_name"], "PML/LL/ONL/YL Liquidity")
+        self.assertEqual(step2_status["active_liquidity_group"]["close_boundary"], 50082.0)
+        self.assertEqual(step2_status["active_liquidity_group"]["extreme_boundary"], 49806.0)
         self.assertEqual(step2_status["liquidity_group"], "LOW 1")
         self.assertEqual(step2_status["setup_direction"], "LONG")
         self.assertEqual(step2_status["rejection_pathway_status"], "controlling")
 
         self.assertEqual(leg1_status["active_liquidity_name"], "PML/LL/ONL/YL Liquidity")
         self.assertEqual(leg1_status["active_liquidity_price"], 50082.0)
+        self.assertEqual(leg1_status["active_liquidity_group"]["components"], ["PML", "LL", "ONL", "YL"])
+        self.assertEqual(leg1_status["active_liquidity_group"]["display_name"], "PML/LL/ONL/YL Liquidity")
+        self.assertEqual(leg1_status["active_liquidity_group"]["close_boundary"], 50082.0)
+        self.assertEqual(leg1_status["active_liquidity_group"]["extreme_boundary"], 49806.0)
         self.assertEqual(leg1_status["liquidity_group"], "LOW 1")
-        self.assertEqual(leg1_status["current_pathway_control"], "rejection")
-        self.assertEqual(leg1_status["rejection_pathway_status"], "controlling")
-        self.assertEqual(leg1_status["setup_direction"], "LONG")
+        self.assertEqual(leg1_status["current_pathway_control"], "continuation")
+        self.assertEqual(leg1_status["rejection_pathway_status"], "frozen")
+        self.assertEqual(leg1_status["continuation_pathway_status"], "controlling")
+        self.assertEqual(leg1_status["continuation_type"], "S/R")
         self.assertIsNotNone(leg1_status["active_liquidity_name"])
         self.assertEqual(persisted["step4"]["next_step"], "Step 4")
-        self.assertEqual(persisted["step4"]["state"]["active_liquidity"]["name"], "PML")
-        self.assertEqual(persisted["step4"]["state"]["setup_direction"], "LONG")
+        self.assertEqual(persisted["step4"]["state"]["active_liquidity"]["name"], "YL")
+        self.assertEqual(persisted["step4"]["state"]["active_liquidity"]["price"], 49806.0)
         self.assertEqual(persisted["step2_locked_owner"]["pathway"], "rejection")
         self.assertEqual(persisted["step2_locked_owner"]["liquidity_group"], "LOW 1")
-        self.assertEqual(persisted["step2_locked_owner"]["stack_components"], ["YL", "ONL", "LL", "PML"])
+        self.assertEqual(persisted["step2_locked_owner"]["setup_direction"], "LONG")
+        self.assertEqual(persisted["step2_locked_owner"]["stack_components"], ["PML", "LL", "ONL", "YL"])
+        self.assertEqual(persisted["step2_locked_owner"]["extreme_boundary"], 49806.0)
 
     def test_nq_2026_05_19_replay_step2_to_step6_contract(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
@@ -4171,6 +4182,209 @@ class EntryStatusEndpointTests(unittest.TestCase):
         _status, persisted = observed["2026-05-19T13:45:00Z"]
         self.assertEqual(persisted["step5"]["state"]["leg2_status"], "VALIDATED")
         self.assertEqual(persisted["step6"]["status"], "ENTRY_CONFIRMED")
+
+    def test_ym_2026_06_05_step4_post_step2_live_path_diagnostics(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+            import step4_engine
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        originals = {
+            "STATE_PATH": entry_agent.STATE_PATH,
+            "TV_CONTEXT_PATH": entry_agent.TV_CONTEXT_PATH,
+            "TV_CONTEXT_BY_SYMBOL_PATH": entry_agent.TV_CONTEXT_BY_SYMBOL_PATH,
+            "RITHMIC_ATR_SNAPSHOT_PATH": entry_agent.RITHMIC_ATR_SNAPSHOT_PATH,
+            "PERSISTENCE_STATE_PATH": entry_agent.PERSISTENCE_STATE_PATH,
+            "EXECUTOR_STATE_PATH": entry_agent.EXECUTOR_STATE_PATH,
+            "get_latest_market_snapshot": entry_agent.get_latest_market_snapshot,
+            "recent_closed_bars": entry_agent.recent_closed_bars,
+        }
+        for name, value in originals.items():
+            self.addCleanup(setattr, entry_agent, name, value)
+
+        candle_rows = [
+            ("2026-06-05T13:32:00Z", 51631.0, 51666.0, 51613.0, 51647.0),
+            ("2026-06-05T13:33:00Z", 51648.0, 51686.0, 51629.0, 51651.0),
+            ("2026-06-05T13:34:00Z", 51650.0, 51671.0, 51612.0, 51646.0),
+            ("2026-06-05T13:35:00Z", 51645.0, 51651.0, 51620.0, 51622.0),
+            ("2026-06-05T13:36:00Z", 51624.0, 51635.0, 51588.0, 51590.0),
+            ("2026-06-05T13:37:00Z", 51589.0, 51626.0, 51581.0, 51585.0),
+            ("2026-06-05T13:38:00Z", 51583.0, 51592.0, 51562.0, 51576.0),
+            ("2026-06-05T13:39:00Z", 51572.0, 51591.0, 51538.0, 51540.0),
+            ("2026-06-05T13:40:00Z", 51540.0, 51567.0, 51524.0, 51563.0),
+            ("2026-06-05T13:41:00Z", 51563.0, 51570.0, 51533.0, 51541.0),
+            ("2026-06-05T13:42:00Z", 51543.0, 51549.0, 51499.0, 51505.0),
+            ("2026-06-05T13:43:00Z", 51507.0, 51516.0, 51479.0, 51481.0),
+        ]
+        candles = [
+            {"timestamp": ts, "open": open_, "high": high, "low": low, "close": close}
+            for ts, open_, high, low, close in candle_rows
+        ]
+        levels = {
+            "PMH": {"price": 51849.0, "status": "ACTIVE", "stack_group": "HIGH 1"},
+            "LH": {"price": 51849.0, "status": "ACTIVE", "stack_group": "HIGH 1"},
+            "ONH": {"price": 51849.0, "status": "ACTIVE", "stack_group": "HIGH 1"},
+            "YH": {"price": 51752.0, "status": "ACTIVE", "stack_group": "NONE"},
+            "LL": {"price": 51639.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+            "PML": {"price": 51632.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+            "ONL": {"price": 51585.0, "status": "ACTIVE", "stack_group": "LOW 1"},
+            "YL": {"price": 51256.0, "status": "ACTIVE", "stack_group": "NONE"},
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            entry_agent.STATE_PATH = temp_path / "entry_agent_state.json"
+            entry_agent.TV_CONTEXT_PATH = temp_path / "tv_context.json"
+            entry_agent.TV_CONTEXT_BY_SYMBOL_PATH = temp_path / "tv_context_by_symbol.json"
+            entry_agent.RITHMIC_ATR_SNAPSHOT_PATH = temp_path / "atr.json"
+            entry_agent.PERSISTENCE_STATE_PATH = temp_path / "persistence_state.json"
+            entry_agent.EXECUTOR_STATE_PATH = temp_path / "executor_state.json"
+            entry_agent.PERSISTENCE_STATE_PATH.write_text(json.dumps({"trades": {}}), encoding="utf-8")
+            entry_agent.EXECUTOR_STATE_PATH.write_text(json.dumps({"orders": {}}), encoding="utf-8")
+            entry_agent.RITHMIC_ATR_SNAPSHOT_PATH.write_text(
+                json.dumps({"symbols": {"YM": {"atr_value": 38.92857142857143}, "YMM6": {"atr_value": 38.92857142857143}}}),
+                encoding="utf-8",
+            )
+            entry_agent.TV_CONTEXT_BY_SYMBOL_PATH.write_text(
+                json.dumps(
+                    {
+                        "symbols": {
+                            "YM": {
+                                "symbol": "YM1!",
+                                "normalized_symbol": "YM",
+                                "locked": True,
+                                "atr_1m_14": 38.92857142857143,
+                                "daily_atr14": 600.0,
+                                "levels": levels,
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cursor = {"index": 0}
+
+            def market_snapshot(_symbol):
+                candle = candles[cursor["index"]]
+                return {
+                    "source": "test",
+                    "symbol": "YMM6",
+                    "latest_price": candle["close"],
+                    "latest_bar_time": candle["timestamp"],
+                    "ohlc_is_closed": True,
+                    "ohlc": candle,
+                }
+
+            entry_agent.get_latest_market_snapshot = market_snapshot
+            entry_agent.recent_closed_bars = lambda _symbol, limit=120: candles[: cursor["index"] + 1][-limit:]
+
+            diagnostics = []
+            observed = {}
+            diagnostic_times = {
+                "2026-06-05T13:39:00Z",
+                "2026-06-05T13:40:00Z",
+                "2026-06-05T13:41:00Z",
+            }
+
+            def append_diagnostic(status, persisted, candle, refresh_number):
+                step4 = persisted.get("step4") or {}
+                step4_state = step4.get("state") if isinstance(step4.get("state"), dict) else {}
+                candle_a = step4_state.get("candle_a") if isinstance(step4_state.get("candle_a"), dict) else None
+                close_candidate = (
+                    step4_engine.close_based_participation(candle_a, candle, step4_state.get("setup_direction"))
+                    if isinstance(candle_a, dict)
+                    else None
+                )
+                wick_candidate = (
+                    step4_engine.wick_participation(candle, step4_state.get("setup_direction"))
+                    if isinstance(candle_a, dict)
+                    else None
+                )
+                diagnostics.append(
+                    {
+                        "timestamp": candle["timestamp"],
+                        "same_closed_candle_refresh": refresh_number,
+                        "ohlc": {key: candle[key] for key in ("open", "high", "low", "close")},
+                        "public_step": status.get("current_step"),
+                        "public_wait_reason": status.get("wait_reason"),
+                        "step2_direction": ((persisted.get("step2_locked_owner") or {}).get("setup_direction")),
+                        "step2_setup": (persisted.get("rejection") or {}).get("watch_side"),
+                        "locked_owner": {
+                            key: (persisted.get("step2_locked_owner") or {}).get(key)
+                            for key in ("active_liquidity_name", "active_liquidity_price", "liquidity_group")
+                        },
+                        "locked_boundary_extreme": {
+                            "close_boundary": (persisted.get("step2_locked_owner") or {}).get("close_boundary"),
+                            "extreme_boundary": (persisted.get("step2_locked_owner") or {}).get("extreme_boundary"),
+                        },
+                        "step4_status": step4.get("status"),
+                        "step4_next_step": step4.get("next_step"),
+                        "step4_reason": step4.get("reason"),
+                        "step4_state_transition_reason": step4_state.get("state_transition_reason"),
+                        "candle_a_timestamp": (candle_a or {}).get("timestamp") if isinstance(candle_a, dict) else None,
+                        "candle_b_timestamp": (
+                            (step4_state.get("candle_b") or {}).get("timestamp")
+                            if isinstance(step4_state.get("candle_b"), dict)
+                            else None
+                        ),
+                        "leg1_candidate": bool(close_candidate or wick_candidate) if close_candidate is not None else None,
+                        "close_participation": close_candidate,
+                        "wick_participation": wick_candidate,
+                        "leg1_status": step4_state.get("leg1_status"),
+                        "leg1_state_locked": step4_state.get("leg1_state_locked"),
+                        "leg1_completed_at": step4_state.get("leg1_completed_at"),
+                        "leg1_window_candle_index": step4_state.get("leg1_window_candle_index"),
+                        "leg1_window_remaining": step4_state.get("leg1_window_remaining"),
+                        "rejection_reason": step4_state.get("step4_block_reason") or step4.get("reason"),
+                    }
+                )
+
+            for index, candle in enumerate(candles):
+                cursor["index"] = index
+                status = entry_agent.build_entry_status("YM")
+                persisted = json.loads(entry_agent.STATE_PATH.read_text(encoding="utf-8"))["state_by_symbol"]["YM"]
+                observed[candle["timestamp"]] = (status, persisted)
+                if candle["timestamp"] in diagnostic_times:
+                    append_diagnostic(status, persisted, candle, 1)
+                if candle["timestamp"] == "2026-06-05T13:39:00Z":
+                    status = entry_agent.build_entry_status("YM")
+                    persisted = json.loads(entry_agent.STATE_PATH.read_text(encoding="utf-8"))["state_by_symbol"]["YM"]
+                    observed[candle["timestamp"]] = (status, persisted)
+                    append_diagnostic(status, persisted, candle, 2)
+
+        print("\nYM 2026-06-05 live Step 4 diagnostics:")
+        print(json.dumps(diagnostics, indent=2))
+        self.assertEqual(observed["2026-06-05T13:38:00Z"][1]["step2_locked_owner"]["setup_direction"], "LONG")
+        self.assertEqual(len(diagnostics), 4)
+        first_1339, duplicate_1339, first_1340, first_1341 = diagnostics
+        self.assertEqual(first_1339["timestamp"], "2026-06-05T13:39:00Z")
+        self.assertEqual(first_1339["step4_status"], "WAIT")
+        self.assertEqual(first_1339["candle_a_timestamp"], "2026-06-05T13:39:00Z")
+        self.assertIsNone(first_1339["candle_b_timestamp"])
+
+        self.assertEqual(duplicate_1339["timestamp"], "2026-06-05T13:39:00Z")
+        self.assertEqual(duplicate_1339["same_closed_candle_refresh"], 2)
+        self.assertEqual(duplicate_1339["step4_status"], "WAIT")
+        self.assertEqual(duplicate_1339["candle_a_timestamp"], "2026-06-05T13:39:00Z")
+        self.assertIsNone(duplicate_1339["candle_b_timestamp"])
+        self.assertIsNone(duplicate_1339["leg1_status"])
+        self.assertIsNone(duplicate_1339["leg1_state_locked"])
+        self.assertIsNone(duplicate_1339["leg1_completed_at"])
+
+        self.assertEqual(first_1340["timestamp"], "2026-06-05T13:40:00Z")
+        self.assertEqual(first_1340["step4_status"], "READY")
+        self.assertEqual(first_1340["candle_a_timestamp"], "2026-06-05T13:39:00Z")
+        self.assertEqual(first_1340["candle_b_timestamp"], "2026-06-05T13:40:00Z")
+        self.assertTrue(first_1340["leg1_candidate"])
+        self.assertEqual(first_1340["leg1_status"], "COMPLETE")
+        self.assertIs(first_1340["leg1_state_locked"], True)
+        self.assertEqual(first_1340["leg1_completed_at"], "2026-06-05T13:40:00Z")
+        self.assertEqual(first_1341["step4_reason"], "Leg 1 locked; Step 4 not re-evaluated on status refresh.")
 
     def test_rs_continuation_projection_has_one_authoritative_long_direction(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))

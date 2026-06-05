@@ -305,6 +305,64 @@ def side_for_level(level_name: str | None) -> str | None:
     return None
 
 
+def stack_component_priority(name: Any) -> int:
+    return ACTIVE_LIQUIDITY_PRIORITY.get(str(name), 999)
+
+
+def close_component_for_stack_display(components: list[dict[str, Any]], side: str | None) -> dict[str, Any]:
+    if side == "upper":
+        close_price = min(float(component["price"]) for component in components)
+    elif side == "lower":
+        close_price = max(float(component["price"]) for component in components)
+    else:
+        return min(components, key=lambda item: (stack_component_priority(item["name"]), str(item["name"])))
+    close_components = [component for component in components if float(component["price"]) == close_price]
+    return min(
+        close_components,
+        key=lambda item: (
+            0 if str(item["name"]).startswith("PM") else 1,
+            stack_component_priority(item["name"]),
+            str(item["name"]),
+        ),
+    )
+
+
+def ordered_stack_components_for_display(components: list[dict[str, Any]], side: str | None) -> list[dict[str, Any]]:
+    """Order stack components from owner/close boundary outward; boundary math remains price-based."""
+    if not components:
+        return []
+    close_component = close_component_for_stack_display(components, side)
+    if side == "lower":
+        return sorted(
+            components,
+            key=lambda item: (
+                -float(item["price"]),
+                0 if item["name"] == close_component["name"] else 1,
+                stack_component_priority(item["name"]),
+                str(item["name"]),
+            ),
+        )
+    if side == "upper":
+        return sorted(
+            components,
+            key=lambda item: (
+                float(item["price"]),
+                0 if item["name"] == close_component["name"] else 1,
+                stack_component_priority(item["name"]),
+                str(item["name"]),
+            ),
+        )
+    return sorted(components, key=lambda item: (stack_component_priority(item["name"]), str(item["name"])))
+
+
+def stack_display_component_names(components: list[dict[str, Any]], side: str | None) -> list[str]:
+    return [str(component["name"]) for component in ordered_stack_components_for_display(components, side)]
+
+
+def stack_display_name(components: list[dict[str, Any]], side: str | None) -> str:
+    return f"{'/'.join(stack_display_component_names(components, side))} Liquidity"
+
+
 def active_levels_from_tv_context(tv_context: dict[str, Any] | None) -> dict[str, float]:
     """Return only ACTIVE TradingView helper levels as a flat name/price mapping."""
     if not isinstance(tv_context, dict) or not isinstance(tv_context.get("levels"), dict):
@@ -359,52 +417,8 @@ def selected_active_liquidity_from_context(
             return close <= close_boundary - tick_size
         return False
 
-    def component_priority(name: Any) -> int:
-        return ACTIVE_LIQUIDITY_PRIORITY.get(str(name), 999)
-
     def close_component_for_stack(components: list[dict[str, Any]], side: str | None) -> dict[str, Any]:
-        if side == "upper":
-            close_price = min(float(component["price"]) for component in components)
-        elif side == "lower":
-            close_price = max(float(component["price"]) for component in components)
-        else:
-            return min(components, key=lambda item: (component_priority(item["name"]), str(item["name"])))
-        close_components = [component for component in components if float(component["price"]) == close_price]
-        preferred_prefix = "PM" if side in {"upper", "lower"} else ""
-        return min(
-            close_components,
-            key=lambda item: (
-                0 if str(item["name"]).startswith(preferred_prefix) else 1,
-                component_priority(item["name"]),
-                str(item["name"]),
-            ),
-        )
-
-    def combined_stack_name(components: list[dict[str, Any]], side: str | None) -> str:
-        close_component = close_component_for_stack(components, side)
-        if side == "lower":
-            ordered = sorted(
-                components,
-                key=lambda item: (
-                    -float(item["price"]),
-                    0 if item["name"] == close_component["name"] else 1,
-                    component_priority(item["name"]),
-                    str(item["name"]),
-                ),
-            )
-        elif side == "upper":
-            ordered = sorted(
-                components,
-                key=lambda item: (
-                    float(item["price"]),
-                    0 if item["name"] == close_component["name"] else 1,
-                    component_priority(item["name"]),
-                    str(item["name"]),
-                ),
-            )
-        else:
-            ordered = sorted(components, key=lambda item: (component_priority(item["name"]), str(item["name"])))
-        return f"{'/'.join(str(component['name']) for component in ordered)} Liquidity"
+        return close_component_for_stack_display(components, side)
 
     grouped: dict[str, dict[str, Any]] = {}
     for name, details in tv_context["levels"].items():
@@ -455,10 +469,10 @@ def selected_active_liquidity_from_context(
             close_component = close_component_for_stack(components, side)
             group_payload = {
                 "name": group["stack_group"],
-                "components": [component["name"] for component in components],
+                "components": stack_display_component_names(components, side),
                 "prices": {component["name"]: component["price"] for component in components},
                 "side": side,
-                "display_name": combined_stack_name(components, side),
+                "display_name": stack_display_name(components, side),
                 "close_boundary": close_boundary,
                 "extreme_boundary": extreme_boundary,
                 "low": low,
@@ -2452,9 +2466,10 @@ def active_stack_from_context(tv_context: dict[str, Any] | None, active_level: s
                     side = components[0].get("side") or side_for_level(active_level)
                     return {
                         "name": stack_group,
-                        "components": [component["name"] for component in components],
+                        "components": stack_display_component_names(components, side),
                         "prices": {component["name"]: component["price"] for component in components},
                         "side": side,
+                        "display_name": stack_display_name(components, side),
                         "close_boundary": active_price,
                         "extreme_boundary": max(prices) if side == "upper" else min(prices),
                         "low": min(prices),
@@ -2915,6 +2930,10 @@ def build_step4_interaction(
             interaction["initial_candle_a"] = previous_candle_a
             interaction["candle_a_source"] = previous_state.get("candle_a_source") or "step4_stack_post_extreme_candle_a"
             interaction["stack_step4_candle_a_assigned"] = True
+            if same_candle_time(candle_timestamp(current_candle), candle_timestamp(previous_candle_a)):
+                interaction.pop("candle_b", None)
+                interaction.pop("latest_candle", None)
+                interaction["awaiting_stack_candle_b"] = True
         elif candle_is_after(current_candle, candle_timestamp(confirmation_candle)):
             interaction["candle_a"] = current_candle
             interaction["initial_candle_a"] = current_candle
@@ -3762,6 +3781,17 @@ def mark_finalized_rejection_state(step_result: dict[str, Any]) -> dict[str, Any
     return result
 
 
+def public_active_liquidity_price(liquidity: dict[str, Any] | None, group: dict[str, Any] | None = None) -> Any:
+    """Return display price for status/chart without changing internal boundary math."""
+    if isinstance(group, dict):
+        close_boundary = optional_float(group.get("close_boundary"))
+        if close_boundary is not None:
+            return close_boundary
+    if isinstance(liquidity, dict):
+        return liquidity.get("price")
+    return None
+
+
 def active_liquidity_from_snapshot(snapshot: dict[str, Any]) -> tuple[Any, Any]:
     """Return active liquidity only when the current snapshot is interacting with it."""
     if snapshot.get("suppress_active_liquidity") is True:
@@ -3777,7 +3807,8 @@ def active_liquidity_from_snapshot(snapshot: dict[str, Any]) -> tuple[Any, Any]:
         and locked_owner.get("pathway") == "rejection"
         and valid_active_liquidity_selection(locked_active.get("name"), locked_active.get("price"))
     ):
-        return locked_active.get("display_name") or locked_active.get("name"), locked_active.get("price")
+        locked_group = locked_owner.get("active_liquidity_group") if isinstance(locked_owner.get("active_liquidity_group"), dict) else locked_active.get("group")
+        return locked_active.get("display_name") or locked_active.get("name"), public_active_liquidity_price(locked_active, locked_group)
 
     last_interacted = step_2_1a.get("last_interacted_liquidity")
     name = (
@@ -3795,7 +3826,7 @@ def active_liquidity_from_snapshot(snapshot: dict[str, Any]) -> tuple[Any, Any]:
         group = step_2_1a.get("active_liquidity_group")
         if not display_name and isinstance(group, dict):
             display_name = group.get("display_name")
-        return display_name or name, price
+        return display_name or name, public_active_liquidity_price({"price": price}, group if isinstance(group, dict) else None)
 
     selected_liquidity = None
     if candle_close_confirmed(snapshot):
@@ -3806,7 +3837,8 @@ def active_liquidity_from_snapshot(snapshot: dict[str, Any]) -> tuple[Any, Any]:
             float((liquidity or {}).get("tick_size") or 0.25),
         )
     if selected_liquidity and valid_active_liquidity_selection(selected_liquidity.get("name"), selected_liquidity.get("price")):
-        return selected_liquidity.get("display_name") or selected_liquidity.get("name"), selected_liquidity.get("price")
+        selected_group = selected_liquidity.get("group") if isinstance(selected_liquidity.get("group"), dict) else None
+        return selected_liquidity.get("display_name") or selected_liquidity.get("name"), public_active_liquidity_price(selected_liquidity, selected_group)
 
     return None, None
 
