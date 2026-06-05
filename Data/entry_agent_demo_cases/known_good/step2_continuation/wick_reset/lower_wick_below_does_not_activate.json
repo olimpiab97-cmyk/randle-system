@@ -1,0 +1,54 @@
+{
+  "case_name": "Step 2 continuation wick reset LOWER - wick below does not activate",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_continuation_only",
+  "scenario_type": "continuation",
+  "continuation_type": "R/S",
+  "level_type": "regular",
+  "expected_result": "WAIT",
+  "symbol": "NQ",
+  "date": "2026-06-05",
+  "tick_size": 0.25,
+  "levels": {
+    "PML": {
+      "price": 100.0,
+      "side": "LOW"
+    }
+  },
+  "stacks": [],
+  "active_liquidity": {
+    "name": "PML",
+    "components": [
+      "PML"
+    ],
+    "price": 100.0,
+    "side": "LOW"
+  },
+  "wick_reset": {
+    "original_boundary": 100.0,
+    "reset_boundary": 99.5,
+    "qualifying_close": "close < 99.5"
+  },
+  "candles": [
+    {
+      "time": "2026-06-05T13:12:00Z",
+      "open": 100.5,
+      "high": 100.75,
+      "low": 99.5,
+      "close": 100.25
+    }
+  ],
+  "expected": [
+    {
+      "continuation_type": "R/S",
+      "liquidity_level": "PML Liquidity",
+      "close_price": 100.25,
+      "qualification_boundary": 99.5,
+      "expected_step2_state": "WAIT",
+      "actual_step2_state": "WAIT"
+    }
+  ],
+  "notes": "Step 2 continuation-only fixture. Wick-through does not activate Step 2 continuation; it resets the active lower qualifying boundary to the wick low."
+}

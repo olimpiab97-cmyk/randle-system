@@ -1012,6 +1012,27 @@ def continuation_step2_reason(continuation_type: str, step2_state: str) -> str:
     )
 
 
+def continuation_wick_reset_boundary(
+    *,
+    fixture: dict[str, Any],
+    candle: dict[str, Any],
+    continuation_type: str,
+    boundary: float,
+) -> float:
+    if not isinstance(fixture.get("wick_reset"), dict):
+        return boundary
+    close = as_float(candle.get("close"))
+    high = as_float(candle.get("high"))
+    low = as_float(candle.get("low"))
+    if close is None:
+        return boundary
+    if continuation_type == "R/S" and low is not None and low < boundary and close > boundary:
+        return low
+    if continuation_type == "S/R" and high is not None and high > boundary and close < boundary:
+        return high
+    return boundary
+
+
 def continuation_chart_context_candles(
     active: dict[str, Any],
     validation_candle: dict[str, Any],
@@ -1075,6 +1096,13 @@ def evaluate_step2_continuation_fixture(fixture: dict[str, Any]) -> list[dict[st
 
     for index, candle in enumerate(candles):
         step2_state = "ACTIVE" if continuation_step2_active(candle, continuation_type, boundary) else "WAIT"
+        if step2_state == "WAIT":
+            boundary = continuation_wick_reset_boundary(
+                fixture=fixture,
+                candle=candle,
+                continuation_type=continuation_type,
+                boundary=boundary,
+            )
         actual = {
             "time": candle.get("timestamp"),
             "step": "Step 2" if step2_state == "ACTIVE" else "Step 1",
