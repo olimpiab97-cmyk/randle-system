@@ -1,0 +1,85 @@
+{
+  "case_name": "Step 2 rejection wick reset LOWER - close below original above wick boundary waits",
+  "case_type": "known_good",
+  "classification": "APPROVED PASS",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "regular",
+  "expected_result": "ignored",
+  "why": "After a lower wick reset, a later close below the original liquidity price but above the wick low does not activate Step 2.",
+  "symbol": "NQ",
+  "date": "2026-06-05",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {
+      "price": 100.0,
+      "side": "LOW"
+    },
+    "ONH": {
+      "price": 120.0,
+      "side": "HIGH"
+    }
+  },
+  "stacks": [],
+  "active_liquidity": {
+    "name": "PML",
+    "components": [
+      "PML"
+    ],
+    "price": 100.0,
+    "side": "LOW"
+  },
+  "wick_reset": {
+    "original_boundary": 100.0,
+    "reset_boundary": 99.5,
+    "qualifying_close": "close < 99.5"
+  },
+  "candles": [
+    {
+      "time": "2026-06-05T13:12:00Z",
+      "open": 100.5,
+      "high": 100.75,
+      "low": 99.5,
+      "close": 100.25
+    },
+    {
+      "time": "2026-06-05T13:13:00Z",
+      "open": 100.25,
+      "high": 100.5,
+      "low": 99.75,
+      "close": 99.75
+    }
+  ],
+  "expected": [
+    {
+      "time": "2026-06-05T13:12:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    },
+    {
+      "time": "2026-06-05T13:13:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    }
+  ],
+  "notes": "Step 2 rejection-only fixture. The later close is below original PML 100.0 but remains above the reset wick-low boundary 99.5, so Step 2 stays inactive."
+}

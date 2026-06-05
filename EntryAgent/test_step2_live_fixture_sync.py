@@ -70,8 +70,8 @@ def fixture_tv_context(fixture: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def live_snapshot(fixture: dict[str, Any]) -> dict[str, Any]:
-    candle = fixture["candles"][0]
+def live_snapshot(fixture: dict[str, Any], candle: dict[str, Any] | None = None) -> dict[str, Any]:
+    candle = candle or fixture["candles"][0]
     return {
         "normalized_symbol": fixture.get("symbol") or "NQ",
         "symbol": fixture.get("symbol") or "NQ",
@@ -134,8 +134,8 @@ def continuation_live_type(fixture: dict[str, Any]) -> str:
 
 
 def test_live_step2_rejection_matches_all_approved_fixtures() -> None:
-    fixtures = approved_fixtures(REJECTION_DIR)
-    assert len(fixtures) == 49
+    fixtures = [path for path in approved_fixtures(REJECTION_DIR) if len(load_json(path).get("candles") or []) == 1]
+    assert len(fixtures) == 51
     for path in fixtures:
         fixture = load_json(path)
         result = entry_agent.evaluate_live_step_2_1a(
@@ -155,6 +155,50 @@ def test_live_step2_rejection_matches_all_approved_fixtures() -> None:
             else:
                 assert result["active_level"] == expected_name, path
                 assert result["level_price"] == expected_price, path
+
+
+def test_live_step2_rejection_wick_reset_sequences_match_approved_fixtures() -> None:
+    fixtures = [
+        path
+        for path in approved_fixtures(REJECTION_DIR)
+        if path.parent.name == "wick_reset"
+    ]
+    assert len(fixtures) == 6
+    for path in fixtures:
+        fixture = load_json(path)
+        persisted_state: dict[str, Any] = {"normalized_symbol": fixture.get("symbol") or "NQ"}
+        result: dict[str, Any] = {}
+        for index, candle in enumerate(fixture["candles"]):
+            result = entry_agent.evaluate_live_step_2_1a(
+                live_snapshot(fixture, candle),
+                {},
+                {"tick_size": fixture.get("tick_size", 0.25)},
+                persisted_state,
+            )
+            expected = fixture["expected"][index]
+            expected_active = expected.get("step") == "Step 2"
+            assert bool(result.get("step_2_activated")) is expected_active, (path, index)
+            persisted_state.update(
+                {
+                    "step_2_1a": result,
+                    "step_2_1a_candle_index": result.get("next_candle_index"),
+                    "step_2_1a_last_evaluated_bar_time": result.get("last_evaluated_bar_time"),
+                    "last_interacted_liquidity": result.get("last_interacted_liquidity"),
+                }
+            )
+        expected_final_active = fixture.get("expected_result") == "valid_step2"
+        assert bool(result.get("step_2_activated")) is expected_final_active, path
+        if expected_final_active:
+            expected_name, expected_price = expected_rejection_owner(fixture)
+            assert result["active_level"] == expected_name, path
+            assert result["level_price"] == expected_price, path
+            events = result.get("events") or []
+            assert any(event.get("event") == "pre_activation_probe_consumed" for event in events), path
+            assert any(event.get("event") == "step_2_activated" and event.get("source") == "probe" for event in events), path
+        else:
+            probe = result.get("pre_activation_probe_boundary") or {}
+            assert probe.get("active") is True, path
+            assert probe.get("boundary_price") == fixture["wick_reset"]["reset_boundary"], path
 
 
 def test_live_step2_continuation_matches_all_approved_fixtures() -> None:

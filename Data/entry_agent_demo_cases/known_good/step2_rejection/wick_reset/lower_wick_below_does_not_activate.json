@@ -1,0 +1,66 @@
+{
+  "case_name": "Step 2 rejection wick reset LOWER - wick below does not activate",
+  "case_type": "known_good",
+  "classification": "APPROVED PASS",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "regular",
+  "expected_result": "ignored",
+  "why": "Wick trades below active low-side liquidity, closes back above it, and resets the future qualifying boundary to the wick low without activating Step 2.",
+  "symbol": "NQ",
+  "date": "2026-06-05",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {
+      "price": 100.0,
+      "side": "LOW"
+    },
+    "ONH": {
+      "price": 120.0,
+      "side": "HIGH"
+    }
+  },
+  "stacks": [],
+  "active_liquidity": {
+    "name": "PML",
+    "components": [
+      "PML"
+    ],
+    "price": 100.0,
+    "side": "LOW"
+  },
+  "wick_reset": {
+    "original_boundary": 100.0,
+    "reset_boundary": 99.5,
+    "qualifying_close": "close < 99.5"
+  },
+  "candles": [
+    {
+      "time": "2026-06-05T13:12:00Z",
+      "open": 100.5,
+      "high": 100.75,
+      "low": 99.5,
+      "close": 100.25
+    }
+  ],
+  "expected": [
+    {
+      "time": "2026-06-05T13:12:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    }
+  ],
+  "notes": "Step 2 rejection-only fixture. Wick-through does not activate Step 2; it resets the active low-side qualifying boundary to the wick low. No Step 4, Step 5, Step 6, trade manager, broker, or order behavior is evaluated."
+}
