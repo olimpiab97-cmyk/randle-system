@@ -132,6 +132,30 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
         self.assertEqual(investigation["review_status"], "INVESTIGATION")
         self.assertTrue(investigation["review_label"].startswith("[INVESTIGATION]"))
 
+    def test_step2_wick_reset_review_queue_statuses(self):
+        entries = self.harness.list_fixture_entries()
+        wick_reset_entries = [
+            entry
+            for entry in entries
+            if entry.get("review_group") == "Step 2 Wick Reset"
+        ]
+        self.assertEqual(len(wick_reset_entries), 12)
+        self.assertEqual(
+            sum(1 for entry in wick_reset_entries if entry.get("review_section") == "Rejection Wick Reset"),
+            6,
+        )
+        self.assertEqual(
+            sum(1 for entry in wick_reset_entries if entry.get("review_section") == "Continuation Wick Reset"),
+            6,
+        )
+        for entry in wick_reset_entries:
+            with self.subTest(fixture_id=entry["id"]):
+                self.assertEqual(entry["review_status"], "APPROVED")
+                self.assertEqual(entry["user_review"], "APPROVED")
+                self.assertTrue(entry["review_label"].startswith("[APPROVED]"))
+                self.assertFalse(entry["hidden_from_review"])
+                self.assertFalse(entry["deprecated"])
+
     def test_all_initial_fixtures_match_expected_outputs(self):
         for name in self.harness.list_fixtures():
             with self.subTest(name=name):

@@ -7,7 +7,7 @@
   "scenario_type": "continuation",
   "continuation_type": "S/R",
   "level_type": "regular",
-  "expected_result": "WAIT",
+  "expected_result": "WAIT_THEN_ACTIVE",
   "symbol": "NQ",
   "date": "2026-06-05",
   "tick_size": 0.25,
@@ -37,14 +37,32 @@
       "open": 99.5,
       "high": 100.5,
       "low": 99.25,
-      "close": 99.75
+      "close": 99.75,
+      "highlight_label": "Wick reset: wick high 100.5"
     },
     {
       "time": "2026-06-05T13:23:00Z",
       "open": 99.75,
       "high": 100.25,
       "low": 99.5,
-      "close": 100.25
+      "close": 100.25,
+      "highlight_label": "WAIT: close below wick boundary"
+    },
+    {
+      "time": "2026-06-05T13:24:00Z",
+      "open": 100.25,
+      "high": 100.5,
+      "low": 100.0,
+      "close": 100.5,
+      "highlight_label": "WAIT: close at wick boundary"
+    },
+    {
+      "time": "2026-06-05T13:25:00Z",
+      "open": 100.5,
+      "high": 100.75,
+      "low": 100.25,
+      "close": 100.75,
+      "highlight_label": "ACTIVE: close beyond wick boundary"
     }
   ],
   "expected": [
@@ -63,7 +81,24 @@
       "qualification_boundary": 100.5,
       "expected_step2_state": "WAIT",
       "actual_step2_state": "WAIT"
+    },
+    {
+      "continuation_type": "S/R",
+      "liquidity_level": "PMH Liquidity",
+      "close_price": 100.5,
+      "qualification_boundary": 100.5,
+      "expected_step2_state": "WAIT",
+      "actual_step2_state": "WAIT"
+    },
+    {
+      "continuation_type": "S/R",
+      "liquidity_level": "PMH Liquidity",
+      "close_price": 100.75,
+      "qualification_boundary": 100.5,
+      "expected_step2_state": "ACTIVE",
+      "actual_step2_state": "ACTIVE"
     }
   ],
-  "notes": "Step 2 continuation-only fixture. The later close is above original PMH 100.0 but remains below the reset wick-high boundary 100.5, so Step 2 continuation stays WAIT."
+  "notes": "Step 2 continuation wick-reset review. Original Boundary: 100.0. Wick Extreme: 100.5. Wick Qualifying Boundary: 100.5. Follow-up candle 2 closes 100.25 below the Wick Qualifying Boundary and stays WAIT. Follow-up candle 3 closes 100.5 at the Wick Qualifying Boundary and stays WAIT because it is not beyond by the required tick. Follow-up candle 4 closes 100.75 beyond the Wick Qualifying Boundary and activates Step 2.",
+  "step2_scenario_text": "Step 2 continuation wick-reset review. Original Boundary: 100.0. Wick Extreme: 100.5. Wick Qualifying Boundary: 100.5. Follow-up candle 2 closes 100.25 below the Wick Qualifying Boundary and stays WAIT. Follow-up candle 3 closes 100.5 at the Wick Qualifying Boundary and stays WAIT because it is not beyond by the required tick. Follow-up candle 4 closes 100.75 beyond the Wick Qualifying Boundary and activates Step 2."
 }

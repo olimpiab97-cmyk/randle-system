@@ -251,6 +251,31 @@
     .step2-chart-panel canvas {
       height: 620px;
     }
+    .step2-layout.wick-reset-review {
+      grid-template-columns: 1fr;
+    }
+    .step2-layout.wick-reset-review .step2-left {
+      display: none;
+    }
+    .step2-layout.wick-reset-review .step2-chart-panel {
+      grid-column: 1;
+      grid-row: auto;
+    }
+    .step2-layout.wick-reset-review #stepLogicScenarios,
+    .step2-layout.wick-reset-review #step2StackAnatomyGrid {
+      display: none;
+    }
+    .step2-layout.wick-reset-review .step2-chart-panel canvas {
+      height: 560px;
+    }
+    .wick-boundary-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .wick-boundary-note {
+      padding: 0 10px 12px;
+      color: #334148;
+      line-height: 1.35;
+    }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -349,6 +374,9 @@
     <span class="status">Step 2 Continuation</span>
     <select id="step2ContinuationSelect" aria-label="Step 2 Continuation Case"></select>
     <button id="loadStep2ContinuationBtn">Load Continuation</button>
+    <span class="status">Step 2 Wick Reset</span>
+    <select id="step2WickResetSelect" aria-label="Step 2 Wick Reset Review Case"></select>
+    <button id="loadStep2WickResetBtn">Load Wick Reset</button>
     <button id="prevBtn">Previous Candle</button>
     <button id="nextBtn">Next Candle</button>
     <button id="resetBtn">Reset</button>
@@ -396,6 +424,11 @@
       <div class="chart-wrap">
         <canvas id="step2Chart" width="1280" height="720"></canvas>
       </div>
+      <section class="panel hidden" id="step2WickBoundaryPanel">
+        <h2>Wick Qualifying Boundary</h2>
+        <div class="grid wick-boundary-grid" id="step2WickBoundaryGrid"></div>
+        <div class="wick-boundary-note">After a wick reset, Step 2 no longer qualifies against the original boundary. Future qualification must occur beyond the Wick Qualifying Boundary.</div>
+      </section>
     </section>
     </div>
 
@@ -420,9 +453,15 @@
 
     <section class="panel step2-chart-panel">
       <h2>Candles and Liquidity</h2>
+      <div class="decision-flow" id="step2ContinuationScenarioText"></div>
       <div class="chart-wrap">
         <canvas id="step2ContinuationChart" width="1280" height="720"></canvas>
       </div>
+      <section class="panel hidden" id="step2ContinuationWickBoundaryPanel">
+        <h2>Wick Qualifying Boundary</h2>
+        <div class="grid wick-boundary-grid" id="step2ContinuationWickBoundaryGrid"></div>
+        <div class="wick-boundary-note">After a wick reset, Step 2 no longer qualifies against the original boundary. Future qualification must occur beyond the Wick Qualifying Boundary.</div>
+      </section>
     </section>
     </div>
 
@@ -729,8 +768,9 @@
       const select = document.getElementById("scenarioSelect");
       const rootEntries = fixtureEntries.filter(entry => !entry.id.includes("/"));
       const regressionEntries = fixtureEntries.filter(entry => entry.folder === "regressions");
-      const step2RejectionEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_rejection/") && !entry.hidden_from_review && !entry.deprecated);
-      const step2ContinuationEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_continuation/") && !entry.hidden_from_review && !entry.deprecated);
+      const step2WickResetEntries = fixtureEntries.filter(entry => entry.review_group === "Step 2 Wick Reset" && !entry.hidden_from_review && !entry.deprecated);
+      const step2RejectionEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_rejection/") && entry.review_group !== "Step 2 Wick Reset" && !entry.hidden_from_review && !entry.deprecated);
+      const step2ContinuationEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_continuation/") && entry.review_group !== "Step 2 Wick Reset" && !entry.hidden_from_review && !entry.deprecated);
       select.innerHTML = rootEntries.map(entry => `<option value="${entry.id}">${entry.id}</option>`).join("");
       if (!select.innerHTML) select.innerHTML = names.filter(name => !name.includes("/")).map(name => `<option value="${name}">${name}</option>`).join("");
       const regressionSelect = document.getElementById("regressionSelect");
@@ -745,6 +785,10 @@
       step2ContinuationSelect.innerHTML = step2ContinuationEntries.map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`).join("");
       step2ContinuationSelect.disabled = step2ContinuationEntries.length === 0;
       document.getElementById("loadStep2ContinuationBtn").disabled = step2ContinuationEntries.length === 0;
+      const step2WickResetSelect = document.getElementById("step2WickResetSelect");
+      step2WickResetSelect.innerHTML = formatStep2WickResetOptions(step2WickResetEntries);
+      step2WickResetSelect.disabled = step2WickResetEntries.length === 0;
+      document.getElementById("loadStep2WickResetBtn").disabled = step2WickResetEntries.length === 0;
     }
 
     function reviewStatus(entryOrFixture) {
@@ -773,6 +817,17 @@
 
     function formatReviewDropdownLabel(entry) {
       return `${reviewPrefix(reviewStatus(entry))} ${entry.id.replace("known_good/step2_rejection/", "").replace("known_good/step2_continuation/", "")}`;
+    }
+
+    function formatStep2WickResetOptions(entries) {
+      const sections = ["Rejection Wick Reset", "Continuation Wick Reset"];
+      return sections.map(section => {
+        const options = entries
+          .filter(entry => entry.review_section === section)
+          .map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`)
+          .join("");
+        return options ? `<optgroup label="${section}">${options}</optgroup>` : "";
+      }).join("");
     }
 
     async function loadScenario(name) {
@@ -826,7 +881,9 @@
       renderLevelLifecycle(frame);
       if (isStep2ContinuationFixture()) {
         document.getElementById("step2ContinuationLayout").classList.remove("hidden");
+        document.getElementById("step2ContinuationLayout").classList.toggle("wick-reset-review", isStep2WickResetFixture());
         document.getElementById("step2DebugLayout").classList.add("hidden");
+        document.getElementById("step2DebugLayout").classList.remove("wick-reset-review");
         document.getElementById("continuationStructureLayout").classList.add("hidden");
         document.getElementById("debugLayout").classList.add("hidden");
         document.getElementById("bottomLayout").classList.add("hidden");
@@ -834,7 +891,9 @@
         drawStep2Chart(frame, "step2ContinuationChart");
       } else if (isStep2DebugFixture()) {
         document.getElementById("step2ContinuationLayout").classList.add("hidden");
+        document.getElementById("step2ContinuationLayout").classList.remove("wick-reset-review");
         document.getElementById("step2DebugLayout").classList.remove("hidden");
+        document.getElementById("step2DebugLayout").classList.toggle("wick-reset-review", isStep2WickResetFixture());
         document.getElementById("continuationStructureLayout").classList.add("hidden");
         document.getElementById("debugLayout").classList.add("hidden");
         document.getElementById("bottomLayout").classList.add("hidden");
@@ -843,14 +902,18 @@
         drawStep2Chart(frame);
       } else if (isContinuationStructureFixture()) {
         document.getElementById("step2ContinuationLayout").classList.add("hidden");
+        document.getElementById("step2ContinuationLayout").classList.remove("wick-reset-review");
         document.getElementById("step2DebugLayout").classList.add("hidden");
+        document.getElementById("step2DebugLayout").classList.remove("wick-reset-review");
         document.getElementById("continuationStructureLayout").classList.remove("hidden");
         document.getElementById("debugLayout").classList.add("hidden");
         document.getElementById("bottomLayout").classList.add("hidden");
         renderContinuationStructure(frame);
       } else {
         document.getElementById("step2ContinuationLayout").classList.add("hidden");
+        document.getElementById("step2ContinuationLayout").classList.remove("wick-reset-review");
         document.getElementById("step2DebugLayout").classList.add("hidden");
+        document.getElementById("step2DebugLayout").classList.remove("wick-reset-review");
         document.getElementById("continuationStructureLayout").classList.add("hidden");
         document.getElementById("debugLayout").classList.remove("hidden");
         document.getElementById("bottomLayout").classList.remove("hidden");
@@ -890,6 +953,14 @@
 
     function isInvestigationFixture() {
       return Boolean(fixture && (fixture.case_type === "investigation" || (loadedFixtureId || "").startsWith("investigations/")));
+    }
+
+    function isStep2WickResetFixture() {
+      return Boolean(
+        fixture &&
+        fixture.wick_reset &&
+        (loadedFixtureId || "").includes("/wick_reset/")
+      );
     }
 
     function renderMeta(frame) {
@@ -1050,6 +1121,7 @@
       renderStep2StackAnatomy(qualification);
       renderStep2ScenarioText(qualification);
       renderStepLogicScenarios(qualification);
+      renderWickBoundaryPanel(frame, qualification, "step2WickBoundaryPanel", "step2WickBoundaryGrid");
       document.getElementById("step2QualificationGrid").innerHTML = step2QualificationFields.map(([label, key]) => {
         const value = qualification[key];
         const displayValue = key === "pass" ? (value ? "PASS" : "FAIL") : value;
@@ -1068,6 +1140,89 @@
       target.innerHTML = text
         ? `<div class="flow-row"><div class="label">Scenario Logic</div><div class="value">${escapeHtml(text)}</div></div>`
         : "";
+    }
+
+    function renderStep2ContinuationScenarioText(qualification) {
+      const target = document.getElementById("step2ContinuationScenarioText");
+      if (!target) return;
+      const text = qualification.step2_scenario_text || fixture.step2_scenario_text || fixture.notes || "";
+      target.innerHTML = isStep2WickResetFixture() && text
+        ? `<div class="flow-row"><div class="label">Scenario Logic</div><div class="value">${escapeHtml(text)}</div></div>`
+        : "";
+    }
+
+    function renderWickBoundaryPanel(frame, qualification, panelId, gridId) {
+      const panel = document.getElementById(panelId);
+      const grid = document.getElementById(gridId);
+      if (!panel || !grid) return;
+      if (!isStep2WickResetFixture()) {
+        panel.classList.add("hidden");
+        grid.innerHTML = "";
+        return;
+      }
+      const data = wickBoundaryReviewData(frame, qualification);
+      panel.classList.remove("hidden");
+      grid.innerHTML = [
+        ["Original Boundary", data.originalBoundary],
+        ["Wick Extreme", data.wickExtreme],
+        ["Wick Qualifying Boundary", data.wickQualifyingBoundary],
+        ["Trigger Close", data.triggerClose],
+        ["Result", data.result],
+        ["Reason", data.reason]
+      ].map(([label, value]) => {
+        const wide = label === "Reason" ? " wide" : "";
+        return `<div class="kv${wide}"><div class="k">${label}</div><div class="v">${escapeHtml(formatValue(value))}</div></div>`;
+      }).join("");
+    }
+
+    function wickBoundaryReviewData(frame, qualification) {
+      const actual = frame.actual || {};
+      const candle = normalizeCandle(frame.candle || {});
+      const wickReset = fixture.wick_reset || {};
+      const originalBoundary = firstPresent(wickReset.original_boundary, activeLiquidityForFrame(frame).price);
+      const wickQualifyingBoundary = firstPresent(actual.qualification_boundary, qualification.qualification_boundary, wickReset.reset_boundary, qualification.qualification_boundary_price);
+      const wickExtreme = firstPresent(wickReset.reset_boundary, wickQualifyingBoundary);
+      const triggerClose = firstPresent(actual.close_price, qualification.close_price, candle.close);
+      const result = firstPresent(
+        actual.actual_step2_state,
+        actual.rejection_mode_entered === true ? "ACTIVE" : actual.rejection_mode_entered === false ? "WAIT" : null,
+        qualification.actual_result,
+        fixture.expected_result,
+        "WAIT"
+      );
+      return {
+        originalBoundary,
+        wickExtreme,
+        wickQualifyingBoundary,
+        triggerClose,
+        result,
+        reason: wickBoundaryReason(originalBoundary, wickQualifyingBoundary, triggerClose, result)
+      };
+    }
+
+    function wickBoundaryReason(originalBoundary, wickBoundary, triggerClose, result) {
+      const original = Number(originalBoundary);
+      const boundary = Number(wickBoundary);
+      const close = Number(triggerClose);
+      const normalizedResult = String(result || "").toUpperCase();
+      if (!Number.isFinite(original) || !Number.isFinite(boundary) || !Number.isFinite(close)) {
+        return "Step 2 uses the Wick Qualifying Boundary after the wick reset.";
+      }
+      const isLowerLiquidity = boundary < original;
+      if (normalizedResult === "WAIT" || normalizedResult === "IGNORED") {
+        if (isLowerLiquidity && close < original && close > boundary) {
+          return "Close is below the original boundary but remains above the Wick Qualifying Boundary, so Step 2 stays inactive.";
+        }
+        if (!isLowerLiquidity && close > original && close < boundary) {
+          return "Close is above the original boundary but remains below the Wick Qualifying Boundary, so Step 2 stays inactive.";
+        }
+        return isLowerLiquidity
+          ? "Lower-liquidity activation requires a close below the Wick Qualifying Boundary."
+          : "Upper-liquidity activation requires a close above the Wick Qualifying Boundary.";
+      }
+      return isLowerLiquidity
+        ? "Close is below the Wick Qualifying Boundary, so Step 2 activates."
+        : "Close is above the Wick Qualifying Boundary, so Step 2 activates.";
     }
 
     function renderStepLogicScenarios(qualification) {
@@ -1148,6 +1303,8 @@
           <div>${formatValue(actual.actual_step2_state)} / expected ${formatValue(actual.expected_step2_state)}</div>
         </div>
       `;
+      renderStep2ContinuationScenarioText(qualification);
+      renderWickBoundaryPanel(frame, qualification, "step2ContinuationWickBoundaryPanel", "step2ContinuationWickBoundaryGrid");
       const fields = [
         ["Continuation Type", actual.continuation_type],
         ["Level / Stack Name", actual.liquidity_level],
@@ -1873,59 +2030,77 @@
         extreme_boundary_price: qualification.extreme_boundary_price,
         close_boundary_price: qualification.close_boundary_price
       };
-      const boundary = Number(active.qualification_boundary_price || active.extreme_boundary_price || active.close_boundary_price || active.price);
-      const allLines = (frame.debug && frame.debug.step2_chart_lines) || fallbackStep2ChartLines(active);
+      const wickBoundary = wickQualifyingBoundaryForFrame(frame, qualification);
+      const boundary = Number(firstPresent(wickBoundary, active.qualification_boundary_price, active.extreme_boundary_price, active.close_boundary_price, active.price));
+      const allLines = wickResetChartLines((frame.debug && frame.debug.step2_chart_lines) || fallbackStep2ChartLines(active), frame, qualification);
       const chartLines = focusedStep2ChartLines(allLines, candle, boundary);
-      const chartCandles = chartDisplayCandles(step2ChartCandleSource(frame, candle));
+      const isWickReview = isStep2WickResetFixture();
+      const chartCandles = isWickReview
+        ? step2ChartCandleSource(frame, candle).map(normalizeCandle)
+        : chartDisplayCandles(step2ChartCandleSource(frame, candle));
+      const wickOutcomeFrames = isStep2WickResetFixture() ? visibleWickResetFrames(chartCandles) : [];
       const prices = [
         ...chartCandles.flatMap(item => [item.open, item.high, item.low, item.close]),
         boundary,
         ...chartLines.map(line => line.price)
       ].map(Number);
-      const span = Math.max(1, Math.max(...prices) - Math.min(...prices));
-      const buffer = Math.max(0.5, span * 0.12);
+      const span = Math.max(0.25, Math.max(...prices) - Math.min(...prices));
+      const buffer = isWickReview ? Math.max(0.15, span * 0.06) : Math.max(0.5, span * 0.12);
       const min = Math.min(...prices) - buffer;
       const max = Math.max(...prices) + buffer;
-      const y = price => h - 42 - ((price - min) / (max - min)) * (h - 84);
+      const plotTop = isWickReview ? 122 : 28;
+      const plotBottom = isWickReview ? h - 58 : h - 42;
+      const leftAxis = isWickReview ? 270 : 150;
+      const rightAxis = isWickReview ? w - 120 : w - 135;
+      const y = price => plotBottom - ((price - min) / (max - min)) * (plotBottom - plotTop);
       const xFor = candleIndex => chartCandles.length > 1
-        ? 220 + candleIndex * ((w - 440) / Math.max(1, chartCandles.length - 1))
+        ? (isWickReview ? leftAxis + 76 : 220) + candleIndex * (((isWickReview ? rightAxis - leftAxis - 152 : w - 440)) / Math.max(1, chartCandles.length - 1))
         : Math.round(w * 0.55);
-      const currentChartIndex = Math.max(0, chartCandles.findIndex(item => item.timestamp === candle.timestamp));
+      const reviewCandle = isWickReview
+        ? [...chartCandles].reverse().find(item => !item.wick_review_context) || candle
+        : candle;
+      const currentChartIndex = Math.max(0, chartCandles.findIndex(item => item.timestamp === reviewCandle.timestamp));
       const x = xFor(currentChartIndex >= 0 ? currentChartIndex : chartCandles.length - 1);
 
       ctx.strokeStyle = "#d8e0e4";
       ctx.lineWidth = 1;
       for (let i = 0; i < 6; i++) {
-        const yy = 28 + i * ((h - 70) / 5);
-        ctx.beginPath(); ctx.moveTo(150, yy); ctx.lineTo(w - 135, yy); ctx.stroke();
+        const yy = plotTop + i * ((plotBottom - plotTop) / 5);
+        ctx.beginPath(); ctx.moveTo(leftAxis, yy); ctx.lineTo(rightAxis, yy); ctx.stroke();
       }
 
-      const levelLabelRows = labelRows(chartLines.map(line => ({...line, rawY: y(Number(line.price))})), "rawY", 18, 26, h - 42);
-      chartLines.forEach(line => {
-        const yy = y(Number(line.price));
-        applyLevelLineStyle(ctx, line);
-        ctx.beginPath(); ctx.moveTo(150, yy); ctx.lineTo(w - 135, yy); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = levelTextColor(line);
-        ctx.font = line.is_stack_component ? "bold 13px Segoe UI, Arial" : "12px Segoe UI, Arial";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        const qualifier = line.is_qualification_boundary ? " (Q)" : "";
-        const labelY = levelLabelRows.get(line.name) ?? yy;
-        ctx.fillText(`${line.price} ${line.name}${qualifier}`, 12, labelY);
-        if (Math.abs(labelY - yy) > 2) {
-          ctx.strokeStyle = "#aeb8bd";
-          ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.moveTo(118, labelY); ctx.lineTo(145, yy); ctx.stroke();
-        }
-      });
+      if (isWickReview) {
+        drawWickChartQuestion(ctx, w);
+        drawWickProgressionStrip(ctx, chartCandles, wickOutcomeFrames, xFor, leftAxis, rightAxis);
+        drawWickBoundaryLines(ctx, chartLines, y, leftAxis, rightAxis, plotTop, plotBottom);
+      } else {
+        const levelLabelRows = labelRows(chartLines.map(line => ({...line, rawY: y(Number(line.price))})), "rawY", 18, 26, h - 42);
+        chartLines.forEach(line => {
+          const yy = y(Number(line.price));
+          applyLevelLineStyle(ctx, line);
+          ctx.beginPath(); ctx.moveTo(leftAxis, yy); ctx.lineTo(rightAxis, yy); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = levelTextColor(line);
+          ctx.font = line.is_stack_component ? "bold 13px Segoe UI, Arial" : "12px Segoe UI, Arial";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "middle";
+          const qualifier = line.is_qualification_boundary ? " (Wick Qualifying Boundary)" : "";
+          const labelY = levelLabelRows.get(line.name) ?? yy;
+          ctx.fillText(`${line.price} ${line.name}${qualifier}`, 12, labelY);
+          if (Math.abs(labelY - yy) > 2) {
+            ctx.strokeStyle = "#aeb8bd";
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(118, labelY); ctx.lineTo(145, yy); ctx.stroke();
+          }
+        });
+      }
 
-      if (!chartLines.some(line => Number(line.price) === boundary)) {
+      if (!isWickReview && !chartLines.some(line => Number(line.price) === boundary)) {
         const boundaryY = y(boundary);
         ctx.strokeStyle = "#1f6f99";
         ctx.lineWidth = 2;
         ctx.setLineDash([8, 4]);
-        ctx.beginPath(); ctx.moveTo(150, boundaryY); ctx.lineTo(w - 135, boundaryY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(leftAxis, boundaryY); ctx.lineTo(rightAxis, boundaryY); ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = "#1f6f99";
         ctx.font = "bold 13px Segoe UI, Arial";
@@ -1934,7 +2109,7 @@
         ctx.fillText(`${boundary} (Q)`, 12, boundaryY);
       }
 
-      drawStackDistanceBracket(ctx, chartLines, y);
+      if (!isWickReview) drawStackDistanceBracket(ctx, chartLines, y);
 
       chartCandles.forEach((item, candleIndex) => {
         const candleX = xFor(candleIndex);
@@ -1958,7 +2133,7 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "alphabetic";
         ctx.fillText(String(candleIndex + 1), candleX, h - 14);
-        if (item.highlight_label) {
+        if (!isWickReview && item.highlight_label) {
           const badgeWidth = Math.max(118, String(item.highlight_label).length * 7);
           const badgeX = Math.max(156, Math.min(w - 140 - badgeWidth, candleX - badgeWidth / 2));
           const badgeY = Math.max(24, y(item.high) - 34);
@@ -1972,44 +2147,52 @@
         }
       });
 
-      const closeY = y(candle.close);
+      const closeY = y(reviewCandle.close);
       ctx.strokeStyle = priceMarkerColor();
       ctx.lineWidth = 2;
       ctx.setLineDash([2, 4]);
-      ctx.beginPath(); ctx.moveTo(150, closeY); ctx.lineTo(w - 135, closeY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(leftAxis, closeY); ctx.lineTo(rightAxis, closeY); ctx.stroke();
       ctx.setLineDash([]);
 
-      ctx.fillStyle = priceMarkerColor();
-      ctx.font = "12px Segoe UI, Arial";
-      ctx.textAlign = "right";
-      ctx.textBaseline = "middle";
-      const candleRows = labelRows([
-        {name: "H", rawY: y(candle.high), text: `H ${candle.high}`},
-        {name: "O", rawY: y(candle.open), text: `O ${candle.open}`},
-        {name: "C", rawY: closeY, text: `C ${candle.close}`},
-        {name: "L", rawY: y(candle.low), text: `L ${candle.low}`}
-      ], "rawY", 16, 26, h - 42);
-      [
-        {name: "H", rawY: y(candle.high), text: `H ${candle.high}`},
-        {name: "O", rawY: y(candle.open), text: `O ${candle.open}`},
-        {name: "C", rawY: closeY, text: `C ${candle.close}`},
-        {name: "L", rawY: y(candle.low), text: `L ${candle.low}`}
-      ].forEach(item => {
-        const labelY = candleRows.get(item.name) ?? item.rawY;
-        ctx.fillText(item.text, w - 12, labelY);
-        if (Math.abs(labelY - item.rawY) > 2) {
-          ctx.strokeStyle = priceMarkerColor();
-          ctx.lineWidth = 1;
-          ctx.setLineDash([2, 4]);
-          ctx.beginPath(); ctx.moveTo(w - 118, labelY); ctx.lineTo(w - 142, item.rawY); ctx.stroke();
-          ctx.setLineDash([]);
-        }
-      });
+      if (!isWickReview) {
+        ctx.fillStyle = priceMarkerColor();
+        ctx.font = "12px Segoe UI, Arial";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        const candleRows = labelRows([
+          {name: "H", rawY: y(candle.high), text: `H ${candle.high}`},
+          {name: "O", rawY: y(candle.open), text: `O ${candle.open}`},
+          {name: "C", rawY: closeY, text: `C ${candle.close}`},
+          {name: "L", rawY: y(candle.low), text: `L ${candle.low}`}
+        ], "rawY", 16, 26, h - 42);
+        [
+          {name: "H", rawY: y(candle.high), text: `H ${candle.high}`},
+          {name: "O", rawY: y(candle.open), text: `O ${candle.open}`},
+          {name: "C", rawY: closeY, text: `C ${candle.close}`},
+          {name: "L", rawY: y(candle.low), text: `L ${candle.low}`}
+        ].forEach(item => {
+          const labelY = candleRows.get(item.name) ?? item.rawY;
+          ctx.fillText(item.text, w - 12, labelY);
+          if (Math.abs(labelY - item.rawY) > 2) {
+            ctx.strokeStyle = priceMarkerColor();
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 4]);
+            ctx.beginPath(); ctx.moveTo(w - 118, labelY); ctx.lineTo(w - 142, item.rawY); ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        });
+      }
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
     }
 
     function step2ChartCandleSource(frame, candle) {
+      if (isStep2WickResetFixture() && Array.isArray(fixture.candles) && fixture.candles.length) {
+        if (fixture.scope === "step2_continuation_only") {
+          return continuationWickResetChartCandles(frame, candle);
+        }
+        return fixture.candles.slice(0, visibleWickResetCandleCount());
+      }
       if (
         fixture &&
         fixture.scope === "step2_continuation_only" &&
@@ -2019,6 +2202,157 @@
         return fixture.chart_context_candles;
       }
       return (frame.debug && frame.debug.step2_chart_candles) || [candle];
+    }
+
+    function continuationWickResetChartCandles(frame, candle) {
+      const continuationCandles = fixture.candles.slice(0, visibleWickResetCandleCount()).map(normalizeCandle);
+      const rawContext = ((frame.debug && frame.debug.step2_chart_candles) || [])
+        .map(normalizeCandle)
+        .filter(item => item.display_only_context);
+      const activationIndex = rawContext.findIndex(item => String(item.highlight_label || "").includes("Prior rejection Step 2 activation"));
+      const context = activationIndex >= 0
+        ? rawContext.slice(activationIndex, activationIndex + 3)
+        : rawContext.slice(Math.max(0, rawContext.length - 3));
+      if (!context.length) return continuationCandles;
+      const contextKeys = new Set(continuationCandles.map(item => item.timestamp || item.time));
+      const prelude = context
+        .filter(item => !contextKeys.has(item.timestamp || item.time))
+        .map((item, index) => ({
+          ...item,
+          wick_review_context: true,
+          wick_review_status: index === 0 ? "Rejection Step 2" : "Rejection Pathway Established"
+        }));
+      if (prelude.length) {
+        prelude[prelude.length - 1].wick_review_transition = "Continuation Wick Reset";
+      }
+      return prelude.concat(continuationCandles);
+    }
+
+    function visibleWickResetCandleCount() {
+      const id = loadedFixtureId || "";
+      if (id.includes("wick_below_does_not_activate") || id.includes("wick_above_does_not_activate")) return 1;
+      if (id.includes("below_original_above_wick_boundary_waits") || id.includes("above_original_below_wick_boundary_waits")) return 2;
+      if (id.includes("beyond_wick_boundary_activates")) return Math.max(1, Math.min(frames.length, fixture.candles ? fixture.candles.length : frames.length));
+      return Math.max(1, Math.min(index + 1, fixture.candles ? fixture.candles.length : frames.length));
+    }
+
+    function visibleWickResetFrames(chartCandles = []) {
+      const contextCount = chartCandles.filter(item => item.wick_review_context).length;
+      return Array.from({length: contextCount}, () => null).concat(frames.slice(0, visibleWickResetCandleCount()));
+    }
+
+    function drawWickChartQuestion(ctx, width) {
+      ctx.fillStyle = "#26343c";
+      ctx.font = "bold 18px Segoe UI, Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("Which closes qualify and which do not?", width / 2, 34);
+    }
+
+    function drawWickProgressionStrip(ctx, candles, outcomeFrames, xFor, leftAxis, rightAxis) {
+      const y = 78;
+      ctx.strokeStyle = "#b8c3c9";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(leftAxis, y);
+      ctx.lineTo(rightAxis, y);
+      ctx.stroke();
+      candles.forEach((item, index) => {
+        const x = xFor(index);
+        const context = item.wick_review_context;
+        const status = context ? item.wick_review_status : wickResetFrameStatus(outcomeFrames[index]);
+        const reset = !context && !candles.slice(0, index).some(candidate => !candidate.wick_review_context);
+        const label = context ? status : reset ? "Continuation Wick Reset" : status;
+        const active = status === "ACTIVE";
+        const fill = active ? "#147a50" : context ? "#eef2f4" : reset ? "#eef6fb" : "#fff4d8";
+        const stroke = active ? "#147a50" : context ? "#6f7a80" : reset ? "#246b9f" : "#c58a00";
+        const text = active ? "#ffffff" : context ? "#334148" : reset ? "#246b9f" : "#7a5200";
+        const width = context ? 178 : reset ? 164 : 78;
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(x - width / 2, y - 16, width, 32, 6);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = text;
+        ctx.font = context ? "bold 11px Segoe UI, Arial" : "bold 13px Segoe UI, Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        fitCanvasText(ctx, label, x, y, width - 12);
+        ctx.fillStyle = "#52616a";
+        ctx.font = "12px Segoe UI, Arial";
+        const sublabel = context ? item.wick_review_transition || "" : reset ? status : `C ${formatValue(item.close)}`;
+        fitCanvasText(ctx, sublabel, x, y + 34, width + 24);
+      });
+    }
+
+    function fitCanvasText(ctx, text, x, y, maxWidth) {
+      const value = String(text || "");
+      if (!value) return;
+      ctx.fillText(value, x, y, maxWidth);
+    }
+
+    function wickResetFrameStatus(frame) {
+      const actual = (frame && frame.actual) || {};
+      const state = firstPresent(
+        actual.actual_step2_state,
+        actual.rejection_mode_entered === true ? "ACTIVE" : actual.rejection_mode_entered === false ? "WAIT" : null
+      );
+      return String(state || "WAIT").toUpperCase() === "ACTIVE" ? "ACTIVE" : "WAIT";
+    }
+
+    function drawWickBoundaryLines(ctx, chartLines, y, leftAxis, rightAxis, plotTop, plotBottom) {
+      const labels = labelRows(
+        chartLines.map(line => ({...line, rawY: y(Number(line.price))})),
+        "rawY",
+        34,
+        plotTop + 10,
+        plotBottom - 10
+      );
+      chartLines.forEach(line => {
+        const price = Number(line.price);
+        const yy = y(price);
+        const isWick = line.is_qualification_boundary;
+        ctx.strokeStyle = isWick ? "#111111" : "#7c8a91";
+        ctx.lineWidth = isWick ? 4 : 2;
+        ctx.setLineDash(isWick ? [] : [7, 5]);
+        ctx.beginPath();
+        ctx.moveTo(leftAxis, yy);
+        ctx.lineTo(rightAxis, yy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (isWick) {
+          ctx.fillStyle = "rgba(17, 17, 17, 0.07)";
+          ctx.fillRect(leftAxis, yy - 9, rightAxis - leftAxis, 18);
+        }
+
+        const labelY = labels.get(line.name) ?? yy;
+        const label = isWick ? `${formatValue(line.price)} Wick Qualifying Boundary` : `${formatValue(line.price)} ${line.name}`;
+        const labelWidth = isWick ? 220 : Math.max(90, String(label).length * 7);
+        ctx.fillStyle = isWick ? "#111111" : "#ffffff";
+        ctx.strokeStyle = isWick ? "#111111" : "#7c8a91";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(10, labelY - 13, labelWidth, 26, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = isWick ? "#ffffff" : "#4e5b62";
+        ctx.font = isWick ? "bold 12px Segoe UI, Arial" : "12px Segoe UI, Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, 18, labelY);
+        if (Math.abs(labelY - yy) > 2) {
+          ctx.strokeStyle = "#aeb8bd";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(10 + labelWidth, labelY);
+          ctx.lineTo(leftAxis - 5, yy);
+          ctx.stroke();
+        }
+      });
     }
 
     function labelRows(items, yKey, minGap, minY, maxY) {
@@ -2088,6 +2422,50 @@
       return [{name: active.name || active.display_name, price: active.price, color: "gray", width: 1, dash: "solid", is_stack_component: true}];
     }
 
+    function wickQualifyingBoundaryForFrame(frame, qualification) {
+      if (!isStep2WickResetFixture()) return null;
+      const actual = (frame && frame.actual) || {};
+      const wickReset = fixture.wick_reset || {};
+      return firstPresent(actual.qualification_boundary, qualification.qualification_boundary, wickReset.reset_boundary);
+    }
+
+    function wickResetChartLines(lines, frame, qualification) {
+      if (!isStep2WickResetFixture()) return lines;
+      const data = wickBoundaryReviewData(frame, qualification);
+      const originalPrice = Number(data.originalBoundary);
+      const wickPrice = Number(data.wickQualifyingBoundary);
+      const output = lines
+        .filter(line => Number(line.price) !== wickPrice || line.is_qualification_boundary)
+        .map(line => ({
+          ...line,
+          is_qualification_boundary: Number(line.price) === wickPrice,
+          name: Number(line.price) === wickPrice ? "Wick Qualifying Boundary" : line.name
+        }));
+      if (Number.isFinite(originalPrice) && !output.some(line => Number(line.price) === originalPrice)) {
+        output.push({
+          name: "Original Boundary",
+          price: originalPrice,
+          color: "gray",
+          width: 1,
+          dash: "dotted",
+          is_stack_component: true,
+          is_qualification_boundary: false
+        });
+      }
+      if (Number.isFinite(wickPrice) && !output.some(line => Number(line.price) === wickPrice)) {
+        output.push({
+          name: "Wick Qualifying Boundary",
+          price: wickPrice,
+          color: "black",
+          width: 2,
+          dash: "dotted",
+          is_stack_component: false,
+          is_qualification_boundary: true
+        });
+      }
+      return output;
+    }
+
     function applyLevelLineStyle(ctx, line) {
       ctx.strokeStyle = levelCanvasColor(line.color);
       ctx.lineWidth = Number(line.width || 1);
@@ -2133,6 +2511,10 @@
     });
     document.getElementById("loadStep2ContinuationBtn").addEventListener("click", () => {
       const value = document.getElementById("step2ContinuationSelect").value;
+      if (value) loadScenario(value);
+    });
+    document.getElementById("loadStep2WickResetBtn").addEventListener("click", () => {
+      const value = document.getElementById("step2WickResetSelect").value;
       if (value) loadScenario(value);
     });
     document.getElementById("prevBtn").addEventListener("click", () => setIndex(index - 1));

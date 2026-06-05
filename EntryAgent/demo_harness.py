@@ -142,6 +142,7 @@ def list_fixture_entries(include_archived: bool = False) -> list[dict[str, Any]]
         fixture = load_fixture(fixture_id)
         folder = fixture_id.split("/", 1)[0] if "/" in fixture_id else "root"
         review_status = fixture_review_status(fixture)
+        review_group, review_section = fixture_review_group(fixture_id)
         entries.append(
             {
                 "id": fixture_id,
@@ -158,9 +159,20 @@ def list_fixture_entries(include_archived: bool = False) -> list[dict[str, Any]]
                 "expected_result": fixture.get("expected_result"),
                 "deprecated": bool(fixture.get("deprecated")),
                 "hidden_from_review": bool(fixture.get("hidden_from_review")),
+                "review_group": review_group,
+                "review_section": review_section,
             }
         )
     return entries
+
+
+def fixture_review_group(fixture_id: str) -> tuple[str | None, str | None]:
+    normalized = fixture_id.replace("\\", "/").strip("/")
+    if normalized.startswith("known_good/step2_rejection/wick_reset/"):
+        return "Step 2 Wick Reset", "Rejection Wick Reset"
+    if normalized.startswith("known_good/step2_continuation/wick_reset/"):
+        return "Step 2 Wick Reset", "Continuation Wick Reset"
+    return None, None
 
 
 def fixture_review_status(fixture: dict[str, Any]) -> str:
@@ -177,7 +189,7 @@ def fixture_review_status(fixture: dict[str, Any]) -> str:
 
 def fixture_review_label(fixture_id: str, fixture: dict[str, Any], review_status: str | None = None) -> str:
     status = str(review_status or fixture_review_status(fixture)).upper()
-    short_id = fixture_id.replace("known_good/step2_rejection/", "")
+    short_id = fixture_id.replace("known_good/step2_rejection/", "").replace("known_good/step2_continuation/", "")
     if "APPROVED" in status and "NOT APPROVED" not in status and "RETRACTED" not in status:
         return f"[APPROVED] {short_id}"
     if "RETRACTED" in status or "NOT APPROVED" in status:
