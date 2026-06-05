@@ -1,0 +1,182 @@
+{
+  "case_name": "Step 2 investigation - close through consumed level",
+  "case_type": "investigation",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "regular",
+  "expected_result": "ignored",
+  "why": "The candle closes through PML, but PML is marked consumed and is outside the ATR stack threshold from active ONL. Step 2 should only evaluate the current active liquidity ONL.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "tick_size": 0.25,
+  "simulated_daily_atr": 100.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONL": {"price": 80.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "active_liquidity": {
+    "name": "ONL",
+    "components": ["ONL"],
+    "price": 80.0,
+    "side": "LOW"
+  },
+  "inactive_liquidity": {
+    "name": "PML",
+    "price": 100.0,
+    "side": "LOW",
+    "inactive_reason": "consumed_level",
+    "is_active_liquidity": false,
+    "expected_close_through_inactive_level": true,
+    "why_close_through_should_matter": "It should not matter after the level has already been consumed."
+  },
+  "investigation_story": {
+    "schema_version": 1,
+    "blueprint_question": "Can a consumed liquidity level still activate Step 2?",
+    "state_change_banner": [
+      "PML ACTIVE",
+      "PML CONSUMED",
+      "ONL ACTIVE"
+    ],
+    "precondition_story": {
+      "title": "How PML became consumed",
+      "chart_caption": "PML was active low-side liquidity. The highlighted candle closed through PML, consuming it and moving active low-side liquidity to ONL.",
+      "starting_active_liquidity": {
+        "name": "PML",
+        "price": 100.0,
+        "side": "LOW",
+        "components": ["PML"]
+      },
+      "liquidity_lines": [
+        {
+          "name": "PML",
+          "price": 100.0,
+          "side": "LOW",
+          "status": "active",
+          "label": "PML"
+        }
+      ],
+      "candles": [
+        {
+          "time": "2026-05-28T13:48:00Z",
+          "open": 101.0,
+          "high": 101.25,
+          "low": 100.25,
+          "close": 100.5,
+          "engine_evaluated": false,
+          "story_only": true,
+          "active_liquidity": "PML 100.0 LOW",
+          "annotation": "PML is the active low-side liquidity before consumption."
+        },
+        {
+          "time": "2026-05-28T13:49:00Z",
+          "open": 100.5,
+          "high": 100.75,
+          "low": 99.5,
+          "close": 99.75,
+          "engine_evaluated": false,
+          "story_only": true,
+          "highlight": true,
+          "highlight_label": "PML consumed",
+          "active_liquidity": "PML 100.0 LOW",
+          "annotation": "Close through PML consumes the active level.",
+          "event": {
+            "type": "consumed_level",
+            "level": "PML",
+            "prior_status": "active",
+            "new_status": "consumed",
+            "resulting_active_liquidity": "ONL 80.0 LOW"
+          }
+        }
+      ],
+      "resulting_state": {
+        "PML": "consumed",
+        "ONL": "active"
+      }
+    },
+    "investigation_story": {
+      "title": "Later close through consumed PML",
+      "chart_caption": "The tested candle closes through the already consumed PML level while ONL remains the active low-side liquidity.",
+      "current_active_liquidity": {
+        "name": "ONL",
+        "price": 80.0,
+        "side": "LOW",
+        "components": ["ONL"]
+      },
+      "referenced_inactive_liquidity": {
+        "name": "PML",
+        "price": 100.0,
+        "side": "LOW",
+        "status": "consumed",
+        "inactive_reason": "consumed_level",
+        "why_inactive": "PML was consumed in the precondition story before the current investigation candle."
+      },
+      "liquidity_lines": [
+        {
+          "name": "ONL",
+          "price": 80.0,
+          "side": "LOW",
+          "status": "active",
+          "label": "ONL Active"
+        },
+        {
+          "name": "PML",
+          "price": 100.0,
+          "side": "LOW",
+          "status": "consumed",
+          "label": "PML Consumed"
+        }
+      ],
+      "tested_event": {
+        "type": "close_through_inactive_level",
+        "level": "PML",
+        "expected_result": "ignored",
+        "reason": "A consumed liquidity level should not activate Step 2."
+      },
+      "candles": [
+        {
+          "time": "2026-05-28T13:50:00Z",
+          "open": 100.5,
+          "high": 100.75,
+          "low": 99.5,
+          "close": 99.75,
+          "highlight": true,
+          "highlight_label": "Tested close through consumed PML",
+          "expected_behavior": "Ignored",
+          "active_liquidity": "ONL 80.0 LOW",
+          "referenced_inactive_liquidity": "PML 100.0 LOW consumed",
+          "annotation": "Tested candle closes through consumed PML while ONL remains the current active liquidity.",
+          "event": {
+            "type": "close_through_inactive_level",
+            "level": "PML",
+            "expected_result": "ignored"
+          }
+        }
+      ]
+    },
+    "engine_result": {
+      "engine_result": "ignored",
+      "expected_result": "ignored",
+      "user_decision": "INVESTIGATION"
+    }
+  },
+  "candles": [
+    {"time": "2026-05-28T13:50:00Z", "open": 100.5, "high": 100.75, "low": 99.5, "close": 99.75}
+  ],
+  "expected": [
+    {
+      "time": "2026-05-28T13:50:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    }
+  ],
+  "notes": "Investigation fixture only. No Step 2 rule approval."
+}

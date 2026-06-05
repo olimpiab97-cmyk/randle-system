@@ -44,22 +44,26 @@ def _price(candle: dict[str, Any], field: str) -> float:
     return float(candle[field])
 
 
+def continuation_step2_boundary(level: float, stack_extreme: float | None = None) -> float:
+    """Return the approved Step 2 continuation qualification boundary."""
+    return float(stack_extreme) if stack_extreme is not None else float(level)
+
+
 def continuation_step2_close_back_across(
     last_candle: dict[str, Any],
     prev_candle: dict[str, Any],
     level: float,
     level_type: str,
+    stack_extreme: float | None = None,
 ) -> bool:
-    """Return True only when closed candles prove outside structure then close back inside."""
+    """Return True when the completed close is beyond the continuation boundary."""
     normalized_level_type = str(level_type or "").strip().upper()
-    level_value = float(level)
-    prev_close = _price(prev_candle, "close")
-    last_open = _price(last_candle, "open")
+    boundary = continuation_step2_boundary(level, stack_extreme)
     last_close = _price(last_candle, "close")
     if normalized_level_type == "LL":
-        return prev_close < level_value and last_close > level_value and last_close > last_open
+        return last_close > boundary
     if normalized_level_type == "LH":
-        return prev_close > level_value and last_close < level_value and last_close < last_open
+        return last_close < boundary
     return False
 
 
@@ -92,14 +96,16 @@ def select_pathway(
     if not active_liquidity_selected or not rejection_confirmed:
         return output
 
+    boundary = continuation_step2_boundary(level_value, stack_extreme)
     if normalized_level_type == "LL":
-        if continuation_step2_close_back_across(last_candle, prev_candle, level_value, normalized_level_type):
+        if continuation_step2_close_back_across(last_candle, prev_candle, level_value, normalized_level_type, stack_extreme):
             output.update(
                 {
                     "status": "READY",
                     "controlling_mode": SR_MODE,
                     "activation_type": "close",
                     "candle_a": last_candle,
+                    "pathway_level": boundary,
                     "structure_side_requirement": "ABOVE_LEVEL",
                     "continuation_step2_activated": True,
                 }
@@ -107,13 +113,14 @@ def select_pathway(
             return output
 
     if normalized_level_type == "LH":
-        if continuation_step2_close_back_across(last_candle, prev_candle, level_value, normalized_level_type):
+        if continuation_step2_close_back_across(last_candle, prev_candle, level_value, normalized_level_type, stack_extreme):
             output.update(
                 {
                     "status": "READY",
                     "controlling_mode": RS_MODE,
                     "activation_type": "close",
                     "candle_a": last_candle,
+                    "pathway_level": boundary,
                     "structure_side_requirement": "BELOW_LEVEL",
                     "continuation_step2_activated": True,
                 }

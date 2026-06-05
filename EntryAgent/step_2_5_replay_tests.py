@@ -111,23 +111,24 @@ def test_stacked_low_sr_requires_wick_through_stack_extreme() -> None:
     assert result["continuation_uses_stack_extreme"] is True
 
 
-def test_stacked_low_sr_does_not_arm_from_middle_without_extreme_wick() -> None:
+def test_stacked_low_sr_activates_from_close_above_extreme_boundary() -> None:
     previous = candle(101.0, 101.5, 99.5, 100.5)
     current = candle(99.5, 100.75, 99.25, 100.25)
     result = select_pathway(current, previous, 100.0, "LL", stack_extreme=99.0)
 
-    assert result["status"] == "WAIT"
-    assert result["controlling_mode"] is None
-    assert result["candle_a"] is None
+    assert result["status"] == "READY"
+    assert result["controlling_mode"] == "S/R"
+    assert result["candle_a"] == current
 
 
-def test_stacked_low_sr_uses_extreme_not_internal_close_boundary() -> None:
+def test_stacked_low_sr_uses_extreme_as_continuation_boundary() -> None:
     previous = candle(100.5, 100.75, 99.5, 99.4)
     current = candle(99.6, 100.25, 99.25, 99.8)
     result = select_pathway(current, previous, 100.0, "LL", stack_extreme=99.0)
 
-    assert result["status"] == "WAIT"
-    assert result["controlling_mode"] is None
+    assert result["status"] == "READY"
+    assert result["controlling_mode"] == "S/R"
+    assert result["candle_a"] == current
 
 
 def test_close_below_ll_then_close_above_selects_sr() -> None:
@@ -379,8 +380,8 @@ def run_tests() -> None:
         test_rejection_off_waits,
         test_wick_below_ll_green_close_selects_sr,
         test_stacked_low_sr_requires_wick_through_stack_extreme,
-        test_stacked_low_sr_does_not_arm_from_middle_without_extreme_wick,
-        test_stacked_low_sr_uses_extreme_not_internal_close_boundary,
+        test_stacked_low_sr_activates_from_close_above_extreme_boundary,
+        test_stacked_low_sr_uses_extreme_as_continuation_boundary,
         test_close_below_ll_then_close_above_selects_sr,
         test_close_below_ll_then_wick_into_level_selects_sr_provisional,
         test_wick_above_lh_red_close_selects_rs,

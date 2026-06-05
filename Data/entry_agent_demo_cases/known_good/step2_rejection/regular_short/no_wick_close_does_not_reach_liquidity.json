@@ -1,0 +1,60 @@
+{
+  "case_name": "Step 2 rejection regular SHORT - no wick close does not reach liquidity",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "SHORT",
+  "level_type": "regular",
+  "expected_result": "ignored",
+  "why": "No wick and close stays below high-side liquidity.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 80.0,
+  "levels": {
+    "PMH": {
+      "price": 100.0,
+      "side": "HIGH"
+    },
+    "ONL": {
+      "price": 80.0,
+      "side": "LOW"
+    }
+  },
+  "stacks": [],
+  "active_liquidity": {
+    "name": "PMH",
+    "components": [
+      "PMH"
+    ],
+    "price": 100.0,
+    "side": "HIGH"
+  },
+  "candles": [
+    {
+      "time": "2026-05-28T13:20:00Z",
+      "open": 99.0,
+      "high": 99.5,
+      "low": 98.5,
+      "close": 99.5
+    }
+  ],
+  "expected": [
+    {
+      "time": "2026-05-28T13:20:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    }
+  ],
+  "notes": "Step 2 rejection-only fixture. No Leg 1, Leg 2, Step 6, trade manager, broker, or order behavior is evaluated. User reviewed and approved as APPROVED PASS."
+}

@@ -1,0 +1,75 @@
+{
+  "case_name": "6.3B Investigation - rs_sweep_allows_entry",
+  "case_type": "investigation",
+  "scope": "continuation_controlling_structure",
+  "rule": "6.3B",
+  "scenario_type": "continuation",
+  "continuation_type": "R/S",
+  "shared_leg1_valid": true,
+  "shared_leg2_valid": true,
+  "expected_entry_permission": "CONTINUATION_ENTRY_ALLOWED_AFTER_SWEEP",
+  "why": "R/S wick sweeps below controlling structure low after reclaim.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "levels": {
+    "PMH": {
+      "price": 100.0,
+      "side": "HIGH"
+    },
+    "ONL": {
+      "price": 80.0,
+      "side": "LOW"
+    }
+  },
+  "active_liquidity": {
+    "name": "PMH",
+    "components": [
+      "PMH"
+    ],
+    "price": 100.0,
+    "side": "HIGH"
+  },
+  "candles": [
+    {
+      "time": "2026-05-28T14:10:00Z",
+      "open": 99,
+      "high": 102,
+      "low": 98.5,
+      "close": 101
+    },
+    {
+      "time": "2026-05-28T14:11:00Z",
+      "open": 101,
+      "high": 101.5,
+      "low": 99.5,
+      "close": 99.75
+    },
+    {
+      "time": "2026-05-28T14:12:00Z",
+      "open": 99.75,
+      "high": 100.25,
+      "low": 98.25,
+      "close": 99.25
+    }
+  ],
+  "expected": [
+    {
+      "time": "2026-05-28T14:10:00Z"
+    },
+    {
+      "time": "2026-05-28T14:11:00Z"
+    },
+    {
+      "time": "2026-05-28T14:12:00Z",
+      "rule": "6.3B",
+      "scope": "continuation_controlling_structure",
+      "case_type": "investigation",
+      "continuation_type": "R/S",
+      "shared_leg1_valid": true,
+      "shared_leg2_valid": true,
+      "entry_permission": "CONTINUATION_ENTRY_ALLOWED_AFTER_SWEEP",
+      "sweep_occurred": true
+    }
+  ],
+  "notes": "Investigation fixture for continuation controlling structure sweep permission only. Shared Leg 1 and Shared Leg 2 are simulated as already valid."
+}

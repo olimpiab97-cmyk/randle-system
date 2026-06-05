@@ -1,0 +1,32 @@
+{
+  "case_name": "Step 2 ATR stack - triple high levels split by outer distance",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "SHORT",
+  "level_type": "stacked",
+  "expected_result": "valid_step2",
+  "why": "PMH 100 and ONH 105 stack, but YH 117 splits because PMH to YH outer distance is 17, above the 10 point threshold.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "simulated_daily_atr": 100.0,
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 80.0,
+  "levels": {
+    "PMH": {"price": 100.0, "side": "HIGH"},
+    "ONH": {"price": 105.0, "side": "HIGH"},
+    "YH": {"price": 117.0, "side": "HIGH"},
+    "ONL": {"price": 80.0, "side": "LOW"}
+  },
+  "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"},
+  "candles": [
+    {"time": "2026-05-28T14:04:00Z", "open": 101.0, "high": 105.75, "low": 100.5, "close": 105.25}
+  ],
+  "expected": [
+    {"time": "2026-05-28T14:04:00Z", "step": "Step 2", "pathway_type": "Rejection", "current_pathway_control": "rejection", "rejection_mode_entered": true, "active_liquidity_name": "PMH/ONH Liquidity", "setup_direction": "SHORT", "leg1_state": "WAIT", "leg2_state": "WAIT"}
+  ],
+  "notes": "Expected detected groups are PMH/ONH and YH, not PMH/ONH/YH."
+}

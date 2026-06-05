@@ -1,0 +1,76 @@
+{
+  "case_name": "6.3B Investigation - sr_new_bear_push_after_reset_becomes_controlling",
+  "case_type": "investigation",
+  "scope": "continuation_controlling_structure",
+  "rule": "6.3B",
+  "scenario_type": "continuation",
+  "continuation_type": "S/R",
+  "shared_leg1_valid": true,
+  "shared_leg2_valid": true,
+  "expected_entry_permission": "WAIT_BLOCKED_NO_CONTROLLING_STRUCTURE_SWEEP",
+  "why": "After reset, a new bearish close-through push becomes controlling.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "levels": {
+    "PML": {
+      "price": 100.0,
+      "side": "LOW"
+    },
+    "ONH": {
+      "price": 120.0,
+      "side": "HIGH"
+    }
+  },
+  "active_liquidity": {
+    "name": "PML",
+    "components": [
+      "PML"
+    ],
+    "price": 100.0,
+    "side": "LOW"
+  },
+  "candles": [
+    {
+      "time": "2026-05-28T14:20:00Z",
+      "open": 101,
+      "high": 102,
+      "low": 98,
+      "close": 99
+    },
+    {
+      "time": "2026-05-28T14:21:00Z",
+      "open": 99,
+      "high": 100.5,
+      "low": 98.75,
+      "close": 99.5
+    },
+    {
+      "time": "2026-05-28T14:22:00Z",
+      "open": 99.5,
+      "high": 100,
+      "low": 97,
+      "close": 98.5
+    }
+  ],
+  "expected": [
+    {
+      "time": "2026-05-28T14:20:00Z"
+    },
+    {
+      "time": "2026-05-28T14:21:00Z"
+    },
+    {
+      "time": "2026-05-28T14:22:00Z",
+      "rule": "6.3B",
+      "scope": "continuation_controlling_structure",
+      "case_type": "investigation",
+      "continuation_type": "S/R",
+      "shared_leg1_valid": true,
+      "shared_leg2_valid": true,
+      "entry_permission": "WAIT_BLOCKED_NO_CONTROLLING_STRUCTURE_SWEEP",
+      "controlling_structure_reset": true,
+      "controlling_structure_high": 100
+    }
+  ],
+  "notes": "Investigation fixture for continuation controlling structure sweep permission only. Shared Leg 1 and Shared Leg 2 are simulated as already valid."
+}

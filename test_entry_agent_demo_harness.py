@@ -46,22 +46,26 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
         self.assertFalse(comparison["pass"])
         self.assertEqual(comparison["diffs"][0]["field"], "step")
 
-    def test_investigation_fixture_is_discoverable_and_loadable(self):
+    def test_investigation_fixtures_are_archived_out_of_active_demo_flow(self):
         fixture_id = "investigations/step2_multicandle_controlling_boundary_low_stack"
-        self.assertIn(fixture_id, self.harness.list_fixtures())
-        entries = self.harness.list_fixture_entries()
+        self.assertNotIn(fixture_id, self.harness.list_fixtures())
+        self.assertIn(fixture_id, self.harness.list_fixtures(include_archived=True))
+        entries = self.harness.list_fixture_entries(include_archived=True)
         entry = next(item for item in entries if item["id"] == fixture_id)
         self.assertEqual(entry["folder"], "investigations")
         self.assertEqual(entry["case_type"], "investigation")
         result = self.harness.evaluate_fixture_file(fixture_id)
         self.assertTrue(result["overall_pass"], result["frames"])
         self.assertEqual(result["fixture"]["case_type"], "investigation")
+        active_entries = self.harness.list_fixture_entries()
+        self.assertFalse(any(item["id"].startswith("investigations/") for item in active_entries))
 
     def test_fixture_index_entries_cover_each_demo_selector_category(self):
         entries = self.harness.list_fixture_entries()
         ids = {entry["id"] for entry in entries}
         root_ids = {entry["id"] for entry in entries if "/" not in entry["id"]}
         step2_ids = {entry["id"] for entry in entries if entry["id"].startswith("known_good/step2_rejection/")}
+        step2_continuation_ids = {entry["id"] for entry in entries if entry["id"].startswith("known_good/step2_continuation/")}
         regression_ids = {entry["id"] for entry in entries if entry["folder"] == "regressions"}
         investigation_ids = {entry["id"] for entry in entries if entry["folder"] == "investigations" or entry.get("case_type") == "investigation"}
 
@@ -76,13 +80,14 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
             }.issubset(root_ids)
         )
         self.assertIn("known_good/step2_rejection/atr_stack/exact_threshold_distance_stacks", step2_ids)
+        self.assertIn("known_good/step2_continuation/regular/rs_close_below_pmh_active", step2_continuation_ids)
         self.assertIn("regressions/replay_suppression_leg1_window_candle_index", regression_ids)
-        self.assertIn("investigations/step2_multicandle_controlling_boundary_low_stack", investigation_ids)
-        self.assertEqual(ids, root_ids | step2_ids | regression_ids | investigation_ids | (ids - root_ids - step2_ids - regression_ids - investigation_ids))
+        self.assertFalse(investigation_ids)
+        self.assertEqual(ids, root_ids | step2_ids | step2_continuation_ids | regression_ids | (ids - root_ids - step2_ids - step2_continuation_ids - regression_ids))
 
     def test_retracted_stale_inactive_fixture_is_hidden_from_step2_review_selector(self):
         fixture_id = "known_good/step2_rejection/edge_cases/close_through_stale_inactive_level"
-        entries = self.harness.list_fixture_entries()
+        entries = self.harness.list_fixture_entries(include_archived=True)
         entry = next(item for item in entries if item["id"] == fixture_id)
         self.assertEqual(entry["review_status"], "RETRACTED / NOT APPROVED")
         self.assertTrue(entry["review_label"].startswith("[RETRACTED]"))
@@ -91,7 +96,7 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
 
         visible_step2_ids = {
             item["id"]
-            for item in entries
+            for item in self.harness.list_fixture_entries()
             if item["id"].startswith("known_good/step2_rejection/")
             and not item.get("hidden_from_review")
             and not item.get("deprecated")
@@ -111,6 +116,8 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
             "known_good/step2_rejection/atr_stack/low_three_levels_split_overlap",
             "known_good/step2_rejection/edge_cases/active_liquidity_name_ordered_correctly",
             "known_good/step2_rejection/edge_cases/close_through_wrong_side_level",
+            "known_good/step2_rejection/edge_cases/equal_price_stack_components",
+            "known_good/step2_rejection/edge_cases/gaps_through_level",
         ]
         for fixture_id in approved_ids:
             with self.subTest(fixture_id=fixture_id):
@@ -119,13 +126,9 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
                 self.assertEqual(entry["user_review"], "APPROVED")
                 self.assertTrue(entry["review_label"].startswith("[APPROVED]"))
 
-        pending_id = "known_good/step2_rejection/edge_cases/equal_price_stack_components"
-        pending = entries[pending_id]
-        self.assertEqual(pending["review_status"], "PENDING REVIEW")
-        self.assertTrue(pending["review_label"].startswith("[PENDING]"))
-
+        archived_entries = {entry["id"]: entry for entry in self.harness.list_fixture_entries(include_archived=True)}
         investigation_id = "investigations/step2_inactive_liquidity/close_through_consumed_level"
-        investigation = entries[investigation_id]
+        investigation = archived_entries[investigation_id]
         self.assertEqual(investigation["review_status"], "INVESTIGATION")
         self.assertTrue(investigation["review_label"].startswith("[INVESTIGATION]"))
 
@@ -322,33 +325,6 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
         self.assertEqual(qualification["extreme_boundary_price"], 101.0)
         self.assertEqual(qualification["qualification_boundary_price"], 101.0)
 
-    def test_step2_inactive_liquidity_investigations_have_explicit_reasons(self):
-        cases = {
-            "close_through_consumed_level": "consumed_level",
-            "close_through_session_expired_level": "session_expiration",
-            "close_through_stack_owner_replaced_level": "stack_ownership_transfer",
-            "close_through_opposite_side_control_inactivated_level": "opposite_side_control",
-            "close_through_continuation_reset_inactivated_structure": "continuation_reset",
-        }
-        base = "investigations/step2_inactive_liquidity"
-        for name, inactive_reason in cases.items():
-            with self.subTest(name=name):
-                result = self.harness.evaluate_fixture_file(f"{base}/{name}")
-                self.assertTrue(result["overall_pass"], result["frames"])
-                self.assertEqual(result["fixture"]["case_type"], "investigation")
-                self.assertEqual(result["fixture"]["inactive_liquidity"]["inactive_reason"], inactive_reason)
-
-                actual = result["frames"][0]["actual"]
-                qualification = result["frames"][0]["debug"]["step2_qualification"]
-                self.assertFalse(actual["rejection_mode_entered"])
-                self.assertEqual(actual["step"], "Step 1")
-                self.assertEqual(qualification["inactive_reason"], inactive_reason)
-                self.assertFalse(qualification["is_active_liquidity"])
-                self.assertTrue(qualification["close_through_inactive_level"])
-                self.assertEqual(qualification["expected_result"], "ignored")
-                self.assertEqual(qualification["actual_result"], "ignored")
-                self.assertEqual(qualification["review_status"], "INVESTIGATION")
-
     def test_step2_chart_payload_includes_stacked_component_lines_and_styles(self):
         result = self.harness.evaluate_fixture_file("known_good/step2_rejection/atr_stack/low_within_10pct_atr_valid")
         lines = {line["name"]: line for line in result["frames"][0]["debug"]["step2_chart_lines"]}
@@ -410,70 +386,265 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
                 self.assertEqual(outer["distance"], expected_distance)
                 self.assertFalse(outer["within_threshold"])
 
-    def test_continuation_controlling_structure_investigation_suite(self):
-        base = "investigations/continuation_controlling_structure"
-        expected_permissions = {
-            "sr_no_sweep_blocks_entry": "WAIT_BLOCKED_NO_CONTROLLING_STRUCTURE_SWEEP",
-            "sr_sweep_allows_entry": "CONTINUATION_ENTRY_ALLOWED_AFTER_SWEEP",
-            "rs_no_sweep_blocks_entry": "WAIT_BLOCKED_NO_CONTROLLING_STRUCTURE_SWEEP",
-            "rs_sweep_allows_entry": "CONTINUATION_ENTRY_ALLOWED_AFTER_SWEEP",
-            "sr_old_structure_swept_after_reset_does_not_allow_entry": "WAIT_BLOCKED_NO_CONTROLLING_STRUCTURE_SWEEP",
-            "sr_new_structure_swept_after_reset_allows_entry": "CONTINUATION_ENTRY_ALLOWED_AFTER_SWEEP",
-            "rs_old_structure_swept_after_reset_does_not_allow_entry": "WAIT_BLOCKED_NO_CONTROLLING_STRUCTURE_SWEEP",
-            "rs_new_structure_swept_after_reset_allows_entry": "CONTINUATION_ENTRY_ALLOWED_AFTER_SWEEP",
+    def test_gold_standard_2026_06_04_nq_level_lifecycle(self):
+        result = self.harness.evaluate_fixture_file("regressions/gold_standard_2026_06_04_nq_level_lifecycle")
+        self.assertTrue(result["overall_pass"], result["frames"])
+        first_rows = {row["level_name"]: row for row in result["frames"][0]["actual"]["level_lifecycle"]}
+        rows = {row["level_name"]: row for row in result["frames"][-1]["actual"]["level_lifecycle"]}
+
+        self.assertEqual(first_rows["PMH"]["level_status"], "CONSUMED")
+        self.assertEqual(first_rows["PML/LL/ONL"]["rejection_status"], "WAIT")
+        self.assertEqual(first_rows["PML/LL/ONL"]["continuation_status"], "WAIT")
+        self.assertEqual(first_rows["PML/LL/ONL"]["level_status"], "WAIT")
+
+        self.assertEqual(rows["PMH"]["rejection_status"], "INVALIDATED")
+        self.assertEqual(rows["PMH"]["rejection_invalidation_reason"], "STEP6_ENTRY_TRIGGERED")
+        self.assertEqual(rows["PMH"]["continuation_status"], "INVALIDATED")
+        self.assertEqual(rows["PMH"]["continuation_invalidation_reason"], "NEXT_LEVEL_TOUCH")
+        self.assertEqual(rows["PMH"]["level_status"], "CONSUMED")
+
+        self.assertNotIn("PML", rows)
+        self.assertNotIn("LL/ONL", rows)
+        self.assertEqual(rows["PML/LL/ONL"]["rejection_status"], "WAIT")
+        self.assertIsNone(rows["PML/LL/ONL"]["rejection_invalidation_reason"])
+        self.assertEqual(rows["PML/LL/ONL"]["continuation_status"], "WAIT")
+        self.assertIsNone(rows["PML/LL/ONL"]["continuation_invalidation_reason"])
+        self.assertEqual(rows["PML/LL/ONL"]["level_status"], "WAIT")
+
+    def test_step2_continuation_suite_wait_active_only(self):
+        cases = {
+            "known_good/step2_continuation/regular/rs_close_below_pmh_active": ("R/S", "ACTIVE"),
+            "known_good/step2_continuation/regular/rs_wick_below_pmh_wait": ("R/S", "WAIT"),
+            "known_good/step2_continuation/regular/rs_close_at_pmh_wait": ("R/S", "WAIT"),
+            "known_good/step2_continuation/regular/rs_close_above_pmh_wait": ("R/S", "WAIT"),
+            "known_good/step2_continuation/regular/sr_close_above_pml_active": ("S/R", "ACTIVE"),
+            "known_good/step2_continuation/regular/sr_wick_above_pml_wait": ("S/R", "WAIT"),
+            "known_good/step2_continuation/regular/sr_close_at_pml_wait": ("S/R", "WAIT"),
+            "known_good/step2_continuation/regular/sr_close_below_pml_wait": ("S/R", "WAIT"),
+            "known_good/step2_continuation/stacked/rs_high_stack_close_below_boundary_active": ("R/S", "ACTIVE"),
+            "known_good/step2_continuation/stacked/rs_high_stack_wick_below_boundary_wait": ("R/S", "WAIT"),
+            "known_good/step2_continuation/stacked/sr_low_stack_close_above_boundary_active": ("S/R", "ACTIVE"),
+            "known_good/step2_continuation/stacked/sr_low_stack_wick_above_boundary_wait": ("S/R", "WAIT"),
         }
-        for name, permission in expected_permissions.items():
-            with self.subTest(name=name):
-                result = self.harness.evaluate_fixture_file(f"{base}/{name}")
+        for fixture_id, (continuation_type, expected_state) in cases.items():
+            with self.subTest(fixture_id=fixture_id):
+                result = self.harness.evaluate_fixture_file(fixture_id)
                 self.assertTrue(result["overall_pass"], result["frames"])
-                actual = result["frames"][-1]["actual"]
-                self.assertEqual(actual["entry_permission"], permission)
-                self.assertTrue(actual["shared_leg1_valid"])
-                self.assertTrue(actual["shared_leg2_valid"])
+                actual = result["frames"][0]["actual"]
+                self.assertEqual(actual["continuation_type"], continuation_type)
+                self.assertEqual(actual["expected_step2_state"], expected_state)
+                self.assertEqual(actual["actual_step2_state"], expected_state)
+                self.assertIn(actual["actual_step2_state"], {"WAIT", "ACTIVE"})
+                self.assertNotIn("level_lifecycle", actual)
+                self.assertNotIn("level_status", actual)
+                fixture = result["fixture"]
+                fixture_chart_candles = fixture.get("chart_context_candles") or []
+                self.assertEqual(len(fixture_chart_candles), 10)
+                chart_candles = result["frames"][0]["debug"]["step2_chart_candles"]
+                self.assertEqual(len(chart_candles), 10)
+                labels = {candle.get("highlight_label") for candle in chart_candles}
+                self.assertIn("Prior rejection Step 2 activation", labels)
+                self.assertIn("Continuation validation", labels)
+                boundary = actual["qualification_boundary"]
+                active = fixture["active_liquidity"]
+                extreme = active.get("extreme_boundary_price", active.get("price", boundary))
+                activation_boundary = max(boundary, extreme) if continuation_type == "R/S" else min(boundary, extreme)
+                prior_activation = next(candle for candle in chart_candles if candle.get("highlight_label") == "Prior rejection Step 2 activation")
+                validation = chart_candles[-1]
+                self.assertEqual(validation.get("highlight_label"), "Continuation validation")
+                self.assertEqual(validation["time"], fixture["candles"][0]["time"])
+                self.assertEqual(validation["close"], fixture["candles"][0]["close"])
+                if continuation_type == "R/S":
+                    self.assertLess(chart_candles[0]["close"], boundary)
+                    self.assertGreater(prior_activation["close"], activation_boundary)
+                else:
+                    self.assertGreater(chart_candles[0]["close"], boundary)
+                    self.assertLess(prior_activation["close"], activation_boundary)
+                for forbidden in ("leg1_state", "leg2_state", "step5_confirmed", "invalidation_reason"):
+                    self.assertNotIn(forbidden, result["frames"][0]["expected"])
 
-        reset_cases = {
-            "sr_reset_on_bull_close_above_prior_bear_close": "controlling_structure_high",
-            "rs_reset_on_bear_close_below_prior_bull_close": "controlling_structure_low",
+    def test_step2_continuation_stacked_cases_use_extreme_boundary(self):
+        cases = {
+            "known_good/step2_continuation/stacked/rs_high_stack_close_below_boundary_active": 101.0,
+            "known_good/step2_continuation/stacked/rs_high_stack_wick_below_boundary_wait": 101.0,
+            "known_good/step2_continuation/stacked/sr_low_stack_close_above_boundary_active": 89.0,
+            "known_good/step2_continuation/stacked/sr_low_stack_wick_above_boundary_wait": 89.0,
         }
-        for name, inactive_field in reset_cases.items():
-            result = self.harness.evaluate_fixture_file(f"{base}/{name}")
-            actual = result["frames"][-1]["actual"]
-            self.assertTrue(actual["controlling_structure_reset"])
-            self.assertIsNone(actual[inactive_field])
+        for fixture_id, boundary in cases.items():
+            with self.subTest(fixture_id=fixture_id):
+                result = self.harness.evaluate_fixture_file(fixture_id)
+                self.assertTrue(result["overall_pass"], result["frames"])
+                frame = result["frames"][0]
+                self.assertEqual(frame["expected"]["qualification_boundary"], boundary)
+                self.assertEqual(frame["actual"]["qualification_boundary"], boundary)
+                self.assertEqual(frame["debug"]["step2_qualification"]["qualification_boundary_price"], boundary)
 
-        new_structure_cases = {
-            "sr_new_bear_push_after_reset_becomes_controlling": ("controlling_structure_high", 100),
-            "rs_new_bull_push_after_reset_becomes_controlling": ("controlling_structure_low", 100),
+    def test_gold_standard_2026_06_04_nq_step2_zone_transition(self):
+        result = self.harness.evaluate_fixture_file("regressions/gold_standard_2026_06_04_nq_step2_zone_transition")
+        self.assertTrue(result["overall_pass"], result["frames"])
+        self.assertEqual(result["fixture"]["case_name"], "Gold Standard STEP 2 - 2026-06-04 NQ Zone Transition")
+        first = result["frames"][0]["actual"]
+        second = result["frames"][1]["actual"]
+
+        self.assertEqual(first["step2_evaluation_target"], "PMH Liquidity")
+        self.assertTrue(first["rejection_mode_entered"])
+        self.assertFalse(first["zone_transition"])
+        self.assertEqual(first["stack_level_status"], "ACTIVE")
+
+        self.assertEqual(second["prior_step2_focus"], "PMH Liquidity")
+        self.assertEqual(second["current_step2_focus"], "PML/LL/ONL Liquidity")
+        self.assertEqual(second["step2_evaluation_target"], "PML/LL/ONL Liquidity")
+        self.assertEqual(second["stack_components"], ["PML", "LL", "ONL"])
+        self.assertTrue(second["zone_transition"])
+        self.assertFalse(second["rejection_mode_entered"])
+        self.assertEqual(second["step"], "Step 1")
+        self.assertEqual(second["stack_level_status"], "WAIT")
+        self.assertEqual(second["rejection_opportunity_status"], "WAIT")
+        self.assertEqual(second["continuation_opportunity_status"], "WAIT")
+        cards = {card["level_name"]: card for card in second["level_status_cards"]}
+        self.assertEqual(cards["PMH"]["level_status"], "CONSUMED")
+        self.assertEqual(cards["PMH"]["rejection_status"], "INVALIDATED")
+        self.assertEqual(cards["PMH"]["rejection_invalidation_reason"], "STEP6_ENTRY_TRIGGERED")
+        self.assertEqual(cards["PMH"]["continuation_status"], "INVALIDATED")
+        self.assertEqual(cards["PMH"]["continuation_invalidation_reason"], "NEXT_LEVEL_TOUCH")
+        self.assertEqual(cards["PML/LL/ONL"]["level_status"], "WAIT")
+        self.assertEqual(cards["PML/LL/ONL"]["rejection_status"], "WAIT")
+        self.assertEqual(cards["PML/LL/ONL"]["continuation_status"], "WAIT")
+        self.assertEqual(cards["PML/LL/ONL"]["components"], ["PML", "LL", "ONL"])
+        self.assertNotIn("level_lifecycle", second)
+        qualification = result["frames"][1]["debug"]["step2_qualification"]
+        self.assertEqual(qualification["active_liquidity"], "PML/LL/ONL Liquidity")
+        self.assertEqual(qualification["close_boundary_level"], "PML")
+        self.assertEqual(qualification["close_boundary_price"], 90.0)
+        self.assertEqual(qualification["extreme_boundary_level"], "LL/ONL")
+        self.assertEqual(qualification["extreme_boundary_price"], 88.0)
+        self.assertEqual(qualification["stack_level_status"], "WAIT")
+        self.assertEqual(qualification["rejection_opportunity_status"], "WAIT")
+        self.assertEqual(qualification["continuation_opportunity_status"], "WAIT")
+        self.assertEqual(
+            qualification["step2_scenario_text"],
+            "PMH is the prior working zone. Price wicks/reaches into PML/LL/ONL. The watched zone shifts to PML/LL/ONL. PML/LL/ONL is a stack with components PML, LL, ONL. PML/LL/ONL remains WAIT until a qualifying close below the stack. It is not ACTIVE from wick-only reach.",
+        )
+        step_logic = qualification["step_logic_scenarios"]
+        self.assertEqual(len(step_logic), 2)
+        explicit_entry = step_logic[0]
+        no_entry = step_logic[1]
+        self.assertEqual(explicit_entry["expected_state"]["level_status"], "CONSUMED")
+        self.assertEqual(explicit_entry["expected_state"]["rejection_reason"], "EXPLICIT_ENTRY_TRIGGERED / STEP6_ENTRY_TRIGGERED")
+        self.assertEqual(no_entry["expected_state"]["level_status"], "ACTIVE")
+        self.assertEqual(no_entry["expected_state"]["rejection_reason"], "NO_ENTRY_REACTION / STEP6_NO_ENTRY_REACTION")
+        self.assertIn("PMH level is NOT consumed because no explicit trade entry occurred.", no_entry["steps"])
+        self.assertIn("R/S Continuation becomes ACTIVE", " ".join(no_entry["steps"]))
+        chart_lines = result["frames"][1]["debug"]["step2_chart_lines"]
+        self.assertTrue({"PML", "LL", "ONL"}.issubset({line["name"] for line in chart_lines}))
+        self.assertEqual(len(result["frames"][1]["debug"]["step2_chart_candles"]), 10)
+        self.assertEqual(
+            len([candle for candle in result["frames"][1]["debug"]["step2_chart_candles"] if candle.get("display_only_history")]),
+            8,
+        )
+
+    def test_level_is_not_consumed_until_both_opportunities_are_invalidated(self):
+        state = self.harness.initialize_level_lifecycle({
+            "levels": {"PML": {"price": 100.0, "side": "LOW"}}
+        })
+        self.harness.invalidate_opportunity(state, "PML", "rejection", "EXHAUSTION_50_LEG1")
+        self.assertEqual(state["PML"]["level_status"], "ACTIVE")
+        self.harness.invalidate_opportunity(state, "PML", "continuation", "CONTINUATION_FAILURE")
+        self.assertEqual(state["PML"]["level_status"], "CONSUMED")
+
+    def test_wait_invalidated_level_without_active_opportunity_remains_focus(self):
+        state = self.harness.initialize_level_lifecycle({
+            "levels": {"PML": {"price": 100.0, "side": "LOW"}},
+            "level_lifecycle_initial": {
+                "PML": {"rejection_status": "WAIT", "continuation_status": "WAIT"}
+            },
+        })
+        self.harness.invalidate_opportunity(state, "PML", "rejection", "EXHAUSTION_50_LEG1")
+        self.assertEqual(state["PML"]["rejection_status"], "INVALIDATED")
+        self.assertEqual(state["PML"]["continuation_status"], "WAIT")
+        self.assertEqual(state["PML"]["level_status"], "WAIT")
+
+    def test_demo_lifecycle_renderer_does_not_default_focus_rows_to_active(self):
+        html = (ROOT / "entry_agent_demo.html").read_text(encoding="utf-8")
+        self.assertIn('const levelStatus = row.level_status || "WAIT";', html)
+        self.assertIn('const rejectionStatus = row.rejection_status || (levelStatus === "WAIT" ? "WAIT" : "ACTIVE");', html)
+        self.assertIn('const continuationStatus = row.continuation_status || (levelStatus === "WAIT" ? "WAIT" : "ACTIVE");', html)
+        self.assertNotIn('row.level_status || "ACTIVE"', html)
+
+    def test_step2_zone_transition_uses_step2_ui_mode_not_lifecycle_or_monitoring(self):
+        html = (ROOT / "entry_agent_demo.html").read_text(encoding="utf-8")
+        self.assertIn('fixture.scope === "step2_zone_transition_only"', html)
+        self.assertIn('fixture.scope === "step2_continuation_only"', html)
+        self.assertIn('known_good/step2_continuation/', html)
+        self.assertIn('["Actual Step 2 State", "actual_step2_state"]', html)
+        self.assertIn('renderStep2Comparison(frame);', html)
+        self.assertIn('renderStep2ScenarioText(qualification);', html)
+        self.assertIn('renderStepLogicScenarios(qualification);', html)
+        self.assertIn('stepLogicScenarios', html)
+        self.assertIn('step2_chart_candles', html)
+        self.assertIn('step2-chart-panel', html)
+        self.assertIn('level_status_cards', html)
+        self.assertIn('const MIN_CHART_CANDLES = 10;', html)
+        self.assertIn('function chartDisplayCandles(candles)', html)
+        self.assertIn('const showLifecycle = fixture && fixture.scope !== "step2_zone_transition_only" && rows.length > 0;', html)
+
+    def test_step2_continuation_has_dedicated_ui_section_and_selector(self):
+        html = (ROOT / "entry_agent_demo.html").read_text(encoding="utf-8")
+        self.assertIn('id="step2ContinuationSelect"', html)
+        self.assertIn('id="step2ContinuationLayout"', html)
+        self.assertIn('<h2>STEP 2 CONTINUATION</h2>', html)
+        self.assertIn('renderStep2Continuation(frame);', html)
+        self.assertIn('drawStep2Chart(frame, "step2ContinuationChart");', html)
+        self.assertIn('fixture.scope === "step2_continuation_only"', html)
+        self.assertIn("fixture.chart_context_candles", html)
+        self.assertIn("step2ChartCandleSource(frame, candle)", html)
+        self.assertIn('function isStep2ContinuationFixture()', html)
+        self.assertIn('function renderStep2Continuation(frame)', html)
+        self.assertIn('item.highlight_label', html)
+        self.assertIn('["Continuation Type", actual.continuation_type]', html)
+        self.assertIn('["Expected State", actual.expected_step2_state]', html)
+        self.assertIn('["Actual State", actual.actual_step2_state]', html)
+        self.assertIn('["Reason", actual.reason]', html)
+
+    def test_step2_continuation_payload_uses_fixture_chart_context_for_ui(self):
+        result = self.harness.evaluate_fixture_file("known_good/step2_continuation/regular/rs_close_below_pmh_active")
+        fixture_chart_candles = result["fixture"]["chart_context_candles"]
+        frame_chart_candles = result["frames"][0]["debug"]["step2_chart_candles"]
+
+        self.assertEqual(len(fixture_chart_candles), 10)
+        self.assertEqual(len(frame_chart_candles), 10)
+        for fixture_candle, frame_candle in zip(fixture_chart_candles, frame_chart_candles):
+            for key in ("time", "open", "high", "low", "close", "highlight_label"):
+                self.assertEqual(fixture_candle.get(key), frame_candle.get(key))
+        self.assertEqual(fixture_chart_candles[0]["close"], 98.9)
+        self.assertEqual(fixture_chart_candles[3]["close"], 100.25)
+        self.assertEqual(fixture_chart_candles[3]["highlight_label"], "Prior rejection Step 2 activation")
+        self.assertEqual(fixture_chart_candles[8]["close"], 100.05)
+        self.assertEqual(fixture_chart_candles[9]["close"], 99.75)
+        self.assertEqual(fixture_chart_candles[9]["highlight_label"], "Continuation validation")
+
+    def test_continuation_wick_touch_next_same_side_level_invalidates_only_continuation(self):
+        fixture = {
+            "case_name": "Continuation next-level wick touch",
+            "scenario_type": "continuation",
+            "continuation_type": "R/S",
+            "symbol": "NQ",
+            "date": "2026-06-04",
+            "levels": {
+                "LH": {"price": 100.0, "side": "HIGH"},
+                "PMH": {"price": 101.0, "side": "HIGH"},
+                "PML": {"price": 90.0, "side": "LOW"},
+            },
+            "active_liquidity": {"name": "LH", "components": ["LH"], "price": 100.0, "side": "HIGH"},
+            "candles": [{"time": "2026-06-04T13:30:00Z", "open": 99.5, "high": 101.0, "low": 99.0, "close": 100.5}],
+            "expected": [{}],
         }
-        for name, (field, value) in new_structure_cases.items():
-            result = self.harness.evaluate_fixture_file(f"{base}/{name}")
-            actual = result["frames"][-1]["actual"]
-            self.assertTrue(actual["controlling_structure_reset"])
-            self.assertEqual(actual[field], value)
-
-        multi_cases = {
-            "sr_multi_candle_bear_push_last_uninterrupted_push_controls": ([0, 1], 98),
-            "rs_multi_candle_bull_push_last_uninterrupted_push_controls": ([0, 1], 102),
-        }
-        for name, (candle_range, close_value) in multi_cases.items():
-            result = self.harness.evaluate_fixture_file(f"{base}/{name}")
-            actual = result["frames"][-1]["actual"]
-            self.assertEqual(actual["controlling_structure_candle_range"], candle_range)
-            self.assertEqual(actual["controlling_structure_close"], close_value)
-
-        open_question_cases = [
-            "sr_exact_touch_of_controlling_high",
-            "rs_exact_touch_of_controlling_low",
-            "sr_wick_sweep_before_reclaim_does_not_count",
-            "rs_wick_sweep_before_reclaim_does_not_count",
-            "sr_body_close_without_wick_sweep_does_not_count",
-            "rs_body_close_without_wick_sweep_does_not_count",
-        ]
-        for name in open_question_cases:
-            result = self.harness.evaluate_fixture_file(f"{base}/{name}")
-            actual = result["frames"][-1]["actual"]
-            self.assertEqual(result["fixture"]["case_type"], "investigation")
-            self.assertEqual(actual["entry_permission"], "WAIT_BLOCKED_NO_CONTROLLING_STRUCTURE_SWEEP")
+        frame = self.harness.evaluate_fixture(fixture)[0]
+        rows = {row["level_name"]: row for row in frame["actual"]["level_lifecycle"]}
+        self.assertEqual(rows["LH"]["continuation_status"], "INVALIDATED")
+        self.assertEqual(rows["LH"]["continuation_invalidation_reason"], "NEXT_LEVEL_TOUCH")
+        self.assertEqual(rows["LH"]["rejection_status"], "ACTIVE")
+        self.assertEqual(rows["LH"]["level_status"], "ACTIVE")
 
     def test_no_broker_executor_imports_or_live_calls_required(self):
         forbidden = {

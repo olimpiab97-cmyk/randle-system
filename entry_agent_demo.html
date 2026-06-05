@@ -82,6 +82,87 @@
       gap: 12px;
       align-items: start;
     }
+    .investigation-path-panel { margin-top: 12px; }
+    .path-event {
+      margin: 10px;
+      padding: 10px;
+      border: 1px solid #dde4e8;
+      border-radius: 6px;
+      background: #fbfcfd;
+    }
+    .path-event-title {
+      margin-bottom: 8px;
+      font-weight: 800;
+      color: #334148;
+    }
+    .path-event-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .mini-candle-timeline {
+      margin: 10px 0;
+      padding: 8px;
+      border: 1px solid #d7e0e5;
+      border-radius: 6px;
+      background: #ffffff;
+      overflow-x: auto;
+    }
+    .mini-candle-timeline svg {
+      display: block;
+      width: 100%;
+      min-width: 520px;
+      height: auto;
+    }
+    .timeline-note {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .investigation-story-card {
+      margin: 12px 10px;
+      border: 1px solid #d8e1e6;
+      border-radius: 8px;
+      background: #ffffff;
+      overflow: hidden;
+    }
+    .investigation-story-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #e1e7eb;
+      background: #f7f9fa;
+    }
+    .investigation-story-title {
+      font-weight: 850;
+      color: #26343c;
+    }
+    .investigation-story-subtitle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .investigation-story-body { padding: 10px 12px 12px; }
+    .scene-caption {
+      margin-top: 8px;
+      color: #334148;
+      line-height: 1.35;
+    }
+    .decision-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .decision-pill {
+      padding: 7px 12px;
+      border: 1px solid #b9c4ca;
+      border-radius: 6px;
+      background: #ffffff;
+      font-weight: 750;
+      color: #26343c;
+    }
     .hidden { display: none !important; }
     .panel {
       background: var(--panel);
@@ -152,6 +233,24 @@
     }
     .flow-row .label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
     .flow-row .value { font-size: 16px; font-weight: 750; overflow-wrap: anywhere; }
+    .step2-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.9fr) minmax(0, 2fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .step2-left {
+      display: grid;
+      gap: 12px;
+    }
+    .step2-chart-panel {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+    }
+    .step2-chart-panel .chart-wrap { padding: 12px; }
+    .step2-chart-panel canvas {
+      height: 620px;
+    }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -225,7 +324,8 @@
     }
     .scenario-card strong { display: block; margin-bottom: 4px; }
     @media (max-width: 980px) {
-      .debug-layout, .bottom-layout, .step2-layout { grid-template-columns: 1fr; }
+      .debug-layout, .bottom-layout, .step2-layout, .path-event-grid { grid-template-columns: 1fr; }
+      .step2-chart-panel { grid-column: auto; grid-row: auto; }
       .scenario-list { grid-template-columns: 1fr; }
     }
   </style>
@@ -243,12 +343,12 @@
     <span class="status">Regression Cases</span>
     <select id="regressionSelect" aria-label="Regression Case"></select>
     <button id="loadRegressionBtn">Load Regression</button>
-    <span class="status">Investigations</span>
-    <select id="investigationSelect" aria-label="Investigation Case"></select>
-    <button id="loadInvestigationBtn">Load Investigation</button>
     <span class="status">Step 2 Rejection</span>
     <select id="step2RejectionSelect" aria-label="Step 2 Rejection Case"></select>
-    <button id="loadStep2RejectionBtn">Load Step 2 Case</button>
+    <button id="loadStep2RejectionBtn">Load Rejection</button>
+    <span class="status">Step 2 Continuation</span>
+    <select id="step2ContinuationSelect" aria-label="Step 2 Continuation Case"></select>
+    <button id="loadStep2ContinuationBtn">Load Continuation</button>
     <button id="prevBtn">Previous Candle</button>
     <button id="nextBtn">Next Candle</button>
     <button id="resetBtn">Reset</button>
@@ -262,9 +362,14 @@
       <div class="meta" id="scenarioMeta"></div>
       <div class="scenario-list" id="stackSummary"></div>
       <div class="scenario-list" id="levelsList"></div>
+      <div id="levelLifecycleSection" class="hidden">
+        <h2>Level Lifecycle</h2>
+        <div class="scenario-list" id="levelLifecycleList"></div>
+      </div>
     </section>
 
     <div class="step2-layout hidden" id="step2DebugLayout">
+    <div class="step2-left">
     <section class="panel">
       <h2>Step 2 Qualification</h2>
       <div id="step2ResultCard"></div>
@@ -273,17 +378,59 @@
     </section>
 
     <section class="panel">
-      <h2>Stack Anatomy</h2>
-      <div class="grid" id="step2StackAnatomyGrid"></div>
-    </section>
-
-    <section class="panel">
-      <h2>Step 2 Candle And Boundary</h2>
-      <div class="chart-wrap">
-        <canvas id="step2Chart" width="980" height="520"></canvas>
+      <h2>Expected vs Actual Step 2 Fields</h2>
+      <div style="overflow:auto">
+        <table>
+          <thead><tr><th>Field</th><th>Expected</th><th>Actual</th></tr></thead>
+          <tbody id="step2ComparisonBody"></tbody>
+        </table>
       </div>
     </section>
     </div>
+
+    <section class="panel step2-chart-panel">
+      <h2>Candles and Liquidity</h2>
+      <div class="decision-flow" id="step2ScenarioText"></div>
+      <div class="scenario-list" id="stepLogicScenarios"></div>
+      <div class="grid" id="step2StackAnatomyGrid"></div>
+      <div class="chart-wrap">
+        <canvas id="step2Chart" width="1280" height="720"></canvas>
+      </div>
+    </section>
+    </div>
+
+    <div class="step2-layout hidden" id="step2ContinuationLayout">
+    <div class="step2-left">
+    <section class="panel">
+      <h2>STEP 2 CONTINUATION</h2>
+      <div id="step2ContinuationResultCard"></div>
+      <div class="grid" id="step2ContinuationGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Expected vs Actual Step 2 Fields</h2>
+      <div style="overflow:auto">
+        <table>
+          <thead><tr><th>Field</th><th>Expected</th><th>Actual</th></tr></thead>
+          <tbody id="step2ContinuationComparisonBody"></tbody>
+        </table>
+      </div>
+    </section>
+    </div>
+
+    <section class="panel step2-chart-panel">
+      <h2>Candles and Liquidity</h2>
+      <div class="chart-wrap">
+        <canvas id="step2ContinuationChart" width="1280" height="720"></canvas>
+      </div>
+    </section>
+    </div>
+
+    <section class="panel investigation-path-panel hidden" id="investigationPathPanel">
+      <h2>Investigation Review</h2>
+      <div class="grid" id="investigationPathSummary"></div>
+      <div id="investigationPathEvents"></div>
+    </section>
 
     <div class="step2-layout hidden" id="continuationStructureLayout">
     <section class="panel">
@@ -368,6 +515,7 @@
   <script>
     const caseDir = "Data/entry_agent_demo_cases";
     const apiBase = "/api/entry-agent-demo";
+    const MIN_CHART_CANDLES = 10;
     const rejectionFields = [
       "pathway_type", "rejection_mode_entered", "active_liquidity_name", "liquidity_price",
       "setup_direction", "current_pathway_control", "current_controlling_mode",
@@ -408,6 +556,14 @@
       ["Inactive Reason", "inactive_reason"],
       ["Is Active Liquidity?", "is_active_liquidity"],
       ["Close Through Inactive Level?", "close_through_inactive_level"],
+      ["Continuation Type", "continuation_type"],
+      ["Liquidity Level", "liquidity_level"],
+      ["Qualification Boundary", "qualification_boundary"],
+      ["Expected Step 2 State", "expected_step2_state"],
+      ["Actual Step 2 State", "actual_step2_state"],
+      ["Stack Level Status", "stack_level_status"],
+      ["Rejection Opportunity", "rejection_opportunity_status"],
+      ["Continuation Opportunity", "continuation_opportunity_status"],
       ["Expected Result", "expected_result"],
       ["Actual Result", "actual_result"],
       ["Review Status", "review_status"]
@@ -423,6 +579,41 @@
 
     function normalizeCandle(candle) {
       return {...candle, timestamp: candle.timestamp || candle.time};
+    }
+
+    function chartDisplayCandles(candles) {
+      const normalized = (candles || []).map(normalizeCandle);
+      if (normalized.length >= MIN_CHART_CANDLES || !normalized.length) return normalized;
+      const first = normalized[0];
+      const baseTime = Date.parse(first.timestamp || first.time);
+      const baseOpen = Number(first.open ?? first.close ?? 100);
+      const baseClose = Number(first.close ?? baseOpen);
+      const body = Math.max(Math.abs(baseClose - baseOpen), 0.25);
+      const missing = MIN_CHART_CANDLES - normalized.length;
+      const history = [];
+      for (let offset = missing; offset >= 1; offset -= 1) {
+        const close = roundChartPrice(baseOpen + offset * body * 0.15);
+        const open = roundChartPrice(close + body * 0.35);
+        const high = roundChartPrice(Math.max(open, close) + body * 0.6);
+        const low = roundChartPrice(Math.min(open, close) - body * 0.6);
+        const timestamp = Number.isFinite(baseTime)
+          ? new Date(baseTime - offset * 60000).toISOString()
+          : `history-${offset}`;
+        history.push({
+          time: timestamp,
+          timestamp,
+          open,
+          high,
+          low,
+          close,
+          display_only_history: true
+        });
+      }
+      return history.concat(normalized);
+    }
+
+    function roundChartPrice(value) {
+      return Math.round(Number(value) * 100) / 100;
     }
 
     function activeLiquidity(fx) {
@@ -454,6 +645,26 @@
         qualification_boundary_price: firstPresent(active.qualification_boundary_price, inferred.qualification_boundary_price, active.price),
         liquidity_group: active.liquidity_group || "fixture-defined",
         level_type: active.level_type || (components.length > 1 ? "stacked" : "regular")
+      };
+    }
+
+    function activeLiquidityForFrame(frame) {
+      const qualification = frame && frame.debug && frame.debug.step2_qualification;
+      if (!qualification || !qualification.active_liquidity) return activeLiquidity(fixture);
+      const components = qualification.stack_components || [qualification.active_liquidity];
+      return {
+        name: qualification.active_liquidity,
+        display_name: qualification.active_liquidity,
+        components,
+        price: qualification.liquidity_price,
+        side: qualification.active_liquidity && String(qualification.active_liquidity).includes("PML") ? "LOW" : undefined,
+        close_boundary_level: qualification.close_boundary_level,
+        close_boundary_price: qualification.close_boundary_price,
+        extreme_boundary_level: qualification.extreme_boundary_level,
+        extreme_boundary_price: qualification.extreme_boundary_price,
+        qualification_boundary_price: qualification.qualification_boundary_price,
+        liquidity_group: qualification.liquidity_group,
+        level_type: qualification.liquidity_type
       };
     }
 
@@ -506,34 +717,34 @@
     async function loadScenarioNames() {
       let names;
       try {
-        const response = await fetch(`${apiBase}/index`);
+        const response = await fetch(`${apiBase}/index`, {cache: "no-store"});
         const payload = await response.json();
         names = payload.fixtures;
         fixtureEntries = payload.entries || names.map(name => ({id: name, folder: "known_good"}));
       } catch (_error) {
-        const response = await fetch(`${caseDir}/index.json`);
+        const response = await fetch(`${caseDir}/index.json`, {cache: "no-store"});
         names = await response.json();
         fixtureEntries = names.map(name => ({id: name, folder: "known_good"}));
       }
       const select = document.getElementById("scenarioSelect");
       const rootEntries = fixtureEntries.filter(entry => !entry.id.includes("/"));
       const regressionEntries = fixtureEntries.filter(entry => entry.folder === "regressions");
-      const investigationEntries = fixtureEntries.filter(entry => entry.folder === "investigations" || entry.case_type === "investigation");
       const step2RejectionEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_rejection/") && !entry.hidden_from_review && !entry.deprecated);
+      const step2ContinuationEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_continuation/") && !entry.hidden_from_review && !entry.deprecated);
       select.innerHTML = rootEntries.map(entry => `<option value="${entry.id}">${entry.id}</option>`).join("");
       if (!select.innerHTML) select.innerHTML = names.filter(name => !name.includes("/")).map(name => `<option value="${name}">${name}</option>`).join("");
       const regressionSelect = document.getElementById("regressionSelect");
       regressionSelect.innerHTML = regressionEntries.map(entry => `<option value="${entry.id}">${entry.case_name || entry.id}</option>`).join("");
       regressionSelect.disabled = regressionEntries.length === 0;
       document.getElementById("loadRegressionBtn").disabled = regressionEntries.length === 0;
-      const investigationSelect = document.getElementById("investigationSelect");
-      investigationSelect.innerHTML = investigationEntries.map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`).join("");
-      investigationSelect.disabled = investigationEntries.length === 0;
-      document.getElementById("loadInvestigationBtn").disabled = investigationEntries.length === 0;
       const step2Select = document.getElementById("step2RejectionSelect");
       step2Select.innerHTML = step2RejectionEntries.map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`).join("");
       step2Select.disabled = step2RejectionEntries.length === 0;
       document.getElementById("loadStep2RejectionBtn").disabled = step2RejectionEntries.length === 0;
+      const step2ContinuationSelect = document.getElementById("step2ContinuationSelect");
+      step2ContinuationSelect.innerHTML = step2ContinuationEntries.map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`).join("");
+      step2ContinuationSelect.disabled = step2ContinuationEntries.length === 0;
+      document.getElementById("loadStep2ContinuationBtn").disabled = step2ContinuationEntries.length === 0;
     }
 
     function reviewStatus(entryOrFixture) {
@@ -546,6 +757,7 @@
       const normalized = String(status || "").toUpperCase();
       if (normalized.includes("APPROVED") && !normalized.includes("NOT APPROVED") && !normalized.includes("RETRACTED")) return "[APPROVED]";
       if (normalized.includes("RETRACTED") || normalized.includes("NOT APPROVED")) return "[RETRACTED]";
+      if (normalized.includes("BLUEPRINT_CLARIFICATION_NEEDED")) return "[CLARIFY]";
       if (normalized.includes("INVESTIGATION")) return "[INVESTIGATION]";
       return "[PENDING]";
     }
@@ -554,12 +766,13 @@
       const normalized = String(status || "").toUpperCase();
       if (normalized.includes("APPROVED") && !normalized.includes("NOT APPROVED") && !normalized.includes("RETRACTED")) return "review-approved";
       if (normalized.includes("RETRACTED") || normalized.includes("NOT APPROVED")) return "review-retracted";
+      if (normalized.includes("BLUEPRINT_CLARIFICATION_NEEDED")) return "review-pending";
       if (normalized.includes("INVESTIGATION")) return "review-investigation";
       return "review-pending";
     }
 
     function formatReviewDropdownLabel(entry) {
-      return entry.review_label || `${reviewPrefix(reviewStatus(entry))} ${entry.id.replace("known_good/step2_rejection/", "")}`;
+      return `${reviewPrefix(reviewStatus(entry))} ${entry.id.replace("known_good/step2_rejection/", "").replace("known_good/step2_continuation/", "")}`;
     }
 
     async function loadScenario(name) {
@@ -567,11 +780,11 @@
       name = name || document.getElementById("scenarioSelect").value;
       let payload;
       try {
-        const response = await fetch(`${apiBase}/case/${encodeURIComponent(name)}`);
+        const response = await fetch(`${apiBase}/case/${encodeURIComponent(name)}`, {cache: "no-store"});
         payload = await response.json();
         if (payload.error) throw new Error(payload.error);
       } catch (_error) {
-        const response = await fetch(`${caseDir}/${name}.json`);
+        const response = await fetch(`${caseDir}/${name}.json`, {cache: "no-store"});
         const fallbackFixture = await response.json();
         payload = {
           fixture: fallbackFixture,
@@ -610,20 +823,33 @@
       badge.textContent = `${overallPass ? "PASS" : "FAIL"} ${index + 1}/${frames.length}`;
       renderMeta(frame);
       renderLevels();
-      if (isStep2DebugFixture()) {
+      renderLevelLifecycle(frame);
+      if (isStep2ContinuationFixture()) {
+        document.getElementById("step2ContinuationLayout").classList.remove("hidden");
+        document.getElementById("step2DebugLayout").classList.add("hidden");
+        document.getElementById("continuationStructureLayout").classList.add("hidden");
+        document.getElementById("debugLayout").classList.add("hidden");
+        document.getElementById("bottomLayout").classList.add("hidden");
+        renderStep2Continuation(frame);
+        drawStep2Chart(frame, "step2ContinuationChart");
+      } else if (isStep2DebugFixture()) {
+        document.getElementById("step2ContinuationLayout").classList.add("hidden");
         document.getElementById("step2DebugLayout").classList.remove("hidden");
         document.getElementById("continuationStructureLayout").classList.add("hidden");
         document.getElementById("debugLayout").classList.add("hidden");
         document.getElementById("bottomLayout").classList.add("hidden");
         renderStep2Qualification(frame);
+        renderStep2Comparison(frame);
         drawStep2Chart(frame);
       } else if (isContinuationStructureFixture()) {
+        document.getElementById("step2ContinuationLayout").classList.add("hidden");
         document.getElementById("step2DebugLayout").classList.add("hidden");
         document.getElementById("continuationStructureLayout").classList.remove("hidden");
         document.getElementById("debugLayout").classList.add("hidden");
         document.getElementById("bottomLayout").classList.add("hidden");
         renderContinuationStructure(frame);
       } else {
+        document.getElementById("step2ContinuationLayout").classList.add("hidden");
         document.getElementById("step2DebugLayout").classList.add("hidden");
         document.getElementById("continuationStructureLayout").classList.add("hidden");
         document.getElementById("debugLayout").classList.remove("hidden");
@@ -638,7 +864,22 @@
     function isStep2DebugFixture() {
       return Boolean(
         fixture &&
-        (fixture.scope === "step2_rejection_only" || (loadedFixtureId || "").startsWith("known_good/step2_rejection/")) &&
+        (
+          fixture.scope === "step2_rejection_only" ||
+          fixture.scope === "step2_zone_transition_only" ||
+          (loadedFixtureId || "").startsWith("known_good/step2_rejection/")
+        ) &&
+        frames.some(frame => frame.debug && frame.debug.step2_qualification)
+      );
+    }
+
+    function isStep2ContinuationFixture() {
+      return Boolean(
+        fixture &&
+        (
+          fixture.scope === "step2_continuation_only" ||
+          (loadedFixtureId || "").startsWith("known_good/step2_continuation/")
+        ) &&
         frames.some(frame => frame.debug && frame.debug.step2_qualification)
       );
     }
@@ -647,8 +888,12 @@
       return Boolean(fixture && fixture.scope === "continuation_controlling_structure");
     }
 
+    function isInvestigationFixture() {
+      return Boolean(fixture && (fixture.case_type === "investigation" || (loadedFixtureId || "").startsWith("investigations/")));
+    }
+
     function renderMeta(frame) {
-      const active = activeLiquidity(fixture);
+      const active = activeLiquidityForFrame(frame);
       const status = reviewStatus(fixture);
       document.getElementById("scenarioMeta").innerHTML = [
         `<span class="review-badge ${reviewClass(status)}">${reviewPrefix(status)} ${status}</span>`,
@@ -671,12 +916,31 @@
     }
 
     function renderLevels() {
-      const active = activeLiquidity(fixture);
       const rows = [];
+      const active = activeLiquidityForFrame(frames[index]);
       renderStackSummary(active);
-      Object.entries(fixture.levels || {}).forEach(([name, level]) => {
-        rows.push(`<div class="scenario-card"><strong>${name}</strong><span>${level.side} ${level.price}</span></div>`);
-      });
+      const statusCards = (frames[index] && frames[index].actual && frames[index].actual.level_status_cards) || fixture.level_status_cards || [];
+      if (statusCards.length) {
+        statusCards.forEach(card => {
+          const rejectionReason = card.rejection_invalidation_reason ? ` / ${card.rejection_invalidation_reason}` : "";
+          const continuationReason = card.continuation_invalidation_reason ? ` / ${card.continuation_invalidation_reason}` : "";
+          const components = (card.components || []).length ? `<br><span>Stack components: ${escapeHtml(card.components.join(", "))}</span>` : "";
+          rows.push(`
+            <div class="scenario-card">
+              <strong>${escapeHtml(card.level_name || card.name || "Level")}</strong>
+              <span>${escapeHtml(card.side || "")} ${escapeHtml(card.price)}</span><br>
+              <span>Level Status: ${escapeHtml(card.level_status || "WAIT")}</span><br>
+              <span>Rejection Opportunity: ${escapeHtml(card.rejection_status || "WAIT")}${escapeHtml(rejectionReason)}</span><br>
+              <span>Continuation Opportunity: ${escapeHtml(card.continuation_status || "WAIT")}${escapeHtml(continuationReason)}</span>
+              ${components}
+            </div>
+          `);
+        });
+      } else {
+        Object.entries(fixture.levels || {}).forEach(([name, level]) => {
+          rows.push(`<div class="scenario-card"><strong>${name}</strong><span>${level.side} ${level.price}</span></div>`);
+        });
+      }
       (fixture.stacks || []).forEach(stack => {
         const split = stack.split_components ? ` split=${stack.split_components.join("/")}` : "";
         rows.push(`<div class="scenario-card"><strong>${stack.name}</strong><span>stack ${stack.side} ${stack.price} components=${(stack.components || []).join("/")}${split}</span></div>`);
@@ -730,8 +994,39 @@
         const wide = ["wait_reason", "last_decision", "invalidation_reason"].includes(field) ? " wide" : "";
         return `<div class="kv${wide}"><div class="k">${stateFieldLabels[field] || field}</div><div class="v">${formatProgressValue(field, value)}</div></div>`;
       }).join("");
-      renderControllingStructure(frame);
       renderCandleTables(frame);
+    }
+
+    function renderLevelLifecycle(frame) {
+      const rows = (frame && frame.actual && frame.actual.level_lifecycle) || (frame && frame.debug && frame.debug.level_lifecycle) || [];
+      const section = document.getElementById("levelLifecycleSection");
+      const target = document.getElementById("levelLifecycleList");
+      if (!target) return;
+      const showLifecycle = fixture && fixture.scope !== "step2_zone_transition_only" && rows.length > 0;
+      if (section) section.classList.toggle("hidden", !showLifecycle);
+      if (!showLifecycle) {
+        target.innerHTML = "";
+        return;
+      }
+      if (!rows.length) {
+        target.innerHTML = `<div class="scenario-card"><strong>No lifecycle data</strong><span>-</span></div>`;
+        return;
+      }
+      target.innerHTML = rows.map(row => {
+        const rejectionReason = row.rejection_invalidation_reason ? ` reason=${row.rejection_invalidation_reason}` : "";
+        const continuationReason = row.continuation_invalidation_reason ? ` reason=${row.continuation_invalidation_reason}` : "";
+        const levelStatus = row.level_status || "WAIT";
+        const rejectionStatus = row.rejection_status || (levelStatus === "WAIT" ? "WAIT" : "ACTIVE");
+        const continuationStatus = row.continuation_status || (levelStatus === "WAIT" ? "WAIT" : "ACTIVE");
+        return `
+          <div class="scenario-card">
+            <strong>${escapeHtml(row.level_name || row.name || "Level")}</strong>
+            <span>Rejection Opportunity: ${escapeHtml(rejectionStatus)}${escapeHtml(rejectionReason)}</span><br>
+            <span>Continuation Opportunity: ${escapeHtml(continuationStatus)}${escapeHtml(continuationReason)}</span><br>
+            <span>Level Status: ${escapeHtml(levelStatus)}</span>
+          </div>
+        `;
+      }).join("");
     }
 
     function formatProgressValue(field, value) {
@@ -743,7 +1038,7 @@
 
     function renderStep2Qualification(frame) {
       const qualification = (frame.debug && frame.debug.step2_qualification) || {};
-      const passed = qualification.pass === true;
+      const passed = frame.pass === true;
       document.getElementById("step2ResultCard").innerHTML = `
         <div class="result-card ${passed ? "pass" : "fail"}">
           <div class="result-label">Step 2 Result</div>
@@ -753,6 +1048,8 @@
       `;
       renderStep2DecisionFlow(qualification);
       renderStep2StackAnatomy(qualification);
+      renderStep2ScenarioText(qualification);
+      renderStepLogicScenarios(qualification);
       document.getElementById("step2QualificationGrid").innerHTML = step2QualificationFields.map(([label, key]) => {
         const value = qualification[key];
         const displayValue = key === "pass" ? (value ? "PASS" : "FAIL") : value;
@@ -762,6 +1059,568 @@
         + `<div class="kv wide"><div class="k">Inactive Level</div><div class="v">${formatValue(qualification.inactive_level_name)} ${formatValue(qualification.inactive_level_price)}</div></div>`
         + `<div class="kv wide"><div class="k">Inactive Close-through Note</div><div class="v">${formatValue(qualification.inactive_close_through_note)}</div></div>`
         + `<div class="kv wide"><div class="k">Why</div><div class="v">${formatValue(qualification.why)}</div></div>`;
+    }
+
+    function renderStep2ScenarioText(qualification) {
+      const target = document.getElementById("step2ScenarioText");
+      if (!target) return;
+      const text = qualification.step2_scenario_text || fixture.step2_scenario_text || fixture.notes || "";
+      target.innerHTML = text
+        ? `<div class="flow-row"><div class="label">Scenario Logic</div><div class="value">${escapeHtml(text)}</div></div>`
+        : "";
+    }
+
+    function renderStepLogicScenarios(qualification) {
+      const target = document.getElementById("stepLogicScenarios");
+      if (!target) return;
+      const scenarios = qualification.step_logic_scenarios || fixture.step_logic_scenarios || [];
+      if (!scenarios.length) {
+        target.innerHTML = "";
+        return;
+      }
+      target.innerHTML = scenarios.map(scenario => {
+        const steps = (scenario.steps || []).map((step, index) => `<div>${index + 1}. ${escapeHtml(step)}</div>`).join("");
+        const state = scenario.expected_state || {};
+        const stateRows = [
+          ["Level Status", state.level_status],
+          ["Rejection Opportunity", state.rejection_status],
+          ["Rejection Reason", state.rejection_reason],
+          ["Continuation Opportunity", state.continuation_status],
+          ["Continuation Reason", state.continuation_reason]
+        ].map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(formatValue(value))}</div>`).join("");
+        return `
+          <div class="scenario-card">
+            <strong>${escapeHtml(scenario.title || "Step Logic")}</strong>
+            <span>${escapeHtml(scenario.summary || "")}</span>
+            <div style="margin-top:8px">${steps}</div>
+            <div style="margin-top:8px">${stateRows}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderStep2Comparison(frame) {
+      const target = document.getElementById("step2ComparisonBody");
+      if (!target) return;
+      const fields = Array.from(new Set([...Object.keys(frame.expected || {}), ...Object.keys(frame.actual || {})]));
+      const hiddenFields = new Set([
+        "continuation_type",
+        "liquidity_price",
+        "leg1_state",
+        "leg1_reference",
+        "leg1_extreme",
+        "leg1_completed_at",
+        "leg1_window_candle_index",
+        "leg1_window_remaining",
+        "leg2_state",
+        "leg2_candidate_candle",
+        "leg2_reference_price",
+        "step5_confirmed",
+        "invalidation_reason",
+        "wait_reason",
+        "last_decision",
+        "rejection_leg1_progress_pct",
+        "rejection_leg1_50_reached",
+        "rejection_leg2_progress_pct",
+        "rejection_leg2_75_reached",
+        "current_controlling_mode",
+        "current_continuation_type",
+        "sr_rs_context"
+      ]);
+      target.innerHTML = fields
+        .filter(field => !hiddenFields.has(field))
+        .map(field => {
+          const expected = frame.expected[field];
+          const actual = frame.actual[field];
+          const mismatch = expected !== undefined && JSON.stringify(expected) !== JSON.stringify(actual);
+          return `<tr><td>${field}</td><td>${formatValue(expected)}</td><td class="${mismatch ? "mismatch" : ""}">${formatValue(actual)}</td></tr>`;
+        }).join("");
+    }
+
+    function renderStep2Continuation(frame) {
+      const actual = frame.actual || {};
+      const qualification = (frame.debug && frame.debug.step2_qualification) || {};
+      const passed = frame.pass === true;
+      document.getElementById("step2ContinuationResultCard").innerHTML = `
+        <div class="result-card ${passed ? "pass" : "fail"}">
+          <div class="result-label">STEP 2 CONTINUATION</div>
+          <div class="result-value">${passed ? "PASS" : "FAIL"}</div>
+          <div>${formatValue(actual.actual_step2_state)} / expected ${formatValue(actual.expected_step2_state)}</div>
+        </div>
+      `;
+      const fields = [
+        ["Continuation Type", actual.continuation_type],
+        ["Level / Stack Name", actual.liquidity_level],
+        ["Close Boundary", qualification.close_boundary_price],
+        ["Qualification Boundary", actual.qualification_boundary],
+        ["Close Price", actual.close_price],
+        ["Expected State", actual.expected_step2_state],
+        ["Actual State", actual.actual_step2_state],
+        ["Reason", actual.reason]
+      ];
+      document.getElementById("step2ContinuationGrid").innerHTML = fields.map(([label, value]) => {
+        const wide = label === "Reason" ? " wide" : "";
+        return `<div class="kv${wide}"><div class="k">${label}</div><div class="v">${formatValue(value)}</div></div>`;
+      }).join("");
+      renderStep2ContinuationComparison(frame);
+    }
+
+    function renderStep2ContinuationComparison(frame) {
+      const target = document.getElementById("step2ContinuationComparisonBody");
+      if (!target) return;
+      const fields = [
+        "continuation_type",
+        "liquidity_level",
+        "stack_components",
+        "close_price",
+        "qualification_boundary",
+        "expected_step2_state",
+        "actual_step2_state"
+      ];
+      target.innerHTML = fields.map(field => {
+        const expected = (frame.expected || {})[field];
+        const actual = (frame.actual || {})[field];
+        const mismatch = expected !== undefined && JSON.stringify(expected) !== JSON.stringify(actual);
+        return `<tr><td>${field}</td><td>${formatValue(expected)}</td><td class="${mismatch ? "mismatch" : ""}">${formatValue(actual)}</td></tr>`;
+      }).join("");
+    }
+
+    function renderInvestigationPath(frame) {
+      const panel = document.getElementById("investigationPathPanel");
+      const summary = document.getElementById("investigationPathSummary");
+      const eventsRoot = document.getElementById("investigationPathEvents");
+      if (!isInvestigationFixture()) {
+        panel.classList.add("hidden");
+        summary.innerHTML = "";
+        eventsRoot.innerHTML = "";
+        return;
+      }
+
+      panel.classList.remove("hidden");
+      if (fixture.investigation_story) {
+        renderInvestigationStoryPanel(fixture.investigation_story, summary, eventsRoot, frame);
+        return;
+      }
+
+      const path = fixture.path_to_current_state || fixture.current_state_path || fixture.investigation_path;
+      const events = Array.isArray(path && path.events) ? path.events : [];
+      if (!path || !events.length) {
+        summary.innerHTML = `<div class="kv wide"><div class="k">Path to Current State</div><div class="v">Path unavailable - fixture needs path metadata.</div></div>`;
+        eventsRoot.innerHTML = "";
+        return;
+      }
+
+      const levels = path.original_liquidity_levels || fixture.levels;
+      const activeProgression = path.active_liquidity_progression || [];
+      const inactiveLevels = path.inactive_levels || path.referenced_inactive_levels || [];
+      summary.innerHTML = [
+        renderPathSection("Original Liquidity Levels", renderPathLevels(levels)),
+        renderPathSection("Active Liquidity Progression", renderPathProgression(activeProgression)),
+        renderPathSection("Current Active Liquidity", renderCurrentActiveLiquidity(path.current_active_liquidity, path.why_current_active_liquidity_is_active)),
+        renderPathSection("Inactive Referenced Levels", renderInactiveLevels(inactiveLevels))
+      ].join("");
+      eventsRoot.innerHTML = events.map((event, eventIndex) => renderInvestigationPathEvent(event, eventIndex)).join("");
+    }
+
+    function renderInvestigationStoryPanel(story, summary, eventsRoot, frame) {
+      const engine = story.engine_result || {};
+      const qualification = (frame && frame.debug && frame.debug.step2_qualification) || {};
+      const engineResult = qualification.actual_result || engine.engine_result;
+      summary.innerHTML = "";
+      eventsRoot.innerHTML = renderTradingViewInvestigationCard(story, engineResult);
+    }
+
+    function renderTradingViewInvestigationCard(story, engineResult) {
+      const pre = story.precondition_story || {};
+      const current = story.investigation_story || {};
+      const preCandles = Array.isArray(pre.candles) ? pre.candles.map(candle => ({ ...candle, story_segment: "precondition" })) : [];
+      const currentCandles = Array.isArray(current.candles) ? current.candles.map(candle => ({ ...candle, story_segment: "investigation" })) : [];
+      const candles = preCandles.concat(currentCandles).filter(hasOhlc);
+      const lines = [
+        ...(Array.isArray(pre.liquidity_lines) ? pre.liquidity_lines : []),
+        ...(Array.isArray(current.liquidity_lines) ? current.liquidity_lines : [])
+      ];
+      const result = `Engine: ${formatValue(engineResult)}`;
+      return `
+        <div class="investigation-story-card">
+          <div class="investigation-story-header">
+            <div class="investigation-story-title">${escapeHtml(story.blueprint_question || "Investigation")}</div>
+            <div class="investigation-story-subtitle">${escapeHtml(result)}</div>
+          </div>
+          <div class="investigation-story-body">
+            ${renderSingleInvestigationChart({
+              candles,
+              lines,
+              question: story.blueprint_question,
+              result
+            })}
+            <div class="timeline-note">Left: PML active and consumed. Middle: PML consumed -> ONL active. Right: later close through consumed PML, ignored by engine.</div>
+            <div class="decision-buttons">
+              <span class="decision-pill">Correct</span>
+              <span class="decision-pill">Incorrect</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderStorySection(sectionTitle, section, options = {}) {
+      if (!section) return "";
+      const startingValue = options.startingValue || section.starting_active_liquidity;
+      const rows = [];
+      rows.push(`<div class="path-event-title">${escapeHtml(sectionTitle)} - ${escapeHtml(section.title || "")}</div>`);
+      if (sectionTitle === "Precondition Story") rows.push("&nbsp;&nbsp;Setup/history candles - not the current engine replay sequence.");
+      if (startingValue) rows.push(`&nbsp;&nbsp;${escapeHtml(options.startingLabel || "Active Liquidity")}: ${escapeHtml(liquidityText(startingValue))}`);
+      if (options.inactiveValue) rows.push(`&nbsp;&nbsp;Referenced Inactive Level: ${escapeHtml(liquidityText(options.inactiveValue))} ${escapeHtml(humanStatus(options.inactiveValue.status || options.inactiveValue.inactive_reason || ""))}`);
+      if (options.testedEvent) rows.push(`&nbsp;&nbsp;Tested Event: ${escapeHtml(storyEventText(options.testedEvent))}`);
+      const candles = Array.isArray(section.candles) ? section.candles : [];
+      const timeline = renderMiniCandleTimeline(section);
+      const candleRows = candles.map((candle, index) => renderStoryCandle(candle, index)).join("");
+      if (options.footerValue) rows.push(`&nbsp;&nbsp;${escapeHtml(options.footerLabel || "Result")}: ${escapeHtml(formatStateMap(options.footerValue))}`);
+      return `<div class="path-event">${rows.join("<br>")}${timeline}${candleRows}</div>`;
+    }
+
+    function renderMiniCandleTimeline(section) {
+      const candles = chartDisplayCandles(Array.isArray(section && section.candles) ? section.candles.filter(hasOhlc) : []);
+      if (!candles.length) return "";
+
+      const lines = Array.isArray(section.liquidity_lines) ? section.liquidity_lines.filter(line => Number.isFinite(Number(line.price))) : [];
+      const prices = [];
+      candles.forEach(candle => {
+        prices.push(Number(candle.high), Number(candle.low), Number(candle.open), Number(candle.close));
+      });
+      lines.forEach(line => prices.push(Number(line.price)));
+
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      const priceRange = Math.max(maxPrice - minPrice, 1);
+      const padding = Math.max(priceRange * 0.12, 0.25);
+      const domainMin = minPrice - padding;
+      const domainMax = maxPrice + padding;
+      const width = 720;
+      const height = 260;
+      const left = 70;
+      const right = 26;
+      const top = 30;
+      const bottom = 44;
+      const chartWidth = width - left - right;
+      const chartHeight = height - top - bottom;
+      const candleGap = candles.length > 1 ? chartWidth / (candles.length - 1) : 0;
+      const candleBodyWidth = candles.length > 1 ? Math.min(34, Math.max(14, candleGap * 0.34)) : 34;
+      const yFor = price => top + ((domainMax - Number(price)) / (domainMax - domainMin)) * chartHeight;
+      const xFor = index => candles.length > 1 ? left + candleGap * index : left + chartWidth / 2;
+
+      const lineSvg = lines.map(line => {
+        const y = yFor(line.price);
+        const status = String(line.status || "").toLowerCase();
+        const stroke = status === "consumed" ? "#a36b00" : "#246b9f";
+        const dash = status === "consumed" ? "5 4" : "";
+        const label = line.label || liquidityText(line);
+        return [
+          `<line x1="${left}" y1="${y.toFixed(2)}" x2="${width - right}" y2="${y.toFixed(2)}" stroke="${stroke}" stroke-width="2" stroke-dasharray="${escapeHtml(dash)}"></line>`,
+          `<text x="${left + 4}" y="${(y - 6).toFixed(2)}" fill="${stroke}" font-size="12" font-weight="700">${escapeHtml(label)}</text>`,
+          `<text x="${width - right - 4}" y="${(y - 6).toFixed(2)}" fill="${stroke}" font-size="11" text-anchor="end">${escapeHtml(formatValue(line.price))}</text>`
+        ].join("");
+      }).join("");
+
+      const candleSvg = candles.map((candle, index) => {
+        const x = xFor(index);
+        const yHigh = yFor(candle.high);
+        const yLow = yFor(candle.low);
+        const yOpen = yFor(candle.open);
+        const yClose = yFor(candle.close);
+        const up = Number(candle.close) >= Number(candle.open);
+        const color = up ? "#147a50" : "#b73737";
+        const bodyY = Math.min(yOpen, yClose);
+        const bodyHeight = Math.max(Math.abs(yClose - yOpen), 3);
+        const highlight = candle.highlight || candle.highlight_label;
+        const badgeWidth = 254;
+        const badgeX = Math.min(width - right - badgeWidth, Math.max(left, x - badgeWidth / 2));
+        const highlightBand = highlight
+          ? `<rect x="${(x - candleBodyWidth * 0.85).toFixed(2)}" y="${top - 10}" width="${(candleBodyWidth * 1.7).toFixed(2)}" height="${chartHeight + 20}" rx="6" fill="#fff4d6" stroke="#c58a00" stroke-width="1.5"></rect>`
+          : "";
+        const badge = candle.highlight_label
+          ? `<g><rect x="${badgeX.toFixed(2)}" y="8" width="${badgeWidth}" height="20" rx="4" fill="#172026"></rect><text x="${(badgeX + badgeWidth / 2).toFixed(2)}" y="22" fill="#ffffff" font-size="11" font-weight="700" text-anchor="middle">${escapeHtml(candle.highlight_label)}</text></g>`
+          : "";
+        return [
+          highlightBand,
+          `<line x1="${x.toFixed(2)}" y1="${yHigh.toFixed(2)}" x2="${x.toFixed(2)}" y2="${yLow.toFixed(2)}" stroke="${color}" stroke-width="2"></line>`,
+          `<rect x="${(x - candleBodyWidth / 2).toFixed(2)}" y="${bodyY.toFixed(2)}" width="${candleBodyWidth.toFixed(2)}" height="${bodyHeight.toFixed(2)}" rx="2" fill="${color}" stroke="${color}"></rect>`,
+          `<text x="${x.toFixed(2)}" y="${height - 14}" fill="#5f6c72" font-size="11" text-anchor="middle">${escapeHtml(shortTime(candle.time))}</text>`,
+          badge
+        ].join("");
+      }).join("");
+
+      const expected = candles.find(candle => candle.expected_behavior);
+      const expectedText = expected ? `<div class="timeline-note">Expected Behavior: ${escapeHtml(expected.expected_behavior)}</div>` : "";
+      return `
+        <div class="mini-candle-timeline">
+          <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(section.title || "Investigation candle timeline")}">
+            <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"></rect>
+            <rect x="${left}" y="${top}" width="${chartWidth}" height="${chartHeight}" fill="#fbfcfd" stroke="#d6dde1"></rect>
+            ${lineSvg}
+            ${candleSvg}
+          </svg>
+          ${expectedText}
+        </div>
+      `;
+    }
+
+    function renderSingleInvestigationChart(config) {
+      const candles = chartDisplayCandles(Array.isArray(config.candles) ? config.candles.filter(hasOhlc) : []);
+      if (!candles.length) return "";
+
+      const rawLines = Array.isArray(config.lines) ? config.lines : [];
+      const uniqueLines = [];
+      rawLines.forEach(line => {
+        if (!Number.isFinite(Number(line.price))) return;
+        const key = `${line.name || line.label || ""}|${line.price}`;
+        const existing = uniqueLines.find(item => item.key === key);
+        if (!existing) {
+          uniqueLines.push({ key, line });
+        } else if (String(line.status || "").toLowerCase() === "consumed") {
+          existing.line = line;
+        }
+      });
+      const lines = uniqueLines.map(item => item.line);
+
+      const prices = [];
+      candles.forEach(candle => prices.push(Number(candle.high), Number(candle.low), Number(candle.open), Number(candle.close)));
+      lines.forEach(line => prices.push(Number(line.price)));
+
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      const priceRange = Math.max(maxPrice - minPrice, 1);
+      const padding = Math.max(priceRange * 0.10, 0.25);
+      const domainMin = minPrice - padding;
+      const domainMax = maxPrice + padding;
+      const width = 980;
+      const height = 390;
+      const left = 62;
+      const right = 28;
+      const top = 58;
+      const bottom = 46;
+      const chartWidth = width - left - right;
+      const chartHeight = height - top - bottom;
+      const xSlots = [left + chartWidth * 0.16, left + chartWidth * 0.34, left + chartWidth * 0.78];
+      const yFor = price => top + ((domainMax - Number(price)) / (domainMax - domainMin)) * chartHeight;
+      const candleBodyWidth = 34;
+
+      const regionSvg = [
+        `<rect x="${left}" y="${top}" width="${chartWidth * 0.47}" height="${chartHeight}" fill="#fbfcfd" stroke="#e1e7eb"></rect>`,
+        `<rect x="${left + chartWidth * 0.47}" y="${top}" width="${chartWidth * 0.18}" height="${chartHeight}" fill="#f4f8fa" stroke="#e1e7eb"></rect>`,
+        `<rect x="${left + chartWidth * 0.65}" y="${top}" width="${chartWidth * 0.35}" height="${chartHeight}" fill="#fbfcfd" stroke="#e1e7eb"></rect>`,
+        `<text x="${left + chartWidth * 0.22}" y="${top + 18}" fill="#5f6c72" font-size="12" font-weight="700" text-anchor="middle">PRECONDITION</text>`,
+        `<text x="${left + chartWidth * 0.56}" y="${top + 18}" fill="#5f6c72" font-size="12" font-weight="700" text-anchor="middle">STATE CHANGE</text>`,
+        `<text x="${left + chartWidth * 0.83}" y="${top + 18}" fill="#5f6c72" font-size="12" font-weight="700" text-anchor="middle">CURRENT INVESTIGATION</text>`
+      ].join("");
+
+      const lineSvg = lines.map(line => {
+        const y = yFor(line.price);
+        const status = String(line.status || "").toLowerCase();
+        const stroke = status === "consumed" ? "#a36b00" : "#246b9f";
+        const dash = status === "consumed" ? "7 5" : "";
+        const label = line.label || liquidityText(line);
+        return [
+          `<line x1="${left}" y1="${y.toFixed(2)}" x2="${width - right}" y2="${y.toFixed(2)}" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="${escapeHtml(dash)}"></line>`,
+          `<rect x="${left + 8}" y="${(y - 21).toFixed(2)}" width="130" height="18" rx="4" fill="#ffffff" stroke="${stroke}"></rect>`,
+          `<text x="${left + 14}" y="${(y - 8).toFixed(2)}" fill="${stroke}" font-size="12" font-weight="800">${escapeHtml(label)}</text>`,
+          `<text x="${width - right - 4}" y="${(y - 8).toFixed(2)}" fill="${stroke}" font-size="11" text-anchor="end">${escapeHtml(formatValue(line.price))}</text>`
+        ].join("");
+      }).join("");
+
+      const candleSvg = candles.map((candle, index) => {
+        const x = xSlots[index] || (left + chartWidth * (0.16 + index * 0.18));
+        const yHigh = yFor(candle.high);
+        const yLow = yFor(candle.low);
+        const yOpen = yFor(candle.open);
+        const yClose = yFor(candle.close);
+        const up = Number(candle.close) >= Number(candle.open);
+        const color = up ? "#147a50" : "#b73737";
+        const bodyY = Math.min(yOpen, yClose);
+        const bodyHeight = Math.max(Math.abs(yClose - yOpen), 4);
+        const highlight = candle.highlight || candle.highlight_label;
+        const badgeWidth = index === candles.length - 1 ? 278 : 138;
+        const badgeX = Math.min(width - right - badgeWidth, Math.max(left, x - badgeWidth / 2));
+        const highlightBand = highlight
+          ? `<rect x="${(x - 30).toFixed(2)}" y="${top + 28}" width="60" height="${chartHeight - 34}" rx="8" fill="#fff4d6" stroke="#c58a00" stroke-width="1.8"></rect>`
+          : "";
+        const badge = candle.highlight_label
+          ? `<g><rect x="${badgeX.toFixed(2)}" y="${(top + 34).toFixed(2)}" width="${badgeWidth}" height="22" rx="4" fill="#172026"></rect><text x="${(badgeX + badgeWidth / 2).toFixed(2)}" y="${(top + 49).toFixed(2)}" fill="#ffffff" font-size="11" font-weight="800" text-anchor="middle">${escapeHtml(candle.highlight_label)}</text></g>`
+          : "";
+        return [
+          highlightBand,
+          `<line x1="${x.toFixed(2)}" y1="${yHigh.toFixed(2)}" x2="${x.toFixed(2)}" y2="${yLow.toFixed(2)}" stroke="${color}" stroke-width="2.5"></line>`,
+          `<rect x="${(x - candleBodyWidth / 2).toFixed(2)}" y="${bodyY.toFixed(2)}" width="${candleBodyWidth}" height="${bodyHeight.toFixed(2)}" rx="2" fill="${color}" stroke="${color}"></rect>`,
+          `<text x="${x.toFixed(2)}" y="${height - 18}" fill="#5f6c72" font-size="12" text-anchor="middle">${escapeHtml(shortTime(candle.time))}</text>`,
+          badge
+        ].join("");
+      }).join("");
+
+      const stateX = left + chartWidth * 0.56;
+      const stateY = top + chartHeight * 0.50;
+      const question = `Question: ${formatValue(config.question)}`;
+      const result = formatValue(config.result);
+      return `
+        <div class="mini-candle-timeline">
+          <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Chart-centric investigation story">
+            <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"></rect>
+            <rect x="16" y="12" width="${width - 32}" height="${height - 24}" rx="8" fill="#ffffff" stroke="#d6dde1"></rect>
+            ${regionSvg}
+            ${lineSvg}
+            ${candleSvg}
+            <g>
+              <rect x="${(stateX - 92).toFixed(2)}" y="${(stateY - 34).toFixed(2)}" width="184" height="68" rx="6" fill="#ffffff" stroke="#a36b00" stroke-width="1.8"></rect>
+              <text x="${stateX.toFixed(2)}" y="${(stateY - 10).toFixed(2)}" fill="#26343c" font-size="13" font-weight="850" text-anchor="middle">PML consumed</text>
+              <text x="${stateX.toFixed(2)}" y="${(stateY + 10).toFixed(2)}" fill="#5f6c72" font-size="13" text-anchor="middle">-&gt;</text>
+              <text x="${stateX.toFixed(2)}" y="${(stateY + 28).toFixed(2)}" fill="#246b9f" font-size="13" font-weight="850" text-anchor="middle">ONL active</text>
+            </g>
+            <g>
+              <rect x="${left + 12}" y="24" width="392" height="24" rx="5" fill="#eef4f7" stroke="#cfd9df"></rect>
+              <text x="${left + 24}" y="41" fill="#26343c" font-size="13" font-weight="800">${escapeHtml(question)}</text>
+            </g>
+            <g>
+              <rect x="${width - right - 150}" y="24" width="150" height="24" rx="5" fill="#172026"></rect>
+              <text x="${width - right - 75}" y="41" fill="#ffffff" font-size="13" font-weight="850" text-anchor="middle">${escapeHtml(result)}</text>
+            </g>
+          </svg>
+        </div>
+      `;
+    }
+
+    function renderStoryCandle(candle, index) {
+      const rows = [
+        `${index + 1}. ${escapeHtml(formatValue(candle.time))}`,
+        `OHLC: ${escapeHtml(candleOhlcText(candle))}`
+      ];
+      if (candle.active_liquidity) rows.push(`Active Liquidity: ${escapeHtml(candle.active_liquidity)}`);
+      if (candle.referenced_inactive_liquidity) rows.push(`Referenced Inactive Level: ${escapeHtml(candle.referenced_inactive_liquidity)}`);
+      if (candle.annotation) rows.push(`Note: ${escapeHtml(candle.annotation)}`);
+      if (candle.story_only || candle.engine_evaluated === false) rows.push("Replay Scope: Setup/history only, not engine-evaluated in this fixture");
+      if (candle.expected_behavior) rows.push(`Expected Behavior: ${escapeHtml(candle.expected_behavior)}`);
+      if (candle.event) rows.push(`Event: ${escapeHtml(storyEventText(candle.event))}`);
+      return `<div class="path-event"><div>${rows.map(row => `&nbsp;&nbsp;${row}`).join("<br>")}</div></div>`;
+    }
+
+    function hasOhlc(candle) {
+      return candle
+        && Number.isFinite(Number(candle.open))
+        && Number.isFinite(Number(candle.high))
+        && Number.isFinite(Number(candle.low))
+        && Number.isFinite(Number(candle.close));
+    }
+
+    function shortTime(value) {
+      if (!value) return "-";
+      const text = String(value);
+      const match = text.match(/T(\d{2}:\d{2})/);
+      return match ? match[1] : text;
+    }
+
+    function storyEventText(event) {
+      if (!event) return "-";
+      const parts = [];
+      if (event.type) parts.push(humanStatus(event.type));
+      if (event.level) parts.push(`Level ${event.level}`);
+      if (event.prior_status || event.new_status) parts.push(`${humanStatus(event.prior_status)} -> ${humanStatus(event.new_status)}`);
+      if (event.resulting_active_liquidity) parts.push(`Resulting Active ${event.resulting_active_liquidity}`);
+      if (event.expected_result) parts.push(`Expected ${event.expected_result}`);
+      if (event.reason) parts.push(event.reason);
+      return parts.filter(Boolean).join(" | ");
+    }
+
+    function formatStateMap(value) {
+      if (!value || typeof value !== "object") return formatValue(value);
+      return Object.entries(value).map(([key, item]) => `${key}=${humanStatus(item)}`).join(", ");
+    }
+
+    function renderPathSection(title, body) {
+      return `<div class="kv wide"><div class="k">${escapeHtml(title)}</div><div class="v">${body || "-"}</div></div>`;
+    }
+
+    function renderPathLevels(levels) {
+      if (!levels) return "-";
+      if (Array.isArray(levels)) {
+        return levels.map(level => `- ${escapeHtml(liquidityText(level))}`).join("<br>");
+      }
+      return Object.entries(levels).map(([name, level]) => {
+        return `- ${escapeHtml(name)} ${escapeHtml(formatValue(level.side))} ${escapeHtml(formatValue(level.price))}`;
+      }).join("<br>");
+    }
+
+    function renderPathProgression(items) {
+      if (!Array.isArray(items) || !items.length) return "-";
+      return items.map((item, index) => {
+        const status = item.status ? ` ${escapeHtml(humanStatus(item.status))}` : "";
+        const reason = item.reason ? ` (${escapeHtml(item.reason)})` : "";
+        return `${index + 1}. ${escapeHtml(formatValue(item.active_liquidity))}${status}${reason}`;
+      }).join("<br>");
+    }
+
+    function renderCurrentActiveLiquidity(active, reason) {
+      const rows = [];
+      rows.push(`- ${escapeHtml(liquidityText(active))}`);
+      if (reason) rows.push(`- Reason: ${escapeHtml(reason)}`);
+      return rows.join("<br>");
+    }
+
+    function renderInactiveLevels(levels) {
+      if (!Array.isArray(levels) || !levels.length) return "-";
+      return levels.map(level => {
+        const rows = [`- ${escapeHtml(liquidityText(level))}`];
+        if (level.status || level.inactive_reason) rows.push(`&nbsp;&nbsp;Status: ${escapeHtml(humanStatus(level.status || level.inactive_reason))}`);
+        if (level.why_inactive || level.reason) rows.push(`&nbsp;&nbsp;Reason: ${escapeHtml(level.why_inactive || level.reason)}`);
+        return rows.join("<br>");
+      }).join("<br>");
+    }
+
+    function renderInvestigationPathEvent(event, eventIndex) {
+      const candle = event.candle || {};
+      const rows = [];
+      if (event.event_time_status === "not_documented") {
+        rows.push("Event Time: Not documented");
+      } else if (event.candle_time || candle.time || candle.timestamp) {
+        rows.push(`Candle Time: ${escapeHtml(formatValue(event.candle_time || candle.time || candle.timestamp))}`);
+      }
+      if (event.candle_ohlc || candleOhlcText(candle)) rows.push(`Candle OHLC: ${escapeHtml(formatValue(event.candle_ohlc || candleOhlcText(candle)))}`);
+      if (event.level || event.level_involved) rows.push(`Level: ${escapeHtml(formatValue(event.level || event.level_involved))}`);
+      if (event.prior_status) rows.push(`Prior Status: ${escapeHtml(humanStatus(event.prior_status))}`);
+      if (event.new_status) rows.push(`New Status: ${escapeHtml(humanStatus(event.new_status))}`);
+      if (event.reason) rows.push(`Reason: ${escapeHtml(event.reason)}`);
+      if (event.resulting_active_liquidity) rows.push(`Resulting Active Liquidity: ${escapeHtml(formatValue(event.resulting_active_liquidity))}`);
+      return `
+        <div class="path-event">
+          <div class="path-event-title">${eventIndex + 1}. ${escapeHtml(formatValue(event.title || event.type || event.event_type || "Path event"))}</div>
+          <div>${rows.map(row => `&nbsp;&nbsp;${row}`).join("<br>") || "-"}</div>
+        </div>
+      `;
+    }
+
+    function liquidityText(value) {
+      if (!value) return "-";
+      if (typeof value === "string") return value;
+      const name = value.name || value.active_liquidity || "-";
+      const side = value.side ? ` ${value.side}` : "";
+      const price = value.price !== undefined && value.price !== null ? ` ${value.price}` : "";
+      return `${name}${side}${price}`;
+    }
+
+    function humanStatus(value) {
+      return String(value || "-").replace(/_/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+    }
+
+    function candleOhlcText(candle) {
+      if (!candle || candle.open === undefined) return null;
+      return `O=${formatValue(candle.open)} H=${formatValue(candle.high)} L=${formatValue(candle.low)} C=${formatValue(candle.close)}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value === null || value === undefined ? "-" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     }
 
     function renderStep2DecisionFlow(qualification) {
@@ -926,7 +1785,9 @@
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = "#fbfcfd";
       ctx.fillRect(0, 0, w, h);
-      const candles = fixture.candles.map(normalizeCandle);
+      const fixtureCandles = (fixture.candles || []).map(normalizeCandle);
+      const candles = chartDisplayCandles(fixtureCandles);
+      const displayOffset = Math.max(0, candles.length - fixtureCandles.length);
       const prices = [];
       candles.forEach(c => prices.push(c.open, c.high, c.low, c.close));
       Object.values(fixture.levels || {}).forEach(level => prices.push(level.price));
@@ -968,18 +1829,20 @@
         const up = candle.close >= candle.open;
         ctx.strokeStyle = up ? "#147a50" : "#b73737";
         ctx.fillStyle = ctx.strokeStyle;
-        ctx.lineWidth = i === index ? 4 : 2;
+        const isCurrent = i === index + displayOffset;
+        ctx.lineWidth = isCurrent ? 4 : 2;
         ctx.beginPath(); ctx.moveTo(x, y(candle.high)); ctx.lineTo(x, y(candle.low)); ctx.stroke();
         const top = y(Math.max(candle.open, candle.close));
         const bottom = y(Math.min(candle.open, candle.close));
         ctx.fillRect(x - 8, top, 16, Math.max(2, bottom - top));
-        if (i === index) {
+        if (isCurrent) {
           ctx.strokeStyle = "#101820";
           ctx.lineWidth = 2;
           ctx.strokeRect(x - 14, y(candle.high) - 8, 28, y(candle.low) - y(candle.high) + 16);
         }
-        if (markers[i]) {
-          const label = markers[i];
+        const marker = markers[i - displayOffset];
+        if (marker) {
+          const label = marker;
           ctx.fillStyle = label === "S2" ? "#246b9f" : label === "S4" ? "#8c3d7a" : "#a36b00";
           ctx.fillRect(x - 13, y(candle.high) - 28, 26, 18);
           ctx.fillStyle = "#ffffff";
@@ -992,8 +1855,8 @@
       });
     }
 
-    function drawStep2Chart(frame) {
-      const canvas = document.getElementById("step2Chart");
+    function drawStep2Chart(frame, canvasId = "step2Chart") {
+      const canvas = document.getElementById(canvasId);
       const ctx = canvas.getContext("2d");
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
@@ -1001,17 +1864,34 @@
       ctx.fillRect(0, 0, w, h);
 
       const candle = normalizeCandle(frame.candle);
-      const active = activeLiquidity(fixture);
+      const qualification = (frame.debug && frame.debug.step2_qualification) || {};
+      const active = {
+        name: qualification.active_liquidity,
+        display_name: qualification.active_liquidity,
+        price: qualification.liquidity_price,
+        qualification_boundary_price: qualification.qualification_boundary_price,
+        extreme_boundary_price: qualification.extreme_boundary_price,
+        close_boundary_price: qualification.close_boundary_price
+      };
       const boundary = Number(active.qualification_boundary_price || active.extreme_boundary_price || active.close_boundary_price || active.price);
       const allLines = (frame.debug && frame.debug.step2_chart_lines) || fallbackStep2ChartLines(active);
       const chartLines = focusedStep2ChartLines(allLines, candle, boundary);
-      const prices = [candle.open, candle.high, candle.low, candle.close, boundary, ...chartLines.map(line => line.price)].map(Number);
+      const chartCandles = chartDisplayCandles(step2ChartCandleSource(frame, candle));
+      const prices = [
+        ...chartCandles.flatMap(item => [item.open, item.high, item.low, item.close]),
+        boundary,
+        ...chartLines.map(line => line.price)
+      ].map(Number);
       const span = Math.max(1, Math.max(...prices) - Math.min(...prices));
       const buffer = Math.max(0.5, span * 0.12);
       const min = Math.min(...prices) - buffer;
       const max = Math.max(...prices) + buffer;
       const y = price => h - 42 - ((price - min) / (max - min)) * (h - 84);
-      const x = Math.round(w * 0.55);
+      const xFor = candleIndex => chartCandles.length > 1
+        ? 220 + candleIndex * ((w - 440) / Math.max(1, chartCandles.length - 1))
+        : Math.round(w * 0.55);
+      const currentChartIndex = Math.max(0, chartCandles.findIndex(item => item.timestamp === candle.timestamp));
+      const x = xFor(currentChartIndex >= 0 ? currentChartIndex : chartCandles.length - 1);
 
       ctx.strokeStyle = "#d8e0e4";
       ctx.lineWidth = 1;
@@ -1056,14 +1936,41 @@
 
       drawStackDistanceBracket(ctx, chartLines, y);
 
-      const up = candle.close >= candle.open;
-      ctx.strokeStyle = up ? "#147a50" : "#b73737";
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(x, y(candle.high)); ctx.lineTo(x, y(candle.low)); ctx.stroke();
-      const bodyTop = y(Math.max(candle.open, candle.close));
-      const bodyBottom = y(Math.min(candle.open, candle.close));
-      ctx.fillRect(x - 34, bodyTop, 68, Math.max(3, bodyBottom - bodyTop));
+      chartCandles.forEach((item, candleIndex) => {
+        const candleX = xFor(candleIndex);
+        const isCurrent = candleX === x;
+        const up = item.close >= item.open;
+        ctx.strokeStyle = up ? "#147a50" : "#b73737";
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.lineWidth = isCurrent ? 4 : 2;
+        ctx.beginPath(); ctx.moveTo(candleX, y(item.high)); ctx.lineTo(candleX, y(item.low)); ctx.stroke();
+        const bodyTop = y(Math.max(item.open, item.close));
+        const bodyBottom = y(Math.min(item.open, item.close));
+        const bodyWidth = isCurrent ? 58 : 42;
+        ctx.fillRect(candleX - bodyWidth / 2, bodyTop, bodyWidth, Math.max(3, bodyBottom - bodyTop));
+        if (isCurrent) {
+          ctx.strokeStyle = "#101820";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(candleX - bodyWidth / 2 - 7, y(item.high) - 8, bodyWidth + 14, y(item.low) - y(item.high) + 16);
+        }
+        ctx.fillStyle = "#52616a";
+        ctx.font = "11px Segoe UI, Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText(String(candleIndex + 1), candleX, h - 14);
+        if (item.highlight_label) {
+          const badgeWidth = Math.max(118, String(item.highlight_label).length * 7);
+          const badgeX = Math.max(156, Math.min(w - 140 - badgeWidth, candleX - badgeWidth / 2));
+          const badgeY = Math.max(24, y(item.high) - 34);
+          ctx.fillStyle = "#172026";
+          ctx.fillRect(badgeX, badgeY, badgeWidth, 20);
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 11px Segoe UI, Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(item.highlight_label, badgeX + badgeWidth / 2, badgeY + 10);
+        }
+      });
 
       const closeY = y(candle.close);
       ctx.strokeStyle = priceMarkerColor();
@@ -1100,6 +2007,18 @@
       });
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
+    }
+
+    function step2ChartCandleSource(frame, candle) {
+      if (
+        fixture &&
+        fixture.scope === "step2_continuation_only" &&
+        Array.isArray(fixture.chart_context_candles) &&
+        fixture.chart_context_candles.length
+      ) {
+        return fixture.chart_context_candles;
+      }
+      return (frame.debug && frame.debug.step2_chart_candles) || [candle];
     }
 
     function labelRows(items, yKey, minGap, minY, maxY) {
@@ -1208,12 +2127,12 @@
       const value = document.getElementById("regressionSelect").value;
       if (value) loadScenario(value);
     });
-    document.getElementById("loadInvestigationBtn").addEventListener("click", () => {
-      const value = document.getElementById("investigationSelect").value;
-      if (value) loadScenario(value);
-    });
     document.getElementById("loadStep2RejectionBtn").addEventListener("click", () => {
       const value = document.getElementById("step2RejectionSelect").value;
+      if (value) loadScenario(value);
+    });
+    document.getElementById("loadStep2ContinuationBtn").addEventListener("click", () => {
+      const value = document.getElementById("step2ContinuationSelect").value;
       if (value) loadScenario(value);
     });
     document.getElementById("prevBtn").addEventListener("click", () => setIndex(index - 1));

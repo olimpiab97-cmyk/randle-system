@@ -6,6 +6,7 @@ import argparse
 import json
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +19,40 @@ from step5_engine import evaluate_step5
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FIXTURE_DIR = ROOT_DIR / "Data" / "entry_agent_demo_cases"
-LIBRARY_FOLDERS = ("known_good", "regressions", "investigations")
+ACTIVE_LIBRARY_FOLDERS = ("known_good", "regressions")
+ARCHIVED_LIBRARY_FOLDERS = ("investigations",)
+LIBRARY_FOLDERS = ACTIVE_LIBRARY_FOLDERS + ARCHIVED_LIBRARY_FOLDERS
 KEY_LEVELS = ("PMH", "PML", "LH", "LL", "ONH", "ONL", "YH", "YL")
+MIN_CHART_CANDLES = 10
+OPPORTUNITY_ACTIVE = "ACTIVE"
+OPPORTUNITY_WAIT = "WAIT"
+OPPORTUNITY_INVALIDATED = "INVALIDATED"
+LEVEL_ACTIVE = "ACTIVE"
+LEVEL_WAIT = "WAIT"
+LEVEL_CONSUMED = "CONSUMED"
+REJECTION_INVALIDATION_REASONS = {
+    "STEP6_ENTRY_TRIGGERED",
+    "MOVE_AWAY_NO_ENTRY",
+    "EXHAUSTION_50_LEG1",
+    "EXHAUSTION_75_LEG2",
+    "LEG2_EXPIRED",
+    "LEG4_EXPIRED",
+    "LEG6_EXPIRED",
+    "TIME_731_EXPIRED",
+    "NEXT_ZONE_ACCEPTANCE",
+}
+CONTINUATION_INVALIDATION_REASONS = {
+    "STEP6_ENTRY_TRIGGERED",
+    "MOVE_AWAY_NO_ENTRY",
+    "EXHAUSTION_50_LEG1",
+    "EXHAUSTION_75_LEG2",
+    "LEG2_EXPIRED",
+    "LEG4_EXPIRED",
+    "LEG6_EXPIRED",
+    "TIME_731_EXPIRED",
+    "NEXT_LEVEL_TOUCH",
+    "CONTINUATION_FAILURE",
+}
 OUTPUT_FIELDS = (
     "step",
     "pathway_type",
@@ -77,20 +110,35 @@ def fixture_path(name: str) -> Path:
     return path
 
 
-def list_fixtures() -> list[str]:
+def is_archived_investigation_fixture_id(fixture_id: str) -> bool:
+    normalized = fixture_id.replace("\\", "/").strip("/")
+    return normalized.split("/", 1)[0] in ARCHIVED_LIBRARY_FOLDERS
+
+
+def list_fixtures(include_archived: bool = False) -> list[str]:
     if not FIXTURE_DIR.exists():
         return []
     names: list[str] = []
     for path in FIXTURE_DIR.rglob("*.json"):
         if path.name == "index.json":
             continue
-        names.append(path.relative_to(FIXTURE_DIR).with_suffix("").as_posix())
+        fixture_id = path.relative_to(FIXTURE_DIR).with_suffix("").as_posix()
+        if not include_archived and is_archived_investigation_fixture_id(fixture_id):
+            continue
+        if not include_archived:
+            try:
+                fixture = read_json(path)
+            except Exception:
+                fixture = {}
+            if fixture.get("active_demo_hidden") or fixture.get("hidden_from_review"):
+                continue
+        names.append(fixture_id)
     return sorted(names)
 
 
-def list_fixture_entries() -> list[dict[str, Any]]:
+def list_fixture_entries(include_archived: bool = False) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
-    for fixture_id in list_fixtures():
+    for fixture_id in list_fixtures(include_archived=include_archived):
         fixture = load_fixture(fixture_id)
         folder = fixture_id.split("/", 1)[0] if "/" in fixture_id else "root"
         review_status = fixture_review_status(fixture)
@@ -134,6 +182,8 @@ def fixture_review_label(fixture_id: str, fixture: dict[str, Any], review_status
         return f"[APPROVED] {short_id}"
     if "RETRACTED" in status or "NOT APPROVED" in status:
         return f"[RETRACTED] {short_id}"
+    if "BLUEPRINT_CLARIFICATION_NEEDED" in status:
+        return f"[CLARIFY] {short_id}"
     if "INVESTIGATION" in status:
         return f"[INVESTIGATION] {short_id}"
     return f"[PENDING] {short_id}"
@@ -161,6 +211,57 @@ def normalize_candle(candle: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(candle)
     normalized["timestamp"] = normalized.get("timestamp") or normalized.get("time")
     return normalized
+
+
+def parse_candle_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def format_candle_time(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def synthetic_history_candles(candles: list[dict[str, Any]], count: int) -> list[dict[str, Any]]:
+    if not candles or count <= 0:
+        return []
+    first = normalize_candle(candles[0])
+    base_time = parse_candle_time(first.get("timestamp")) or datetime(2026, 1, 1, tzinfo=timezone.utc)
+    base_open = as_float(first.get("open")) or as_float(first.get("close")) or 100.0
+    base_close = as_float(first.get("close")) or base_open
+    body = max(abs(base_close - base_open), 0.25)
+    history: list[dict[str, Any]] = []
+    for offset in range(count, 0, -1):
+        close = round(base_open + (offset * body * 0.15), 2)
+        open_price = round(close + body * 0.35, 2)
+        high = round(max(open_price, close) + body * 0.6, 2)
+        low = round(min(open_price, close) - body * 0.6, 2)
+        timestamp = format_candle_time(base_time - timedelta(minutes=offset))
+        history.append(
+            {
+                "time": timestamp,
+                "timestamp": timestamp,
+                "open": open_price,
+                "high": high,
+                "low": low,
+                "close": close,
+                "display_only_history": True,
+            }
+        )
+    return history
+
+
+def chart_display_candles(candles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized = [normalize_candle(candle) for candle in candles]
+    if len(normalized) >= MIN_CHART_CANDLES:
+        return normalized
+    return synthetic_history_candles(normalized, MIN_CHART_CANDLES - len(normalized)) + normalized
 
 
 def as_float(value: Any) -> float | None:
@@ -443,6 +544,177 @@ def next_same_side_liquidity(fixture: dict[str, Any], active: dict[str, Any]) ->
     return max(candidates, key=lambda item: item["price"]) if active_side == "LOW" else min(candidates, key=lambda item: item["price"])
 
 
+def continuation_type_for_level(level: dict[str, Any]) -> str:
+    side = str(level.get("side") or "").upper()
+    return "R/S" if side == "HIGH" else "S/R"
+
+
+def lifecycle_level_rows(fixture: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for name, level in dict(fixture.get("levels") or {}).items():
+        price = as_float(level.get("price"))
+        side = str(level.get("side") or "").upper()
+        if price is None or side not in {"HIGH", "LOW"}:
+            continue
+        rows.append({"name": name, "price": price, "side": side})
+    return rows
+
+
+def initialize_level_lifecycle(fixture: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    lifecycle: dict[str, dict[str, Any]] = {}
+    configured = fixture.get("level_lifecycle_initial") if isinstance(fixture.get("level_lifecycle_initial"), dict) else {}
+    for row in lifecycle_level_rows(fixture):
+        initial = configured.get(row["name"]) if isinstance(configured.get(row["name"]), dict) else {}
+        rejection_status = str(initial.get("rejection_status") or OPPORTUNITY_ACTIVE).upper()
+        continuation_status = str(initial.get("continuation_status") or OPPORTUNITY_ACTIVE).upper()
+        lifecycle[row["name"]] = {
+            "level_name": row["name"],
+            "price": row["price"],
+            "side": row["side"],
+            "continuation_type": str(initial.get("continuation_type") or continuation_type_for_level(row)),
+            "rejection_status": rejection_status,
+            "rejection_invalidation_reason": initial.get("rejection_invalidation_reason"),
+            "continuation_status": continuation_status,
+            "continuation_invalidation_reason": initial.get("continuation_invalidation_reason"),
+            "level_status": lifecycle_level_status(rejection_status, continuation_status, initial.get("level_status")),
+        }
+    return lifecycle
+
+
+def lifecycle_level_status(rejection_status: str, continuation_status: str, configured_status: Any = None) -> str:
+    if configured_status:
+        return str(configured_status).upper()
+    if rejection_status == OPPORTUNITY_INVALIDATED and continuation_status == OPPORTUNITY_INVALIDATED:
+        return LEVEL_CONSUMED
+    if rejection_status == OPPORTUNITY_ACTIVE or continuation_status == OPPORTUNITY_ACTIVE:
+        return LEVEL_ACTIVE
+    return LEVEL_WAIT
+
+
+def invalidate_opportunity(
+    lifecycle: dict[str, dict[str, Any]],
+    level_name: str,
+    opportunity: str,
+    reason: str,
+) -> None:
+    row = lifecycle.get(level_name)
+    if not row:
+        return
+    normalized_opportunity = str(opportunity or "").lower()
+    normalized_reason = str(reason or "").upper()
+    if normalized_opportunity == "rejection":
+        if row["rejection_status"] == OPPORTUNITY_INVALIDATED:
+            return
+        if normalized_reason not in REJECTION_INVALIDATION_REASONS:
+            normalized_reason = "MOVE_AWAY_NO_ENTRY"
+        row["rejection_status"] = OPPORTUNITY_INVALIDATED
+        row["rejection_invalidation_reason"] = normalized_reason
+    elif normalized_opportunity == "continuation":
+        if row["continuation_status"] == OPPORTUNITY_INVALIDATED:
+            return
+        if normalized_reason not in CONTINUATION_INVALIDATION_REASONS:
+            normalized_reason = "CONTINUATION_FAILURE"
+        row["continuation_status"] = OPPORTUNITY_INVALIDATED
+        row["continuation_invalidation_reason"] = normalized_reason
+    row["level_status"] = (
+        lifecycle_level_status(row["rejection_status"], row["continuation_status"])
+    )
+
+
+def active_component_names(active: dict[str, Any]) -> list[str]:
+    return [str(component) for component in active.get("components") or [active.get("name")] if component]
+
+
+def configured_lifecycle_events(fixture: dict[str, Any], index: int) -> list[dict[str, Any]]:
+    events = fixture.get("level_lifecycle_events")
+    if not isinstance(events, list):
+        return []
+    output = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        if int(event.get("candle_index", -1)) == index:
+            output.append(event)
+    return output
+
+
+def same_side_touch(candle: dict[str, Any], level: dict[str, Any]) -> bool:
+    price = as_float(level.get("price"))
+    side = str(level.get("side") or "").upper()
+    if price is None:
+        return False
+    if side == "HIGH":
+        high = as_float(candle.get("high"))
+        close = as_float(candle.get("close"))
+        return (high is not None and high >= price) or (close is not None and close >= price)
+    if side == "LOW":
+        low = as_float(candle.get("low"))
+        close = as_float(candle.get("close"))
+        return (low is not None and low <= price) or (close is not None and close <= price)
+    return False
+
+
+def apply_level_lifecycle_updates(
+    *,
+    fixture: dict[str, Any],
+    active: dict[str, Any],
+    candle: dict[str, Any],
+    index: int,
+    actual: dict[str, Any],
+    lifecycle_state: dict[str, dict[str, Any]],
+) -> None:
+    for event in configured_lifecycle_events(fixture, index):
+        invalidate_opportunity(
+            lifecycle_state,
+            str(event.get("level") or event.get("level_name") or ""),
+            str(event.get("opportunity") or ""),
+            str(event.get("reason") or ""),
+        )
+
+    if fixture.get("scenario_type") == "continuation":
+        target = next_same_side_liquidity(fixture, active)
+        if target and same_side_touch(candle, target):
+            for level_name in active_component_names(active):
+                invalidate_opportunity(lifecycle_state, level_name, "continuation", "NEXT_LEVEL_TOUCH")
+
+    if actual.get("step5_confirmed") is True:
+        opportunity = "continuation" if fixture.get("scenario_type") == "continuation" else "rejection"
+        for level_name in active_component_names(active):
+            invalidate_opportunity(lifecycle_state, level_name, opportunity, "STEP6_ENTRY_TRIGGERED")
+
+    invalidation_reason = actual.get("invalidation_reason")
+    if invalidation_reason:
+        opportunity = "continuation" if fixture.get("scenario_type") == "continuation" else "rejection"
+        normalized_reason = normalize_lifecycle_invalidation_reason(invalidation_reason, opportunity)
+        for level_name in active_component_names(active):
+            invalidate_opportunity(lifecycle_state, level_name, opportunity, normalized_reason)
+
+
+def normalize_lifecycle_invalidation_reason(reason: Any, opportunity: str) -> str:
+    text = str(reason or "").upper()
+    if "50" in text:
+        return "EXHAUSTION_50_LEG1"
+    if "75" in text:
+        return "EXHAUSTION_75_LEG2"
+    if "LEG 2" in text or "LEG2" in text:
+        return "LEG2_EXPIRED"
+    if "LEG 4" in text or "LEG4" in text:
+        return "LEG4_EXPIRED"
+    if "LEG 6" in text or "LEG6" in text:
+        return "LEG6_EXPIRED"
+    if "7:31" in text or "731" in text:
+        return "TIME_731_EXPIRED"
+    if "NEXT" in text and "ZONE" in text:
+        return "NEXT_ZONE_ACCEPTANCE" if opportunity == "rejection" else "NEXT_LEVEL_TOUCH"
+    if opportunity == "continuation":
+        return "CONTINUATION_FAILURE"
+    return "MOVE_AWAY_NO_ENTRY"
+
+
+def lifecycle_snapshot(lifecycle_state: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    return [deepcopy(lifecycle_state[name]) for name in sorted(lifecycle_state)]
+
+
 def side_travel_probe(candle: dict[str, Any], side: str) -> float | None:
     if str(side).upper() == "LOW":
         return as_float(candle.get("low"))
@@ -594,6 +866,273 @@ def step2_only_status(
     actual.update(liquidity_travel_progress(fixture=fixture, active=active, candle=candle, state=state))
     actual.update(current_pathway_fields("Normal Rejection Mode", scenario_type, "none"))
     return actual
+
+
+def focus_active_liquidity_config(fixture: dict[str, Any], focus: dict[str, Any] | None) -> dict[str, Any]:
+    if isinstance(focus, dict) and isinstance(focus.get("active_liquidity"), dict):
+        active = normalize_stack(focus["active_liquidity"])
+    else:
+        active = active_liquidity_config(fixture)
+    active_components = set(active.get("components") or [])
+    manual_stack = next(
+        (
+            stack
+            for stack in fixture.get("stacks") or []
+            if stack.get("name") == active.get("name")
+            or set(stack.get("components") or []) == active_components
+        ),
+        None,
+    )
+    if manual_stack:
+        active = {**active, **manual_stack}
+    active["price"] = as_float(active.get("price"))
+    active["side"] = str(active.get("side") or "").upper()
+    active["components"] = list(active.get("components") or [str(active.get("name"))])
+    display_name = str(active.get("display_name") or active.get("name") or "/".join(active["components"]))
+    active["display_name"] = display_name if display_name.endswith(" Liquidity") else f"{display_name} Liquidity"
+    return active
+
+
+def evaluate_step2_zone_transition_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
+    validate_fixture(fixture)
+    candles = [normalize_candle(candle) for candle in fixture["candles"]]
+    focus_sequence = fixture.get("focus_sequence") if isinstance(fixture.get("focus_sequence"), list) else []
+    tick_size = as_float(fixture.get("tick_size")) or 0.25
+    frames: list[dict[str, Any]] = []
+
+    for index, candle in enumerate(candles):
+        focus = focus_sequence[index] if index < len(focus_sequence) and isinstance(focus_sequence[index], dict) else {}
+        active = focus_active_liquidity_config(fixture, focus)
+        side = level_side(active)
+        direction = setup_direction_for_side(side)
+        state = step_2_1a_initial_state("/".join(active["components"]), float(active["price"]), side, tick_size)
+        step_candle = {**candle, "active_level": "/".join(active["components"]), "level_price": active["price"]}
+        evaluate_step_2_1a_candle(state, step_candle, index)
+        actual = step2_only_status(fixture=fixture, candle=step_candle, active=active, state=state, direction=direction)
+        stack_level_status = LEVEL_ACTIVE if actual["rejection_mode_entered"] else LEVEL_WAIT
+        opportunity_status = OPPORTUNITY_ACTIVE if actual["rejection_mode_entered"] else OPPORTUNITY_WAIT
+        actual.update(
+            {
+                "prior_step2_focus": focus.get("prior_step2_focus"),
+                "current_step2_focus": active["display_name"],
+                "step2_evaluation_target": active["display_name"],
+                "zone_transition": bool(focus.get("zone_transition")),
+                "zone_transition_reason": focus.get("zone_transition_reason"),
+                "stack_components": active["components"],
+                "stack_level_status": stack_level_status,
+                "rejection_opportunity_status": opportunity_status,
+                "continuation_opportunity_status": opportunity_status,
+                "level_status_cards": deepcopy(fixture.get("level_status_cards") or []),
+            }
+        )
+        expected = dict(fixture["expected"][index])
+        comparison = compare_expected_actual(expected, actual)
+        qualification = step2_qualification_debug(
+            fixture=fixture,
+            active=active,
+            candle=step_candle,
+            actual=actual,
+            tick_size=tick_size,
+        )
+        qualification.update(
+            {
+                "stack_level_status": stack_level_status,
+                "rejection_opportunity_status": opportunity_status,
+                "continuation_opportunity_status": opportunity_status,
+                "step2_scenario_text": fixture.get("step2_scenario_text"),
+                "step_logic_scenarios": deepcopy(fixture.get("step_logic_scenarios") or []),
+            }
+        )
+        debug = {
+            "step2_qualification": qualification,
+            "step2_chart_lines": step2_chart_lines(fixture, active),
+            "step2_chart_candles": chart_display_candles(candles),
+            "zone_transition": {
+                "prior_step2_focus": actual["prior_step2_focus"],
+                "current_step2_focus": actual["current_step2_focus"],
+                "step2_evaluation_target": actual["step2_evaluation_target"],
+                "zone_transition": actual["zone_transition"],
+                "zone_transition_reason": actual["zone_transition_reason"],
+                "stack_components": actual["stack_components"],
+                "stack_level_status": actual["stack_level_status"],
+                "rejection_opportunity_status": actual["rejection_opportunity_status"],
+                "continuation_opportunity_status": actual["continuation_opportunity_status"],
+            },
+        }
+        frames.append(
+            {
+                "index": index,
+                "candle": step_candle,
+                "expected": expected,
+                "actual": actual,
+                "debug": debug,
+                "pass": comparison["pass"],
+                "diffs": comparison["diffs"],
+            }
+        )
+    return frames
+
+
+def continuation_step2_boundary(active: dict[str, Any]) -> float:
+    is_stacked = len(active.get("components") or []) > 1
+    boundary = as_float(active.get("extreme_boundary_price")) if is_stacked else None
+    if boundary is None:
+        boundary = as_float(active.get("close_boundary_price"))
+    if boundary is None:
+        boundary = as_float(active.get("qualification_boundary_price"))
+    if boundary is None:
+        boundary = as_float(active.get("price"))
+    if boundary is None:
+        raise ValueError("Continuation Step 2 requires a liquidity boundary")
+    return boundary
+
+
+def continuation_step2_active(candle: dict[str, Any], continuation_type: str, boundary: float) -> bool:
+    close = as_float(candle.get("close"))
+    if close is None:
+        return False
+    if continuation_type == "R/S":
+        return close < boundary
+    if continuation_type == "S/R":
+        return close > boundary
+    raise ValueError(f"Unsupported continuation_type: {continuation_type}")
+
+
+def continuation_step2_reason(continuation_type: str, step2_state: str) -> str:
+    if continuation_type == "R/S":
+        return (
+            "Close below the liquidity boundary activates R/S continuation."
+            if step2_state == "ACTIVE"
+            else "Close is not below the liquidity boundary; Step 2 continuation remains WAIT."
+        )
+    return (
+        "Close above the liquidity boundary activates S/R continuation."
+        if step2_state == "ACTIVE"
+        else "Close is not above the liquidity boundary; Step 2 continuation remains WAIT."
+    )
+
+
+def continuation_chart_context_candles(
+    active: dict[str, Any],
+    validation_candle: dict[str, Any],
+    continuation_type: str,
+    boundary: float,
+) -> list[dict[str, Any]]:
+    validation = normalize_candle(validation_candle)
+    base_time = parse_candle_time(validation.get("timestamp")) or datetime(2026, 1, 1, tzinfo=timezone.utc)
+    extreme = as_float(active.get("extreme_boundary_price")) or as_float(active.get("price")) or boundary
+    context: list[dict[str, Any]] = []
+
+    def add(minutes_back: int, open_price: float, high: float, low: float, close: float, label: str | None = None) -> None:
+        timestamp = format_candle_time(base_time - timedelta(minutes=minutes_back))
+        candle = {
+            "time": timestamp,
+            "timestamp": timestamp,
+            "open": round(open_price, 2),
+            "high": round(high, 2),
+            "low": round(low, 2),
+            "close": round(close, 2),
+            "display_only_context": True,
+        }
+        if label:
+            candle["highlight_label"] = label
+        context.append(candle)
+
+    if continuation_type == "R/S":
+        activation_level = max(boundary, extreme)
+        add(9, boundary - 1.5, boundary - 0.9, boundary - 1.8, boundary - 1.1)
+        add(8, boundary - 1.1, boundary - 0.35, boundary - 1.25, boundary - 0.45)
+        add(7, boundary - 0.45, boundary + 0.15, boundary - 0.6, boundary - 0.1)
+        add(6, boundary - 0.1, activation_level + 0.45, boundary - 0.2, activation_level + 0.25, "Prior rejection Step 2 activation")
+        add(5, activation_level + 0.25, activation_level + 0.7, boundary + 0.25, boundary + 0.65)
+        add(4, boundary + 0.65, boundary + 0.8, boundary + 0.15, boundary + 0.25)
+        add(3, boundary + 0.25, boundary + 0.45, boundary - 0.05, boundary + 0.1)
+        add(2, boundary + 0.1, boundary + 0.35, boundary - 0.15, boundary + 0.05)
+        add(1, boundary + 0.05, boundary + 0.25, min(boundary - 0.05, as_float(validation.get("low")) or boundary), boundary + 0.05)
+    else:
+        activation_level = min(boundary, extreme)
+        add(9, boundary + 1.5, boundary + 1.8, boundary + 0.9, boundary + 1.1)
+        add(8, boundary + 1.1, boundary + 1.25, boundary + 0.35, boundary + 0.45)
+        add(7, boundary + 0.45, boundary + 0.6, boundary - 0.15, boundary + 0.1)
+        add(6, boundary + 0.1, boundary + 0.2, activation_level - 0.45, activation_level - 0.25, "Prior rejection Step 2 activation")
+        add(5, activation_level - 0.25, boundary - 0.25, activation_level - 0.7, boundary - 0.65)
+        add(4, boundary - 0.65, boundary - 0.15, boundary - 0.8, boundary - 0.25)
+        add(3, boundary - 0.25, boundary + 0.05, boundary - 0.45, boundary - 0.1)
+        add(2, boundary - 0.1, boundary + 0.15, boundary - 0.35, boundary - 0.05)
+        add(1, boundary - 0.05, max(boundary + 0.05, as_float(validation.get("high")) or boundary), boundary - 0.25, boundary - 0.05)
+
+    validation["highlight_label"] = "Continuation validation"
+    return context + [validation]
+
+
+def evaluate_step2_continuation_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
+    validate_fixture(fixture)
+    active = active_liquidity_config(fixture)
+    continuation_type = fixture["continuation_type"]
+    boundary = continuation_step2_boundary(active)
+    candles = [normalize_candle(candle) for candle in fixture["candles"]]
+    frames: list[dict[str, Any]] = []
+
+    for index, candle in enumerate(candles):
+        step2_state = "ACTIVE" if continuation_step2_active(candle, continuation_type, boundary) else "WAIT"
+        actual = {
+            "time": candle.get("timestamp"),
+            "step": "Step 2" if step2_state == "ACTIVE" else "Step 1",
+            "pathway_type": "Continuation",
+            "continuation_type": continuation_type,
+            "liquidity_level": active["display_name"],
+            "stack_components": active.get("components") or [],
+            "close_price": candle.get("close"),
+            "qualification_boundary": boundary,
+            "expected_step2_state": fixture["expected"][index].get("expected_step2_state"),
+            "actual_step2_state": step2_state,
+            "reason": continuation_step2_reason(continuation_type, step2_state),
+            "rejection_mode_entered": False,
+            "active_liquidity_name": active["display_name"] if step2_state == "ACTIVE" else None,
+            "current_pathway_control": "continuation",
+        }
+        expected = dict(fixture["expected"][index])
+        comparison = compare_expected_actual(expected, actual)
+        qualification = step2_qualification_debug(
+            fixture=fixture,
+            active=active,
+            candle=candle,
+            actual={"rejection_mode_entered": step2_state == "ACTIVE"},
+            tick_size=as_float(fixture.get("tick_size")) or 0.25,
+        )
+        qualification.update(
+            {
+                "continuation_type": continuation_type,
+                "liquidity_level": actual["liquidity_level"],
+                "close_price": actual["close_price"],
+                "qualification_boundary": boundary,
+                "expected_step2_state": actual["expected_step2_state"],
+                "actual_step2_state": actual["actual_step2_state"],
+                "reason": actual["reason"],
+                "actual_result": step2_state,
+                "expected_result": actual["expected_step2_state"],
+                "pass": comparison["pass"],
+            }
+        )
+        chart_context = fixture.get("chart_context_candles")
+        if not isinstance(chart_context, list) or not chart_context:
+            chart_context = continuation_chart_context_candles(active, candle, continuation_type, boundary)
+        frames.append(
+            {
+                "index": index,
+                "candle": {**candle, "active_level": "/".join(active["components"]), "level_price": boundary},
+                "expected": expected,
+                "actual": actual,
+                "debug": {
+                    "step2_qualification": qualification,
+                    "step2_chart_lines": step2_chart_lines(fixture, active),
+                    "step2_chart_candles": chart_display_candles(chart_context),
+                },
+                "pass": comparison["pass"],
+                "diffs": comparison["diffs"],
+            }
+        )
+    return frames
 
 
 def compare_expected_actual(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
@@ -880,6 +1419,40 @@ def step2_chart_lines(fixture: dict[str, Any], active: dict[str, Any]) -> list[d
                 **style,
             }
         )
+    manual_stack = next(
+        (
+            stack
+            for stack in fixture.get("stacks") or []
+            if stack.get("name") == active.get("name")
+            or set(stack.get("components") or []) == active_components
+        ),
+        None,
+    )
+    if manual_stack and active_components and not any(line["is_stack_component"] for line in lines):
+        component_prices: dict[str, float] = {}
+        components = list(manual_stack.get("components") or [])
+        if components:
+            close_price = as_float(manual_stack.get("close_boundary_price"))
+            extreme_price = as_float(manual_stack.get("extreme_boundary_price"))
+            for component in components:
+                component_prices[str(component)] = extreme_price if extreme_price is not None else as_float(active.get("price")) or 0.0
+            if close_price is not None:
+                component_prices[str(components[0])] = close_price
+        for component in components:
+            price = component_prices.get(str(component))
+            if price is None:
+                continue
+            style = chart_line_style(str(component))
+            lines.append(
+                {
+                    "name": str(component),
+                    "price": price,
+                    "side": active.get("side"),
+                    "is_stack_component": True,
+                    "is_qualification_boundary": price == active.get("qualification_boundary_price"),
+                    **style,
+                }
+            )
     return lines
 
 
@@ -1020,6 +1593,10 @@ class ScenarioRunner:
 
 def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
     validate_fixture(fixture)
+    if fixture.get("scope") == "step2_zone_transition_only":
+        return evaluate_step2_zone_transition_fixture(fixture)
+    if fixture.get("scope") == "step2_continuation_only":
+        return evaluate_step2_continuation_fixture(fixture)
     if fixture.get("scope") == "continuation_controlling_structure":
         return evaluate_continuation_controlling_structure_fixture(fixture)
     active = active_liquidity_config(fixture)
@@ -1031,6 +1608,7 @@ def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
     candles = [normalize_candle(candle) for candle in fixture["candles"]]
     step2_state = step_2_1a_initial_state("/".join(active["components"]), float(active["price"]), side, tick_size)
     lifecycle: dict[str, Any] = {}
+    level_lifecycle_state = initialize_level_lifecycle(fixture)
     step4_state: dict[str, Any] | None = None
     step5_state: dict[str, Any] | None = None
     step4_ready_index: int | None = None
@@ -1064,6 +1642,15 @@ def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
                     }
                 )
                 actual = step2_only_status(fixture=fixture, candle=candle, active=active, state=lifecycle, direction=direction)
+                apply_level_lifecycle_updates(
+                    fixture=fixture,
+                    active=active,
+                    candle=candle,
+                    index=index,
+                    actual=actual,
+                    lifecycle_state=level_lifecycle_state,
+                )
+                actual["level_lifecycle"] = lifecycle_snapshot(level_lifecycle_state)
                 comparison = compare_expected_actual(expected, actual)
                 debug = build_debug_payload(
                     fixture=fixture,
@@ -1076,6 +1663,7 @@ def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
                     direction=direction,
                     tick_size=tick_size,
                 )
+                debug["level_lifecycle"] = actual["level_lifecycle"]
                 frames.append(
                     {
                         "index": index,
@@ -1186,6 +1774,15 @@ def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
                 reason=reason,
                 invalidation_reason=invalidation_reason,
             )
+        apply_level_lifecycle_updates(
+            fixture=fixture,
+            active=active,
+            candle=candle,
+            index=index,
+            actual=actual,
+            lifecycle_state=level_lifecycle_state,
+        )
+        actual["level_lifecycle"] = lifecycle_snapshot(level_lifecycle_state)
         comparison = compare_expected_actual(expected, actual)
         debug = build_debug_payload(
             fixture=fixture,
@@ -1198,6 +1795,7 @@ def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
             direction=direction,
             tick_size=tick_size,
         )
+        debug["level_lifecycle"] = actual["level_lifecycle"]
         frames.append(
             {
                 "index": index,

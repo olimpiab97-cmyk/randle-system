@@ -2479,6 +2479,8 @@
       const startingEquity = getKpiStartingEquity();
       const currentEquity = getCurrentSyntheticEquity(startingEquity, totalPnl);
       const averageR = rValues.length ? rValues.reduce((sum, value) => sum + value, 0) / rValues.length : null;
+      const winningRValues = rValues.filter((value) => value > 0);
+      const averageWinningR = winningRValues.length ? winningRValues.reduce((sum, value) => sum + value, 0) / winningRValues.length : null;
       const bestTrade = pnls.length ? Math.max(...pnls) : null;
       const worstTrade = pnls.length ? Math.min(...pnls) : null;
       const winRate = rows.length ? `${((wins / rows.length) * 100).toFixed(1)}%` : EMPTY_FIELD;
@@ -2490,7 +2492,8 @@
         { label: "Breakevens", value: String(breakevens), subtext: "PnL = 0" },
         { label: "Win rate", value: winRate, subtext: "Wins / total" },
         { label: "Total PnL", value: formatMoney(totalPnl), subtext: "Closed trades" },
-        { label: "Average R", value: averageR === null ? EMPTY_FIELD : averageR.toFixed(2), subtext: "Available R fields" },
+        { label: "Average R of All Trades", value: averageR === null ? EMPTY_FIELD : averageR.toFixed(2), subtext: "Available R fields" },
+        { label: "Average R Winners", value: averageWinningR === null ? EMPTY_FIELD : averageWinningR.toFixed(2), subtext: "Final R > 0" },
         { label: "Best trade", value: bestTrade === null ? EMPTY_FIELD : formatMoney(bestTrade), subtext: "Largest PnL" },
         { label: "Worst trade", value: worstTrade === null ? EMPTY_FIELD : formatMoney(worstTrade), subtext: "Smallest PnL" },
         { label: "Current synthetic equity", value: formatMoney(currentEquity), subtext: "Account snapshot or curve" }

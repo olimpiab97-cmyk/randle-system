@@ -1,0 +1,38 @@
+{
+  "case_name": "Investigation - Step 2 multi-candle controlling boundary low stack",
+  "case_type": "investigation",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "stacked",
+  "expected_result": "valid_step2",
+  "why": "Investigation only: Step 2 activates on the final close through ONL 90, while the stored continuation controlling boundary is explicitly sourced from a prior/pre-close structure candle.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "simulated_daily_atr": 100.0,
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONL": {"price": 90.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "pre_close_structure": {
+    "controlling_boundary_level": "PML",
+    "controlling_boundary_price": 100.0,
+    "controlling_boundary_time": "2026-05-28T14:04:00Z",
+    "controlling_boundary_candle_index": 0,
+    "source": "pre_close_structure"
+  },
+  "candles": [
+    {"time": "2026-05-28T14:04:00Z", "open": 102.0, "high": 103.0, "low": 100.0, "close": 101.0},
+    {"time": "2026-05-28T14:05:00Z", "open": 99.0, "high": 99.5, "low": 89.5, "close": 89.75}
+  ],
+  "expected": [
+    {"time": "2026-05-28T14:04:00Z", "step": "Step 1", "pathway_type": "Rejection", "current_pathway_control": "rejection", "rejection_mode_entered": false, "active_liquidity_name": null, "setup_direction": null, "leg1_state": "WAIT", "leg2_state": "WAIT", "wait_reason": "Waiting for Step 2 liquidity close-through."},
+    {"time": "2026-05-28T14:05:00Z", "step": "Step 2", "pathway_type": "Rejection", "current_pathway_control": "rejection", "rejection_mode_entered": true, "active_liquidity_name": "PML/ONL Liquidity", "setup_direction": "LONG", "leg1_state": "WAIT", "leg2_state": "WAIT"}
+  ],
+  "notes": "INVESTIGATION, not approved known-good. This fixture documents that continuation controlling boundary validation must use prior/pre-close structure data, not the Step 2 close candle extreme."
+}

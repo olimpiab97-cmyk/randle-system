@@ -1,0 +1,134 @@
+{
+    "case_name":  "Step 2 continuation R/S regular - close below PMH active",
+    "case_type":  "known_good",
+    "review_status":  "APPROVED",
+    "user_review":  "APPROVED",
+    "scope":  "step2_continuation_only",
+    "scenario_type":  "continuation",
+    "continuation_type":  "R/S",
+    "level_type":  "regular",
+    "expected_result":  "ACTIVE",
+    "symbol":  "NQ",
+    "date":  "2026-06-04",
+    "tick_size":  0.25,
+    "levels":  {
+                   "PMH":  {
+                               "price":  100.0,
+                               "side":  "HIGH"
+                           }
+               },
+    "stacks":  [
+
+               ],
+    "active_liquidity":  {
+                             "name":  "PMH",
+                             "components":  [
+                                                "PMH"
+                                            ],
+                             "price":  100.0,
+                             "side":  "HIGH"
+                         },
+    "candles":  [
+                    {
+                        "time":  "2026-06-04T13:40:00Z",
+                        "open":  100.5,
+                        "high":  100.75,
+                        "low":  99.5,
+                        "close":  99.75
+                    }
+                ],
+    "expected":  [
+                     {
+                         "continuation_type":  "R/S",
+                         "liquidity_level":  "PMH Liquidity",
+                         "close_price":  99.75,
+                         "qualification_boundary":  100.0,
+                         "expected_step2_state":  "ACTIVE",
+                         "actual_step2_state":  "ACTIVE"
+                     }
+                 ],
+    "notes":  "Step 2 continuation-only fixture. No Step 4, Step 5, Step 6, entry, invalidation, consumption, or lifecycle behavior is evaluated.",
+    "chart_context_candles":  [
+                                  {
+                                      "time":  "2026-06-04T13:31:00Z",
+                                      "open":  98.75,
+                                      "high":  99.1,
+                                      "low":  98.5,
+                                      "close":  98.9,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:32:00Z",
+                                      "open":  98.9,
+                                      "high":  99.4,
+                                      "low":  98.75,
+                                      "close":  99.25,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:33:00Z",
+                                      "open":  99.25,
+                                      "high":  100.05,
+                                      "low":  99.1,
+                                      "close":  99.85,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:34:00Z",
+                                      "open":  99.85,
+                                      "high":  100.55,
+                                      "low":  99.75,
+                                      "close":  100.25,
+                                      "display_only_context":  true,
+                                      "highlight_label":  "Prior rejection Step 2 activation"
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:35:00Z",
+                                      "open":  100.25,
+                                      "high":  100.9,
+                                      "low":  100.1,
+                                      "close":  100.65,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:36:00Z",
+                                      "open":  100.65,
+                                      "high":  100.75,
+                                      "low":  100.25,
+                                      "close":  100.35,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:37:00Z",
+                                      "open":  100.35,
+                                      "high":  100.45,
+                                      "low":  100.05,
+                                      "close":  100.15,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:38:00Z",
+                                      "open":  100.15,
+                                      "high":  100.3,
+                                      "low":  99.95,
+                                      "close":  100.1,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:39:00Z",
+                                      "open":  100.1,
+                                      "high":  100.25,
+                                      "low":  99.9,
+                                      "close":  100.05,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:40:00Z",
+                                      "open":  100.5,
+                                      "high":  100.75,
+                                      "low":  99.5,
+                                      "close":  99.75,
+                                      "highlight_label":  "Continuation validation"
+                                  }
+                              ]
+}

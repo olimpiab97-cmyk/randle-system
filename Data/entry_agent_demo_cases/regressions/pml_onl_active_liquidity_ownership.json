@@ -1,6 +1,9 @@
 {
   "case_name": "Regression - PML/ONL active liquidity ownership",
   "scenario_type": "rejection",
+  "review_status": "ARCHIVED / DEPRECATED LIFECYCLE MODEL",
+  "active_demo_hidden": true,
+  "deprecated": true,
   "issue": "PML/ONL active liquidity ownership",
   "fixed_by_commit": "unknown-local-history",
   "expected_result": "The stacked PML/ONL level remains the active liquidity owner throughout Step 2-5 evaluation.",
