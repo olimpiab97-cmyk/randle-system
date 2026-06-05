@@ -2637,6 +2637,7 @@ def build_step25_interaction(
         "pathway_level": previous_state.get("pathway_level") if previous_locked else pathway_level,
         "pathway_activation_type": previous_state.get("pathway_activation_type") if previous_locked and previous_state.get("pathway_activation_type") != "wick" else None,
         "continuation_step2_activated": previous_state.get("continuation_step2_activated") if previous_locked else None,
+        "continuation_probe_boundary": previous_state.get("continuation_probe_boundary") if isinstance(previous_state.get("continuation_probe_boundary"), dict) else None,
         "continuation_pending_boundary": previous_state.get("continuation_pending_boundary"),
         "continuation_step2_pending": previous_state.get("continuation_step2_pending"),
         "active_liquidity_selected": active_level is not None and level_price is not None,

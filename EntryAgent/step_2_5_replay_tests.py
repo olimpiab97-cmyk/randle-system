@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 if __package__:
@@ -196,7 +197,7 @@ def test_close_above_lh_then_wick_into_level_selects_rs_provisional() -> None:
 
 def test_no_step25_condition_waits() -> None:
     previous = candle(99.8, 100.2, 99.6, 100.0)
-    current = candle(100.0, 100.3, 99.8, 100.0)
+    current = candle(100.0, 100.0, 99.8, 100.0)
     result = select_pathway(current, previous, 100.0, "LL")
 
     assert result == {
@@ -211,7 +212,132 @@ def test_no_step25_condition_waits() -> None:
         "continuation_acceptance_threshold": None,
         "continuation_step2_activated": False,
         "continuation_rejection_step2_required": True,
+        "continuation_probe_boundary": None,
+        "continuation_activation_boundary": 100.0,
+        "continuation_activation_source": "level",
     }
+
+
+def live_status_sequence(level_name: str, level_price: float, candles: list[dict]) -> list[dict]:
+    import entry_agent
+
+    original_state_path = entry_agent.STATE_PATH
+    original_get_latest = entry_agent.get_latest_market_snapshot
+    original_load_tv = entry_agent.load_tv_context
+    original_recent = entry_agent.recent_closed_bars
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            entry_agent.STATE_PATH = Path(temp_dir) / "entry_agent_state.json"
+            tv_context = {
+                "normalized_symbol": "NQ",
+                "received_at": "2026-06-05T13:30:00Z",
+                "locked": True,
+                "levels": {
+                    level_name: {
+                        "price": level_price,
+                        "status": "ACTIVE",
+                        "stack_group": "NONE",
+                    }
+                },
+            }
+            bars: list[dict] = []
+            index = {"value": 0}
+
+            def market_snapshot(_symbol: str = "NQ") -> dict:
+                current = candles[index["value"]]
+                return {
+                    "symbol": "NQ",
+                    "normalized_symbol": "NQ",
+                    "latest_price": current["close"],
+                    "latest_bar_time": current["timestamp"],
+                    "ohlc_is_closed": True,
+                    "ohlc": {
+                        "open": current["open"],
+                        "high": current["high"],
+                        "low": current["low"],
+                        "close": current["close"],
+                    },
+                }
+
+            entry_agent.get_latest_market_snapshot = market_snapshot
+            entry_agent.load_tv_context = lambda _symbol=None: tv_context
+            entry_agent.recent_closed_bars = lambda _symbol="NQ", limit=120: list(bars)[-limit:]
+
+            observed: list[dict] = []
+            for candle_data in candles:
+                index["value"] = len(observed)
+                bars.append(dict(candle_data))
+                entry_agent.build_entry_status("NQ")
+                state = entry_agent.load_entry_state()
+                symbol_state = state.get("state_by_symbol", {}).get("NQ", state)
+                step25_state = (symbol_state.get("step25") or {}).get("state") or {}
+                observed.append(
+                    {
+                        "controlling_mode": step25_state.get("controlling_mode"),
+                        "continuation_step2_activated": step25_state.get("continuation_step2_activated"),
+                        "continuation_probe_boundary": step25_state.get("continuation_probe_boundary"),
+                        "reclaim_candle_time": (
+                            step25_state.get("reclaim_candle_a") or {}
+                        ).get("timestamp") if isinstance(step25_state.get("reclaim_candle_a"), dict) else None,
+                        "pathway_level": step25_state.get("pathway_level"),
+                    }
+                )
+            return observed
+    finally:
+        entry_agent.STATE_PATH = original_state_path
+        entry_agent.get_latest_market_snapshot = original_get_latest
+        entry_agent.load_tv_context = original_load_tv
+        entry_agent.recent_closed_bars = original_recent
+
+
+def test_live_sr_continuation_wick_reset_persists_boundary_before_activation() -> None:
+    observed = live_status_sequence(
+        "PML",
+        100.0,
+        [
+            {"timestamp": "2026-06-05T13:52:00Z", "open": 100.25, "high": 100.5, "low": 99.25, "close": 99.25},
+            {"timestamp": "2026-06-05T13:53:00Z", "open": 99.25, "high": 100.5, "low": 99.0, "close": 99.75},
+            {"timestamp": "2026-06-05T13:54:00Z", "open": 99.75, "high": 100.25, "low": 99.5, "close": 100.25},
+            {"timestamp": "2026-06-05T13:55:00Z", "open": 100.25, "high": 100.75, "low": 99.5, "close": 100.75},
+        ],
+    )
+
+    assert observed[1]["controlling_mode"] == "Normal Rejection Mode"
+    assert observed[1]["continuation_step2_activated"] is None
+    assert observed[1]["continuation_probe_boundary"]["active"] is True
+    assert observed[1]["continuation_probe_boundary"]["boundary_price"] == 100.5
+    assert observed[2]["controlling_mode"] == "Normal Rejection Mode"
+    assert observed[2]["continuation_step2_activated"] is None
+    assert observed[2]["continuation_probe_boundary"]["boundary_price"] == 100.5
+    assert observed[3]["controlling_mode"] == "S/R"
+    assert observed[3]["continuation_step2_activated"] is True
+    assert observed[3]["reclaim_candle_time"] == "2026-06-05T13:55:00Z"
+    assert observed[3]["pathway_level"] == 100.5
+
+
+def test_live_rs_continuation_wick_reset_persists_boundary_before_activation() -> None:
+    observed = live_status_sequence(
+        "PMH",
+        100.0,
+        [
+            {"timestamp": "2026-06-05T14:02:00Z", "open": 99.75, "high": 100.75, "low": 99.5, "close": 100.75},
+            {"timestamp": "2026-06-05T14:03:00Z", "open": 100.75, "high": 101.0, "low": 99.5, "close": 100.25},
+            {"timestamp": "2026-06-05T14:04:00Z", "open": 100.25, "high": 100.5, "low": 99.75, "close": 99.75},
+            {"timestamp": "2026-06-05T14:05:00Z", "open": 99.75, "high": 100.5, "low": 99.25, "close": 99.25},
+        ],
+    )
+
+    assert observed[1]["controlling_mode"] == "Normal Rejection Mode"
+    assert observed[1]["continuation_step2_activated"] is None
+    assert observed[1]["continuation_probe_boundary"]["active"] is True
+    assert observed[1]["continuation_probe_boundary"]["boundary_price"] == 99.5
+    assert observed[2]["controlling_mode"] == "Normal Rejection Mode"
+    assert observed[2]["continuation_step2_activated"] is None
+    assert observed[2]["continuation_probe_boundary"]["boundary_price"] == 99.5
+    assert observed[3]["controlling_mode"] == "R/S"
+    assert observed[3]["continuation_step2_activated"] is True
+    assert observed[3]["reclaim_candle_time"] == "2026-06-05T14:05:00Z"
+    assert observed[3]["pathway_level"] == 99.5
 
 
 def test_sr_continuation_step2_active_still_requires_shelf_sweep() -> None:
@@ -388,6 +514,8 @@ def run_tests() -> None:
         test_close_above_lh_then_close_below_selects_rs,
         test_close_above_lh_then_wick_into_level_selects_rs_provisional,
         test_no_step25_condition_waits,
+        test_live_sr_continuation_wick_reset_persists_boundary_before_activation,
+        test_live_rs_continuation_wick_reset_persists_boundary_before_activation,
         test_sr_continuation_step2_active_still_requires_shelf_sweep,
         test_rs_continuation_step2_active_still_requires_shelf_sweep,
         test_normal_rejection_does_not_require_continuation_shelf_sweep,
