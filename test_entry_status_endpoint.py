@@ -625,6 +625,50 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(selected["group"]["extreme_component"], "ONH")
         self.assertEqual(selected["group"]["close_component"], "PMH")
 
+    def test_ym_stacked_upper_lh_pmh_selects_on_wick_without_forcing_step2(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        candle = {"open": 50755.0, "high": 50771.0, "low": 50754.0, "close": 50759.0}
+        selected = entry_agent.selected_active_liquidity_from_context(
+            {
+                "levels": {
+                    "LH": {"price": 50763.0, "status": "ACTIVE", "stack_group": "HIGH 1"},
+                    "PMH": {"price": 50764.0, "status": "ACTIVE", "stack_group": "HIGH 1"},
+                }
+            },
+            50759.0,
+            candle,
+            tick_size=1.0,
+        )
+
+        self.assertEqual(selected["display_name"], "LH/PMH Liquidity")
+        self.assertEqual(selected["group"]["display_name"], "LH/PMH Liquidity")
+        self.assertEqual(selected["group"]["close_boundary"], 50763.0)
+        self.assertEqual(selected["group"]["extreme_boundary"], 50764.0)
+        self.assertEqual(selected["group"]["close_component"], "LH")
+        self.assertEqual(selected["group"]["extreme_component"], "PMH")
+
+        step2 = entry_agent.step_2_1a_initial_state(selected["name"], selected["price"], selected["side"], 1.0)
+        entry_agent.evaluate_step_2_1a_candle(
+            step2,
+            {
+                **candle,
+                "timestamp": "2026-06-10T13:45:00Z",
+                "active_level": selected["name"],
+                "level_price": selected["price"],
+            },
+            0,
+        )
+        self.assertFalse(step2["step_2_activated"])
+        self.assertEqual(step2["events"][0]["event"], "pre_activation_probe_detected")
+
     def test_active_liquidity_lower_stack_selects_lowest_actionable_component(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:
@@ -708,6 +752,34 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(selected["group"]["close_boundary"], 100.0)
         self.assertEqual(selected["group"]["extreme_boundary"], 99.0)
         self.assertEqual(selected["group"]["close_component"], "PML")
+
+    def test_nq_single_active_liquidity_selection_still_works_unchanged(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        selected = entry_agent.selected_active_liquidity_from_context(
+            {
+                "levels": {
+                    "PMH": {"price": 100.0, "status": "ACTIVE", "stack_group": "NONE"},
+                    "PML": {"price": 95.0, "status": "ACTIVE", "stack_group": "NONE"},
+                }
+            },
+            100.25,
+            {"open": 99.5, "high": 100.25, "low": 99.25, "close": 99.75},
+            tick_size=0.25,
+        )
+
+        self.assertEqual(selected["display_name"], None)
+        self.assertEqual(selected["name"], "PMH")
+        self.assertEqual(selected["price"], 100.0)
+        self.assertEqual(selected["side"], "upper")
+        self.assertIsNone(selected["group"])
 
     def test_inactive_broken_pml_rotates_to_onl_same_stack_target(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
@@ -2099,7 +2171,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         )
         self.assertTrue(lower["step_2_activated"])
 
-    def test_ym_pml_ll_low_stack_waits_until_close_beyond_extreme_and_displays_combined(self):
+    def test_ym_pml_ll_low_stack_selects_on_interaction_without_forcing_step2(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
         try:
             import entry_agent
@@ -2116,54 +2188,51 @@ class EntryStatusEndpointTests(unittest.TestCase):
             }
         }
 
+        inside_candle = {"open": 49732.0, "high": 49733.0, "low": 49730.25, "close": 49730.5}
+        exact_ll_candle = {"open": 49731.0, "high": 49732.0, "low": 49729.0, "close": 49730.0}
+        beyond_ll_candle = {"open": 49731.0, "high": 49732.0, "low": 49728.0, "close": 49729.0}
+
         inside = entry_agent.selected_active_liquidity_from_context(
             tv_context,
             49730.5,
-            {"open": 49732.0, "high": 49733.0, "low": 49730.25, "close": 49730.5},
+            inside_candle,
             tick_size=1.0,
         )
         exact_ll = entry_agent.selected_active_liquidity_from_context(
             tv_context,
             49730.0,
-            {"open": 49731.0, "high": 49732.0, "low": 49729.0, "close": 49730.0},
+            exact_ll_candle,
             tick_size=1.0,
         )
         beyond_ll = entry_agent.selected_active_liquidity_from_context(
             tv_context,
             49729.0,
-            {"open": 49731.0, "high": 49732.0, "low": 49728.0, "close": 49729.0},
+            beyond_ll_candle,
             tick_size=1.0,
         )
 
-        self.assertIsNone(inside)
-        self.assertEqual(exact_ll["name"], "LL")
-        self.assertEqual(exact_ll["display_name"], "PML/LL Liquidity")
-        self.assertEqual(beyond_ll["name"], "LL")
-        self.assertEqual(beyond_ll["display_name"], "PML/LL Liquidity")
-        self.assertEqual(beyond_ll["group"]["display_name"], "PML/LL Liquidity")
-        self.assertEqual(
-            entry_agent.active_liquidity_from_snapshot(
-                {
-                    "latest_price": 49729.0,
-                    "ohlc_is_closed": True,
-                    "ohlc": {"open": 49731.0, "high": 49732.0, "low": 49728.0, "close": 49729.0},
-                    "tv_context": tv_context,
-                    "liquidity": {"tick_size": 1.0},
-                    "step_2_1a": {
-                        "active_level": "LL",
-                        "level_price": 49730.0,
-                        "active_liquidity_group": beyond_ll["group"],
-                        "last_interacted_liquidity": {
-                            "name": "LL",
-                            "price": 49730.0,
-                            "display_name": "PML/LL Liquidity",
-                            "group": beyond_ll["group"],
-                        },
-                    },
-                }
-            ),
-            ("PML/LL Liquidity", 49730.0),
+        for selected in (inside, exact_ll, beyond_ll):
+            self.assertEqual(selected["name"], "LL")
+            self.assertEqual(selected["price"], 49730.0)
+            self.assertEqual(selected["display_name"], "PML/LL Liquidity")
+            self.assertEqual(selected["group"]["display_name"], "PML/LL Liquidity")
+            self.assertEqual(selected["group"]["close_boundary"], 49731.0)
+            self.assertEqual(selected["group"]["extreme_boundary"], 49730.0)
+            self.assertEqual(selected["group"]["close_component"], "PML")
+            self.assertEqual(selected["group"]["extreme_component"], "LL")
+
+        step2 = entry_agent.step_2_1a_initial_state(inside["name"], inside["price"], inside["side"], 1.0)
+        entry_agent.evaluate_step_2_1a_candle(
+            step2,
+            {
+                **inside_candle,
+                "timestamp": "2026-06-10T13:45:00Z",
+                "active_level": inside["name"],
+                "level_price": inside["price"],
+            },
+            0,
         )
+        self.assertFalse(step2["step_2_activated"])
 
     def test_ym_below_pmh_does_not_mark_pmh_active_liquidity(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
@@ -4337,7 +4406,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(status_1342["continuation_side"]["pathway_status"], "controlling")
         self.assertEqual(status_1342["rejection_side"]["pathway_status"], "frozen")
         self.assertIsNone(status_1342["rejection_side"]["entry_status"])
-        self.assertIsNone(status_1342["rejection_side"]["current_step"])
+        self.assertEqual(status_1342["rejection_side"]["current_step"], "Step 2")
         self.assertEqual(status_1342["consumed_liquidity_levels"], [])
         self.assertEqual(status_1342["current_step_confirmed_at"], "2026-05-19T13:42:00Z")
         self.assertEqual(status_1342["leg1_window_started_at"], "2026-05-19T13:42:00Z")
@@ -4349,7 +4418,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(status_1343["leg1_state"], "COMPLETE")
         self.assertEqual(status_1343["selected_pathway"], "continuation")
         self.assertNotEqual(status_1343["rejection_side"]["setup_direction"], "SHORT")
-        self.assertIsNone(status_1343["rejection_side"]["current_step"])
+        self.assertEqual(status_1343["rejection_side"]["current_step"], "Step 2")
         self.assertEqual(status_1343["leg1_window_started_at"], "2026-05-19T13:42:00Z")
         self.assertEqual(status_1343["leg1_window_candle_index"], 1)
         self.assertEqual(status_1343["leg1_reference_candle_time"], "2026-05-19T13:42:00Z")
@@ -4382,7 +4451,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(status_1345["setup_direction"], "LONG")
         self.assertNotEqual(status_1345["rejection_side"]["setup_direction"], "SHORT")
         self.assertIsNone(status_1345["rejection_side"]["entry_status"])
-        self.assertIsNone(status_1345["rejection_side"]["current_step"])
+        self.assertEqual(status_1345["rejection_side"]["current_step"], "Step 2")
 
     def test_step6_window_expiration_publishes_past_step5_gate(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))
@@ -4605,6 +4674,117 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(leg1_status["continuation_side"]["setup_direction"], "SHORT")
         self.assertEqual(leg1_status["leg2_status"], "WAIT")
         self.assertEqual(leg1_status["entry_status"], "WAIT")
+
+    def test_rejection_step2_remains_visible_when_continuation_controls_before_shared_leg1(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        original_get_latest_market_snapshot = entry_agent.get_latest_market_snapshot
+        self.addCleanup(setattr, entry_agent, "get_latest_market_snapshot", original_get_latest_market_snapshot)
+        entry_agent.get_latest_market_snapshot = lambda _symbol="NQ": None
+
+        original_run_once = entry_agent.run_once
+        self.addCleanup(setattr, entry_agent, "run_once", original_run_once)
+
+        rejection_candle = {
+            "open": 29000.0,
+            "high": 29020.0,
+            "low": 28990.0,
+            "close": 29010.0,
+            "timestamp": "2026-06-10T13:38:00Z",
+        }
+        continuation_candle = {
+            "open": 29010.0,
+            "high": 29015.0,
+            "low": 28980.0,
+            "close": 28990.0,
+            "timestamp": "2026-06-10T13:40:00Z",
+        }
+        active_liquidity = {
+            "name": "PMH",
+            "display_name": "PMH Liquidity",
+            "price": 29000.0,
+            "side": "upper",
+            "group": None,
+        }
+        locked_owner = {
+            "pathway": "rejection",
+            "active_liquidity": active_liquidity,
+            "active_liquidity_name": "PMH",
+            "active_liquidity_display_name": "PMH Liquidity",
+            "active_liquidity_price": 29000.0,
+            "active_liquidity_group": None,
+            "setup_direction": "SHORT",
+            "side": "upper",
+            "candle_a": rejection_candle,
+            "activated_at": "2026-06-10T13:38:00Z",
+        }
+        snapshot = {
+            "requested_symbol": "NQ",
+            "normalized_symbol": "NQ",
+            "latest_price": continuation_candle["close"],
+            "latest_bar_time": continuation_candle["timestamp"],
+            "ohlc_is_closed": True,
+            "ohlc": continuation_candle,
+            "liquidity": {"tick_size": 0.25},
+            "step_2_1a": {
+                "step_2_activated": True,
+                "candle_a": rejection_candle,
+                "active_level": "PMH",
+                "level_price": 29000.0,
+                "side": "upper",
+                "last_evaluated_bar_time": continuation_candle["timestamp"],
+                "active_liquidity_group": None,
+                "last_interacted_liquidity": active_liquidity,
+                "step2_locked_owner": locked_owner,
+                "events": [{"event": "step_2_activated", "timestamp": "2026-06-10T13:38:00Z"}],
+            },
+            "rejection": {
+                "rejection_mode": "ON",
+                "watch_side": "SHORT",
+                "trigger_level": "PMH",
+                "trigger_price": 29000.0,
+            },
+            "step25": {
+                "status": "READY",
+                "next_step": "Step 3",
+                "state": {
+                    "controlling_mode": "R/S",
+                    "current_continuation_type": "R/S",
+                    "reclaim_candle_a": continuation_candle,
+                    "continuation_step2_activated": True,
+                    "setup_direction": "LONG",
+                },
+            },
+            "step3": {"status": "WAIT", "next_step": "Step 3", "state": {}},
+            "step4": {"status": "WAIT", "next_step": "Step 4", "state": {}},
+            "step5": {"status": "WAIT", "next_step": "Step 5", "state": {}},
+            "step6": {"status": "WAIT", "next_step": "Step 6", "state": {}},
+        }
+        entry_agent.run_once = lambda _symbol="NQ", persist=True: copy.deepcopy(snapshot)
+
+        status = entry_agent.build_entry_status("NQ")
+
+        self.assertEqual(status["selected_pathway"], "continuation")
+        self.assertEqual(status["current_pathway_control"], "continuation")
+        self.assertEqual(status["continuation_side"]["pathway_status"], "controlling")
+        self.assertEqual(status["continuation_side"]["current_step"], "Step 2")
+        self.assertEqual(status["continuation_side"]["current_step_confirmed_at"], "2026-06-10T13:40:00Z")
+
+        self.assertEqual(status["rejection_side"]["pathway_status"], "frozen")
+        self.assertEqual(status["rejection_side"]["current_step"], "Step 2")
+        self.assertEqual(status["rejection_side"]["current_step_label"], "Step 2 (Liquidity Close / Pathway Activation)")
+        self.assertEqual(status["rejection_side"]["current_step_status"], "CONFIRMED")
+        self.assertEqual(status["rejection_side"]["current_step_confirmed_at"], "2026-06-10T13:38:00Z")
+        self.assertEqual(status["rejection_side"]["step2_status"], "CONFIRMED")
+        self.assertEqual(status["rejection_side"]["step2_confirmed_at"], "2026-06-10T13:38:00Z")
+        self.assertIsNone(status["rejection_side"]["leg1_status"])
 
     def test_leg1_50_percent_penetration_rule_fields_and_invalidation(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))

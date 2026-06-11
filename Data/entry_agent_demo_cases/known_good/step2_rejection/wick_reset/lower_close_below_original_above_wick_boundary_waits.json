@@ -1,0 +1,126 @@
+{
+  "case_name": "Step 2 rejection wick reset LOWER - close below original above wick boundary waits",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "regular",
+  "expected_result": "WAIT_THEN_ACTIVE",
+  "why": "After a lower wick reset, follow-up closes above or at the wick low wait; only a close at least one tick below the Wick Qualifying Boundary activates Step 2.",
+  "symbol": "NQ",
+  "date": "2026-06-05",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {
+      "price": 100.0,
+      "side": "LOW"
+    },
+    "ONH": {
+      "price": 120.0,
+      "side": "HIGH"
+    }
+  },
+  "stacks": [],
+  "active_liquidity": {
+    "name": "PML",
+    "components": [
+      "PML"
+    ],
+    "price": 100.0,
+    "side": "LOW"
+  },
+  "wick_reset": {
+    "original_boundary": 100.0,
+    "reset_boundary": 99.5,
+    "qualifying_close": "close < 99.5"
+  },
+  "candles": [
+    {
+      "time": "2026-06-05T13:12:00Z",
+      "open": 100.5,
+      "high": 100.75,
+      "low": 99.5,
+      "close": 100.25,
+      "highlight_label": "Wick reset: wick low 99.5"
+    },
+    {
+      "time": "2026-06-05T13:13:00Z",
+      "open": 100.25,
+      "high": 100.5,
+      "low": 99.75,
+      "close": 99.75,
+      "highlight_label": "WAIT: close above wick boundary"
+    },
+    {
+      "time": "2026-06-05T13:14:00Z",
+      "open": 99.75,
+      "high": 100.0,
+      "low": 99.5,
+      "close": 99.5,
+      "highlight_label": "WAIT: close at wick boundary"
+    },
+    {
+      "time": "2026-06-05T13:15:00Z",
+      "open": 99.5,
+      "high": 99.75,
+      "low": 99.25,
+      "close": 99.25,
+      "highlight_label": "ACTIVE: close beyond wick boundary"
+    }
+  ],
+  "expected": [
+    {
+      "time": "2026-06-05T13:12:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    },
+    {
+      "time": "2026-06-05T13:13:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    },
+    {
+      "time": "2026-06-05T13:14:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    },
+    {
+      "time": "2026-06-05T13:15:00Z",
+      "step": "Step 2",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": true,
+      "active_liquidity_name": "PML Liquidity",
+      "setup_direction": "LONG",
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT"
+    }
+  ],
+  "notes": "Step 2 rejection wick-reset review. Original Boundary: 100.0. Wick Extreme: 99.5. Wick Qualifying Boundary: 99.5. Follow-up candle 2 closes 99.75 above the Wick Qualifying Boundary and stays WAIT. Follow-up candle 3 closes 99.5 at the Wick Qualifying Boundary and stays WAIT because it is not beyond by the required tick. Follow-up candle 4 closes 99.25 beyond the Wick Qualifying Boundary and activates Step 2.",
+  "step2_scenario_text": "Step 2 rejection wick-reset review. Original Boundary: 100.0. Wick Extreme: 99.5. Wick Qualifying Boundary: 99.5. Follow-up candle 2 closes 99.75 above the Wick Qualifying Boundary and stays WAIT. Follow-up candle 3 closes 99.5 at the Wick Qualifying Boundary and stays WAIT because it is not beyond by the required tick. Follow-up candle 4 closes 99.25 beyond the Wick Qualifying Boundary and activates Step 2."
+}
