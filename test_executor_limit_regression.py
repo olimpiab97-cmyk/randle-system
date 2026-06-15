@@ -1763,12 +1763,14 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         self.assertEqual(data["order"]["status"], "rejected")
 
     def test_nq_fresh_price_inside_current_bar_range_allows_entry(self):
+        bar_timestamp = datetime(2026, 6, 2, 13, 41, 0)
         self._seed_last_price_and_current_bar(
             "NQM6",
             price=27000.25,
             bar_low=26999.75,
             bar_high=27000.50,
             bar_close=27000.25,
+            bar_timestamp=bar_timestamp,
         )
 
         response = self.executor.app.test_client().post("/execute", json={
@@ -1785,6 +1787,11 @@ class ExecutorLimitRegressionTests(unittest.TestCase):
         self.assertEqual(data["fill_price"], 27000.25)
         self.assertEqual(data["fill_price_source"], "executor_actual_fill")
         self.assertEqual(data["resolved_symbol"], "NQM6")
+        self.assertEqual(data["current_1m_bar_high"], 27000.50)
+        self.assertEqual(data["current_1m_bar_low"], 26999.75)
+        self.assertEqual(data["current_1m_bar_timestamp"], bar_timestamp.isoformat())
+        self.assertEqual(data["fill_audit"]["current_1m_bar_high"], 27000.50)
+        self.assertEqual(data["fill_audit"]["current_1m_bar_low"], 26999.75)
         self.assertEqual(self.executor.POSITIONS["NQM6"]["qty"], 1.0)
 
     def test_ym_fill_within_one_tick_outside_current_bar_range_allows_entry(self):

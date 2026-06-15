@@ -37,7 +37,7 @@ def assert_reason(result: dict) -> None:
 
 def failed_short_participation_candle(index: int) -> dict:
     base = 101.0 + (index * 0.2)
-    return candle(base, base + 0.4, base - 0.1, base + 0.3)
+    return candle(base, base, base - 0.5, max(101.0, base - 0.2))
 
 
 def valid_short_participation_candle(index: int) -> dict:
@@ -332,6 +332,66 @@ def test_wick_based_participation_passes_when_close_fails() -> None:
     assert result["state"]["leg1_extreme_owner"] == "Candle B"
 
 
+def test_certified_short_wick_33_fails_and_34_passes_with_close_disqualified() -> None:
+    fail = evaluate_step4(base_interaction("SHORT"), candle(102.0, 102.33, 101.33, 102.0))
+    assert fail["status"] == "WAIT"
+    assert fail["next_step"] == "Step 4"
+    assert fail["state"]["step3_close_participation_pass"] is False
+    assert fail["state"]["step3_wick_participation_pct"] == 33.0
+    assert fail["state"]["step3_wick_participation_pass"] is False
+
+    passed = evaluate_step4(base_interaction("SHORT"), candle(102.0, 102.34, 101.34, 102.0))
+    assert passed["status"] == "READY"
+    assert passed["next_step"] == "Step 5"
+    assert passed["state"]["step3_close_participation_pass"] is False
+    assert passed["state"]["step3_wick_participation_pct"] == 34.0
+    assert passed["state"]["step3_wick_participation_pass"] is True
+    assert passed["events"][-1]["step3_participation_rule_certification"] == "CERTIFIED"
+
+
+def test_certified_long_wick_33_fails_and_34_passes_with_close_disqualified() -> None:
+    fail_interaction = base_interaction("LONG")
+    fail_interaction["nearest_opposing_liquidity"] = {"name": "PMH", "price": 105.0}
+    fail = evaluate_step4(fail_interaction, candle(99.0, 99.67, 98.67, 99.0))
+    assert fail["status"] == "WAIT"
+    assert fail["next_step"] == "Step 4"
+    assert fail["state"]["step3_close_participation_pass"] is False
+    assert fail["state"]["step3_wick_participation_pct"] == 33.0
+    assert fail["state"]["step3_wick_participation_pass"] is False
+
+    pass_interaction = base_interaction("LONG")
+    pass_interaction["nearest_opposing_liquidity"] = {"name": "PMH", "price": 105.0}
+    passed = evaluate_step4(pass_interaction, candle(99.0, 99.66, 98.66, 99.0))
+    assert passed["status"] == "READY"
+    assert passed["next_step"] == "Step 5"
+    assert passed["state"]["step3_close_participation_pass"] is False
+    assert passed["state"]["step3_wick_participation_pct"] == 34.0
+    assert passed["state"]["step3_wick_participation_pass"] is True
+    assert passed["events"][-1]["step3_participation_rule_certification"] == "CERTIFIED"
+
+
+def test_certified_equal_close_fails_and_beyond_extreme_close_passes() -> None:
+    short_equal = evaluate_step4(base_interaction("SHORT"), candle(101.25, 101.25, 100.75, 101.0))
+    assert short_equal["status"] == "WAIT"
+    assert short_equal["state"]["step3_participation_candle_a_extreme"] == 101.0
+    assert short_equal["state"]["step3_close_participation_pass"] is False
+    short_beyond = evaluate_step4(base_interaction("SHORT"), candle(101.25, 101.25, 100.25, 100.75))
+    assert short_beyond["status"] == "READY"
+    assert short_beyond["state"]["step3_close_participation_pass"] is True
+
+    long_equal_interaction = base_interaction("LONG")
+    long_equal_interaction["nearest_opposing_liquidity"] = {"name": "PMH", "price": 105.0}
+    long_equal = evaluate_step4(long_equal_interaction, candle(99.5, 100.0, 99.5, 99.5))
+    assert long_equal["status"] == "WAIT"
+    assert long_equal["state"]["step3_participation_candle_a_extreme"] == 99.5
+    assert long_equal["state"]["step3_close_participation_pass"] is False
+    long_beyond_interaction = base_interaction("LONG")
+    long_beyond_interaction["nearest_opposing_liquidity"] = {"name": "PMH", "price": 105.0}
+    long_beyond = evaluate_step4(long_beyond_interaction, candle(99.5, 100.0, 99.25, 99.75))
+    assert long_beyond["status"] == "READY"
+    assert long_beyond["state"]["step3_close_participation_pass"] is True
+
+
 def test_both_participation_paths_fail_routes_step7() -> None:
     interaction = base_interaction("SHORT")
     result = evaluate_step4(interaction, candle(101.5, 101.5, 101.0, 101.25))
@@ -351,6 +411,89 @@ def test_long_assigns_low_extreme() -> None:
     assert result["state"]["leg1_extreme"] == 99.0
     assert result["state"]["leg1_extreme_owner"] == "Candle B"
     assert result["state"]["anchor_extreme"] == 99.0
+
+
+def test_step2_step4_50_line_touch_invalidates_before_leg1_participation() -> None:
+    interaction = base_interaction("LONG")
+    interaction.update(
+        {
+            "active_liquidity": {"name": "PML", "price": 100.0, "side": "LOW"},
+            "next_break_side_liquidity": {"name": "ONL", "price": 50.0, "side": "LOW"},
+            "nearest_opposing_liquidity": {"name": "PMH", "price": 120.0},
+            "atr_1m_14": 20.0,
+        }
+    )
+
+    result = evaluate_step4(interaction, candle(99.5, 99.5, 75.0, 99.0, "2026-06-11T14:11:00Z"))
+
+    assert result["step"] == "Step 7"
+    assert result["status"] == "TERMINATED"
+    assert result["reason"] == "STEP2_STEP4_50_LINE_TOUCHED"
+    assert result["state"]["leg1_window_invalidated"] is True
+    assert result["state"]["leg1_window_invalidation_reason"] == "STEP2_STEP4_50_LINE_TOUCHED"
+    assert result["state"]["leg1_window_remaining"] == 0
+    assert result["state"]["invalidation_source"] == "step2_step4_50_line"
+    assert result["state"]["invalidation_source_step"] == "Step 4"
+    assert result["state"]["step2_step4_50_line"] == 75.0
+    assert "EXHAUSTION_50_LEG1" not in result["reason"]
+
+
+def test_nq_2026_06_12_step2_step4_50_line_touch_invalidates_rejection() -> None:
+    activation = candle(29383.0, 29392.5, 29316.25, 29322.5, "2026-06-12T13:33:00Z")
+    touch = candle(29325.0, 29355.75, 29303.0, 29333.0, "2026-06-12T13:34:00Z")
+    interaction = base_interaction("LONG")
+    interaction.update(
+        {
+            "initial_candle_a": activation,
+            "candle_a": activation,
+            "active_liquidity": {"name": "PML", "price": 29354.0, "side": "lower"},
+            "next_break_side_liquidity": {"name": "ONL", "price": 29260.0},
+            "nearest_opposing_liquidity": {"name": "PMH", "price": 29646.0},
+            "atr_1m_14": 20.0,
+            "leg1_window_started_at": "2026-06-12T13:33:00Z",
+            "leg1_window_candle_index": 0,
+            "leg1_window_remaining": 4,
+            "leg1_window_active": True,
+        }
+    )
+
+    result = evaluate_step4(interaction, touch)
+
+    assert result["step"] == "Step 7"
+    assert result["status"] == "TERMINATED"
+    assert result["reason"] == "STEP2_STEP4_50_LINE_TOUCHED"
+    assert result["state"]["step2_step4_50_line"] == 29307.0
+    assert touch["low"] <= result["state"]["step2_step4_50_line"]
+    assert result["state"].get("leg1_status") is None
+
+
+def test_short_step2_step4_50_line_touch_uses_candle_high() -> None:
+    activation = candle(29640.0, 29683.75, 29635.0, 29678.0, "2026-06-12T13:33:00Z")
+    touch = candle(29696.0, 29700.0, 29694.0, 29695.0, "2026-06-12T13:34:00Z")
+    interaction = base_interaction("SHORT")
+    interaction.update(
+        {
+            "initial_candle_a": activation,
+            "candle_a": activation,
+            "active_liquidity": {"name": "PMH", "price": 29646.0, "side": "upper"},
+            "next_break_side_liquidity": {"name": "ONH", "price": 29740.0},
+            "nearest_opposing_liquidity": {"name": "PML", "price": 29354.0},
+            "atr_1m_14": 20.0,
+            "leg1_window_started_at": "2026-06-12T13:33:00Z",
+            "leg1_window_candle_index": 0,
+            "leg1_window_remaining": 4,
+            "leg1_window_active": True,
+        }
+    )
+
+    result = evaluate_step4(interaction, touch)
+
+    assert result["step"] == "Step 7"
+    assert result["status"] == "TERMINATED"
+    assert result["reason"] == "STEP2_STEP4_50_LINE_TOUCHED"
+    assert result["state"]["step2_step4_50_line"] == 29693.0
+    assert touch["high"] >= result["state"]["step2_step4_50_line"]
+    assert touch["low"] > result["state"]["step2_step4_50_line"]
 
 
 def test_upper_static_stack_rejects_close_boundary_only_leg1() -> None:
@@ -397,7 +540,7 @@ def test_lower_static_stack_rejects_close_boundary_only_leg1() -> None:
 def test_live_static_stack_assigns_post_extreme_candle_a_then_locks_leg1_on_future_b() -> None:
     confirmation = candle(29233.0, 29265.75, 29231.25, 29262.75, "2026-05-12T13:42:00Z")
     candle_a = candle(29262.5, 29284.5, 29258.5, 29274.5, "2026-05-12T13:43:00Z")
-    failed_b = candle(29274.0, 29285.75, 29263.25, 29285.0, "2026-05-12T13:44:00Z")
+    failed_b = candle(29285.5, 29285.75, 29284.75, 29285.0, "2026-05-12T13:44:00Z")
     valid_b = candle(29285.5, 29296.0, 29266.0, 29273.0, "2026-05-12T13:45:00Z")
     step25 = {
         "status": "READY",
@@ -465,7 +608,7 @@ def test_live_static_stack_assigns_post_extreme_candle_a_then_locks_leg1_on_futu
 
 def test_ym_2026_05_28_failed_c1_keeps_rejection_window_for_c2_wick() -> None:
     activation = candle(50582.0, 50590.0, 50570.0, 50576.0, "2026-05-28T13:29:00Z")
-    c1_failed = candle(50569.0, 50570.0, 50560.0, 50561.0, "2026-05-28T13:30:00Z")
+    c1_failed = candle(50562.0, 50570.0, 50560.0, 50561.0, "2026-05-28T13:30:00Z")
     c2_wick_valid = candle(50568.0, 50570.0, 50550.0, 50566.0, "2026-05-28T13:31:00Z")
     step25 = {
         "status": "READY",
@@ -535,12 +678,12 @@ def test_ym_2026_05_29_same_pml_close_through_does_not_recreate_step2_window() -
     pml = 50836.0
     candles = [
         candle(50840.0, 50842.0, 50820.0, 50835.0, "2026-05-29T13:15:00Z"),
-        candle(50834.0, 50835.0, 50810.0, 50811.0, "2026-05-29T13:16:00Z"),
-        candle(50812.0, 50813.0, 50800.0, 50801.0, "2026-05-29T13:17:00Z"),
-        candle(50802.0, 50803.0, 50790.0, 50791.0, "2026-05-29T13:18:00Z"),
-        candle(50792.0, 50793.0, 50780.0, 50781.0, "2026-05-29T13:19:00Z"),
-        candle(50782.0, 50783.0, 50770.0, 50771.0, "2026-05-29T13:20:00Z"),
-        candle(50772.0, 50773.0, 50760.0, 50761.0, "2026-05-29T13:21:00Z"),
+        candle(50811.0, 50835.0, 50810.0, 50811.0, "2026-05-29T13:16:00Z"),
+        candle(50801.0, 50813.0, 50800.0, 50801.0, "2026-05-29T13:17:00Z"),
+        candle(50791.0, 50803.0, 50790.0, 50791.0, "2026-05-29T13:18:00Z"),
+        candle(50781.0, 50793.0, 50780.0, 50781.0, "2026-05-29T13:19:00Z"),
+        candle(50771.0, 50783.0, 50770.0, 50771.0, "2026-05-29T13:20:00Z"),
+        candle(50761.0, 50773.0, 50760.0, 50761.0, "2026-05-29T13:21:00Z"),
     ]
     rejection = {"rejection_mode": "ON", "watch_side": "LONG", "trigger_level": "PML", "trigger_price": pml}
     step3 = {
@@ -594,9 +737,9 @@ def test_nq_2026_05_29_stack_step2_owner_survives_repeated_close_through() -> No
     extreme_boundary = 30372.25
     candles = [
         candle(30360.0, 30375.0, 30358.0, 30373.0, "2026-05-29T13:33:00Z"),
-        candle(30374.0, 30380.0, 30370.0, 30379.0, "2026-05-29T13:34:00Z"),
-        candle(30378.0, 30381.0, 30374.0, 30380.0, "2026-05-29T13:35:00Z"),
-        candle(30379.0, 30382.0, 30375.0, 30381.0, "2026-05-29T13:36:00Z"),
+        candle(30379.0, 30380.0, 30370.0, 30379.0, "2026-05-29T13:34:00Z"),
+        candle(30380.0, 30381.0, 30374.0, 30380.0, "2026-05-29T13:35:00Z"),
+        candle(30381.0, 30382.0, 30375.0, 30381.0, "2026-05-29T13:36:00Z"),
     ]
     tv_context = {
         "levels": {
@@ -779,8 +922,14 @@ def run_tests() -> None:
         test_sr_provisional_leg1_does_not_require_close_back_above_stack_extreme,
         test_rs_wrong_side_structure_blocks,
         test_wick_based_participation_passes_when_close_fails,
+        test_certified_short_wick_33_fails_and_34_passes_with_close_disqualified,
+        test_certified_long_wick_33_fails_and_34_passes_with_close_disqualified,
+        test_certified_equal_close_fails_and_beyond_extreme_close_passes,
         test_both_participation_paths_fail_routes_step7,
         test_long_assigns_low_extreme,
+        test_step2_step4_50_line_touch_invalidates_before_leg1_participation,
+        test_nq_2026_06_12_step2_step4_50_line_touch_invalidates_rejection,
+        test_short_step2_step4_50_line_touch_uses_candle_high,
         test_upper_static_stack_rejects_close_boundary_only_leg1,
         test_lower_static_stack_rejects_close_boundary_only_leg1,
         test_live_static_stack_assigns_post_extreme_candle_a_then_locks_leg1_on_future_b,

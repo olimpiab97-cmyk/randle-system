@@ -24,7 +24,7 @@ from levels import classify_liquidity_location, root_symbol
 from market_feed import get_latest_market_snapshot, recent_closed_bars
 from step25_engine import evaluate_step25
 from step3_engine import evaluate_step3
-from step4_engine import evaluate_step4, initialize_leg1_window
+from step4_engine import STEP2_STEP4_50_LINE_TOUCHED, evaluate_step4, initialize_leg1_window
 from step5_engine import evaluate_step5
 from step6_engine import evaluate_step6
 
@@ -2472,6 +2472,72 @@ def next_same_side_liquidity_target(
     }
 
 
+def step4_participation_line_payload(
+    snapshot: dict[str, Any],
+    step_2_1a: dict[str, Any],
+    step4_state: dict[str, Any],
+    *,
+    rejection_active: bool,
+    selected_pathway: str | None,
+    setup_direction: str | None,
+    leg1_published: bool,
+    invalidated: bool,
+) -> dict[str, Any]:
+    """Return public Step 2 to Step 4 participation line values for chart overlays."""
+    active_liquidity = step4_state.get("active_liquidity") if isinstance(step4_state.get("active_liquidity"), dict) else None
+    if not active_liquidity:
+        locked_owner = step_2_1a.get("step2_locked_owner") if isinstance(step_2_1a.get("step2_locked_owner"), dict) else {}
+        locked_active = locked_owner.get("active_liquidity") if isinstance(locked_owner.get("active_liquidity"), dict) else None
+        active_liquidity = locked_active
+    if not active_liquidity:
+        active_name, active_price = active_liquidity_from_snapshot(snapshot)
+        active_liquidity = {"name": active_name, "price": active_price, "side": side_for_level(str(active_name or ""))}
+
+    active_price = optional_float(active_liquidity.get("price") if isinstance(active_liquidity, dict) else None)
+    active_side = active_liquidity.get("side") if isinstance(active_liquidity, dict) else None
+    active_side = active_side if active_side in {"lower", "upper"} else side_for_level(str((active_liquidity or {}).get("name") or ""))
+
+    reference = step4_state.get("next_break_side_liquidity") if isinstance(step4_state.get("next_break_side_liquidity"), dict) else None
+    if not reference:
+        reference = step_2_1a.get("next_same_side_liquidity") if isinstance(step_2_1a.get("next_same_side_liquidity"), dict) else None
+    if not reference and isinstance(active_liquidity, dict):
+        reference = next_same_side_liquidity_target(snapshot.get("tv_context"), active_liquidity)
+    reference_price = optional_float(reference.get("price") if isinstance(reference, dict) else None)
+
+    line_50 = None
+    line_75 = None
+    if active_price is not None and reference_price is not None and active_price != reference_price:
+        line_50 = active_price + ((reference_price - active_price) * 0.50)
+        line_75 = active_price + ((reference_price - active_price) * 0.75)
+
+    terminal_window = (
+        step4_state.get("leg1_window_invalidated") is True
+        or step4_state.get("leg1_window_remaining") == 0
+    )
+    visible = (
+        line_50 is not None
+        and line_75 is not None
+        and rejection_active
+        and selected_pathway == "rejection"
+        and setup_direction in {"LONG", "SHORT"}
+        and not leg1_published
+        and not invalidated
+        and step4_state.get("leg1_status") != "COMPLETE"
+        and step4_state.get("leg1_state_locked") is not True
+        and step4_state.get("leg1_window_active") is True
+        and not terminal_window
+    )
+
+    return {
+        "reference_liquidity": reference,
+        "active_liquidity": active_liquidity if isinstance(active_liquidity, dict) else None,
+        "active_side": active_side,
+        "line_50": line_50,
+        "line_75": line_75,
+        "visible": visible,
+    }
+
+
 def has_valid_leg1_without_valid_leg2(persisted_state: dict[str, Any]) -> bool:
     """Return True once Leg 1 is locked but Step 5 has not validated Leg 2."""
     step4 = persisted_state.get("step4") if isinstance(persisted_state.get("step4"), dict) else {}
@@ -4152,6 +4218,8 @@ def public_invalidation_from_results(current_step: str, *results: dict[str, Any]
         if decision_status(result) != "INVALIDATE":
             continue
         source_step = result_invalidation_source_step(result)
+        reason = result_reason(result, "Invalidated by EntryAgent rule.")
+        step2_step4_guard = reason == STEP2_STEP4_50_LINE_TOUCHED
         step6_window_expired = (
             current_step == "Step 5"
             and source_step == "Step 6"
@@ -4159,10 +4227,10 @@ def public_invalidation_from_results(current_step: str, *results: dict[str, Any]
             and result["state"].get("step6_window_candle_index") is not None
             and result["state"].get("step6_window_remaining") == 0
         )
-        if step_order(source_step) <= public_order or step6_window_expired:
+        if step_order(source_step) <= public_order or step6_window_expired or step2_step4_guard:
             state = result.get("state") if isinstance(result.get("state"), dict) else {}
             return {
-                "reason": result_reason(result, "Invalidated by EntryAgent rule."),
+                "reason": reason,
                 "source_step": source_step,
                 "source": state.get("invalidation_source"),
                 "source_candle_time": state.get("invalidation_source_candle_time"),
@@ -4739,7 +4807,7 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
     leg1_status = raw_leg1_status if leg1_published else "WAIT"
     leg2_status = raw_leg2_status if leg2_published else "WAIT"
     if current_step == "Step 4" and leg1_status == "COMPLETE":
-        step_label = "Shared Leg 1 Confirmed"
+        step_label = "Leg 1 Complete"
     step2_rejection_confirmed = (
         current_step == "Step 2"
         and valid_active_liquidity_selection(active_name, active_price)
@@ -4817,6 +4885,16 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         and rejection_step2_time is not None
         and not invalidated
     )
+    participation_lines = step4_participation_line_payload(
+        snapshot,
+        step_2_1a,
+        step4_state,
+        rejection_active=rejection_active,
+        selected_pathway=selected_pathway,
+        setup_direction=public_setup_direction or setup_direction,
+        leg1_published=leg1_published,
+        invalidated=invalidated,
+    )
     rejection_side = {
         "pathway_status": (
             "entered"
@@ -4844,6 +4922,10 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "leg1_confirmed_at": None if continuation_selected else leg1_time,
         "leg2_confirmed_at": None if continuation_selected else leg2_time,
         "entry_status_confirmed_at": None if continuation_selected else entry_time,
+        "step4_participation_reference_liquidity": None if continuation_selected else participation_lines["reference_liquidity"],
+        "step4_participation_50_line": None if continuation_selected else participation_lines["line_50"],
+        "step4_participation_75_line": None if continuation_selected else participation_lines["line_75"],
+        "step4_participation_lines_visible": False if continuation_selected else participation_lines["visible"],
     }
     continuation_side = {
         "continuation_type": continuation_type,
@@ -4902,6 +4984,12 @@ def build_entry_status(symbol: str = "NQ") -> dict[str, Any]:
         "leg1_status": leg1_status,
         "leg1_state": leg1_status,
         "leg1_confirmed_at": leg1_time,
+        "step4_participation_reference_liquidity": participation_lines["reference_liquidity"],
+        "step4_participation_active_liquidity": participation_lines["active_liquidity"],
+        "step4_participation_active_side": participation_lines["active_side"],
+        "step4_participation_50_line": participation_lines["line_50"],
+        "step4_participation_75_line": participation_lines["line_75"],
+        "step4_participation_lines_visible": participation_lines["visible"],
         "leg2_status": leg2_status,
         "leg2_state": leg2_status,
         "leg2_confirmed_at": leg2_time,

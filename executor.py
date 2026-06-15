@@ -1233,7 +1233,7 @@ def resolve_fill_price(symbol, *, direction=None, order_id=None, trade_id=None):
     audit["listener_status_reason"] = listener_freshness.get("listener_status_reason")
     persist_fill_audit(audit)
     log(f"SUBMIT FLOW live_price_found symbol={resolved_symbol} source=last_price_cache price={live_price}")
-    return live_price, fill_price_source, resolved_symbol
+    return live_price, fill_price_source, resolved_symbol, audit
 
 
 def build_executor_state():
@@ -2177,7 +2177,7 @@ def execute():
             f"resolved={resolved_symbol} source={resolution_source}"
         )
         try:
-            entry_price, fill_price_source, fill_lookup_symbol = resolve_fill_price(
+            entry_price, fill_price_source, fill_lookup_symbol, fill_audit = resolve_fill_price(
                 submitted_symbol,
                 direction=direction,
                 order_id=order_id,
@@ -2283,6 +2283,10 @@ def execute():
             "fill_price": entry_price,
             "fill_price_source": fill_price_source,
             "resolved_symbol": fill_lookup_symbol,
+            "fill_audit": fill_audit,
+            "current_1m_bar_high": fill_audit.get("current_1m_bar_high"),
+            "current_1m_bar_low": fill_audit.get("current_1m_bar_low"),
+            "current_1m_bar_timestamp": fill_audit.get("current_1m_bar_timestamp"),
             "order": ORDERS[order_id]
         })
 

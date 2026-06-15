@@ -1,0 +1,119 @@
+{
+  "case_name": "Complete Level Consumption - PMH rejection 4-candle then R/S continuation ONH touch",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Complete Level Consumption",
+  "scenario_type": "rejection",
+  "expected_result": "PMH is consumed only after rejection is consumed by the 4-candle rule and R/S continuation is consumed by next same-side liquidity touch.",
+  "symbol": "YM",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 80.0,
+  "levels": {
+    "PMH": {"price": 100.0, "side": "HIGH"},
+    "ONH": {"price": 110.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"},
+  "lifecycle_context": [
+    "Level: PMH 100",
+    "Starting state: rejection and continuation opportunities available",
+    "Result: level becomes consumed only after both opportunities are dead"
+  ],
+  "lifecycle_waiting_window": [
+    {"label": "Candle 1", "description": "No valid Step 4 participation"},
+    {"label": "Candle 2", "description": "No valid Step 4 participation"},
+    {"label": "Candle 3", "description": "No valid Step 4 participation"},
+    {"label": "Candle 4", "description": "No valid Step 4 participation"}
+  ],
+  "lifecycle_event_progression": [
+    {"event_number": 1, "label": "Rejection Step 2 Activated", "detail": "Rejection Opportunity ACTIVE"},
+    {"event_number": 2, "label": "Rejection Invalidated", "detail": "Reason: STEP2_STEP4_4_CANDLE_EXPIRED"},
+    {"event_number": 3, "label": "Continuation Step 2 Activated", "detail": "Continuation Opportunity ACTIVE"},
+    {"event_number": 4, "label": "Continuation Invalidated", "detail": "Continuation Opportunity DEAD"}
+  ],
+  "lifecycle_final_state": [
+    "Rejection: DEAD",
+    "Continuation: DEAD",
+    "Level: CONSUMED"
+  ],
+  "level_lifecycle_events": [
+    {"candle_index": 6, "level": "PMH", "opportunity": "rejection", "reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "event_label": "Rejection consumed by 4-candle rule"},
+    {"candle_index": 11, "level": "PMH", "opportunity": "continuation", "reason": "NEXT_LEVEL_TOUCH", "event_label": "R/S continuation consumed by next same-side liquidity touch"}
+  ],
+  "lifecycle_chart_events": [
+    {
+      "event_number": 1,
+      "candle_index": 2,
+      "type": "rejection_step2",
+      "label": "Rejection Step 2 Activated",
+      "description": "Close through PMH. Rejection activates and controls the level."
+    },
+    {
+      "event_number": 2,
+      "candle_index": 6,
+      "type": "rejection_invalidation",
+      "label": "Rejection Invalidated",
+      "reason": "FOUR_CANDLE_RULE",
+      "description": "Four candles passed after Step 2 without valid Step 4 participation. Rejection opportunity consumed."
+    },
+    {
+      "event_number": 3,
+      "candle_index": 8,
+      "type": "continuation_step2",
+      "label": "R/S Continuation Step 2 Activated",
+      "description": "Price reclaims PMH. R/S continuation activates and controls the level."
+    },
+    {
+      "event_number": 4,
+      "candle_index": 11,
+      "type": "continuation_invalidation",
+      "label": "R/S Continuation Invalidated",
+      "reason": "NEXT_LIQUIDITY_TOUCH",
+      "description": "Price touches ONH, the next same-side liquidity. R/S continuation opportunity consumed."
+    }
+  ],
+  "lifecycle_chart_countdown": [
+    {"candle_index": 3, "label": "Candle 1"},
+    {"candle_index": 4, "label": "Candle 2"},
+    {"candle_index": 5, "label": "Candle 3"},
+    {"candle_index": 6, "label": "Candle 4 / invalidation"}
+  ],
+  "lifecycle_progression": [
+    {"state": "A", "label": "Both opportunities available", "rejection_status": "ACTIVE", "continuation_status": "ACTIVE", "level_status": "ACTIVE"},
+    {"state": "B", "label": "Continuation remains available", "rejection_status": "INVALIDATED", "continuation_status": "ACTIVE", "level_status": "ACTIVE"},
+    {"state": "C", "label": "Level consumed", "rejection_status": "INVALIDATED", "continuation_status": "INVALIDATED", "level_status": "CONSUMED"}
+  ],
+  "candles": [
+    {"time": "2026-06-11T14:30:00Z", "open": 97.75, "high": 98.5, "low": 97.25, "close": 98.0},
+    {"time": "2026-06-11T14:31:00Z", "open": 98.0, "high": 99.25, "low": 97.75, "close": 99.0},
+    {"time": "2026-06-11T14:32:00Z", "open": 99.0, "high": 101.25, "low": 98.75, "close": 100.75},
+    {"time": "2026-06-11T14:33:00Z", "open": 100.75, "high": 101.0, "low": 99.75, "close": 100.25},
+    {"time": "2026-06-11T14:34:00Z", "open": 100.25, "high": 100.75, "low": 99.5, "close": 100.5},
+    {"time": "2026-06-11T14:35:00Z", "open": 100.5, "high": 100.75, "low": 99.75, "close": 100.25},
+    {"time": "2026-06-11T14:36:00Z", "open": 100.25, "high": 100.5, "low": 99.5, "close": 100.0},
+    {"time": "2026-06-11T14:37:00Z", "open": 100.0, "high": 100.25, "low": 98.75, "close": 99.25},
+    {"time": "2026-06-11T14:38:00Z", "open": 99.25, "high": 101.25, "low": 99.0, "close": 100.75},
+    {"time": "2026-06-11T14:39:00Z", "open": 100.75, "high": 103.0, "low": 100.5, "close": 102.5},
+    {"time": "2026-06-11T14:40:00Z", "open": 102.5, "high": 107.0, "low": 102.25, "close": 106.25},
+    {"time": "2026-06-11T14:41:00Z", "open": 106.25, "high": 110.25, "low": 105.75, "close": 109.75}
+  ],
+  "expected": [
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}]},
+    {"level_lifecycle": [{"level_name": "ONH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}, {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "NEXT_LEVEL_TOUCH", "level_status": "CONSUMED"}]}
+  ],
+  "demo_display_text": "PMH rejection is consumed by the 4-candle rule. PMH R/S continuation remains available, then is consumed by ONH touch. PMH is consumed only after both opportunities are dead.",
+  "notes": "Chart markers and countdown labels are sourced only from explicit lifecycle_chart_events and lifecycle_chart_countdown metadata."
+}

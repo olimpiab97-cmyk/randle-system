@@ -1,0 +1,31 @@
+{
+  "case_name": "Step 2 ATR stack - exact threshold distance stacks",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "stacked",
+  "expected_result": "valid_step2",
+  "why": "PML 100 and ONL 90 are exactly 10 points apart with simulated Daily ATR 100; the demo rule is inclusive, so exact threshold distance stacks.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "simulated_daily_atr": 100.0,
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONL": {"price": 90.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "candles": [
+    {"time": "2026-05-28T14:05:00Z", "open": 99.0, "high": 99.5, "low": 89.5, "close": 89.75}
+  ],
+  "expected": [
+    {"time": "2026-05-28T14:05:00Z", "step": "Step 2", "pathway_type": "Rejection", "current_pathway_control": "rejection", "rejection_mode_entered": true, "active_liquidity_name": "PML/ONL Liquidity", "setup_direction": "LONG", "leg1_state": "WAIT", "leg2_state": "WAIT"}
+  ],
+  "notes": "Ambiguity resolved for the demo harness as inclusive: distance <= threshold is stacked."
+}

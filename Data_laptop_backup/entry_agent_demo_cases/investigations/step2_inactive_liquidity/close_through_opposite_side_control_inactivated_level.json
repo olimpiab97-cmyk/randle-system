@@ -1,0 +1,50 @@
+{
+  "case_name": "Step 2 investigation - close through opposite side control inactivated level",
+  "case_type": "investigation",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "regular",
+  "expected_result": "ignored",
+  "why": "The candle closes through ONH, but ONH is inactive because opposite-side control owns the current Step 2 context.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "tick_size": 0.25,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONH": {"price": 101.0, "side": "HIGH"}
+  },
+  "active_liquidity": {
+    "name": "PML",
+    "components": ["PML"],
+    "price": 100.0,
+    "side": "LOW"
+  },
+  "inactive_liquidity": {
+    "name": "ONH",
+    "price": 101.0,
+    "side": "HIGH",
+    "inactive_reason": "opposite_side_control",
+    "is_active_liquidity": false,
+    "expected_close_through_inactive_level": true,
+    "why_close_through_should_matter": "It should not matter while the opposite-side control context makes this level non-qualifying."
+  },
+  "candles": [
+    {"time": "2026-05-28T13:53:00Z", "open": 100.5, "high": 101.5, "low": 100.25, "close": 101.25}
+  ],
+  "expected": [
+    {
+      "time": "2026-05-28T13:53:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    }
+  ],
+  "notes": "Investigation fixture only. No Step 2 rule approval."
+}

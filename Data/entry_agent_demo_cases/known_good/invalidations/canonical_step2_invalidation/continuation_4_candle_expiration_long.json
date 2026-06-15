@@ -1,0 +1,67 @@
+{
+  "case_name": "Continuation 4-Candle Expiration (Long)",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Canonical Step 2 Invalidation Matrix",
+  "scenario_type": "continuation",
+  "continuation_type": "S/R",
+  "expected_result": "Long-side continuation opportunity invalidates on the 4th candle after Step 2 when no valid Step 4 participation occurs; rejection remains available.",
+  "symbol": "YM",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {"PML": {"price": 100.0, "side": "LOW"}, "ONH": {"price": 120.0, "side": "HIGH"}},
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "teaching_display_levels": ["PML"],
+  "lifecycle_context": ["Level: PML 100", "Price closes below PML", "Result: Continuation Step 2 Activated"],
+  "lifecycle_waiting_window": [
+    {"label": "Candle 1", "description": "No valid Step 4 continuation participation"},
+    {"label": "Candle 2", "description": "No valid Step 4 continuation participation"},
+    {"label": "Candle 3", "description": "No valid Step 4 continuation participation"},
+    {"label": "Candle 4", "description": "No valid Step 4 continuation participation"}
+  ],
+  "lifecycle_event_progression": [
+    {"event_number": 1, "label": "Continuation Step 2 Activated", "detail": "Continuation Opportunity ACTIVE"},
+    {"event_number": 2, "label": "Continuation Invalidated", "detail": "Reason: STEP2_STEP4_4_CANDLE_EXPIRED"}
+  ],
+  "lifecycle_final_state": ["Rejection: AVAILABLE", "Continuation: DEAD", "Level: ACTIVE"],
+  "lifecycle_progression": [
+    {"type": "state", "state": "A", "label": "Starting Opportunity State", "rejection_status": "AVAILABLE", "continuation_status": "AVAILABLE", "level_status": "ACTIVE"},
+    {"type": "event", "event_number": 1, "label": "Continuation Step 2 Activated", "detail": "Continuation Opportunity ACTIVE"},
+    {"type": "event", "event_number": 2, "label": "Continuation Invalidated", "detail": "Reason: STEP2_STEP4_4_CANDLE_EXPIRED"},
+    {"type": "state", "state": "B", "label": "Continuation Dead, Rejection Still Available", "rejection_status": "AVAILABLE", "continuation_status": "DEAD", "level_status": "ACTIVE"}
+  ],
+  "candles": [
+    {"time": "2026-06-11T13:30:00Z", "open": 100.5, "high": 100.5, "low": 99.4, "close": 99.5},
+    {"time": "2026-06-11T13:31:00Z", "open": 99.1, "high": 99.2, "low": 99.0, "close": 99.0},
+    {"time": "2026-06-11T13:32:00Z", "open": 99.1, "high": 99.2, "low": 99.0, "close": 99.0},
+    {"time": "2026-06-11T13:33:00Z", "open": 99.1, "high": 99.2, "low": 99.0, "close": 99.0},
+    {"time": "2026-06-11T13:34:00Z", "open": 99.1, "high": 99.2, "low": 99.0, "close": 99.0}
+  ],
+  "expected": [
+    {"time": "2026-06-11T13:30:00Z", "step": "Step 4", "pathway_type": "Continuation", "current_pathway_control": "continuation", "setup_direction": "LONG", "leg1_state": "WAIT", "leg1_window_candle_index": 0, "leg1_window_remaining": 4},
+    {"time": "2026-06-11T13:31:00Z", "step": "Step 4", "pathway_type": "Continuation", "current_pathway_control": "continuation", "setup_direction": "LONG", "leg1_state": "WAIT", "leg1_window_candle_index": 1, "leg1_window_remaining": 3},
+    {"time": "2026-06-11T13:32:00Z", "step": "Step 4", "pathway_type": "Continuation", "current_pathway_control": "continuation", "setup_direction": "LONG", "leg1_state": "WAIT", "leg1_window_candle_index": 2, "leg1_window_remaining": 2},
+    {"time": "2026-06-11T13:33:00Z", "step": "Step 4", "pathway_type": "Continuation", "current_pathway_control": "continuation", "setup_direction": "LONG", "leg1_state": "WAIT", "leg1_window_candle_index": 3, "leg1_window_remaining": 1},
+    {
+      "time": "2026-06-11T13:34:00Z",
+      "step": "Step 4",
+      "pathway_type": "Continuation",
+      "current_pathway_control": "continuation",
+      "setup_direction": "LONG",
+      "leg1_state": "WAIT",
+      "leg1_window_candle_index": 4,
+      "leg1_window_remaining": 0,
+      "invalidation_reason": "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation.",
+      "level_lifecycle": [
+        {"level_name": "ONH", "price": 120.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+        {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "level_status": "ACTIVE"}
+      ]
+    }
+  ],
+  "demo_display_text": "Long continuation expired: no Step 4 participation within 4 candles after Step 2. Rejection remains available.",
+  "notes": "Placeholder for canonical invalidation matrix."
+}

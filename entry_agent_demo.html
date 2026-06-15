@@ -70,6 +70,9 @@
       gap: 12px;
       align-items: start;
     }
+    .debug-layout.lifecycle-proof-layout {
+      grid-template-columns: minmax(520px, 1fr);
+    }
     .bottom-layout {
       display: grid;
       grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
@@ -323,10 +326,197 @@
       background: #fbfcfd;
     }
     .scenario-card strong { display: block; margin-bottom: 4px; }
+    .lifecycle-storyboard {
+      border-top: 1px solid var(--line);
+    }
+    .lifecycle-storyboard h2 {
+      border-top: 1px solid var(--line);
+    }
+    .lifecycle-storyboard-body {
+      padding: 10px;
+    }
+    .lifecycle-principle {
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border: 1px solid #d7e0e5;
+      border-radius: 6px;
+      background: #f7f9fa;
+      color: #334148;
+      font-weight: 650;
+      line-height: 1.35;
+    }
+    .lifecycle-trigger-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 0 0 10px;
+    }
+    .lifecycle-trigger {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 8px;
+      border: 1px solid #d8c38a;
+      border-radius: 6px;
+      background: #fffaf0;
+      color: #6f4c00;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .lifecycle-sequence {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 8px;
+      align-items: stretch;
+    }
+    .lifecycle-node {
+      position: relative;
+      min-height: 132px;
+      padding: 10px;
+      border: 1px solid #d8e1e6;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+    .lifecycle-node.event {
+      border-color: #d8c38a;
+      background: #fffaf0;
+    }
+    .lifecycle-node.consumed {
+      border-color: #23a267;
+      background: #e7f7ef;
+    }
+    .lifecycle-node:not(:last-child)::after {
+      content: "->";
+      position: absolute;
+      right: -9px;
+      top: 50%;
+      transform: translate(50%, -50%);
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: #172026;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      z-index: 1;
+    }
+    .lifecycle-node-title {
+      margin-bottom: 8px;
+      font-weight: 850;
+      color: #26343c;
+    }
+    .lifecycle-status-grid {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+    .lifecycle-status-row {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 6px;
+      align-items: baseline;
+      font-size: 12px;
+    }
+    .lifecycle-status-label {
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .lifecycle-status-value {
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+    .lifecycle-status-value.active { color: var(--green); }
+    .lifecycle-status-value.invalidated,
+    .lifecycle-status-value.consumed,
+    .lifecycle-status-value.dead { color: var(--red); }
+    .lifecycle-event-reason {
+      margin-bottom: 8px;
+      color: #6f4c00;
+      font-size: 12px;
+      font-weight: 750;
+      overflow-wrap: anywhere;
+    }
+    .lifecycle-description {
+      color: #334148;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .chart-event-legend {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 0 10px 10px;
+    }
+    .chart-event-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 26px;
+      padding: 4px 8px;
+      border: 1px solid #d7e0e5;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #334148;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .chart-event-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: #172026;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .lifecycle-state-demo {
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+    }
+    .lifecycle-state-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .lifecycle-state-section {
+      border: 1px solid #d8e1e6;
+      border-radius: 6px;
+      background: #ffffff;
+      padding: 12px;
+    }
+    .lifecycle-state-section h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      color: #26343c;
+    }
+    .lifecycle-state-section ul {
+      margin: 0;
+      padding-left: 18px;
+      line-height: 1.55;
+    }
+    .lifecycle-state-section li {
+      margin: 3px 0;
+    }
     @media (max-width: 980px) {
-      .debug-layout, .bottom-layout, .step2-layout, .path-event-grid { grid-template-columns: 1fr; }
+      .debug-layout, .debug-layout.lifecycle-proof-layout, .bottom-layout, .step2-layout, .path-event-grid { grid-template-columns: 1fr; }
       .step2-chart-panel { grid-column: auto; grid-row: auto; }
       .scenario-list { grid-template-columns: 1fr; }
+      .lifecycle-node:not(:last-child)::after {
+        right: 50%;
+        top: auto;
+        bottom: -16px;
+        transform: translate(50%, 50%) rotate(90deg);
+      }
     }
   </style>
 </head>
@@ -349,6 +539,12 @@
     <span class="status">Step 2 Continuation</span>
     <select id="step2ContinuationSelect" aria-label="Step 2 Continuation Case"></select>
     <button id="loadStep2ContinuationBtn">Load Continuation</button>
+    <span class="status">Step 3 Participation</span>
+    <select id="step3ParticipationSelect" aria-label="Step 3 Participation Case"></select>
+    <button id="loadStep3ParticipationBtn">Load Participation</button>
+    <span class="status">Invalidations</span>
+    <select id="invalidationSelect" aria-label="Invalidation Case"></select>
+    <button id="loadInvalidationBtn">Load Invalidation</button>
     <button id="prevBtn">Previous Candle</button>
     <button id="nextBtn">Next Candle</button>
     <button id="resetBtn">Reset</button>
@@ -357,7 +553,7 @@
   </div>
 
   <main>
-    <section class="panel top-levels">
+    <section class="panel top-levels" id="topLevelsPanel">
       <h2>Key Liquidity Levels</h2>
       <div class="meta" id="scenarioMeta"></div>
       <div class="scenario-list" id="stackSummary"></div>
@@ -366,6 +562,19 @@
         <h2>Level Lifecycle</h2>
         <div class="scenario-list" id="levelLifecycleList"></div>
       </div>
+      <div id="lifecycleStoryboardSection" class="lifecycle-storyboard hidden">
+        <h2>Lifecycle Progression</h2>
+        <div class="lifecycle-storyboard-body">
+          <div class="lifecycle-principle">Rejection and continuation are independent opportunities. A level is fully consumed only after both opportunities are dead.</div>
+          <div class="lifecycle-trigger-list" id="lifecycleTriggerList"></div>
+          <div class="lifecycle-sequence" id="lifecycleStoryboardList"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="lifecycleStateDemoSection">
+      <h2>Lifecycle State Transition</h2>
+      <div class="lifecycle-state-demo" id="lifecycleStateDemo"></div>
     </section>
 
     <div class="step2-layout hidden" id="step2DebugLayout">
@@ -451,7 +660,7 @@
     </div>
 
     <div class="debug-layout" id="debugLayout">
-    <section class="panel">
+    <section class="panel" id="rejectionStatePanel">
       <h2>Rejection State</h2>
       <div class="grid" id="rejectionGrid"></div>
       <div class="mini-table">
@@ -464,14 +673,15 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="proofChartPanel">
       <h2>Candles And Liquidity</h2>
       <div class="chart-wrap">
         <canvas id="chart" width="980" height="520"></canvas>
       </div>
+      <div class="chart-event-legend hidden" id="chartEventLegend"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="continuationStatePanel">
       <h2>Continuation State</h2>
       <div class="grid" id="continuationGrid"></div>
       <div class="mini-table">
@@ -515,10 +725,22 @@
   <script>
     const caseDir = "Data/entry_agent_demo_cases";
     const apiBase = "/api/entry-agent-demo";
+    const canonicalInvalidationFixtureIds = new Set([
+      "known_good/invalidations/step2_step4_expiration/rejection_4_candle_expiration",
+      "known_good/invalidations/canonical_step2_invalidation/rejection_4_candle_expiration_short",
+      "known_good/invalidations/canonical_step2_invalidation/rejection_50_line_invalidation_long",
+      "known_good/invalidations/canonical_step2_invalidation/rejection_50_line_invalidation_short",
+      "known_good/invalidations/canonical_step2_invalidation/continuation_4_candle_expiration_long",
+      "known_good/invalidations/canonical_step2_invalidation/continuation_4_candle_expiration_short",
+      "known_good/invalidations/canonical_step2_invalidation/continuation_50_line_invalidation_long",
+      "known_good/invalidations/canonical_step2_invalidation/continuation_50_line_invalidation_short"
+    ]);
     const MIN_CHART_CANDLES = 10;
     const rejectionFields = [
       "pathway_type", "rejection_mode_entered", "active_liquidity_name", "liquidity_price",
       "setup_direction", "current_pathway_control", "current_controlling_mode",
+      "step3_participation_rule_certification", "step3_participation_candle_a_extreme",
+      "step3_close_participation_pass", "step3_wick_participation_pct", "step3_wick_participation_pass",
       "leg1_state", "leg1_reference", "leg1_extreme", "leg1_completed_at",
       "leg1_window_candle_index", "leg1_window_remaining", "rejection_leg1_progress_pct",
       "rejection_leg1_50_reached", "leg2_state", "leg2_candidate_candle",
@@ -528,7 +750,9 @@
     const continuationFields = [
       "pathway_type", "continuation_type", "sr_rs_context", "current_pathway_control",
       "current_controlling_mode", "current_continuation_type", "active_liquidity_name",
-      "liquidity_price", "setup_direction", "leg1_state", "leg1_reference",
+      "liquidity_price", "setup_direction", "step3_participation_rule_certification",
+      "step3_participation_candle_a_extreme", "step3_close_participation_pass",
+      "step3_wick_participation_pct", "step3_wick_participation_pass", "leg1_state", "leg1_reference",
       "leg1_extreme", "leg1_completed_at", "leg2_state", "leg2_candidate_candle",
       "leg2_reference_price", "step5_confirmed", "invalidation_reason",
       "wait_reason", "last_decision"
@@ -537,7 +761,12 @@
       rejection_leg1_progress_pct: "Rejection Leg 1 Progress %",
       rejection_leg1_50_reached: "Rejection Leg 1 50% Reached",
       rejection_leg2_progress_pct: "Rejection Leg 2 Progress %",
-      rejection_leg2_75_reached: "Rejection Leg 2 75% Reached"
+      rejection_leg2_75_reached: "Rejection Leg 2 75% Reached",
+      step3_participation_rule_certification: "Step 3 Participation Certification",
+      step3_participation_candle_a_extreme: "Step 3 Candle A Extreme",
+      step3_close_participation_pass: "Step 3 Close Participation",
+      step3_wick_participation_pct: "Step 3 Wick Participation %",
+      step3_wick_participation_pass: "Step 3 Wick Participation"
     };
     const allStateFields = Array.from(new Set([...rejectionFields, ...continuationFields, "step"]));
     const step2QualificationFields = [
@@ -583,6 +812,7 @@
 
     function chartDisplayCandles(candles) {
       const normalized = (candles || []).map(normalizeCandle);
+      if (hasLifecycleProgression()) return normalized;
       if (normalized.length >= MIN_CHART_CANDLES || !normalized.length) return normalized;
       const first = normalized[0];
       const baseTime = Date.parse(first.timestamp || first.time);
@@ -731,6 +961,8 @@
       const regressionEntries = fixtureEntries.filter(entry => entry.folder === "regressions");
       const step2RejectionEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_rejection/") && !entry.hidden_from_review && !entry.deprecated);
       const step2ContinuationEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step2_continuation/") && !entry.hidden_from_review && !entry.deprecated);
+      const step3ParticipationEntries = fixtureEntries.filter(entry => entry.id.startsWith("known_good/step3_participation/") && !entry.hidden_from_review && !entry.deprecated);
+      const invalidationEntries = fixtureEntries.filter(entry => canonicalInvalidationFixtureIds.has(entry.id) && !entry.hidden_from_review && !entry.deprecated);
       select.innerHTML = rootEntries.map(entry => `<option value="${entry.id}">${entry.id}</option>`).join("");
       if (!select.innerHTML) select.innerHTML = names.filter(name => !name.includes("/")).map(name => `<option value="${name}">${name}</option>`).join("");
       const regressionSelect = document.getElementById("regressionSelect");
@@ -745,6 +977,14 @@
       step2ContinuationSelect.innerHTML = step2ContinuationEntries.map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`).join("");
       step2ContinuationSelect.disabled = step2ContinuationEntries.length === 0;
       document.getElementById("loadStep2ContinuationBtn").disabled = step2ContinuationEntries.length === 0;
+      const step3ParticipationSelect = document.getElementById("step3ParticipationSelect");
+      step3ParticipationSelect.innerHTML = step3ParticipationEntries.map(entry => `<option value="${entry.id}">${formatReviewDropdownLabel(entry)}</option>`).join("");
+      step3ParticipationSelect.disabled = step3ParticipationEntries.length === 0;
+      document.getElementById("loadStep3ParticipationBtn").disabled = step3ParticipationEntries.length === 0;
+      const invalidationSelect = document.getElementById("invalidationSelect");
+      invalidationSelect.innerHTML = invalidationEntries.map(entry => `<option value="${entry.id}">${formatInvalidationDropdownLabel(entry)}</option>`).join("");
+      invalidationSelect.disabled = invalidationEntries.length === 0;
+      document.getElementById("loadInvalidationBtn").disabled = invalidationEntries.length === 0;
     }
 
     function reviewStatus(entryOrFixture) {
@@ -755,6 +995,7 @@
 
     function reviewPrefix(status) {
       const normalized = String(status || "").toUpperCase();
+      if (normalized.includes("CERTIFIED")) return "[CERTIFIED]";
       if (normalized.includes("APPROVED") && !normalized.includes("NOT APPROVED") && !normalized.includes("RETRACTED")) return "[APPROVED]";
       if (normalized.includes("RETRACTED") || normalized.includes("NOT APPROVED")) return "[RETRACTED]";
       if (normalized.includes("BLUEPRINT_CLARIFICATION_NEEDED")) return "[CLARIFY]";
@@ -764,6 +1005,7 @@
 
     function reviewClass(status) {
       const normalized = String(status || "").toUpperCase();
+      if (normalized.includes("CERTIFIED")) return "review-approved";
       if (normalized.includes("APPROVED") && !normalized.includes("NOT APPROVED") && !normalized.includes("RETRACTED")) return "review-approved";
       if (normalized.includes("RETRACTED") || normalized.includes("NOT APPROVED")) return "review-retracted";
       if (normalized.includes("BLUEPRINT_CLARIFICATION_NEEDED")) return "review-pending";
@@ -772,7 +1014,22 @@
     }
 
     function formatReviewDropdownLabel(entry) {
-      return `${reviewPrefix(reviewStatus(entry))} ${entry.id.replace("known_good/step2_rejection/", "").replace("known_good/step2_continuation/", "")}`;
+      return `${reviewPrefix(entry.certification_status || reviewStatus(entry))} ${entry.id.replace("known_good/step2_rejection/", "").replace("known_good/step2_continuation/", "").replace("known_good/step3_participation/", "")}`;
+    }
+
+    function strictReviewStatus(entryOrFixture) {
+      if (!entryOrFixture) return "PENDING REVIEW";
+      if (entryOrFixture.deprecated || entryOrFixture.hidden_from_review) return entryOrFixture.review_status || "RETRACTED / NOT APPROVED";
+      return entryOrFixture.review_status || entryOrFixture.user_review || "PENDING REVIEW";
+    }
+
+    function formatStrictReviewDropdownLabel(entry) {
+      return `${reviewPrefix(strictReviewStatus(entry))} ${entry.case_name || entry.id}`;
+    }
+
+    function formatInvalidationDropdownLabel(entry) {
+      if (entry.review_label) return entry.review_label;
+      return formatStrictReviewDropdownLabel(entry);
     }
 
     async function loadScenario(name) {
@@ -821,9 +1078,23 @@
       const badge = document.getElementById("overallBadge");
       badge.className = `badge ${overallPass ? "pass" : "fail"}`;
       badge.textContent = `${overallPass ? "PASS" : "FAIL"} ${index + 1}/${frames.length}`;
+      if (hasLifecycleProgression()) {
+        document.getElementById("topLevelsPanel").classList.add("hidden");
+        document.getElementById("lifecycleStateDemoSection").classList.remove("hidden");
+        document.getElementById("step2ContinuationLayout").classList.add("hidden");
+        document.getElementById("step2DebugLayout").classList.add("hidden");
+        document.getElementById("continuationStructureLayout").classList.add("hidden");
+        document.getElementById("debugLayout").classList.add("hidden");
+        document.getElementById("bottomLayout").classList.add("hidden");
+        renderLifecycleStateDemo(frame);
+        return;
+      }
+      document.getElementById("topLevelsPanel").classList.remove("hidden");
+      document.getElementById("lifecycleStateDemoSection").classList.add("hidden");
       renderMeta(frame);
       renderLevels();
       renderLevelLifecycle(frame);
+      renderLifecycleStoryboard();
       if (isStep2ContinuationFixture()) {
         document.getElementById("step2ContinuationLayout").classList.remove("hidden");
         document.getElementById("step2DebugLayout").classList.add("hidden");
@@ -853,6 +1124,9 @@
         document.getElementById("step2DebugLayout").classList.add("hidden");
         document.getElementById("continuationStructureLayout").classList.add("hidden");
         document.getElementById("debugLayout").classList.remove("hidden");
+        document.getElementById("debugLayout").classList.remove("lifecycle-proof-layout");
+        document.getElementById("rejectionStatePanel").classList.remove("hidden");
+        document.getElementById("continuationStatePanel").classList.remove("hidden");
         document.getElementById("bottomLayout").classList.remove("hidden");
         renderStatePanels(frame);
         renderComparison(frame);
@@ -892,6 +1166,80 @@
       return Boolean(fixture && (fixture.case_type === "investigation" || (loadedFixtureId || "").startsWith("investigations/")));
     }
 
+    function hasLifecycleProgression() {
+      return Boolean(fixture && Array.isArray(fixture.lifecycle_progression) && fixture.lifecycle_progression.length > 0);
+    }
+
+    function renderLifecycleStateDemo(frame) {
+      const target = document.getElementById("lifecycleStateDemo");
+      if (!target) return;
+      const progression = Array.isArray(fixture.lifecycle_progression) ? fixture.lifecycle_progression : [];
+      const events = Array.isArray(fixture.lifecycle_event_progression) && fixture.lifecycle_event_progression.length
+        ? fixture.lifecycle_event_progression
+        : progression.filter(item => item.type === "event" || item.event || item.event_number || item.number);
+      const contextRows = lifecycleContextRows(frame);
+      const waitingRows = Array.isArray(fixture.lifecycle_waiting_window) ? fixture.lifecycle_waiting_window : [];
+      const finalRows = lifecycleFinalStateRows(progression);
+      target.innerHTML = [
+        lifecycleStateSection("Context", contextRows),
+        `<div class="lifecycle-state-grid">${events.map(item => lifecycleStateSection(lifecycleEventTitle(item), lifecycleEventRows(item))).join("")}</div>`,
+        waitingRows.length ? lifecycleStateSection("Waiting Window", waitingRows.map(item => lifecycleWaitingText(item))) : "",
+        lifecycleStateSection("Final State", finalRows)
+      ].filter(Boolean).join("");
+    }
+
+    function lifecycleContextRows(frame) {
+      if (Array.isArray(fixture.lifecycle_context) && fixture.lifecycle_context.length) return fixture.lifecycle_context;
+      const active = activeLiquidityForFrame(frame);
+      return [
+        `Level: ${active.name || active.display_name} ${active.price}`,
+        fixture.expected_result ? `Result: ${fixture.expected_result}` : ""
+      ].filter(Boolean);
+    }
+
+    function lifecycleEventTitle(item) {
+      const number = item.event_number || item.number;
+      return number ? `Event ${number}` : (item.event || "Event");
+    }
+
+    function lifecycleEventRows(item) {
+      const nestedReason = item.level_lifecycle_event && item.level_lifecycle_event.reason;
+      return [
+        item.label || item.event,
+        item.detail || item.description,
+        item.reason || nestedReason ? `Reason: ${item.reason || nestedReason}` : ""
+      ].filter(Boolean);
+    }
+
+    function lifecycleWaitingText(item) {
+      if (typeof item === "string") return item;
+      const label = item.label || item.candle || item.name || "Waiting";
+      const detail = item.detail || item.description || "";
+      return detail ? `${label}: ${detail}` : label;
+    }
+
+    function lifecycleFinalStateRows(progression) {
+      if (Array.isArray(fixture.lifecycle_final_state) && fixture.lifecycle_final_state.length) return fixture.lifecycle_final_state;
+      const finalState = [...progression].reverse().find(item => item.type === "state" || item.state || item.level_status || item.rejection_status || item.continuation_status);
+      if (!finalState) return [];
+      return [
+        finalState.rejection_status ? `Rejection: ${finalState.rejection_status}` : "",
+        finalState.continuation_status ? `Continuation: ${finalState.continuation_status}` : "",
+        finalState.level_status ? `Level: ${finalState.level_status}` : ""
+      ].filter(Boolean);
+    }
+
+    function lifecycleStateSection(title, rows) {
+      const items = (rows || []).filter(Boolean);
+      if (!items.length) return "";
+      return `
+        <section class="lifecycle-state-section">
+          <h3>${escapeHtml(title)}</h3>
+          <ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </section>
+      `;
+    }
+
     function renderMeta(frame) {
       const active = activeLiquidityForFrame(frame);
       const status = reviewStatus(fixture);
@@ -921,7 +1269,7 @@
       renderStackSummary(active);
       const statusCards = (frames[index] && frames[index].actual && frames[index].actual.level_status_cards) || fixture.level_status_cards || [];
       if (statusCards.length) {
-        statusCards.forEach(card => {
+        displayLevelRows(statusCards, card => card.level_name || card.name).forEach(card => {
           const rejectionReason = card.rejection_invalidation_reason ? ` / ${card.rejection_invalidation_reason}` : "";
           const continuationReason = card.continuation_invalidation_reason ? ` / ${card.continuation_invalidation_reason}` : "";
           const components = (card.components || []).length ? `<br><span>Stack components: ${escapeHtml(card.components.join(", "))}</span>` : "";
@@ -937,7 +1285,7 @@
           `);
         });
       } else {
-        Object.entries(fixture.levels || {}).forEach(([name, level]) => {
+        displayLevelEntries().forEach(([name, level]) => {
           rows.push(`<div class="scenario-card"><strong>${name}</strong><span>${level.side} ${level.price}</span></div>`);
         });
       }
@@ -949,7 +1297,7 @@
         (stackAnalysis.detected_stacks || []).forEach(stack => {
           rows.push(`<div class="scenario-card"><strong>Detected ${stack.liquidity_group}</strong><span>${stack.name} ${stack.side} close=${stack.close_boundary_level} ${stack.close_boundary_price} extreme=${stack.extreme_boundary_level} ${stack.extreme_boundary_price} qualification=${stack.qualification_boundary_price} distance=${formatValue(stack.outer_distance)}</span></div>`);
         });
-        (stackAnalysis.non_stacked_levels || []).forEach(level => {
+        displayLevelRows(stackAnalysis.non_stacked_levels || [], level => level.name).forEach(level => {
           rows.push(`<div class="scenario-card"><strong>Non-stacked ${level.liquidity_group}</strong><span>${level.name} ${level.side} close=${level.close_boundary_price} extreme=${level.extreme_boundary_price} qualification=${level.qualification_boundary_price}</span></div>`);
         });
       }
@@ -958,7 +1306,8 @@
     }
 
     function renderStackSummary(active) {
-      const distances = stackAnalysis ? (stackAnalysis.distances || []) : [];
+      const displayedNonStackedLevels = stackAnalysis ? displayLevelRows(stackAnalysis.non_stacked_levels || [], level => level.name) : [];
+      const distances = stackAnalysis ? displayLevelRows(stackAnalysis.distances || [], item => item.levels || []) : [];
       const distanceText = distances.length
         ? distances.map(item => `${item.levels.join("/")}=${item.distance}${item.within_threshold === null ? "" : item.within_threshold ? " stacked" : " split"}`).join("; ")
         : "-";
@@ -976,7 +1325,7 @@
         ["Stack Threshold", stackAnalysis ? stackAnalysis.stack_threshold : null],
         ["Detected Stack Distance(s)", distanceText],
         ["Detected Stacks", stackAnalysis ? (stackAnalysis.detected_stacks || []).map(stack => stack.name).join("; ") : null],
-        ["Non-stacked Levels", stackAnalysis ? (stackAnalysis.non_stacked_levels || []).map(level => level.name).join("; ") : null]
+        ["Non-stacked Levels", stackAnalysis ? displayedNonStackedLevels.map(level => level.name).join("; ") : null]
       ];
       document.getElementById("stackSummary").innerHTML = cards.map(([label, value]) => {
         return `<div class="scenario-card"><strong>${label}</strong><span>${formatValue(value)}</span></div>`;
@@ -1012,7 +1361,7 @@
         target.innerHTML = `<div class="scenario-card"><strong>No lifecycle data</strong><span>-</span></div>`;
         return;
       }
-      target.innerHTML = rows.map(row => {
+      target.innerHTML = displayLevelRows(rows, row => row.level_name || row.name).map(row => {
         const rejectionReason = row.rejection_invalidation_reason ? ` reason=${row.rejection_invalidation_reason}` : "";
         const continuationReason = row.continuation_invalidation_reason ? ` reason=${row.continuation_invalidation_reason}` : "";
         const levelStatus = row.level_status || "WAIT";
@@ -1027,6 +1376,163 @@
           </div>
         `;
       }).join("");
+    }
+
+    function displayLevelNames() {
+      const configured = Array.isArray(fixture && fixture.teaching_display_levels) ? fixture.teaching_display_levels : [];
+      const names = configured.map(name => String(name)).filter(Boolean);
+      return names.length ? new Set(names) : null;
+    }
+
+    function displayLevelRows(rows, getNames) {
+      const allowed = displayLevelNames();
+      if (!allowed) return rows;
+      return rows.filter(row => {
+        const rawNames = getNames(row);
+        const names = Array.isArray(rawNames) ? rawNames : [rawNames];
+        return names.some(name => allowed.has(String(name)));
+      });
+    }
+
+    function displayLevelEntries() {
+      return displayLevelRows(Object.entries(fixture.levels || {}), ([name]) => name);
+    }
+
+    function renderLifecycleStoryboard() {
+      const progression = fixture && Array.isArray(fixture.lifecycle_progression) ? fixture.lifecycle_progression : [];
+      const section = document.getElementById("lifecycleStoryboardSection");
+      const target = document.getElementById("lifecycleStoryboardList");
+      const triggersTarget = document.getElementById("lifecycleTriggerList");
+      if (!section || !target) return;
+      const showStoryboard = progression.length > 0;
+      section.classList.toggle("hidden", !showStoryboard);
+      if (!showStoryboard) {
+        target.innerHTML = "";
+        if (triggersTarget) triggersTarget.innerHTML = "";
+        return;
+      }
+      const triggers = lifecycleConsumptionTriggers();
+      if (triggersTarget) {
+        triggersTarget.innerHTML = triggers.map(trigger => `<span class="lifecycle-trigger">${escapeHtml(trigger)}</span>`).join("");
+      }
+      target.innerHTML = progression.map(item => renderLifecycleProgressionItem(item)).join("");
+    }
+
+    function renderLifecycleProgressionItem(item) {
+      const eventNumber = item.event_number || item.number;
+      const isEvent = item.type === "event" || item.event || eventNumber;
+      const title = isEvent ? `Event ${eventNumber || ""}` : `State ${item.state || ""}`;
+      const levelStatus = item.level_status || null;
+      const consumedClass = String(levelStatus || "").toUpperCase() === "CONSUMED" ? " consumed" : "";
+      return `
+        <div class="lifecycle-node ${isEvent ? "event" : "state"}${consumedClass}">
+          <div class="lifecycle-node-title">${escapeHtml(title)}</div>
+          <div class="lifecycle-description"><strong>${escapeHtml(item.label)}</strong></div>
+          ${item.detail ? `<div class="lifecycle-description">${escapeHtml(item.detail)}</div>` : ""}
+          ${isEvent ? "" : renderLifecycleStatusRows(item.rejection_status, item.continuation_status, item.level_status)}
+          ${item.description ? `<div class="lifecycle-description">${escapeHtml(item.description)}</div>` : ""}
+        </div>
+      `;
+    }
+
+    function fixedConsumptionStoryboardItems() {
+      return [
+        {
+          type: "state",
+          state: "A",
+          label: "Both Opportunities Available",
+          rejection_status: "AVAILABLE",
+          continuation_status: "AVAILABLE",
+          level_status: "ACTIVE"
+        },
+        {
+          type: "event",
+          number: "1",
+          label: "Step 2 Rejection Activated",
+          detail: "Step 2 Rejection Controlling"
+        },
+        {
+          type: "event",
+          number: "2",
+          label: "Rejection Invalidated",
+          detail: "4-Candle Rule"
+        },
+        {
+          type: "state",
+          state: "B",
+          label: "Rejection Consumed",
+          detail: "Continuation Still Available",
+          rejection_status: "DEAD",
+          continuation_status: "AVAILABLE",
+          level_status: "ACTIVE"
+        },
+        {
+          type: "event",
+          number: "3",
+          label: "Step 2 Continuation Activated",
+          detail: "Step 2 Continuation Controlling"
+        },
+        {
+          type: "event",
+          number: "4",
+          label: "Step 4 Continuation Activated",
+          detail: "Continuation Opportunity Consumed"
+        },
+        {
+          type: "state",
+          state: "C",
+          label: "Level Consumed",
+          rejection_status: "DEAD",
+          continuation_status: "DEAD",
+          level_status: "CONSUMED"
+        }
+      ];
+    }
+
+    function lifecycleConsumptionTriggers() {
+      const reasons = lifecycleConsumptionReasons();
+      const labels = reasons.map(lifecycleReasonLabel).filter(Boolean);
+      return Array.from(new Set(labels));
+    }
+
+    function lifecycleConsumptionReasons() {
+      const events = Array.isArray(fixture && fixture.level_lifecycle_events) ? fixture.level_lifecycle_events : [];
+      const progressionEvents = Array.isArray(fixture && fixture.lifecycle_progression)
+        ? fixture.lifecycle_progression.map(item => item.level_lifecycle_event).filter(Boolean)
+        : [];
+      return events.concat(progressionEvents)
+        .map(event => event && event.reason)
+        .filter(Boolean);
+    }
+
+    function lifecycleReasonLabel(reason) {
+      const normalized = String(reason || "").toUpperCase();
+      if (normalized.includes("4_CANDLE") || normalized.includes("FOUR_CANDLE")) return "4 Candle Rule";
+      if (normalized.includes("50")) return "50% Rule";
+      if (normalized.includes("730") || normalized.includes("7:30") || normalized.includes("TIME_CUTOFF")) return "7:30 AM Rule";
+      return null;
+    }
+
+    function renderLifecycleStatusRows(rejectionStatus, continuationStatus, levelStatus) {
+      const rows = [
+        ["Rejection", rejectionStatus],
+        ["Continuation", continuationStatus],
+        ["Level", levelStatus]
+      ].filter(([, value]) => value !== null && value !== undefined);
+      if (!rows.length) return "";
+      return `
+        <div class="lifecycle-status-grid">
+          ${rows.map(([label, value]) => {
+            const className = String(value).toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+            return `
+              <div class="lifecycle-status-row">
+                <div class="lifecycle-status-label">${escapeHtml(label)}</div>
+                <div class="lifecycle-status-value ${escapeHtml(className)}">${escapeHtml(value)}</div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
     }
 
     function formatProgressValue(field, value) {
@@ -1786,16 +2292,26 @@
       ctx.fillStyle = "#fbfcfd";
       ctx.fillRect(0, 0, w, h);
       const fixtureCandles = (fixture.candles || []).map(normalizeCandle);
-      const candles = chartDisplayCandles(fixtureCandles);
-      const displayOffset = Math.max(0, candles.length - fixtureCandles.length);
+      const chartSourceCandles = fixture && fixture.scope === "step3_participation_demo" && Array.isArray(fixture.chart_context_candles) && fixture.chart_context_candles.length
+        ? fixture.chart_context_candles.map(normalizeCandle)
+        : fixtureCandles;
+      const candles = chartDisplayCandles(chartSourceCandles);
+      const displayOffset = Math.max(0, candles.length - chartSourceCandles.length);
+      const fixtureIndexByTimestamp = new Map(fixtureCandles.map((item, itemIndex) => [item.timestamp, itemIndex]));
+      const currentTimestamp = normalizeCandle(frame.candle).timestamp;
+      const currentDisplayIndex = candles.findIndex(item => item.timestamp === currentTimestamp);
+      const guideRows = measurementGuides();
+      const closeGuideRows = closeReferenceGuides();
       const prices = [];
       candles.forEach(c => prices.push(c.open, c.high, c.low, c.close));
-      Object.values(fixture.levels || {}).forEach(level => prices.push(level.price));
+      displayLevelEntries().forEach(([, level]) => prices.push(level.price));
+      guideRows.forEach(guide => prices.push(guide.open_price, guide.extreme_price));
+      closeGuideRows.forEach(guide => prices.push(guide.price));
       const min = Math.min(...prices) - 1;
       const max = Math.max(...prices) + 1;
       const xStep = (w - 90) / Math.max(1, candles.length);
       const x0 = 58;
-      const y = price => h - 34 - ((price - min) / (max - min)) * (h - 74);
+      const y = price => h - 90 - ((price - min) / (max - min)) * (h - 150);
 
       ctx.strokeStyle = "#d8e0e4";
       ctx.lineWidth = 1;
@@ -1804,15 +2320,33 @@
         ctx.beginPath(); ctx.moveTo(48, yy); ctx.lineTo(w - 16, yy); ctx.stroke();
       }
 
-      Object.entries(fixture.levels || {}).forEach(([name, level]) => {
+      displayLevelEntries().forEach(([name, level]) => {
         const yy = y(level.price);
         ctx.strokeStyle = ["PMH", "PML"].includes(name) ? "#1f6f99" : ["ONH", "ONL"].includes(name) ? "#946b16" : "#5f6c72";
         ctx.setLineDash([6, 4]);
         ctx.beginPath(); ctx.moveTo(42, yy); ctx.lineTo(w - 18, yy); ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = ctx.strokeStyle;
+        ctx.font = "bold 16px Segoe UI, Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
         ctx.fillText(`${name} ${level.price}`, 8, yy - 4);
       });
+
+      const fiftyLine = lifecycleFiftyPercentLine();
+      if (fiftyLine) {
+        const yy = y(fiftyLine.price);
+        ctx.strokeStyle = "#6f4aa3";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath(); ctx.moveTo(42, yy); ctx.lineTo(w - 18, yy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#6f4aa3";
+        ctx.font = "bold 15px Segoe UI, Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText(fiftyLine.label, 8, yy - 6);
+      }
 
       (fixture.stacks || []).forEach(stack => {
         const yy = y(stack.price);
@@ -1823,13 +2357,15 @@
         ctx.fillText(`STACK ${stack.name} (${(stack.components || []).join("/")})`, w - 230, yy - 6);
       });
 
+      const isStep3Participation = fixture && fixture.scope === "step3_participation_demo";
       const markers = stepMarkers();
+      const countdownLabels = lifecycleCountdownLabels();
       candles.forEach((candle, i) => {
         const x = x0 + i * xStep + xStep / 2;
         const up = candle.close >= candle.open;
         ctx.strokeStyle = up ? "#147a50" : "#b73737";
         ctx.fillStyle = ctx.strokeStyle;
-        const isCurrent = i === index + displayOffset;
+        const isCurrent = currentDisplayIndex >= 0 ? i === currentDisplayIndex : i === index + displayOffset;
         ctx.lineWidth = isCurrent ? 4 : 2;
         ctx.beginPath(); ctx.moveTo(x, y(candle.high)); ctx.lineTo(x, y(candle.low)); ctx.stroke();
         const top = y(Math.max(candle.open, candle.close));
@@ -1840,19 +2376,220 @@
           ctx.lineWidth = 2;
           ctx.strokeRect(x - 14, y(candle.high) - 8, 28, y(candle.low) - y(candle.high) + 16);
         }
-        const marker = markers[i - displayOffset];
-        if (marker) {
-          const label = marker;
-          ctx.fillStyle = label === "S2" ? "#246b9f" : label === "S4" ? "#8c3d7a" : "#a36b00";
-          ctx.fillRect(x - 13, y(candle.high) - 28, 26, 18);
+        const fixtureIndex = fixtureIndexByTimestamp.has(candle.timestamp) ? fixtureIndexByTimestamp.get(candle.timestamp) : i - displayOffset;
+        const markerItems = isStep3Participation ? [] : markerItemsForCandle(markers, fixtureIndex);
+        markerItems.forEach((marker, markerIndex) => {
+          const label = marker.label || marker;
+          const title = marker.title || label;
+          const markerText = /^event\s+/i.test(String(label)) ? String(label) : `Event ${label}`;
+          const detailText = String(title);
+          ctx.font = "bold 13px Segoe UI, Arial";
+          const badgeWidth = Math.max(96, Math.min(230, Math.max(ctx.measureText(markerText).width, ctx.measureText(detailText).width) + 18));
+          const badgeHeight = 40;
+          const markerY = Math.max(8 + markerIndex * 46, y(candle.high) - 62 - markerIndex * 46);
+          const markerX = Math.max(48, Math.min(w - 18 - badgeWidth, x - badgeWidth / 2));
+          ctx.fillStyle = marker.color || markerColor(label);
+          ctx.fillRect(markerX, markerY, badgeWidth, badgeHeight);
           ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 13px Segoe UI, Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(markerText, markerX + badgeWidth / 2, markerY + 12);
           ctx.font = "bold 11px Segoe UI, Arial";
-          ctx.fillText(label, x - 8, y(candle.high) - 15);
-          ctx.font = "10px Segoe UI, Arial";
+          ctx.fillText(detailText, markerX + badgeWidth / 2, markerY + 29);
+          ctx.textAlign = "start";
+          ctx.textBaseline = "alphabetic";
+          ctx.font = "13px Segoe UI, Arial";
+        });
+        if (markerItems.length) {
+          ctx.strokeStyle = "#172026";
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(x, y(candle.high) - 10);
+          ctx.lineTo(x, Math.max(10, y(candle.high) - 68 - (markerItems.length - 1) * 46));
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        const countdownLabel = countdownLabels.get(fixtureIndex);
+        if (countdownLabel) {
+          const labelText = String(countdownLabel);
+          ctx.font = "bold 14px Segoe UI, Arial";
+          const badgeWidth = Math.max(82, ctx.measureText(labelText).width + 18);
+          const badgeHeight = 26;
+          const badgeX = Math.max(48, Math.min(w - 18 - badgeWidth, x - badgeWidth / 2));
+          const badgeY = h - 64;
+          ctx.fillStyle = "#fff7e4";
+          ctx.strokeStyle = "#a36b00";
+          ctx.lineWidth = 1;
+          ctx.fillRect(badgeX, badgeY, badgeWidth, badgeHeight);
+          ctx.strokeRect(badgeX, badgeY, badgeWidth, badgeHeight);
+          ctx.fillStyle = "#7a5100";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(labelText, badgeX + badgeWidth / 2, badgeY + badgeHeight / 2);
+          ctx.textAlign = "start";
+          ctx.textBaseline = "alphabetic";
         }
         ctx.fillStyle = "#52616a";
-        ctx.fillText(String(i + 1), x - 4, h - 12);
+        ctx.font = "bold 14px Segoe UI, Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText(String(i + 1), x, h - 12);
+        ctx.textAlign = "start";
       });
+      drawCloseReferenceGuides(ctx, closeGuideRows, y, w);
+      drawMeasurementGuides(ctx, guideRows, candles, y, candleIndex => x0 + candleIndex * xStep + xStep / 2, displayOffset, w);
+      if (isStep3Participation) {
+        drawStep3ParticipationLabels(ctx, candles, y, candleIndex => x0 + candleIndex * xStep + xStep / 2, displayOffset, w, h);
+      }
+      renderChartEventLegend();
+    }
+
+    function measurementGuides() {
+      return Array.isArray(fixture && fixture.measurement_guides) ? fixture.measurement_guides : [];
+    }
+
+    function closeReferenceGuides() {
+      return Array.isArray(fixture && fixture.close_reference_guides) ? fixture.close_reference_guides : [];
+    }
+
+    function drawCloseReferenceGuides(ctx, guides, y, width) {
+      guides.forEach(guide => {
+        const price = Number(guide.price);
+        if (!Number.isFinite(price)) return;
+        const yy = y(price);
+        ctx.save();
+        ctx.strokeStyle = "#24313a";
+        ctx.fillStyle = "#24313a";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 5]);
+        ctx.beginPath();
+        ctx.moveTo(42, yy);
+        ctx.lineTo(width - 18, yy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = "bold 13px Segoe UI, Arial";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(String(guide.label || "Candle A Extreme Close"), width - 24, yy - 4);
+        ctx.restore();
+      });
+    }
+
+    function drawMeasurementGuides(ctx, guides, candles, y, xFor, displayOffset, width) {
+      guides.forEach(guide => {
+        const fixtureCandles = (fixture.candles || []).map(normalizeCandle);
+        const source = fixtureCandles[Math.max(0, Math.min(fixtureCandles.length - 1, Number(guide.candle_index || 0)))] || {};
+        let candleIndex = candles.findIndex(item => item.timestamp === source.timestamp);
+        if (candleIndex < 0) candleIndex = Math.max(0, Number(guide.candle_index || 0) + displayOffset);
+        if (candleIndex < 0 || candleIndex >= candles.length) return;
+        const openPrice = Number(guide.open_price);
+        const extremePrice = Number(guide.extreme_price);
+        if (!Number.isFinite(openPrice) || !Number.isFinite(extremePrice)) return;
+        const yOpen = y(openPrice);
+        const yExtreme = y(extremePrice);
+        const topY = Math.min(yOpen, yExtreme);
+        const bottomY = Math.max(yOpen, yExtreme);
+        const candleX = xFor(candleIndex);
+        const guideLeft = Math.max(58, candleX - 46);
+        const guideRight = Math.min(width - 28, candleX + 72);
+        const bracketX = Math.min(width - 42, candleX + 44);
+        ctx.save();
+        ctx.strokeStyle = "#172026";
+        ctx.fillStyle = "#172026";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 5]);
+        ctx.beginPath();
+        ctx.moveTo(guideLeft, yOpen);
+        ctx.lineTo(guideRight, yOpen);
+        ctx.moveTo(guideLeft, yExtreme);
+        ctx.lineTo(guideRight, yExtreme);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(bracketX, topY);
+        ctx.lineTo(bracketX, bottomY);
+        ctx.moveTo(bracketX - 7, topY);
+        ctx.lineTo(bracketX + 7, topY);
+        ctx.moveTo(bracketX - 7, bottomY);
+        ctx.lineTo(bracketX + 7, bottomY);
+        ctx.stroke();
+        ctx.font = "bold 13px Segoe UI, Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(guide.label || ""), bracketX + 10, (topY + bottomY) / 2);
+        ctx.restore();
+      });
+    }
+
+    function drawStep3ParticipationLabels(ctx, candles, y, xFor, displayOffset, width, height) {
+      const fixtureCandles = (fixture.candles || []).map(normalizeCandle);
+      if (fixtureCandles.length < 2) return;
+      const direction = String(fixture.setup_direction || "").toUpperCase();
+      const labelFor = (fixtureIndex) => {
+        if (fixtureIndex === 0) return "A";
+        if (fixtureIndex === 1) return "B";
+        return "";
+      };
+      fixtureCandles.slice(0, 2).forEach((source, fixtureIndex) => {
+        let candleIndex = candles.findIndex(item => item.timestamp === source.timestamp);
+        if (candleIndex < 0) candleIndex = fixtureIndex + displayOffset;
+        if (candleIndex < 0 || candleIndex >= candles.length) return;
+        const x = xFor(candleIndex);
+        const label = labelFor(fixtureIndex);
+        const labelAbove = direction === "LONG";
+        const labelY = labelAbove ? y(source.high) - 18 : y(source.low) + 18;
+        drawStep3Badge(ctx, label, x, Math.max(18, Math.min(height - 88, labelY)), "#24313a", 26);
+      });
+
+      const candleB = fixtureCandles[1];
+      let candleBIndex = candles.findIndex(item => item.timestamp === candleB.timestamp);
+      if (candleBIndex < 0) candleBIndex = 1 + displayOffset;
+      if (candleBIndex < 0 || candleBIndex >= candles.length) return;
+      const resultLabel = String(candleB.highlight_label || "");
+      if (!resultLabel) return;
+      const resultY = direction === "SHORT" ? 18 : height - 76;
+      drawStep3Badge(ctx, resultLabel, xFor(candleBIndex), resultY, resultLabel.includes("PASS") ? "#147a50" : "#b73737");
+    }
+
+    function drawStep3Badge(ctx, text, centerX, centerY, fill, minWidth = 84) {
+      const label = String(text || "");
+      if (!label) return;
+      ctx.save();
+      ctx.font = "bold 12px Segoe UI, Arial";
+      const badgeWidth = Math.max(minWidth, ctx.measureText(label).width + 16);
+      const badgeHeight = 22;
+      const badgeX = Math.max(48, Math.min(ctx.canvas.width - 18 - badgeWidth, centerX - badgeWidth / 2));
+      const badgeY = Math.max(8, Math.min(ctx.canvas.height - 86, centerY - badgeHeight / 2));
+      ctx.fillStyle = fill;
+      ctx.fillRect(badgeX, badgeY, badgeWidth, badgeHeight);
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, badgeX + badgeWidth / 2, badgeY + badgeHeight / 2);
+      ctx.restore();
+    }
+
+    function lifecycleCountdownLabels() {
+      const labels = new Map();
+      const rows = Array.isArray(fixture && fixture.lifecycle_chart_countdown) ? fixture.lifecycle_chart_countdown : [];
+      rows.forEach(row => {
+        const candleIndex = Number(row && row.candle_index);
+        if (Number.isFinite(candleIndex) && row.label) labels.set(Math.round(candleIndex), row.label);
+      });
+      return labels;
+    }
+
+    function lifecycleFiftyPercentLine() {
+      if (!hasLifecycleProgression()) return null;
+      const levels = fixture && fixture.levels ? fixture.levels : {};
+      const pmh = levels.PMH && Number(levels.PMH.price);
+      const onh = levels.ONH && Number(levels.ONH.price);
+      if (!Number.isFinite(pmh) || !Number.isFinite(onh)) return null;
+      return {
+        price: (pmh + onh) / 2,
+        label: "50% between PMH and ONH"
+      };
     }
 
     function drawStep2Chart(frame, canvasId = "step2Chart") {
@@ -2106,14 +2843,89 @@
     }
 
     function stepMarkers() {
+      if (hasLifecycleProgression()) return lifecycleChartMarkers();
       const markers = {};
       const s2 = frames.find(item => item.actual && item.actual.rejection_mode_entered === true);
       const s4 = frames.find(item => item.actual && item.actual.leg1_state === "COMPLETE");
       const s5 = frames.find(item => item.actual && ["CONFIRMED", "COMPLETE", "VALIDATED"].includes(item.actual.leg2_state));
+      if (fixture && fixture.scope === "step3_participation_demo") return markers;
       if (s2) markers[s2.index] = "S2";
       if (s4) markers[s4.index] = "S4";
       if (s5) markers[s5.index] = "S5";
       return markers;
+    }
+
+    function lifecycleChartMarkers() {
+      const markers = {};
+      explicitLifecycleChartEvents().forEach(event => {
+        addChartMarker(
+          markers,
+          clampFrameIndex(event.candle_index, Math.max(0, frames.length - 1)),
+          String(event.event_number || event.number || event.label || ""),
+          event.label || lifecycleStoryboardEventLabel(event.event_number || event.number)
+        );
+      });
+      return markers;
+    }
+
+    function explicitLifecycleChartEvents() {
+      const events = Array.isArray(fixture && fixture.lifecycle_chart_events) ? fixture.lifecycle_chart_events : [];
+      return events.filter(event => {
+        const candleIndex = Number(event && event.candle_index);
+        return event && Number.isFinite(candleIndex);
+      });
+    }
+
+    function clampFrameIndex(value, maxIndex) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return 0;
+      return Math.max(0, Math.min(Math.round(number), maxIndex));
+    }
+
+    function addChartMarker(markers, index, label, title) {
+      if (!markers[index]) markers[index] = [];
+      markers[index].push({label, title, color: "#172026"});
+    }
+
+    function markerItemsForCandle(markers, index) {
+      const value = markers[index];
+      if (!value) return [];
+      return Array.isArray(value) ? value : [{label: value}];
+    }
+
+    function markerColor(label) {
+      if (label === "S2") return "#246b9f";
+      if (label === "S4") return "#8c3d7a";
+      if (label === "S5") return "#a36b00";
+      return "#172026";
+    }
+
+    function renderChartEventLegend() {
+      const target = document.getElementById("chartEventLegend");
+      if (!target) return;
+      const explicitEvents = explicitLifecycleChartEvents();
+      const items = hasLifecycleProgression() && explicitEvents.length
+        ? explicitEvents.map(event => ({
+            number: event.event_number || event.number || event.label,
+            label: event.label || lifecycleStoryboardEventLabel(event.event_number || event.number)
+          }))
+        : [];
+      target.classList.toggle("hidden", items.length === 0);
+      target.innerHTML = items.map(item => `
+        <span class="chart-event-item">
+          <span class="chart-event-number">${escapeHtml(item.number)}</span>
+          <span>${escapeHtml(item.label)}</span>
+        </span>
+      `).join("");
+    }
+
+    function lifecycleStoryboardEventLabel(number) {
+      const progression = Array.isArray(fixture && fixture.lifecycle_progression) ? fixture.lifecycle_progression : [];
+      const item = progression.find(candidate => {
+        const candidateNumber = candidate.event_number || candidate.number;
+        return (candidate.type === "event" || candidate.event || candidateNumber) && String(candidateNumber) === String(number);
+      });
+      return item ? item.label : "";
     }
 
     function formatValue(value) {
@@ -2133,6 +2945,14 @@
     });
     document.getElementById("loadStep2ContinuationBtn").addEventListener("click", () => {
       const value = document.getElementById("step2ContinuationSelect").value;
+      if (value) loadScenario(value);
+    });
+    document.getElementById("loadStep3ParticipationBtn").addEventListener("click", () => {
+      const value = document.getElementById("step3ParticipationSelect").value;
+      if (value) loadScenario(value);
+    });
+    document.getElementById("loadInvalidationBtn").addEventListener("click", () => {
+      const value = document.getElementById("invalidationSelect").value;
       if (value) loadScenario(value);
     });
     document.getElementById("prevBtn").addEventListener("click", () => setIndex(index - 1));

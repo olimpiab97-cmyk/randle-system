@@ -1,0 +1,34 @@
+{
+  "case_name": "Invalidation - Continuation next same-side liquidity touch",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Continuation Invalidations",
+  "scenario_type": "continuation",
+  "continuation_type": "R/S",
+  "expected_result": "Only the continuation opportunity is invalidated; rejection remains available.",
+  "symbol": "NQ",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 80.0,
+  "levels": {
+    "PMH": {"price": 100.0, "side": "HIGH"},
+    "ONH": {"price": 104.0, "side": "HIGH"},
+    "PML": {"price": 80.0, "side": "LOW"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"},
+  "candles": [
+    {"time": "2026-06-11T14:20:00Z", "open": 99.5, "high": 104.25, "low": 99.25, "close": 103.75, "highlight_label": "Next touch"}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 104.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "NEXT_LEVEL_TOUCH", "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 80.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]}
+  ],
+  "demo_display_text": "Continuation invalidated: next same-side liquidity touch. Rejection remains available.",
+  "notes": "This uses the harness continuation same-side touch lifecycle path."
+}

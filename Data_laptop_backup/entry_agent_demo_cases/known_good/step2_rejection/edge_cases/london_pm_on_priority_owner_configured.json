@@ -1,0 +1,90 @@
+{
+    "case_name":  "Step 2 rejection edge - london pm on priority owner configured",
+    "case_type":  "known_good",
+    "review_status":  "APPROVED",
+    "user_review":  "APPROVED",
+    "scope":  "step2_rejection_only",
+    "scenario_type":  "rejection",
+    "direction":  "LONG",
+    "level_type":  "stacked",
+    "expected_result":  "valid_step2",
+    "why":  "Nearby same-side LL is included in the configured PML/ONL/LL stack; Step 2 qualifies only after close beyond the LL extreme.",
+    "symbol":  "NQ",
+    "date":  "2026-05-28",
+    "tick_size":  0.25,
+    "atr_1m_14":  20.0,
+    "nearest_opposing_liquidity":  120.0,
+    "levels":  {
+                   "PML":  {
+                               "price":  100.0,
+                               "side":  "LOW"
+                           },
+                   "ONL":  {
+                               "price":  99.0,
+                               "side":  "LOW"
+                           },
+                   "LL":  {
+                              "price":  98.5,
+                              "side":  "LOW"
+                          },
+                   "ONH":  {
+                               "price":  120.0,
+                               "side":  "HIGH"
+                           }
+               },
+    "stacks":  [
+                   {
+                       "name":  "PML/ONL/LL",
+                       "components":  [
+                                          "PML",
+                                          "ONL",
+                                          "LL"
+                                      ],
+                       "price":  98.5,
+                       "side":  "LOW",
+                       "close_boundary_level":  "PML",
+                       "close_boundary_price":  100,
+                       "extreme_boundary_level":  "LL",
+                       "extreme_boundary_price":  98.5,
+                       "qualification_boundary_price":  98.5
+                   }
+               ],
+    "active_liquidity":  {
+                             "name":  "PML/ONL/LL",
+                             "components":  [
+                                                "PML",
+                                                "ONL",
+                                                "LL"
+                                            ],
+                             "price":  98.5,
+                             "side":  "LOW",
+                             "close_boundary_level":  "PML",
+                             "close_boundary_price":  100,
+                             "extreme_boundary_level":  "LL",
+                             "extreme_boundary_price":  98.5,
+                             "qualification_boundary_price":  98.5
+                         },
+    "candles":  [
+                    {
+                        "time":  "2026-05-28T13:59:00Z",
+                        "open":  99,
+                        "high":  99.25,
+                        "low":  98,
+                        "close":  98.25
+                    }
+                ],
+    "expected":  [
+                     {
+                         "time":  "2026-05-28T13:59:00Z",
+                         "step":  "Step 2",
+                         "pathway_type":  "Rejection",
+                         "current_pathway_control":  "rejection",
+                         "rejection_mode_entered":  true,
+                         "active_liquidity_name":  "PML/ONL/LL Liquidity",
+                         "setup_direction":  "LONG",
+                         "leg1_state":  "WAIT",
+                         "leg2_state":  "WAIT"
+                     }
+                 ],
+    "notes":  "Step 2 rejection-only fixture. Nearby same-side LL is explicitly included in the PML/ONL/LL stack; no manual active_liquidity override excludes nearby stack candidates. No Leg 1, Leg 2, Step 6, trade manager, broker, or order behavior is evaluated."
+}

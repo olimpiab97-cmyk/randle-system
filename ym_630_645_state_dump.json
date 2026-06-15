@@ -1,0 +1,2943 @@
+{
+  "symbol": "YMM6",
+  "normalized_symbol": "YM",
+  "requested_symbol": "YM",
+  "latest_price": 51238.0,
+  "latest_bar_time": "2026-06-09T14:09:00Z",
+  "liquidity": {
+    "nearest_level_above": {
+      "name": "YH",
+      "price": 51331.0
+    },
+    "nearest_level_below": {
+      "name": "PMH",
+      "price": 51094.0
+    },
+    "touched_levels": [],
+    "current_location": "BETWEEN_LEVELS",
+    "tick_size": 1.0
+  },
+  "step_2_1a": {
+    "step_2_activated": true,
+    "blocked": false,
+    "candle_a": {
+      "open": 51177.0,
+      "high": 51210.0,
+      "low": 51177.0,
+      "close": 51210.0,
+      "timestamp": "2026-06-09T14:06:00Z",
+      "active_level": "ONH",
+      "level_price": 51094.0
+    },
+    "active_level": "ONH",
+    "level_price": 51094.0,
+    "side": "upper",
+    "tick_size": 1.0,
+    "expiration_candles": 5,
+    "pre_activation_probe_boundary": {
+      "active": false,
+      "side": "upper",
+      "source_level": "ONH",
+      "boundary_price": null,
+      "detected_at_index": null
+    },
+    "events": [
+      {
+        "event": "step_2_activated",
+        "timestamp": "2026-06-09T14:06:00Z",
+        "boundary_price": 51094.0,
+        "source": "level"
+      }
+    ],
+    "next_same_side_liquidity": {
+      "name": "YH",
+      "price": 51331.0,
+      "side": "upper",
+      "group": null
+    },
+    "pre_confirmation_50_percent_target_price": 51331.0,
+    "available": true,
+    "reason": "Step 2 already locked for this liquidity/pathway; preserving original activation owner.",
+    "next_candle_index": 542,
+    "last_evaluated_bar_time": "2026-06-09T14:09:00Z",
+    "candle_index": 541,
+    "active_liquidity_group": {
+      "name": "HIGH 1",
+      "components": [
+        "PMH",
+        "ONH"
+      ],
+      "prices": {
+        "ONH": 51094.0,
+        "PMH": 51094.0
+      },
+      "side": "upper",
+      "display_name": "PMH/ONH Liquidity",
+      "close_boundary": 51094.0,
+      "extreme_boundary": 51094.0,
+      "low": 51094.0,
+      "high": 51094.0,
+      "extreme_component": "ONH",
+      "close_component": "PMH"
+    },
+    "continuation_controlling_structure_high": 51232.0,
+    "continuation_controlling_structure_low": 51187.0,
+    "continuation_controlling_structure_start_time": "2026-06-09T13:43:00Z",
+    "continuation_controlling_structure_end_time": "2026-06-09T13:45:00Z",
+    "continuation_controlling_structure_source_step": "Step 2",
+    "last_interacted_liquidity": {
+      "name": "ONH",
+      "price": 51094.0,
+      "display_name": "PMH/ONH Liquidity",
+      "side": "upper",
+      "group": {
+        "name": "HIGH 1",
+        "components": [
+          "PMH",
+          "ONH"
+        ],
+        "prices": {
+          "ONH": 51094.0,
+          "PMH": 51094.0
+        },
+        "side": "upper",
+        "display_name": "PMH/ONH Liquidity",
+        "close_boundary": 51094.0,
+        "extreme_boundary": 51094.0,
+        "low": 51094.0,
+        "high": 51094.0,
+        "extreme_component": "ONH",
+        "close_component": "PMH"
+      },
+      "interacted_at": "2026-06-09T14:10:51.035842+00:00"
+    },
+    "step2_locked_owner": {
+      "pathway": "rejection",
+      "active_liquidity": {
+        "name": "ONH",
+        "price": 51094.0,
+        "display_name": "PMH/ONH Liquidity",
+        "side": "upper",
+        "group": {
+          "name": "HIGH 1",
+          "components": [
+            "PMH",
+            "ONH"
+          ],
+          "prices": {
+            "ONH": 51094.0,
+            "PMH": 51094.0
+          },
+          "side": "upper",
+          "display_name": "PMH/ONH Liquidity",
+          "close_boundary": 51094.0,
+          "extreme_boundary": 51094.0,
+          "low": 51094.0,
+          "high": 51094.0,
+          "extreme_component": "ONH",
+          "close_component": "PMH"
+        }
+      },
+      "active_liquidity_name": "ONH",
+      "active_liquidity_price": 51094.0,
+      "active_liquidity_display_name": "PMH/ONH Liquidity",
+      "active_liquidity_group": {
+        "name": "HIGH 1",
+        "components": [
+          "PMH",
+          "ONH"
+        ],
+        "prices": {
+          "ONH": 51094.0,
+          "PMH": 51094.0
+        },
+        "side": "upper",
+        "display_name": "PMH/ONH Liquidity",
+        "close_boundary": 51094.0,
+        "extreme_boundary": 51094.0,
+        "low": 51094.0,
+        "high": 51094.0,
+        "extreme_component": "ONH",
+        "close_component": "PMH"
+      },
+      "liquidity_group": "HIGH 1",
+      "stack_components": [
+        "PMH",
+        "ONH"
+      ],
+      "close_boundary": 51094.0,
+      "extreme_boundary": 51094.0,
+      "setup_direction": "SHORT",
+      "side": "upper",
+      "candle_a": {
+        "open": 51177.0,
+        "high": 51210.0,
+        "low": 51177.0,
+        "close": 51210.0,
+        "timestamp": "2026-06-09T14:06:00Z",
+        "active_level": "ONH",
+        "level_price": 51094.0
+      },
+      "activated_at": "2026-06-09T14:06:00Z"
+    },
+    "consumed_liquidity_levels": [
+      {
+        "key": "ONH:49703.0",
+        "name": "ONH",
+        "price": 49703.0,
+        "side": "upper",
+        "exhaustion_type": "no_leg1_50_percent_exhaustion",
+        "exhausted_by": "YH",
+        "exhausted_by_price": 49851.0,
+        "exhausted_at_candle_time": "2026-05-18T13:52:00Z",
+        "progress_fraction": 0.5135135135135135,
+        "threshold_fraction": 0.5,
+        "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+      },
+      {
+        "key": "ONL:49583.0",
+        "name": "ONL",
+        "price": 49583.0,
+        "side": "lower",
+        "exhaustion_type": "no_leg1_50_percent_exhaustion",
+        "exhausted_by": "YL",
+        "exhausted_by_price": 49428.0,
+        "exhausted_at_candle_time": "2026-05-19T13:30:00Z",
+        "progress_fraction": 0.535483870967742,
+        "threshold_fraction": 0.5,
+        "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+      },
+      {
+        "key": "PML:49543.0",
+        "name": "PML",
+        "price": 49543.0,
+        "side": "lower",
+        "exhaustion_type": "no_leg1_50_percent_exhaustion",
+        "exhausted_by": "ONL",
+        "exhausted_by_price": 49294.0,
+        "exhausted_at_candle_time": "2026-05-20T13:32:00Z",
+        "progress_fraction": 0.6104417670682731,
+        "threshold_fraction": 0.5,
+        "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+      },
+      {
+        "key": "LL:49404.0",
+        "name": "LL",
+        "price": 49404.0,
+        "side": "lower",
+        "exhaustion_type": "no_leg1_50_percent_exhaustion",
+        "exhausted_by": "ONL",
+        "exhausted_by_price": 49294.0,
+        "exhausted_at_candle_time": "2026-05-20T13:35:00Z",
+        "progress_fraction": 0.8454545454545455,
+        "threshold_fraction": 0.5,
+        "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+      },
+      {
+        "key": "ONH:49702.0",
+        "name": "ONH",
+        "price": 49702.0,
+        "side": "upper",
+        "exhaustion_type": "no_leg1_50_percent_exhaustion",
+        "exhausted_by": "PMH",
+        "exhausted_by_price": 50025.0,
+        "exhausted_at_candle_time": "2026-05-21T13:10:00Z",
+        "progress_fraction": 0.7492260061919505,
+        "threshold_fraction": 0.5,
+        "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+      },
+      {
+        "name": "LH",
+        "price": 50724.0,
+        "key": "LH:50724.0",
+        "invalidated_at": "2026-05-28T15:11:04.243749+00:00",
+        "invalidation_source_candle_time": "2026-05-28T15:10:00Z",
+        "reason": "Anchor Extreme close invalidation occurred before Leg 2 activation."
+      },
+      {
+        "key": "PMH:50960.0",
+        "name": "PMH",
+        "price": 50960.0,
+        "side": "upper",
+        "exhaustion_type": "no_leg1_50_percent_exhaustion",
+        "exhausted_by": "YH",
+        "exhausted_by_price": 51176.0,
+        "exhausted_at_candle_time": "2026-06-02T14:34:00Z",
+        "progress_fraction": 0.5694444444444444,
+        "threshold_fraction": 0.5,
+        "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+      },
+      {
+        "name": "ONH",
+        "price": 51094.0,
+        "key": "ONH:51094.0",
+        "invalidated_at": "2026-06-09T13:32:03.305750+00:00",
+        "invalidation_source_candle_time": "2026-06-09T13:31:00Z",
+        "reason": "Anchor Extreme close invalidation occurred before Leg 2 activation."
+      }
+    ]
+  },
+  "step2_locked_owner": {
+    "pathway": "rejection",
+    "active_liquidity": {
+      "name": "ONH",
+      "price": 51094.0,
+      "display_name": "PMH/ONH Liquidity",
+      "side": "upper",
+      "group": {
+        "name": "HIGH 1",
+        "components": [
+          "PMH",
+          "ONH"
+        ],
+        "prices": {
+          "ONH": 51094.0,
+          "PMH": 51094.0
+        },
+        "side": "upper",
+        "display_name": "PMH/ONH Liquidity",
+        "close_boundary": 51094.0,
+        "extreme_boundary": 51094.0,
+        "low": 51094.0,
+        "high": 51094.0,
+        "extreme_component": "ONH",
+        "close_component": "PMH"
+      }
+    },
+    "active_liquidity_name": "ONH",
+    "active_liquidity_price": 51094.0,
+    "active_liquidity_display_name": "PMH/ONH Liquidity",
+    "active_liquidity_group": {
+      "name": "HIGH 1",
+      "components": [
+        "PMH",
+        "ONH"
+      ],
+      "prices": {
+        "ONH": 51094.0,
+        "PMH": 51094.0
+      },
+      "side": "upper",
+      "display_name": "PMH/ONH Liquidity",
+      "close_boundary": 51094.0,
+      "extreme_boundary": 51094.0,
+      "low": 51094.0,
+      "high": 51094.0,
+      "extreme_component": "ONH",
+      "close_component": "PMH"
+    },
+    "liquidity_group": "HIGH 1",
+    "stack_components": [
+      "PMH",
+      "ONH"
+    ],
+    "close_boundary": 51094.0,
+    "extreme_boundary": 51094.0,
+    "setup_direction": "SHORT",
+    "side": "upper",
+    "candle_a": {
+      "open": 51177.0,
+      "high": 51210.0,
+      "low": 51177.0,
+      "close": 51210.0,
+      "timestamp": "2026-06-09T14:06:00Z",
+      "active_level": "ONH",
+      "level_price": 51094.0
+    },
+    "activated_at": "2026-06-09T14:06:00Z"
+  },
+  "last_interacted_liquidity": {
+    "name": "ONH",
+    "price": 51094.0,
+    "display_name": "PMH/ONH Liquidity",
+    "side": "upper",
+    "group": {
+      "name": "HIGH 1",
+      "components": [
+        "PMH",
+        "ONH"
+      ],
+      "prices": {
+        "ONH": 51094.0,
+        "PMH": 51094.0
+      },
+      "side": "upper",
+      "display_name": "PMH/ONH Liquidity",
+      "close_boundary": 51094.0,
+      "extreme_boundary": 51094.0,
+      "low": 51094.0,
+      "high": 51094.0,
+      "extreme_component": "ONH",
+      "close_component": "PMH"
+    },
+    "interacted_at": "2026-06-09T14:10:51.035842+00:00"
+  },
+  "last_interacted_liquidity_by_symbol": {
+    "RTY": {
+      "name": "ONH",
+      "price": 2891.4,
+      "display_name": "PMH/ONH Liquidity",
+      "side": "upper",
+      "group": {
+        "name": "HIGH 1",
+        "components": [
+          "PMH",
+          "ONH"
+        ],
+        "prices": {
+          "ONH": 2891.4,
+          "PMH": 2891.4
+        },
+        "side": "upper",
+        "display_name": "PMH/ONH Liquidity",
+        "close_boundary": 2891.4,
+        "extreme_boundary": 2891.4,
+        "low": 2891.4,
+        "high": 2891.4,
+        "extreme_component": "ONH",
+        "close_component": "PMH"
+      },
+      "interacted_at": "2026-06-09T14:10:47.344811+00:00"
+    },
+    "NQ": {
+      "name": "ONH",
+      "price": 29747.25,
+      "display_name": "YH/ONH/PMH Liquidity",
+      "side": "upper",
+      "group": {
+        "name": "HIGH 1",
+        "components": [
+          "YH",
+          "ONH",
+          "PMH"
+        ],
+        "prices": {
+          "YH": 29743.0,
+          "ONH": 29747.25,
+          "PMH": 29747.25
+        },
+        "side": "upper",
+        "display_name": "YH/ONH/PMH Liquidity",
+        "close_boundary": 29743.0,
+        "extreme_boundary": 29747.25,
+        "low": 29743.0,
+        "high": 29747.25,
+        "extreme_component": "ONH",
+        "close_component": "YH"
+      },
+      "interacted_at": "2026-06-09T14:10:49.684891+00:00"
+    },
+    "YM": {
+      "name": "ONH",
+      "price": 51094.0,
+      "display_name": "PMH/ONH Liquidity",
+      "side": "upper",
+      "group": {
+        "name": "HIGH 1",
+        "components": [
+          "PMH",
+          "ONH"
+        ],
+        "prices": {
+          "ONH": 51094.0,
+          "PMH": 51094.0
+        },
+        "side": "upper",
+        "display_name": "PMH/ONH Liquidity",
+        "close_boundary": 51094.0,
+        "extreme_boundary": 51094.0,
+        "low": 51094.0,
+        "high": 51094.0,
+        "extreme_component": "ONH",
+        "close_component": "PMH"
+      },
+      "interacted_at": "2026-06-09T14:10:51.035842+00:00"
+    }
+  },
+  "consumed_liquidity_levels": [
+    {
+      "key": "ONH:49703.0",
+      "name": "ONH",
+      "price": 49703.0,
+      "side": "upper",
+      "exhaustion_type": "no_leg1_50_percent_exhaustion",
+      "exhausted_by": "YH",
+      "exhausted_by_price": 49851.0,
+      "exhausted_at_candle_time": "2026-05-18T13:52:00Z",
+      "progress_fraction": 0.5135135135135135,
+      "threshold_fraction": 0.5,
+      "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+    },
+    {
+      "key": "ONL:49583.0",
+      "name": "ONL",
+      "price": 49583.0,
+      "side": "lower",
+      "exhaustion_type": "no_leg1_50_percent_exhaustion",
+      "exhausted_by": "YL",
+      "exhausted_by_price": 49428.0,
+      "exhausted_at_candle_time": "2026-05-19T13:30:00Z",
+      "progress_fraction": 0.535483870967742,
+      "threshold_fraction": 0.5,
+      "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+    },
+    {
+      "key": "PML:49543.0",
+      "name": "PML",
+      "price": 49543.0,
+      "side": "lower",
+      "exhaustion_type": "no_leg1_50_percent_exhaustion",
+      "exhausted_by": "ONL",
+      "exhausted_by_price": 49294.0,
+      "exhausted_at_candle_time": "2026-05-20T13:32:00Z",
+      "progress_fraction": 0.6104417670682731,
+      "threshold_fraction": 0.5,
+      "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+    },
+    {
+      "key": "LL:49404.0",
+      "name": "LL",
+      "price": 49404.0,
+      "side": "lower",
+      "exhaustion_type": "no_leg1_50_percent_exhaustion",
+      "exhausted_by": "ONL",
+      "exhausted_by_price": 49294.0,
+      "exhausted_at_candle_time": "2026-05-20T13:35:00Z",
+      "progress_fraction": 0.8454545454545455,
+      "threshold_fraction": 0.5,
+      "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+    },
+    {
+      "key": "ONH:49702.0",
+      "name": "ONH",
+      "price": 49702.0,
+      "side": "upper",
+      "exhaustion_type": "no_leg1_50_percent_exhaustion",
+      "exhausted_by": "PMH",
+      "exhausted_by_price": 50025.0,
+      "exhausted_at_candle_time": "2026-05-21T13:10:00Z",
+      "progress_fraction": 0.7492260061919505,
+      "threshold_fraction": 0.5,
+      "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+    },
+    {
+      "name": "LH",
+      "price": 50724.0,
+      "key": "LH:50724.0",
+      "invalidated_at": "2026-05-28T15:11:04.243749+00:00",
+      "invalidation_source_candle_time": "2026-05-28T15:10:00Z",
+      "reason": "Anchor Extreme close invalidation occurred before Leg 2 activation."
+    },
+    {
+      "key": "PMH:50960.0",
+      "name": "PMH",
+      "price": 50960.0,
+      "side": "upper",
+      "exhaustion_type": "no_leg1_50_percent_exhaustion",
+      "exhausted_by": "YH",
+      "exhausted_by_price": 51176.0,
+      "exhausted_at_candle_time": "2026-06-02T14:34:00Z",
+      "progress_fraction": 0.5694444444444444,
+      "threshold_fraction": 0.5,
+      "reason": "No valid Leg 1 formed and close progressed beyond 50% of the distance to the next same-side liquidity target."
+    },
+    {
+      "name": "ONH",
+      "price": 51094.0,
+      "key": "ONH:51094.0",
+      "invalidated_at": "2026-06-09T13:32:03.305750+00:00",
+      "invalidation_source_candle_time": "2026-06-09T13:31:00Z",
+      "reason": "Anchor Extreme close invalidation occurred before Leg 2 activation."
+    }
+  ],
+  "consumed_entry_setups": [],
+  "step_2_1a_last_evaluated_bar_time": "2026-06-09T14:09:00Z",
+  "step_2_1a_candle_index": 542,
+  "rejection": {
+    "rejection_mode": "ON",
+    "watch_side": "SHORT",
+    "trigger_level": "ONH",
+    "trigger_price": 51094.0,
+    "trigger_priority": 1,
+    "reason_text": "Step 2 activated ONH 51094.0; watching SHORT participation."
+  },
+  "step25": {
+    "step": "Step 2.5",
+    "status": "READY",
+    "state": {
+      "system_state": "REJECTION MODE ON",
+      "trade_mode": "ON",
+      "rejection_mode": "ON",
+      "interaction_state": "ACTIVE",
+      "initial_candle_a": {
+        "open": 51177.0,
+        "high": 51210.0,
+        "low": 51177.0,
+        "close": 51210.0,
+        "timestamp": "2026-06-09T14:06:00Z",
+        "active_level": "ONH",
+        "level_price": 51094.0
+      },
+      "candidate_modes": [
+        "Normal Rejection Mode"
+      ],
+      "controlling_mode": "Normal Rejection Mode",
+      "structure_side_requirement": null,
+      "reclaim_candle_a": null,
+      "provisional_candle_a": null,
+      "pathway_level": 51094.0,
+      "pathway_activation_type": "normal",
+      "continuation_step2_activated": null,
+      "continuation_probe_boundary": null,
+      "continuation_pending_boundary": null,
+      "continuation_step2_pending": null,
+      "active_liquidity_selected": true,
+      "active_liquidity": {
+        "name": "ONH",
+        "price": 51094.0,
+        "side": "upper"
+      },
+      "active_liquidity_name": "ONH",
+      "active_liquidity_price": 51094.0,
+      "rejection_step2_confirmed": true,
+      "events": [
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        },
+        {
+          "event": "step25_pathway_selected",
+          "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+          "controlling_mode": "Normal Rejection Mode",
+          "candidate_modes": [
+            "Normal Rejection Mode"
+          ],
+          "structure_side_requirement": null,
+          "pathway_activation_type": "normal"
+        }
+      ],
+      "prev_candle": {
+        "open": 51214.0,
+        "high": 51270.0,
+        "low": 51203.0,
+        "close": 51251.0,
+        "timestamp": "2026-06-09T14:08:00Z"
+      },
+      "last_candle": {
+        "open": 51251.0,
+        "high": 51260.0,
+        "low": 51233.0,
+        "close": 51238.0,
+        "timestamp": "2026-06-09T14:09:00Z"
+      },
+      "level": 51094.0,
+      "level_type": "LH",
+      "stack_extreme": 51094.0,
+      "continuation_activation_boundary": 51094.0,
+      "continuation_activation_source": "level",
+      "continuation_acceptance_required": false,
+      "continuation_acceptance_threshold": null,
+      "step25_pathway_selection_complete": true,
+      "step25_block_reason": null
+    },
+    "next_step": "Step 3",
+    "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+    "events": [
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      },
+      {
+        "event": "step25_pathway_selected",
+        "reason": "Step 2.5 pathway selection complete: Normal Rejection Mode.",
+        "controlling_mode": "Normal Rejection Mode",
+        "candidate_modes": [
+          "Normal Rejection Mode"
+        ],
+        "structure_side_requirement": null,
+        "pathway_activation_type": "normal"
+      }
+    ]
+  },
+  "step3": {
+    "step": "Step 3",
+    "status": "ALLOW_STEP_4",
+    "state": {
+      "system_state": "REJECTION MODE ON",
+      "trade_mode": "ON",
+      "rejection_mode": "ON",
+      "interaction_state": "ACTIVE",
+      "initial_candle_a": {
+        "open": 51177.0,
+        "high": 51210.0,
+        "low": 51177.0,
+        "close": 51210.0,
+        "timestamp": "2026-06-09T14:06:00Z",
+        "active_level": "ONH",
+        "level_price": 51094.0
+      },
+      "candidate_modes": [
+        "Normal Rejection Mode"
+      ],
+      "controlling_mode": "Normal Rejection Mode",
+      "structure_side_requirement": null,
+      "reclaim_candle_a": null,
+      "provisional_candle_a": null,
+      "pathway_level": 51094.0,
+      "pathway_activation_type": "normal",
+      "continuation_step2_activated": null,
+      "continuation_probe_boundary": null,
+      "continuation_pending_boundary": null,
+      "continuation_step2_pending": null,
+      "active_liquidity_selected": true,
+      "active_liquidity": {
+        "name": "ONH",
+        "price": 51094.0
+      },
+      "active_liquidity_name": "ONH",
+      "active_liquidity_price": 51094.0,
+      "rejection_step2_confirmed": true,
+      "events": [
+        {
+          "event": "step3_waiting_for_step2",
+          "reason": "Step 3 requires Step 2 liquidity-close activation, Step 2.5 selection, Candle A, and active liquidity."
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        },
+        {
+          "event": "step3_structure_allowed",
+          "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+          "liquidity_type": "STATIC_STACK"
+        }
+      ],
+      "prev_candle": {
+        "open": 51214.0,
+        "high": 51270.0,
+        "low": 51203.0,
+        "close": 51251.0,
+        "timestamp": "2026-06-09T14:08:00Z"
+      },
+      "last_candle": {
+        "open": 51251.0,
+        "high": 51260.0,
+        "low": 51233.0,
+        "close": 51238.0,
+        "timestamp": "2026-06-09T14:09:00Z"
+      },
+      "level": 51094.0,
+      "level_type": "LH",
+      "stack_extreme": 51094.0,
+      "continuation_activation_boundary": 51094.0,
+      "continuation_activation_source": "level",
+      "continuation_acceptance_required": false,
+      "continuation_acceptance_threshold": null,
+      "step25_pathway_selection_complete": true,
+      "step25_block_reason": null,
+      "active_stack": {
+        "name": "HIGH 1",
+        "components": [
+          "PMH",
+          "ONH"
+        ],
+        "prices": {
+          "ONH": 51094.0,
+          "PMH": 51094.0
+        },
+        "side": "upper",
+        "display_name": "PMH/ONH Liquidity",
+        "close_boundary": 51094.0,
+        "extreme_boundary": 51094.0,
+        "low": 51094.0,
+        "high": 51094.0,
+        "extreme_component": "ONH",
+        "close_component": "PMH"
+      },
+      "close_boundary": 51094.0,
+      "extreme_boundary": 51094.0,
+      "stack_side": "upper",
+      "tick_size": 1.0,
+      "candle_a": {
+        "open": 51177.0,
+        "high": 51210.0,
+        "low": 51177.0,
+        "close": 51210.0,
+        "timestamp": "2026-06-09T14:06:00Z",
+        "active_level": "ONH",
+        "level_price": 51094.0
+      },
+      "latest_candle": {
+        "open": 51251.0,
+        "high": 51260.0,
+        "low": 51233.0,
+        "close": 51238.0,
+        "timestamp": "2026-06-09T14:09:00Z"
+      },
+      "pre_activation_probe_boundary": {
+        "active": false,
+        "side": "upper",
+        "source_level": "ONH",
+        "boundary_price": null,
+        "detected_at_index": null
+      },
+      "stack_extreme_confirmation_seen": true,
+      "stack_extreme_confirmation_candle": {
+        "open": 51177.0,
+        "high": 51210.0,
+        "low": 51177.0,
+        "close": 51210.0,
+        "timestamp": "2026-06-09T14:06:00Z"
+      },
+      "sweep_extreme_boundary_seen": true,
+      "liquidity_type": "STATIC_STACK",
+      "step3_allows_structure": true,
+      "step3_block_reason": null,
+      "candle_a_source": "stack_extreme_confirmation_candle"
+    },
+    "next_step": "Step 4",
+    "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+    "events": [
+      {
+        "event": "step3_waiting_for_step2",
+        "reason": "Step 3 requires Step 2 liquidity-close activation, Step 2.5 selection, Candle A, and active liquidity."
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      },
+      {
+        "event": "step3_structure_allowed",
+        "reason": "Step 3 allows structure: static stack has HH/LL confirmation beyond the Extreme Boundary.",
+        "liquidity_type": "STATIC_STACK"
+      }
+    ]
+  },
+  "step4": {
+    "step": "Step 4",
+    "status": "WAIT",
+    "state": {
+      "system_state": "REJECTION MODE ON",
+      "trade_mode": "ON",
+      "rejection_mode": "ON",
+      "interaction_state": "ACTIVE",
+      "initial_candle_a": {
+        "open": 51251.0,
+        "high": 51260.0,
+        "low": 51233.0,
+        "close": 51238.0,
+        "timestamp": "2026-06-09T14:09:00Z"
+      },
+      "candidate_modes": [
+        "Normal Rejection Mode"
+      ],
+      "controlling_mode": "Normal Rejection Mode",
+      "structure_side_requirement": null,
+      "reclaim_candle_a": null,
+      "provisional_candle_a": null,
+      "pathway_level": 51094.0,
+      "pathway_activation_type": "normal",
+      "continuation_step2_activated": null,
+      "continuation_probe_boundary": null,
+      "continuation_pending_boundary": null,
+      "continuation_step2_pending": null,
+      "active_liquidity_selected": true,
+      "active_liquidity": {
+        "name": "ONH",
+        "price": 51094.0
+      },
+      "active_liquidity_name": "ONH",
+      "active_liquidity_price": 51094.0,
+      "rejection_step2_confirmed": true,
+      "events": [
+        {
+          "event": "step4_waiting_for_inputs",
+          "reason": "Step 4 waiting for Step 2.5 selection, Step 3 permission, Candle A, Candle B, setup direction, ATR, and opposing liquidity."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_waiting_for_candles",
+          "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_participation_window_wait",
+          "reason": "Candle B failed both close-based participation and 34% wick-based participation.",
+          "candidate_count": 1,
+          "candle_number": 1,
+          "window_label": "Candle 1 of 4",
+          "remaining": 3,
+          "expires_at": "2026-06-09T14:10:00Z",
+          "final_candle_number": 4
+        },
+        {
+          "event": "step4_participation_window_wait",
+          "reason": "Candle B failed both close-based participation and 34% wick-based participation.",
+          "candidate_count": 2,
+          "candle_number": 2,
+          "window_label": "Candle 2 of 4",
+          "remaining": 2,
+          "expires_at": "2026-06-09T14:10:00Z",
+          "final_candle_number": 4
+        },
+        {
+          "event": "step4_participation_window_wait",
+          "reason": "Candle B failed both close-based participation and 34% wick-based participation.",
+          "candidate_count": 3,
+          "candle_number": 3,
+          "window_label": "Candle 3 of 4",
+          "remaining": 1,
+          "expires_at": "2026-06-09T14:10:00Z",
+          "final_candle_number": 4
+        },
+        {
+          "event": "step4_participation_window_failed",
+          "reason": "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation.",
+          "candidate_count": 4,
+          "candle_number": 4,
+          "window_label": "Candle 4 of 4",
+          "level_state": "GATEWAY"
+        },
+        {
+          "event": "step7_interaction_terminated",
+          "source_step": "Step 4",
+          "reason": "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step7_interaction_terminated",
+          "source_step": "Step 4",
+          "reason": "Leg 1 invalid: active liquidity was penetrated beyond 50% before Leg 1 formed."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        },
+        {
+          "event": "step4_stack_candle_a_assigned",
+          "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+        }
+      ],
+      "prev_candle": {
+        "open": 51214.0,
+        "high": 51270.0,
+        "low": 51203.0,
+        "close": 51251.0,
+        "timestamp": "2026-06-09T14:08:00Z"
+      },
+      "last_candle": {
+        "open": 51251.0,
+        "high": 51260.0,
+        "low": 51233.0,
+        "close": 51238.0,
+        "timestamp": "2026-06-09T14:09:00Z"
+      },
+      "level": 51094.0,
+      "level_type": "LH",
+      "stack_extreme": 51094.0,
+      "continuation_activation_boundary": 51094.0,
+      "continuation_activation_source": "level",
+      "continuation_acceptance_required": false,
+      "continuation_acceptance_threshold": null,
+      "step25_pathway_selection_complete": true,
+      "step25_block_reason": null,
+      "active_stack": {
+        "name": "HIGH 1",
+        "components": [
+          "PMH",
+          "ONH"
+        ],
+        "prices": {
+          "ONH": 51094.0,
+          "PMH": 51094.0
+        },
+        "side": "upper",
+        "display_name": "PMH/ONH Liquidity",
+        "close_boundary": 51094.0,
+        "extreme_boundary": 51094.0,
+        "low": 51094.0,
+        "high": 51094.0,
+        "extreme_component": "ONH",
+        "close_component": "PMH"
+      },
+      "close_boundary": 51094.0,
+      "extreme_boundary": 51094.0,
+      "stack_side": "upper",
+      "tick_size": 1.0,
+      "candle_a": {
+        "open": 51251.0,
+        "high": 51260.0,
+        "low": 51233.0,
+        "close": 51238.0,
+        "timestamp": "2026-06-09T14:09:00Z"
+      },
+      "pre_activation_probe_boundary": {
+        "active": false,
+        "side": "upper",
+        "source_level": "ONH",
+        "boundary_price": null,
+        "detected_at_index": null
+      },
+      "stack_extreme_confirmation_seen": true,
+      "stack_extreme_confirmation_candle": {
+        "open": 51177.0,
+        "high": 51210.0,
+        "low": 51177.0,
+        "close": 51210.0,
+        "timestamp": "2026-06-09T14:06:00Z"
+      },
+      "sweep_extreme_boundary_seen": true,
+      "liquidity_type": "STATIC_STACK",
+      "step3_allows_structure": true,
+      "step3_block_reason": null,
+      "candle_a_source": "step4_stack_post_extreme_candle_a",
+      "setup_direction": "SHORT",
+      "shared_leg1_uses_initial_candle_a": false,
+      "participation_candidate_keys": [],
+      "participation_candidate_count": 0,
+      "participation_timer": null,
+      "leg1_window_active": true,
+      "leg1_window_started_at": "2026-06-09T14:06:00Z",
+      "leg1_window_candle_index": 1,
+      "leg1_window_remaining": 3,
+      "leg1_window_expires_at": "2026-06-09T14:10:00Z",
+      "leg1_window_invalidated": false,
+      "leg1_window_invalidation_reason": null,
+      "nearest_opposing_liquidity": {
+        "name": "PMH",
+        "price": 51094.0
+      },
+      "step4_proximity_reference_liquidity": null,
+      "next_break_side_liquidity": {
+        "name": "YH",
+        "price": 51331.0
+      },
+      "atr_1m_14": 35.285714285714285,
+      "daily_atr14": 667.0579100969,
+      "stack_step4_candle_a_assigned": true,
+      "awaiting_stack_candle_b": true,
+      "last_evaluated_candle_time": "2026-06-09T14:09:00Z",
+      "state_transition_reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+    },
+    "next_step": "Step 4",
+    "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation.",
+    "events": [
+      {
+        "event": "step4_waiting_for_inputs",
+        "reason": "Step 4 waiting for Step 2.5 selection, Step 3 permission, Candle A, Candle B, setup direction, ATR, and opposing liquidity."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_waiting_for_candles",
+        "reason": "Step 4 waiting: final Candle A assignment and Candle B are required."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_participation_window_wait",
+        "reason": "Candle B failed both close-based participation and 34% wick-based participation.",
+        "candidate_count": 1,
+        "candle_number": 1,
+        "window_label": "Candle 1 of 4",
+        "remaining": 3,
+        "expires_at": "2026-06-09T14:10:00Z",
+        "final_candle_number": 4
+      },
+      {
+        "event": "step4_participation_window_wait",
+        "reason": "Candle B failed both close-based participation and 34% wick-based participation.",
+        "candidate_count": 2,
+        "candle_number": 2,
+        "window_label": "Candle 2 of 4",
+        "remaining": 2,
+        "expires_at": "2026-06-09T14:10:00Z",
+        "final_candle_number": 4
+      },
+      {
+        "event": "step4_participation_window_wait",
+        "reason": "Candle B failed both close-based participation and 34% wick-based participation.",
+        "candidate_count": 3,
+        "candle_number": 3,
+        "window_label": "Candle 3 of 4",
+        "remaining": 1,
+        "expires_at": "2026-06-09T14:10:00Z",
+        "final_candle_number": 4
+      },
+      {
+        "event": "step4_participation_window_failed",
+        "reason": "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation.",
+        "candidate_count": 4,
+        "candle_number": 4,
+        "window_label": "Candle 4 of 4",
+        "level_state": "GATEWAY"
+      },
+      {
+        "event": "step7_interaction_terminated",
+        "source_step": "Step 4",
+        "reason": "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step7_interaction_terminated",
+        "source_step": "Step 4",
+        "reason": "Leg 1 invalid: active liquidity was penetrated beyond 50% before Leg 1 formed."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      },
+      {
+        "event": "step4_stack_candle_a_assigned",
+        "reason": "Step 4 assigned stack Candle A after Extreme Boundary proof; waiting for future Candle B participation."
+      }
+    ]
+  },
+  "step5": {
+    "step": "Step 5",
+    "status": "WAIT",
+    "state": {},
+    "next_step": "Step 4",
+    "reason": "Step 5 waiting for Step 4 Leg 1 completion and a Leg 2 candidate candle.",
+    "events": [
+      {
+        "event": "step5_waiting_for_inputs",
+        "reason": "Step 5 waiting for Step 4 Leg 1 completion and a Leg 2 candidate candle."
+      }
+    ]
+  },
+  "step6": {
+    "step": "Step 6",
+    "status": "WAIT",
+    "state": {},
+    "next_step": "Step 4",
+    "reason": "Step 6 waiting for Step 5 confirmation and an entry candidate candle.",
+    "events": [
+      {
+        "event": "step6_waiting_for_inputs",
+        "reason": "Step 6 waiting for Step 5 confirmation and an entry candidate candle."
+      }
+    ]
+  },
+  "gateway": {
+    "gateway_status": "BLOCKED",
+    "gateway_reason": "Missing pre-built gateway object; Entry Engine must not infer GH/GL.",
+    "allowed_sides": "NONE",
+    "session_phase": "MIDSESSION",
+    "near_liquidity": false,
+    "nearest_level": "YH"
+  },
+  "tv_context": {
+    "source": "tradingview_level_helper",
+    "version": "v13_directional_midpoints",
+    "context_mode": "locked_levels_recurring_status",
+    "session_locked": true,
+    "is_premarket_end": false,
+    "is_recurring_update": true,
+    "price_is_true_level": true,
+    "display_offsets_applied_to_chart_only": true,
+    "symbol": "YM1!",
+    "time_zone": "America/Los_Angeles",
+    "timeframe": "1",
+    "daily_atr14": 667.0579100969,
+    "stack_threshold": 66.7057910097,
+    "stack_threshold_pct": 10,
+    "pm_atr_pct": 26.5344278691,
+    "daily_range_pct": 61.3140169405,
+    "levels": {
+      "PMH": {
+        "price": 51094,
+        "status": "ACTIVE",
+        "stack_group": "HIGH 1"
+      },
+      "PML": {
+        "price": 50917,
+        "status": "ACTIVE",
+        "stack_group": "NONE"
+      },
+      "LH": {
+        "price": 51039,
+        "status": "INACTIVE",
+        "stack_group": "NONE"
+      },
+      "LL": {
+        "price": 50843,
+        "status": "ACTIVE",
+        "stack_group": "NONE"
+      },
+      "ONH": {
+        "price": 51094,
+        "status": "ACTIVE",
+        "stack_group": "HIGH 1"
+      },
+      "ONL": {
+        "price": 50685,
+        "status": "ACTIVE",
+        "stack_group": "NONE"
+      },
+      "YH": {
+        "price": 51331,
+        "status": "ACTIVE",
+        "stack_group": "NONE"
+      },
+      "YL": {
+        "price": 50793,
+        "status": "INACTIVE",
+        "stack_group": "NONE"
+      }
+    },
+    "midpoints": {
+      "PMH_YH": 51212.5,
+      "PML_LL": 50880,
+      "LL_ONL": 50764
+    },
+    "exhaustion_boundaries": {
+      "PMH_YH": {
+        "side": "high",
+        "mid_50": 51212.5,
+        "remaining_25": 51271.75
+      },
+      "PML_LL": {
+        "side": "low",
+        "mid_50": 50880,
+        "remaining_25": 50861.5
+      },
+      "LL_ONL": {
+        "side": "low",
+        "mid_50": 50764,
+        "remaining_25": 50724.5
+      }
+    },
+    "received_at": "2026-06-09T14:10:11.074316+00:00",
+    "normalized_symbol": "YM"
+  },
+  "tv_context_status": "TV_CONTEXT_LIVE",
+  "observation_reset_session_date": null,
+  "observation_reset_bar_time": null,
+  "observation_reset_at": null
+}

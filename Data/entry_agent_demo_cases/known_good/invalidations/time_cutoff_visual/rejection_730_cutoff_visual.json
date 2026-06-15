@@ -1,0 +1,38 @@
+{
+  "case_name": "7:30 Visual Only - Rejection cutoff display",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "7:30 Rule Visual Only",
+  "visual_only": true,
+  "lifecycle_impact_confirmed": false,
+  "scenario_type": "rejection",
+  "expected_result": "Visual-only cutoff explanation; lifecycle impact remains provisional until confirmed.",
+  "symbol": "NQ",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "candles": [
+    {"time": "2026-06-11T14:29:00Z", "open": 100.5, "high": 100.75, "low": 99.25, "close": 99.5, "highlight_label": "Before 7:30"},
+    {"time": "2026-06-11T14:30:00Z", "open": 99.5, "high": 99.75, "low": 99.25, "close": 99.4, "highlight_label": "7:30 visual"}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 120.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]},
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 120.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]}
+  ],
+  "demo_display_text": "7:30 cutoff visual only: rejection impact is not asserted until lifecycle behavior is confirmed.",
+  "notes": "Per blueprint instruction, 7:30 cases remain visual-only and do not mutate lifecycle state."
+}

@@ -1,12 +1,25 @@
 import argparse
+import importlib.util
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
 
 MODELS = ("fixed_8", "fixed_12", "fixed_16", "structural_dynamic")
+HALF_ATR_MODEL = "half_atr_dynamic"
 SYMBOLS = ("NQM6", "YMM6", "RTYM6")
 DEFAULT_PATH = Path("Data") / "trade_management_research.jsonl"
+ROOT = Path(__file__).resolve().parent
+
+
+def load_trade_manager():
+    spec = importlib.util.spec_from_file_location(
+        "trade_manager_research_report",
+        ROOT / "Engines" / "trade_manager.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def load_rows(path):
@@ -48,6 +61,32 @@ def model_flag(row, field, model):
     return False
 
 
+def half_atr_fields(row, manager):
+    if "half_atr_dynamic_enabled" in row:
+        return row
+    return {**row, **manager.half_atr_dynamic_research_row_fields(dict(row))}
+
+
+def numeric(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def average(values):
+    values = [value for value in values if value is not None]
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def format_number(value):
+    if value is None:
+        return "n/a"
+    return f"{value:.4f}"
+
+
 def trade_label(row):
     return (
         f"{row.get('symbol')} {row.get('trade_id')} "
@@ -68,6 +107,8 @@ def main():
 
     path = Path(args.path)
     rows = load_rows(path)
+    manager = load_trade_manager()
+    half_rows = [half_atr_fields(row, manager) for row in rows]
 
     baseline_counts = Counter(baseline_bucket(row) for row in rows)
     dynamic_counts = {model: Counter(dynamic_bucket(row, model) for row in rows) for model in MODELS}
@@ -87,6 +128,52 @@ def main():
     print("Help / hurt / net")
     for model in MODELS:
         print(f"  {model}: helped={helped_counts[model]} hurt={hurt_counts[model]} net={net[model]}")
+
+    half_evaluable = [row for row in half_rows if row.get("half_atr_dynamic_enabled")]
+    half_triggered = [row for row in half_evaluable if row.get("half_atr_dynamic_trigger_reached")]
+    half_improved_risk = [
+        row for row in half_triggered
+        if row.get("half_atr_dynamic_used_original_stop") is False
+    ]
+    half_retained_original = [
+        row for row in half_triggered
+        if row.get("half_atr_dynamic_used_original_stop") is True
+    ]
+    half_classification = Counter(row.get("half_atr_dynamic_helped_hurt_same") or "unable_to_evaluate" for row in half_rows)
+    half_unable_reasons = Counter(
+        row.get("half_atr_dynamic_unable_to_evaluate_reason") or "unspecified"
+        for row in half_rows
+        if row.get("half_atr_dynamic_helped_hurt_same") == "unable_to_evaluate"
+    )
+    half_r_values = [numeric(row.get("half_atr_dynamic_result_r")) for row in half_rows]
+    half_winner_r_values = [
+        numeric(row.get("half_atr_dynamic_result_r"))
+        for row in half_rows
+        if numeric(row.get("half_atr_dynamic_result_r")) is not None and numeric(row.get("half_atr_dynamic_result_r")) > 0
+    ]
+    baseline_r_values = [
+        manager.actual_result_r(row)
+        for row in rows
+        if manager.actual_result_r(row) is not None
+    ]
+
+    print("HALF_ATR_DYNAMIC_RISK_RESET")
+    print(f"  Total trades evaluated: {len(rows)}")
+    print(f"  Trades reaching 0.5 ATR favorable trigger: {len(half_triggered)}")
+    print(f"  Trades where dynamic stop improved risk: {len(half_improved_risk)}")
+    print(f"  Trades where original stop/TP1 were retained because adjustment was worse: {len(half_retained_original)}")
+    print(
+        "  Helped / hurt / same totals: "
+        f"helped={half_classification.get('helped', 0)} "
+        f"hurt={half_classification.get('hurt', 0)} "
+        f"same={half_classification.get('same', 0)} "
+        f"unable_to_evaluate={half_classification.get('unable_to_evaluate', 0)}"
+    )
+    print(f"  Average R of all trades: {format_number(average(half_r_values))}")
+    print(f"  Average R of winners: {format_number(average(half_winner_r_values))}")
+    print(f"  Baseline average R: {format_number(average(baseline_r_values))}")
+    print(f"  Comparison versus actual baseline: avg_delta_r={format_number((average(half_r_values) - average(baseline_r_values)) if average(half_r_values) is not None and average(baseline_r_values) is not None else None)}")
+    print(f"  Unable to evaluate reasons: {dict(half_unable_reasons)}")
 
     print("Per-symbol breakdown")
     by_symbol = defaultdict(list)

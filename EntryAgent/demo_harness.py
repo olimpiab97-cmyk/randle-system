@@ -24,13 +24,28 @@ ARCHIVED_LIBRARY_FOLDERS = ("investigations",)
 LIBRARY_FOLDERS = ACTIVE_LIBRARY_FOLDERS + ARCHIVED_LIBRARY_FOLDERS
 KEY_LEVELS = ("PMH", "PML", "LH", "LL", "ONH", "ONL", "YH", "YL")
 MIN_CHART_CANDLES = 10
+CANONICAL_INVALIDATION_FIXTURE_IDS = (
+    "known_good/invalidations/step2_step4_expiration/rejection_4_candle_expiration",
+    "known_good/invalidations/canonical_step2_invalidation/rejection_4_candle_expiration_short",
+    "known_good/invalidations/canonical_step2_invalidation/rejection_50_line_invalidation_long",
+    "known_good/invalidations/canonical_step2_invalidation/rejection_50_line_invalidation_short",
+    "known_good/invalidations/canonical_step2_invalidation/continuation_4_candle_expiration_long",
+    "known_good/invalidations/canonical_step2_invalidation/continuation_4_candle_expiration_short",
+    "known_good/invalidations/canonical_step2_invalidation/continuation_50_line_invalidation_long",
+    "known_good/invalidations/canonical_step2_invalidation/continuation_50_line_invalidation_short",
+)
+CANONICAL_INVALIDATION_FIXTURE_ID_SET = set(CANONICAL_INVALIDATION_FIXTURE_IDS)
 OPPORTUNITY_ACTIVE = "ACTIVE"
 OPPORTUNITY_WAIT = "WAIT"
 OPPORTUNITY_INVALIDATED = "INVALIDATED"
 LEVEL_ACTIVE = "ACTIVE"
 LEVEL_WAIT = "WAIT"
 LEVEL_CONSUMED = "CONSUMED"
+STEP2_STEP4_4_CANDLE_EXPIRED = "STEP2_STEP4_4_CANDLE_EXPIRED"
+STEP2_STEP4_50_LINE_TOUCHED = "STEP2_STEP4_50_LINE_TOUCHED"
 REJECTION_INVALIDATION_REASONS = {
+    STEP2_STEP4_4_CANDLE_EXPIRED,
+    STEP2_STEP4_50_LINE_TOUCHED,
     "STEP6_ENTRY_TRIGGERED",
     "MOVE_AWAY_NO_ENTRY",
     "EXHAUSTION_50_LEG1",
@@ -42,6 +57,8 @@ REJECTION_INVALIDATION_REASONS = {
     "NEXT_ZONE_ACCEPTANCE",
 }
 CONTINUATION_INVALIDATION_REASONS = {
+    STEP2_STEP4_4_CANDLE_EXPIRED,
+    STEP2_STEP4_50_LINE_TOUCHED,
     "STEP6_ENTRY_TRIGGERED",
     "MOVE_AWAY_NO_ENTRY",
     "EXHAUSTION_50_LEG1",
@@ -115,6 +132,14 @@ def is_archived_investigation_fixture_id(fixture_id: str) -> bool:
     return normalized.split("/", 1)[0] in ARCHIVED_LIBRARY_FOLDERS
 
 
+def is_noncanonical_invalidation_fixture_id(fixture_id: str) -> bool:
+    normalized = fixture_id.replace("\\", "/").strip("/")
+    return (
+        normalized.startswith("known_good/invalidations/")
+        and normalized not in CANONICAL_INVALIDATION_FIXTURE_ID_SET
+    )
+
+
 def list_fixtures(include_archived: bool = False) -> list[str]:
     if not FIXTURE_DIR.exists():
         return []
@@ -125,6 +150,8 @@ def list_fixtures(include_archived: bool = False) -> list[str]:
         fixture_id = path.relative_to(FIXTURE_DIR).with_suffix("").as_posix()
         if not include_archived and is_archived_investigation_fixture_id(fixture_id):
             continue
+        if not include_archived and is_noncanonical_invalidation_fixture_id(fixture_id):
+            continue
         if not include_archived:
             try:
                 fixture = read_json(path)
@@ -133,7 +160,8 @@ def list_fixtures(include_archived: bool = False) -> list[str]:
             if fixture.get("active_demo_hidden") or fixture.get("hidden_from_review"):
                 continue
         names.append(fixture_id)
-    return sorted(names)
+    canonical_order = {fixture_id: index for index, fixture_id in enumerate(CANONICAL_INVALIDATION_FIXTURE_IDS)}
+    return sorted(names, key=lambda name: (canonical_order.get(name, len(canonical_order)), name))
 
 
 def list_fixture_entries(include_archived: bool = False) -> list[dict[str, Any]]:
@@ -151,6 +179,7 @@ def list_fixture_entries(include_archived: bool = False) -> list[dict[str, Any]]
                 "review_status": review_status,
                 "user_review": fixture.get("user_review"),
                 "status": fixture.get("status"),
+                "certification_status": fixture.get("certification_status"),
                 "review_label": fixture_review_label(fixture_id, fixture, review_status),
                 "scenario_type": fixture.get("scenario_type"),
                 "continuation_type": fixture.get("continuation_type"),
@@ -177,7 +206,13 @@ def fixture_review_status(fixture: dict[str, Any]) -> str:
 
 def fixture_review_label(fixture_id: str, fixture: dict[str, Any], review_status: str | None = None) -> str:
     status = str(review_status or fixture_review_status(fixture)).upper()
-    short_id = fixture_id.replace("known_good/step2_rejection/", "")
+    short_id = (
+        fixture_id.replace("known_good/step2_rejection/", "")
+        .replace("known_good/step2_continuation/", "")
+        .replace("known_good/step3_participation/", "")
+    )
+    if str(fixture.get("certification_status") or "").upper() == "CERTIFIED":
+        return f"[CERTIFIED] {short_id}"
     if "APPROVED" in status and "NOT APPROVED" not in status and "RETRACTED" not in status:
         return f"[APPROVED] {short_id}"
     if "RETRACTED" in status or "NOT APPROVED" in status:
@@ -692,6 +727,10 @@ def apply_level_lifecycle_updates(
 
 def normalize_lifecycle_invalidation_reason(reason: Any, opportunity: str) -> str:
     text = str(reason or "").upper()
+    if STEP2_STEP4_4_CANDLE_EXPIRED in text or ("NO VALID CANDLE B" in text and "4 CANDLES" in text):
+        return STEP2_STEP4_4_CANDLE_EXPIRED
+    if STEP2_STEP4_50_LINE_TOUCHED in text or ("50% LINE" in text and "STEP 4" in text):
+        return STEP2_STEP4_50_LINE_TOUCHED
     if "50" in text:
         return "EXHAUSTION_50_LEG1"
     if "75" in text:
@@ -734,6 +773,49 @@ def travel_progress_percent(start: Any, target: Any, probe: Any) -> int | None:
     if total <= 0:
         return None
     return int(round(max(0.0, min(100.0, traveled / total * 100.0))))
+
+
+def step2_step4_fifty_percent_line(fixture: dict[str, Any], active: dict[str, Any]) -> float | None:
+    active_price = as_float(active.get("price"))
+    active_name = str(active.get("name") or "")
+    if active_price is None:
+        return None
+    for name, level in dict(fixture.get("levels") or {}).items():
+        if str(name) == active_name:
+            continue
+        if str(level.get("side") or "").upper() != str(active.get("side") or "").upper():
+            continue
+        reference_price = as_float(level.get("price"))
+        if reference_price is None:
+            continue
+        return (active_price + reference_price) / 2.0
+    return None
+
+
+def touches_step2_step4_fifty_percent_line(
+    fixture: dict[str, Any],
+    active: dict[str, Any],
+    candle: dict[str, Any],
+) -> bool:
+    line = step2_step4_fifty_percent_line(fixture, active)
+    if line is None:
+        return False
+    side = str(active.get("side") or "").upper()
+    if side == "LOW":
+        low = as_float(candle.get("low"))
+        return low is not None and low <= line
+    if side == "HIGH":
+        high = as_float(candle.get("high"))
+        return high is not None and high >= line
+    return False
+
+
+def fixture_expects_step2_step4_50_line_invalidation(fixture: dict[str, Any]) -> bool:
+    return any(
+        expected.get("invalidation_reason") == STEP2_STEP4_50_LINE_TOUCHED
+        for expected in fixture.get("expected") or []
+        if isinstance(expected, dict)
+    )
 
 
 def liquidity_travel_progress(
@@ -1144,6 +1226,110 @@ def compare_expected_actual(expected: dict[str, Any], actual: dict[str, Any]) ->
         if actual_value != expected_value:
             diffs.append({"field": key, "expected": expected_value, "actual": actual_value})
     return {"pass": not diffs, "diffs": diffs}
+
+
+def step3_participation_percent(candle: dict[str, Any], direction: str) -> float | None:
+    high = as_float(candle.get("high"))
+    low = as_float(candle.get("low"))
+    open_price = as_float(candle.get("open"))
+    if None in {high, low, open_price} or high == low:
+        return None
+    if direction == "SHORT":
+        return round(((high - open_price) / (high - low)) * 100, 10)
+    if direction == "LONG":
+        return round(((open_price - low) / (high - low)) * 100, 10)
+    return None
+
+
+def step3_candle_a_extreme_close(candle_a: dict[str, Any]) -> float | None:
+    return as_float(candle_a.get("extreme_close"))
+
+
+def step3_close_participates(candle_a: dict[str, Any], candle_b: dict[str, Any], direction: str) -> bool:
+    close_a = step3_candle_a_extreme_close(candle_a)
+    close_b = as_float(candle_b.get("close"))
+    if close_a is None or close_b is None:
+        return False
+    if direction == "SHORT":
+        return close_b < close_a
+    if direction == "LONG":
+        return close_b > close_a
+    return False
+
+
+def evaluate_step3_participation_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
+    validate_fixture(fixture)
+    active = active_liquidity_config(fixture)
+    candles = [normalize_candle(candle) for candle in fixture["candles"]]
+    direction = str(fixture.get("setup_direction") or setup_direction_for_side(level_side(active))).upper()
+    rule_type = str(fixture.get("participation_rule") or "").strip()
+    frames: list[dict[str, Any]] = []
+    candle_a = candles[0] if candles else {}
+
+    for index, candle in enumerate(candles):
+        is_candle_b = index == 1
+        wick_pct = step3_participation_percent(candle, direction) if is_candle_b else None
+        wick_pass = bool(wick_pct is not None and wick_pct >= 34.0)
+        close_pass = step3_close_participates(candle_a, candle, direction) if is_candle_b else False
+        passed = wick_pass if rule_type == "wick_threshold_34" else close_pass if rule_type in {"close_beyond_candle_a_close", "close_beyond_candle_a_extreme_close"} else False
+        label = str(candle.get("highlight_label") or ("Candle A" if index == 0 else ("PASS" if passed else "FAIL")))
+        reason = (
+            "Candle B wick participation is at least 34%."
+            if rule_type == "wick_threshold_34" and passed
+            else "Candle B wick participation is below 34%."
+            if rule_type == "wick_threshold_34"
+            else "Candle B close is strictly beyond Candle A close."
+            if passed
+            else "Candle B close is not strictly beyond Candle A close."
+        )
+        actual = {
+            "time": candle.get("timestamp"),
+            "step": "Step 3",
+            "pathway_type": fixture["scenario_type"].capitalize(),
+            "active_liquidity_name": active["display_name"],
+            "liquidity_price": active.get("price"),
+            "setup_direction": direction,
+            "candle_role": "Candle B" if is_candle_b else "Candle A",
+            "participation_rule": rule_type,
+            "participation_threshold_pct": 34.0 if rule_type == "wick_threshold_34" else None,
+            "candle_a_extreme_close": step3_candle_a_extreme_close(candle_a) if is_candle_b else None,
+            "wick_participation_pct": wick_pct,
+            "wick_participation_pass": wick_pass if is_candle_b else None,
+            "close_participation_pass": close_pass if is_candle_b else None,
+            "participation_result": "PASS" if is_candle_b and passed else "FAIL" if is_candle_b else "WAIT",
+            "participation_label": label,
+            "leg1_state": "COMPLETE" if is_candle_b and passed else "WAIT",
+            "leg2_state": "WAIT",
+            "step5_confirmed": False,
+            "wait_reason": None if is_candle_b else "Waiting for Candle B participation.",
+            "last_decision": f"{'PASS' if passed else 'FAIL' if is_candle_b else 'WAIT'}: {reason if is_candle_b else 'Candle A printed at active liquidity.'}",
+        }
+        expected = dict(fixture["expected"][index])
+        comparison = compare_expected_actual(expected, actual)
+        frames.append(
+            {
+                "index": index,
+                "candle": candle,
+                "expected": expected,
+                "actual": actual,
+                "debug": {
+                    "step2_chart_lines": step2_chart_lines(fixture, active),
+                    "step2_chart_candles": chart_display_candles(candles),
+                    "rejection_step24_candles": padded_slots(
+                        [
+                            candle_slot(candles[0] if candles else None, "Printed liquidity / Candle A", None),
+                            candle_slot(candles[1] if len(candles) > 1 else None, str(candles[1].get("highlight_label") if len(candles) > 1 else "Candle B"), None),
+                        ]
+                    ),
+                    "rejection_step56_candles": padded_slots([]),
+                    "continuation_step24_candles": padded_slots([]),
+                    "continuation_step56_candles": padded_slots([]),
+                },
+                "pass": comparison["pass"],
+                "diffs": comparison["diffs"],
+            }
+        )
+    return frames
 
 
 def evaluate_continuation_controlling_structure_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1593,6 +1779,8 @@ class ScenarioRunner:
 
 def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
     validate_fixture(fixture)
+    if fixture.get("scope") == "step3_participation_demo":
+        return evaluate_step3_participation_fixture(fixture)
     if fixture.get("scope") == "step2_zone_transition_only":
         return evaluate_step2_zone_transition_fixture(fixture)
     if fixture.get("scope") == "step2_continuation_only":
@@ -1605,6 +1793,11 @@ def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
     tick_size = as_float(fixture.get("tick_size")) or 0.25
     atr = as_float(fixture.get("atr_1m_14")) or 20.0
     nearest = as_float(fixture.get("nearest_opposing_liquidity")) or nearest_opposing_liquidity(fixture, direction, float(active["price"]))
+    reference_liquidity = (
+        next_same_side_liquidity(fixture, active)
+        if fixture_expects_step2_step4_50_line_invalidation(fixture)
+        else None
+    )
     candles = [normalize_candle(candle) for candle in fixture["candles"]]
     step2_state = step_2_1a_initial_state("/".join(active["components"]), float(active["price"]), side, tick_size)
     lifecycle: dict[str, Any] = {}
@@ -1694,6 +1887,8 @@ def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
                     "events": list(lifecycle.get("events") or []),
                 }
             )
+            if reference_liquidity is not None:
+                lifecycle["step2_step4_reference_liquidity"] = reference_liquidity
             reason = "Step 2 activated liquidity interaction."
 
             if fixture["scenario_type"] == "continuation":

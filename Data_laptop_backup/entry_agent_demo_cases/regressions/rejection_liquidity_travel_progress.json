@@ -1,0 +1,84 @@
+{
+  "case_name": "Regression - Rejection liquidity travel progress",
+  "scenario_type": "rejection",
+  "issue": "Rejection-only Leg 1 and Leg 2 liquidity-to-liquidity progress display",
+  "expected_result": "Rejection demo displays Leg 1 50% and Leg 2 75% progress milestones without changing setup qualification or continuation behavior.",
+  "symbol": "YM",
+  "date": "2026-05-28",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "YL": {"price": 90.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "candles": [
+    {"time": "2026-05-28T13:29:00Z", "open": 100.5, "high": 100.75, "low": 95.0, "close": 99.5},
+    {"time": "2026-05-28T13:30:00Z", "open": 99.5, "high": 101.25, "low": 92.0, "close": 100.75},
+    {"time": "2026-05-28T13:31:00Z", "open": 100.75, "high": 101.0, "low": 92.0, "close": 99.25},
+    {"time": "2026-05-28T13:32:00Z", "open": 99.25, "high": 100.75, "low": 91.5, "close": 100.25}
+  ],
+  "expected": [
+    {
+      "time": "2026-05-28T13:29:00Z",
+      "step": "Step 4",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "active_liquidity_name": "PML Liquidity",
+      "setup_direction": "LONG",
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "rejection_leg1_progress_pct": 50,
+      "rejection_leg1_50_reached": "YES",
+      "rejection_leg2_progress_pct": null,
+      "rejection_leg2_75_reached": "NO"
+    },
+    {
+      "time": "2026-05-28T13:30:00Z",
+      "step": "Step 5",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "active_liquidity_name": "PML Liquidity",
+      "setup_direction": "LONG",
+      "leg1_state": "COMPLETE",
+      "leg2_state": "WAIT",
+      "rejection_leg1_progress_pct": 80,
+      "rejection_leg1_50_reached": "YES",
+      "rejection_leg2_progress_pct": 79,
+      "rejection_leg2_75_reached": "YES"
+    },
+    {
+      "time": "2026-05-28T13:31:00Z",
+      "step": "Step 5",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "active_liquidity_name": "PML Liquidity",
+      "setup_direction": "LONG",
+      "leg1_state": "COMPLETE",
+      "leg2_state": "CONFIRMED",
+      "rejection_leg1_progress_pct": 80,
+      "rejection_leg1_50_reached": "YES",
+      "rejection_leg2_progress_pct": 79,
+      "rejection_leg2_75_reached": "YES"
+    },
+    {
+      "time": "2026-05-28T13:32:00Z",
+      "step": "Step 5",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "active_liquidity_name": "PML Liquidity",
+      "setup_direction": "LONG",
+      "leg1_state": "COMPLETE",
+      "leg2_state": "COMPLETE",
+      "step5_confirmed": true,
+      "rejection_leg1_progress_pct": 85,
+      "rejection_leg1_50_reached": "YES",
+      "rejection_leg2_progress_pct": 84,
+      "rejection_leg2_75_reached": "YES"
+    }
+  ],
+  "notes": "Synthetic read-only rejection fixture. Progress values are observational demo fields only."
+}

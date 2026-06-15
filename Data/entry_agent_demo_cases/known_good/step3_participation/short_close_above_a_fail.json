@@ -1,0 +1,157 @@
+{
+    "case_name":  "Step 3 Participation - SHORT close above A close FAIL",
+    "case_type":  "known_good",
+    "review_status":  "APPROVED",
+    "scope":  "step3_participation_demo",
+    "scenario_type":  "rejection",
+    "participation_rule":  "close_beyond_candle_a_extreme_close",
+    "expected_result":  "Close FAIL",
+    "symbol":  "NQ",
+    "date":  "2026-06-12",
+    "tick_size":  0.25,
+    "levels":  {
+                   "PMH":  {
+                               "price":  110,
+                               "side":  "HIGH"
+                           },
+                   "PML":  {
+                               "price":  100,
+                               "side":  "LOW"
+                           }
+               },
+    "active_liquidity":  {
+                             "name":  "PML",
+                             "components":  [
+                                                "PML"
+                                            ],
+                             "price":  100,
+                             "side":  "LOW"
+                         },
+    "setup_direction":  "SHORT",
+    "candles":  [
+                    {
+                        "time":  "2026-06-12T13:30:00Z",
+                        "open":  100.5,
+                        "high":  102.5,
+                        "low":  99.75,
+                        "close":  102.0,
+                        "extreme_close":  102.5,
+                        "highlight_label":  "A"
+                    },
+                    {
+                        "time":  "2026-06-12T13:31:00Z",
+                        "open":  102.5,
+                        "high":  103.25,
+                        "low":  102.0,
+                        "close":  102.75,
+                        "highlight_label":  "Close FAIL"
+                    }
+                ],
+    "close_reference_guides":  [
+                                   {
+                                       "price":  102.5,
+                                       "label":  "Candle A Extreme Close"
+                                   }
+                               ],
+    "expected":  [
+                     {
+                         "time":  "2026-06-12T13:30:00Z",
+                         "step":  "Step 3",
+                         "setup_direction":  "SHORT",
+                         "candle_role":  "Candle A",
+                         "participation_rule":  "close_beyond_candle_a_extreme_close",
+                         "participation_result":  "WAIT",
+                         "leg1_state":  "WAIT",
+                         "leg2_state":  "WAIT"
+                     },
+                     {
+                         "time":  "2026-06-12T13:31:00Z",
+                         "step":  "Step 3",
+                         "setup_direction":  "SHORT",
+                         "candle_role":  "Candle B",
+                         "participation_rule":  "close_beyond_candle_a_extreme_close",
+                         "candle_a_extreme_close":  102.5,
+                         "close_participation_pass":  false,
+                         "participation_result":  "FAIL",
+                         "participation_label":  "Close FAIL",
+                         "leg1_state":  "WAIT",
+                         "leg2_state":  "WAIT"
+                     }
+                 ],
+    "chart_context_candles":  [
+                                  {
+                                      "time":  "2026-06-12T13:22:00Z",
+                                      "open":  98.8,
+                                      "high":  99,
+                                      "low":  98.3,
+                                      "close":  98.6
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:23:00Z",
+                                      "open":  98.6,
+                                      "high":  98.9,
+                                      "low":  98.15,
+                                      "close":  98.45
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:24:00Z",
+                                      "open":  98.45,
+                                      "high":  98.75,
+                                      "low":  98,
+                                      "close":  98.55
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:25:00Z",
+                                      "open":  98.55,
+                                      "high":  98.85,
+                                      "low":  98.1,
+                                      "close":  98.35
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:26:00Z",
+                                      "open":  98.35,
+                                      "high":  98.65,
+                                      "low":  97.95,
+                                      "close":  98.15
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:27:00Z",
+                                      "open":  98.15,
+                                      "high":  98.5,
+                                      "low":  97.8,
+                                      "close":  98.3
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:28:00Z",
+                                      "open":  98.3,
+                                      "high":  98.6,
+                                      "low":  97.9,
+                                      "close":  98.1
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:29:00Z",
+                                      "open":  98.1,
+                                      "high":  98.4,
+                                      "low":  97.7,
+                                      "close":  98
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:30:00Z",
+                                      "open":  100.5,
+                                      "high":  102.5,
+                                      "low":  99.75,
+                                      "close":  102.0,
+                                      "extreme_close":  102.5,
+                                      "highlight_label":  "A"
+                                  },
+                                  {
+                                      "time":  "2026-06-12T13:31:00Z",
+                                      "open":  102.5,
+                                      "high":  103.25,
+                                      "low":  102.0,
+                                      "close":  102.75,
+                                      "highlight_label":  "Close FAIL"
+                                  }
+                              ],
+    "certification_status":  "CERTIFIED"
+}

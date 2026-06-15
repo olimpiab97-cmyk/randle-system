@@ -1,0 +1,40 @@
+{
+  "case_name": "Countdown Display - Opposite-side Step 2 activates independently",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Countdown Display",
+  "scenario_type": "rejection",
+  "expected_result": "Opposite-side Step 2 activation is visualized as independent; it does not invalidate or displace the original opportunity.",
+  "symbol": "NQ",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PMH": {"price": 110.0, "side": "HIGH"},
+    "PML": {"price": 100.0, "side": "LOW"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "level_lifecycle_initial": {
+    "PMH": {"rejection_status": "ACTIVE", "continuation_status": "ACTIVE"},
+    "PML": {"rejection_status": "ACTIVE", "continuation_status": "ACTIVE"}
+  },
+  "candles": [
+    {"time": "2026-06-11T14:00:00Z", "open": 100.5, "high": 100.5, "low": 99.4, "close": 99.5, "highlight_label": "PML Step 2"},
+    {"time": "2026-06-11T14:01:00Z", "open": 99.6, "high": 110.5, "low": 99.5, "close": 110.25, "highlight_label": "PMH Step 2 visual"}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "PMH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]},
+    {"level_lifecycle": [
+      {"level_name": "PMH", "price": 110.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]}
+  ],
+  "demo_display_text": "Opposite-side Step 2 activated independently. Original opportunity remains available unless separately invalidated.",
+  "notes": "Visual-only lifecycle explanation for the blueprint correction: opposite-side Step 2 is not an automatic invalidation event."
+}

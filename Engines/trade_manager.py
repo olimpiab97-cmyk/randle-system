@@ -937,6 +937,216 @@ def structural_dynamic_research_levels(trade):
     return None, None, None
 
 
+def research_atr_value(trade):
+    for key in ("atr_value", "atr_1m_14", "atr"):
+        value = coerce_float(trade.get(key))
+        if value is not None and value > 0:
+            return value
+    return None
+
+
+def original_stop_research_levels(trade):
+    entry_price = coerce_float(trade.get("entry_price"))
+    original_stop = coerce_float(trade.get("original_stop"))
+    original_tp1 = coerce_float(trade.get("original_tp1_price") or trade.get("tp1_price"))
+    if entry_price is None or original_stop is None or original_tp1 is None:
+        return None, None, None
+    distance = abs(entry_price - original_stop)
+    if distance <= 0:
+        return None, None, None
+    return original_stop, original_tp1, round(distance, 4)
+
+
+def half_atr_dynamic_default_fields(reason=None):
+    return {
+        "half_atr_dynamic_enabled": False,
+        "half_atr_dynamic_trigger_reached": False,
+        "half_atr_dynamic_trigger_price": None,
+        "half_atr_dynamic_setup_extreme": None,
+        "half_atr_dynamic_offset_ticks": None,
+        "half_atr_dynamic_stop_price": None,
+        "half_atr_dynamic_stop_distance_ticks": None,
+        "half_atr_dynamic_tp1_price": None,
+        "half_atr_dynamic_tp1_distance_ticks": None,
+        "half_atr_dynamic_used_original_stop": False,
+        "half_atr_dynamic_exit_price": None,
+        "half_atr_dynamic_exit_reason": None,
+        "half_atr_dynamic_result_r": None,
+        "half_atr_dynamic_helped_hurt_same": "unable_to_evaluate",
+        "half_atr_dynamic_unable_to_evaluate_reason": reason,
+    }
+
+
+def half_atr_dynamic_research_levels(trade):
+    entry_price = coerce_float(trade.get("entry_price"))
+    tick_size = coerce_float(get_tick_size(trade.get("symbol")))
+    atr_value = research_atr_value(trade)
+    original_stop, original_tp1, original_distance = original_stop_research_levels(trade)
+    direction = trade.get("direction")
+    if entry_price is None:
+        return None, None, None, None, "missing_entry_price"
+    if tick_size is None or tick_size <= 0:
+        return None, None, None, None, "missing_tick_size"
+    if atr_value is None:
+        return None, None, None, None, "missing_atr_value"
+    if original_stop is None or original_tp1 is None or original_distance is None:
+        return None, None, None, None, "missing_original_stop_or_tp1"
+    structural_stop, _structural_tp1, structural_distance = structural_dynamic_research_levels(trade)
+    if structural_stop is None or structural_distance is None:
+        return None, None, None, None, "missing_setup_extreme"
+
+    if direction == "short":
+        setup_extreme = coerce_float(trade.get("entry_leg_high"))
+        trigger_price = round_to_nearest_tick(entry_price - (atr_value * 0.5), trade.get("symbol"))
+        if structural_distance > original_distance:
+            return original_stop, original_tp1, original_distance, trigger_price, None
+        tp1_price = round_to_nearest_tick(entry_price - structural_distance, trade.get("symbol"))
+        return structural_stop, tp1_price, structural_distance, trigger_price, setup_extreme
+
+    if direction == "long":
+        setup_extreme = coerce_float(trade.get("entry_leg_low"))
+        trigger_price = round_to_nearest_tick(entry_price + (atr_value * 0.5), trade.get("symbol"))
+        if structural_distance > original_distance:
+            return original_stop, original_tp1, original_distance, trigger_price, None
+        tp1_price = round_to_nearest_tick(entry_price + structural_distance, trade.get("symbol"))
+        return structural_stop, tp1_price, structural_distance, trigger_price, setup_extreme
+
+    return None, None, None, None, "missing_direction"
+
+
+def half_atr_dynamic_trigger_reached(trade, price):
+    entry_price = coerce_float(trade.get("entry_price"))
+    current_price = coerce_float(price)
+    atr_value = research_atr_value(trade)
+    if entry_price is None or current_price is None or atr_value is None:
+        return False
+    if trade.get("direction") == "short":
+        return entry_price - current_price >= atr_value * 0.5
+    if trade.get("direction") == "long":
+        return current_price - entry_price >= atr_value * 0.5
+    return False
+
+
+def half_atr_dynamic_model_result_from_exit_reason(reason):
+    if reason == "tp1":
+        return "tp1"
+    if reason == "stop":
+        return "stop"
+    return "no_hit"
+
+
+def half_atr_dynamic_result_r(trade, exit_price, distance_points):
+    entry_price = coerce_float(trade.get("entry_price"))
+    exit_price = coerce_float(exit_price)
+    distance = coerce_float(distance_points)
+    if entry_price is None or exit_price is None or distance is None or distance <= 0:
+        return None
+    if trade.get("direction") == "short":
+        return round((entry_price - exit_price) / distance, 4)
+    if trade.get("direction") == "long":
+        return round((exit_price - entry_price) / distance, 4)
+    return None
+
+
+def actual_result_r(trade):
+    original_stop, _original_tp1, original_distance = original_stop_research_levels(trade)
+    exit_price = coerce_float(trade.get("exit_price") or trade.get("actual_exit_price"))
+    if original_stop is None or original_distance is None or exit_price is None:
+        return None
+    return half_atr_dynamic_result_r(trade, exit_price, original_distance)
+
+
+def classify_half_atr_dynamic_result(trade, model_r):
+    actual_r = actual_result_r(trade)
+    if model_r is None or actual_r is None:
+        return "unable_to_evaluate"
+    if model_r > actual_r + 1e-9:
+        return "helped"
+    if model_r < actual_r - 1e-9:
+        return "hurt"
+    return "same"
+
+
+def initialize_half_atr_dynamic_fields(trade):
+    stop_price, tp1_price, distance, trigger_price, setup_extreme = half_atr_dynamic_research_levels(trade)
+    if isinstance(setup_extreme, str):
+        return half_atr_dynamic_default_fields(setup_extreme)
+    if stop_price is None or tp1_price is None or distance is None or trigger_price is None:
+        reason = "missing_setup_extreme" if setup_extreme is None else "missing_half_atr_dynamic_inputs"
+        return half_atr_dynamic_default_fields(reason)
+
+    tick_size = coerce_float(get_tick_size(trade.get("symbol")))
+    original_stop, original_tp1, original_distance = original_stop_research_levels(trade)
+    used_original = original_stop is not None and round_to_nearest_tick(stop_price, trade.get("symbol")) == round_to_nearest_tick(original_stop, trade.get("symbol"))
+    if setup_extreme is None:
+        setup_extreme = coerce_float(trade.get("entry_leg_high") if trade.get("direction") == "short" else trade.get("entry_leg_low"))
+    distance_ticks = round(distance / tick_size, 4) if tick_size else None
+    return {
+        "half_atr_dynamic_enabled": True,
+        "half_atr_dynamic_trigger_reached": bool(trade.get("half_atr_dynamic_trigger_reached")),
+        "half_atr_dynamic_trigger_price": trigger_price,
+        "half_atr_dynamic_setup_extreme": setup_extreme,
+        "half_atr_dynamic_offset_ticks": 1,
+        "half_atr_dynamic_stop_price": stop_price,
+        "half_atr_dynamic_stop_distance_ticks": distance_ticks,
+        "half_atr_dynamic_tp1_price": tp1_price,
+        "half_atr_dynamic_tp1_distance_ticks": distance_ticks,
+        "half_atr_dynamic_used_original_stop": bool(used_original and original_distance is not None and distance == original_distance and tp1_price == original_tp1),
+        "half_atr_dynamic_exit_price": trade.get("half_atr_dynamic_exit_price"),
+        "half_atr_dynamic_exit_reason": trade.get("half_atr_dynamic_exit_reason"),
+        "half_atr_dynamic_result_r": trade.get("half_atr_dynamic_result_r"),
+        "half_atr_dynamic_helped_hurt_same": trade.get("half_atr_dynamic_helped_hurt_same"),
+        "half_atr_dynamic_unable_to_evaluate_reason": None,
+    }
+
+
+def update_half_atr_dynamic_research(trade, price, timestamp):
+    fields = initialize_half_atr_dynamic_fields(trade)
+    trade.update({key: value for key, value in fields.items() if key.startswith("half_atr_dynamic_")})
+    if not fields["half_atr_dynamic_enabled"]:
+        return trade
+
+    if not trade.get("half_atr_dynamic_trigger_reached"):
+        if not half_atr_dynamic_trigger_reached(trade, price):
+            return trade
+        trade["half_atr_dynamic_trigger_reached"] = True
+        trade["half_atr_dynamic_triggered_at"] = timestamp
+
+    if trade.get("half_atr_dynamic_exit_reason"):
+        return trade
+
+    current_price = coerce_float(price)
+    stop_price = coerce_float(trade.get("half_atr_dynamic_stop_price"))
+    tp1_price = coerce_float(trade.get("half_atr_dynamic_tp1_price"))
+    distance_ticks = coerce_float(trade.get("half_atr_dynamic_stop_distance_ticks"))
+    tick_size = coerce_float(get_tick_size(trade.get("symbol")))
+    distance_points = distance_ticks * tick_size if distance_ticks is not None and tick_size is not None else None
+    exit_reason = None
+    exit_price = None
+    if trade.get("direction") == "short":
+        if current_price is not None and current_price <= tp1_price:
+            exit_reason = "tp1"
+            exit_price = tp1_price
+        elif current_price is not None and current_price >= stop_price:
+            exit_reason = "stop"
+            exit_price = stop_price
+    elif trade.get("direction") == "long":
+        if current_price is not None and current_price >= tp1_price:
+            exit_reason = "tp1"
+            exit_price = tp1_price
+        elif current_price is not None and current_price <= stop_price:
+            exit_reason = "stop"
+            exit_price = stop_price
+
+    if exit_reason:
+        trade["half_atr_dynamic_exit_price"] = exit_price
+        trade["half_atr_dynamic_exit_reason"] = exit_reason
+        model_r = half_atr_dynamic_result_r(trade, exit_price, distance_points)
+        trade["half_atr_dynamic_result_r"] = model_r
+        trade["half_atr_dynamic_helped_hurt_same"] = classify_half_atr_dynamic_result(trade, model_r)
+    return trade
+
+
 def fixed_research_distance_points(symbol, distance_id):
     symbol_root = normalize_symbol_root(symbol)
     tick_size = coerce_float(get_tick_size(symbol))
@@ -1023,6 +1233,7 @@ def update_research_models(trade, price, timestamp):
             tp1_price,
             distance,
         )
+    update_half_atr_dynamic_research(trade, price, timestamp)
 
 
 def update_post_be_analytics(trade, price, timestamp):
@@ -1113,6 +1324,90 @@ def fixed_research_row_fields(trade):
     return fields
 
 
+def half_atr_dynamic_research_row_fields(trade):
+    fields = initialize_half_atr_dynamic_fields(trade)
+    for key, value in fields.items():
+        if trade.get(key) is not None:
+            fields[key] = trade.get(key)
+
+    if not fields["half_atr_dynamic_enabled"]:
+        return fields
+
+    if not fields["half_atr_dynamic_trigger_reached"]:
+        best_price = coerce_float(trade.get("post_be_best_price"))
+        if best_price is not None and half_atr_dynamic_trigger_reached(trade, best_price):
+            fields["half_atr_dynamic_trigger_reached"] = True
+
+    if fields["half_atr_dynamic_trigger_reached"] and not fields["half_atr_dynamic_exit_reason"]:
+        best_price = coerce_float(trade.get("post_be_best_price"))
+        worst_price = coerce_float(trade.get("post_be_worst_price"))
+        stop_price = coerce_float(fields.get("half_atr_dynamic_stop_price"))
+        tp1_price = coerce_float(fields.get("half_atr_dynamic_tp1_price"))
+        aggregate_exit_reason = None
+        aggregate_exit_price = None
+        if trade.get("direction") == "short":
+            tp1_hit = best_price is not None and tp1_price is not None and best_price <= tp1_price
+            stop_hit = worst_price is not None and stop_price is not None and worst_price >= stop_price
+            if tp1_hit and not stop_hit:
+                aggregate_exit_reason = "tp1"
+                aggregate_exit_price = tp1_price
+            elif stop_hit and not tp1_hit:
+                aggregate_exit_reason = "stop"
+                aggregate_exit_price = stop_price
+            elif tp1_hit and stop_hit:
+                aggregate_exit_reason = "both_hit_order_unknown"
+        elif trade.get("direction") == "long":
+            tp1_hit = best_price is not None and tp1_price is not None and best_price >= tp1_price
+            stop_hit = worst_price is not None and stop_price is not None and worst_price <= stop_price
+            if tp1_hit and not stop_hit:
+                aggregate_exit_reason = "tp1"
+                aggregate_exit_price = tp1_price
+            elif stop_hit and not tp1_hit:
+                aggregate_exit_reason = "stop"
+                aggregate_exit_price = stop_price
+            elif tp1_hit and stop_hit:
+                aggregate_exit_reason = "both_hit_order_unknown"
+
+        if aggregate_exit_reason in {"tp1", "stop"}:
+            distance_ticks = coerce_float(fields.get("half_atr_dynamic_stop_distance_ticks"))
+            tick_size = coerce_float(get_tick_size(trade.get("symbol")))
+            distance_points = distance_ticks * tick_size if distance_ticks is not None and tick_size is not None else None
+            fields["half_atr_dynamic_exit_price"] = aggregate_exit_price
+            fields["half_atr_dynamic_exit_reason"] = aggregate_exit_reason
+            model_r = half_atr_dynamic_result_r(trade, aggregate_exit_price, distance_points)
+            fields["half_atr_dynamic_result_r"] = model_r
+            fields["half_atr_dynamic_helped_hurt_same"] = classify_half_atr_dynamic_result(trade, model_r)
+            return fields
+        if aggregate_exit_reason == "both_hit_order_unknown":
+            fields["half_atr_dynamic_exit_reason"] = aggregate_exit_reason
+            fields["half_atr_dynamic_helped_hurt_same"] = "unable_to_evaluate"
+            fields["half_atr_dynamic_unable_to_evaluate_reason"] = "both_stop_and_tp1_hit_order_unknown"
+            return fields
+
+        exit_price = coerce_float(trade.get("exit_price") or trade.get("actual_exit_price"))
+        distance_ticks = coerce_float(fields.get("half_atr_dynamic_stop_distance_ticks"))
+        tick_size = coerce_float(get_tick_size(trade.get("symbol")))
+        distance_points = distance_ticks * tick_size if distance_ticks is not None and tick_size is not None else None
+        if exit_price is not None:
+            fields["half_atr_dynamic_exit_price"] = exit_price
+            fields["half_atr_dynamic_exit_reason"] = trade.get("exit_reason") or trade.get("actual_exit_reason") or "actual_exit"
+            model_r = half_atr_dynamic_result_r(trade, exit_price, distance_points)
+            fields["half_atr_dynamic_result_r"] = model_r
+            fields["half_atr_dynamic_helped_hurt_same"] = classify_half_atr_dynamic_result(trade, model_r)
+
+    if fields["half_atr_dynamic_trigger_reached"] and fields["half_atr_dynamic_exit_reason"]:
+        model_r = fields.get("half_atr_dynamic_result_r")
+        if model_r is None:
+            distance_ticks = coerce_float(fields.get("half_atr_dynamic_stop_distance_ticks"))
+            tick_size = coerce_float(get_tick_size(trade.get("symbol")))
+            distance_points = distance_ticks * tick_size if distance_ticks is not None and tick_size is not None else None
+            model_r = half_atr_dynamic_result_r(trade, fields.get("half_atr_dynamic_exit_price"), distance_points)
+            fields["half_atr_dynamic_result_r"] = model_r
+        fields["half_atr_dynamic_helped_hurt_same"] = classify_half_atr_dynamic_result(trade, model_r)
+
+    return fields
+
+
 def build_trade_management_research_row(trade):
     structural_stop_price, structural_tp1_price, structural_distance = structural_dynamic_research_levels(trade)
     row = {
@@ -1128,6 +1423,9 @@ def build_trade_management_research_row(trade):
         "actual_exit_price": trade.get("exit_price"),
         "actual_exit_reason": trade.get("exit_reason"),
         "actual_result": actual_trade_result(trade),
+        "atr_value": research_atr_value(trade),
+        "atr_source": trade.get("atr_source"),
+        "atr_bar_timestamp": trade.get("atr_bar_timestamp"),
         "post_be_best_price": trade.get("post_be_best_price"),
         "post_be_worst_price": trade.get("post_be_worst_price"),
         "post_be_mfe_points": trade.get("post_be_mfe_points"),
@@ -1138,6 +1436,8 @@ def build_trade_management_research_row(trade):
         "post_be_last_updated_at": trade.get("post_be_last_updated_at"),
         "entry_leg_high": trade.get("entry_leg_high"),
         "entry_leg_low": trade.get("entry_leg_low"),
+        "entry_leg_timestamp": trade.get("entry_leg_timestamp"),
+        "entry_leg_source": trade.get("entry_leg_source"),
         "structural_dynamic_stop_price": trade.get("structural_dynamic_stop_price") or structural_stop_price,
         "structural_dynamic_tp1_price": trade.get("structural_dynamic_tp1_price") or structural_tp1_price,
         "structural_dynamic_stop_distance_points": (
@@ -1148,6 +1448,7 @@ def build_trade_management_research_row(trade):
         "structural_dynamic_model_result": research_model_result(trade, "structural_dynamic"),
     }
     row.update(fixed_research_row_fields(trade))
+    row.update(half_atr_dynamic_research_row_fields(trade))
     return row
 
 

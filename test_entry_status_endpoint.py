@@ -3931,7 +3931,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
             entry_agent.run_once = original_run_once
 
         self.assertEqual(status["current_step"], "Step 4")
-        self.assertEqual(status["current_step_label"], "Shared Leg 1 Confirmed")
+        self.assertEqual(status["current_step_label"], "Leg 1 Complete")
         self.assertEqual(status["current_step_status"], "CONFIRMED")
         self.assertEqual(status["leg1_status"], "COMPLETE")
         self.assertEqual(status["leg1_state"], "COMPLETE")
@@ -4657,7 +4657,7 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(step2_status["entry_status"], "WAIT")
 
         self.assertEqual(leg1_status["current_step"], "Step 4")
-        self.assertEqual(leg1_status["current_step_label"], "Shared Leg 1 Confirmed")
+        self.assertEqual(leg1_status["current_step_label"], "Leg 1 Complete")
         self.assertEqual(leg1_status["current_step_status"], "CONFIRMED")
         self.assertEqual(leg1_status["leg1_status"], "COMPLETE")
         self.assertEqual(leg1_status["leg1_state"], "COMPLETE")
@@ -4674,6 +4674,113 @@ class EntryStatusEndpointTests(unittest.TestCase):
         self.assertEqual(leg1_status["continuation_side"]["setup_direction"], "SHORT")
         self.assertEqual(leg1_status["leg2_status"], "WAIT")
         self.assertEqual(leg1_status["entry_status"], "WAIT")
+
+    def test_nq_2026_06_12_step4_participation_lines_remain_visible_after_step2(self):
+        sys.path.insert(0, str(ENTRY_AGENT_DIR))
+        try:
+            import entry_agent
+            import tv_context_server as server
+        finally:
+            try:
+                sys.path.remove(str(ENTRY_AGENT_DIR))
+            except ValueError:
+                pass
+
+        original_state_path = entry_agent.STATE_PATH
+        original_context_path = entry_agent.TV_CONTEXT_PATH
+        original_by_symbol_path = entry_agent.TV_CONTEXT_BY_SYMBOL_PATH
+        original_atr_path = entry_agent.RITHMIC_ATR_SNAPSHOT_PATH
+        original_market_snapshot = entry_agent.get_latest_market_snapshot
+        original_recent_closed_bars = entry_agent.recent_closed_bars
+        self.addCleanup(setattr, entry_agent, "STATE_PATH", original_state_path)
+        self.addCleanup(setattr, entry_agent, "TV_CONTEXT_PATH", original_context_path)
+        self.addCleanup(setattr, entry_agent, "TV_CONTEXT_BY_SYMBOL_PATH", original_by_symbol_path)
+        self.addCleanup(setattr, entry_agent, "RITHMIC_ATR_SNAPSHOT_PATH", original_atr_path)
+        self.addCleanup(setattr, entry_agent, "get_latest_market_snapshot", original_market_snapshot)
+        self.addCleanup(setattr, entry_agent, "recent_closed_bars", original_recent_closed_bars)
+
+        step2_candle = {
+            "open": 29383.0,
+            "high": 29392.5,
+            "low": 29316.25,
+            "close": 29322.5,
+            "timestamp": "2026-06-12T13:33:00Z",
+        }
+        touch_candle = {
+            "open": 29325.0,
+            "high": 29355.75,
+            "low": 29303.0,
+            "close": 29333.0,
+            "timestamp": "2026-06-12T13:34:00Z",
+        }
+        candles = [step2_candle, touch_candle]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            entry_agent.STATE_PATH = temp_path / "entry_agent_state.json"
+            entry_agent.TV_CONTEXT_PATH = temp_path / "tv_context.json"
+            entry_agent.TV_CONTEXT_BY_SYMBOL_PATH = temp_path / "tv_context_by_symbol.json"
+            entry_agent.RITHMIC_ATR_SNAPSHOT_PATH = temp_path / "atr.json"
+            cursor = {"index": 0}
+
+            def market_snapshot(_symbol):
+                candle = candles[cursor["index"]]
+                return {
+                    "source": "test",
+                    "symbol": "NQM6",
+                    "latest_price": candle["close"],
+                    "latest_bar_time": candle["timestamp"],
+                    "ohlc_is_closed": True,
+                    "ohlc": candle,
+                }
+
+            entry_agent.get_latest_market_snapshot = market_snapshot
+            entry_agent.recent_closed_bars = lambda _symbol, limit=2: candles[: cursor["index"] + 1][-limit:]
+            entry_agent.TV_CONTEXT_BY_SYMBOL_PATH.write_text(
+                json.dumps(
+                    {
+                        "symbols": {
+                            "NQ": {
+                                "symbol": "NQ1!",
+                                "normalized_symbol": "NQ",
+                                "locked": True,
+                                "levels": {
+                                    "PML": {"price": 29354.0, "status": "ACTIVE", "stack_group": "NONE"},
+                                    "ONL": {"price": 29260.0, "status": "ACTIVE", "stack_group": "NONE"},
+                                    "PMH": {"price": 29646.0, "status": "ACTIVE", "stack_group": "NONE"},
+                                },
+                                "atr_1m_14": 20.0,
+                                "daily_atr14": 200.0,
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            step2_status = entry_agent.build_entry_status("NQ")
+            step2_reasoning = server.entry_reasoning_record(step2_status, "2026-06-12T13:33:00Z")
+            cursor["index"] = 1
+            invalidated_status = entry_agent.build_entry_status("NQ")
+
+        self.assertEqual(step2_status["current_step"], "Step 2")
+        self.assertEqual(step2_status["current_step_status"], "CONFIRMED")
+        self.assertEqual(step2_status["setup_direction"], "LONG")
+        self.assertEqual(step2_status["leg1_window_started_at"], "2026-06-12T13:33:00Z")
+        self.assertEqual(step2_status["leg1_window_candle_index"], 0)
+        self.assertEqual(step2_status["step4_participation_50_line"], 29307.0)
+        self.assertEqual(step2_status["step4_participation_75_line"], 29283.5)
+        self.assertTrue(step2_status["step4_participation_lines_visible"])
+        self.assertEqual(step2_status["rejection_side"]["step4_participation_50_line"], 29307.0)
+        self.assertTrue(step2_status["rejection_side"]["step4_participation_lines_visible"])
+        self.assertEqual(step2_reasoning["step4_participation_50_line"], 29307.0)
+        self.assertEqual(step2_reasoning["step4_participation_75_line"], 29283.5)
+        self.assertTrue(step2_reasoning["step4_participation_lines_visible"])
+
+        self.assertEqual(invalidated_status["invalidation_reason"], "STEP2_STEP4_50_LINE_TOUCHED")
+        self.assertEqual(invalidated_status["leg1_window_invalidation_reason"], "STEP2_STEP4_50_LINE_TOUCHED")
+        self.assertEqual(invalidated_status["step4_participation_50_line"], 29307.0)
+        self.assertFalse(invalidated_status["step4_participation_lines_visible"])
 
     def test_rejection_step2_remains_visible_when_continuation_controls_before_shared_leg1(self):
         sys.path.insert(0, str(ENTRY_AGENT_DIR))

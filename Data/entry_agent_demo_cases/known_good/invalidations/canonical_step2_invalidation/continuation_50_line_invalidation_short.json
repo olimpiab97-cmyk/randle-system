@@ -1,0 +1,59 @@
+{
+  "case_name": "Continuation 50% Line Invalidation (Short)",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Canonical Step 2 Invalidation Matrix",
+  "scenario_type": "continuation",
+  "continuation_type": "R/S",
+  "expected_result": "Short-side continuation opportunity invalidates when price touches the 50% line before valid Step 4 participation; rejection remains available.",
+  "symbol": "NQ",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 80.0,
+  "levels": {"PMH": {"price": 100.0, "side": "HIGH"}, "ONH": {"price": 150.0, "side": "HIGH"}},
+  "stacks": [],
+  "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"},
+  "teaching_display_levels": ["PMH"],
+  "lifecycle_context": [
+    "Active Liquidity: PMH 100",
+    "Reference Liquidity: ONH 150",
+    "50% Line: 125",
+    "Result: Continuation 50% Line Invalidation"
+  ],
+  "lifecycle_event_progression": [
+    {"event_number": 1, "label": "50% Line Touched", "detail": "Price touched the 50% line before valid Step 4 participation"},
+    {"event_number": 2, "label": "Continuation Invalidated", "detail": "Reason: 50% line touched before Step 4 participation"}
+  ],
+  "lifecycle_final_state": ["Rejection: AVAILABLE", "Continuation: DEAD", "Level: ACTIVE"],
+  "lifecycle_progression": [
+    {"type": "state", "state": "A", "label": "Starting Opportunity State", "rejection_status": "AVAILABLE", "continuation_status": "AVAILABLE", "level_status": "ACTIVE"},
+    {"type": "event", "event_number": 1, "label": "50% Line Touched", "detail": "Price touched the 50% line before valid Step 4 participation"},
+    {"type": "event", "event_number": 2, "label": "Continuation Invalidated", "detail": "Reason: 50% line touched before Step 4 participation"},
+    {"type": "state", "state": "B", "label": "Continuation Dead, Rejection Still Available", "rejection_status": "AVAILABLE", "continuation_status": "DEAD", "level_status": "ACTIVE"}
+  ],
+  "candles": [
+    {"time": "2026-06-11T14:10:00Z", "open": 99.5, "high": 100.6, "low": 99.5, "close": 100.5},
+    {"time": "2026-06-11T14:11:00Z", "open": 100.5, "high": 125.0, "low": 100.5, "close": 101.0}
+  ],
+  "expected": [
+    {"time": "2026-06-11T14:10:00Z", "step": "Step 4", "pathway_type": "Continuation", "current_pathway_control": "continuation", "setup_direction": "SHORT", "leg1_state": "WAIT", "leg1_window_candle_index": 0, "leg1_window_remaining": 4},
+    {
+      "time": "2026-06-11T14:11:00Z",
+      "step": "Step 4",
+      "pathway_type": "Continuation",
+      "current_pathway_control": "continuation",
+      "setup_direction": "SHORT",
+      "leg1_state": "WAIT",
+      "leg1_window_remaining": 0,
+      "invalidation_reason": "STEP2_STEP4_50_LINE_TOUCHED",
+      "level_lifecycle": [
+        {"level_name": "ONH", "price": 150.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+        {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "STEP2_STEP4_50_LINE_TOUCHED", "level_status": "ACTIVE"}
+      ]
+    }
+  ],
+  "demo_display_text": "Short continuation invalidated when price touches the 50% line before valid Step 4 participation. Rejection remains available.",
+  "notes": "Placeholder for canonical invalidation matrix."
+}

@@ -1,0 +1,160 @@
+{
+  "case_name": "Gold Standard STEP 2 - 2026-06-04 NQ Zone Transition",
+  "scope": "step2_zone_transition_only",
+  "scenario_type": "rejection",
+  "issue": "Step 2 active liquidity focus shifts zone-to-zone after next-zone wick/reach.",
+  "expected_result": "PMH is the prior working zone; after price reaches the stacked low-side zone, Step 2 evaluates PML/LL/ONL as the active focus.",
+  "step2_scenario_text": "PMH is the prior working zone. Price wicks/reaches into PML/LL/ONL. The watched zone shifts to PML/LL/ONL. PML/LL/ONL is a stack with components PML, LL, ONL. PML/LL/ONL remains WAIT until a qualifying close below the stack. It is not ACTIVE from wick-only reach.",
+  "step_logic_scenarios": [
+    {
+      "title": "Core Rule 1 - Explicit entry consumes level",
+      "summary": "We can only be in one trade at a time. If a valid Step 6 entry triggers at a level, that level is immediately CONSUMED because the trade should now be active. No further opportunity tracking is needed at that level.",
+      "steps": [
+        "PMH is the working liquidity level.",
+        "Price closes above PMH and activates Step 2.",
+        "Leg 1 forms above PMH.",
+        "Leg 2 forms above PMH.",
+        "Valid Step 6 short entry triggers.",
+        "PMH level is CONSUMED.",
+        "Reason: EXPLICIT_ENTRY_TRIGGERED / STEP6_ENTRY_TRIGGERED.",
+        "No R/S continuation remains available at PMH because an entry was triggered and we can only be in one trade at a time."
+      ],
+      "expected_state": {
+        "level_status": "CONSUMED",
+        "rejection_status": "INVALIDATED",
+        "rejection_reason": "EXPLICIT_ENTRY_TRIGGERED / STEP6_ENTRY_TRIGGERED",
+        "continuation_status": "INVALIDATED",
+        "continuation_reason": "EXPLICIT_ENTRY_TRIGGERED / STEP6_ENTRY_TRIGGERED"
+      }
+    },
+    {
+      "title": "Core Rule 2 - No-entry reaction invalidates rejection only",
+      "summary": "If Step 6 never triggers by Candle 4, but the short reaction still happens, the rejection opportunity is invalidated because the move happened without entry. Since no trade was entered, the level itself is not consumed. R/S continuation can still become active if price closes back below PMH.",
+      "steps": [
+        "PMH is the working liquidity level.",
+        "Price closes above PMH and activates Step 2.",
+        "Leg 1 forms above PMH.",
+        "Leg 2 forms above PMH.",
+        "Step 6 window opens.",
+        "No valid Step 6 entry triggers by Candle 4.",
+        "Price still reacts short from PMH.",
+        "PMH Rejection Opportunity = INVALIDATED.",
+        "Reason: NO_ENTRY_REACTION / STEP6_NO_ENTRY_REACTION.",
+        "PMH level is NOT consumed because no explicit trade entry occurred.",
+        "If price closes back below PMH, R/S Continuation becomes ACTIVE.",
+        "R/S Continuation remains available because no trade was entered."
+      ],
+      "expected_state": {
+        "level_status": "ACTIVE",
+        "rejection_status": "INVALIDATED",
+        "rejection_reason": "NO_ENTRY_REACTION / STEP6_NO_ENTRY_REACTION",
+        "continuation_status": "ACTIVE once price closes back below PMH",
+        "continuation_reason": "R/S continuation remains available because no trade was entered"
+      }
+    }
+  ],
+  "level_status_cards": [
+    {
+      "level_name": "PMH",
+      "price": 100.0,
+      "side": "HIGH",
+      "level_status": "CONSUMED",
+      "rejection_status": "INVALIDATED",
+      "rejection_invalidation_reason": "STEP6_ENTRY_TRIGGERED",
+      "continuation_status": "INVALIDATED",
+      "continuation_invalidation_reason": "NEXT_LEVEL_TOUCH"
+    },
+    {
+      "level_name": "PML/LL/ONL",
+      "price": 88.0,
+      "side": "LOW",
+      "components": ["PML", "LL", "ONL"],
+      "level_status": "WAIT",
+      "rejection_status": "WAIT",
+      "continuation_status": "WAIT"
+    }
+  ],
+  "symbol": "NQ",
+  "date": "2026-06-04",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 110.0,
+  "levels": {
+    "PMH": {"price": 100.0, "side": "HIGH"},
+    "PML/LL/ONL": {"price": 88.0, "side": "LOW"}
+  },
+  "stacks": [
+    {
+      "name": "PML/LL/ONL",
+      "components": ["PML", "LL", "ONL"],
+      "price": 88.0,
+      "side": "LOW",
+      "close_boundary_level": "PML",
+      "close_boundary_price": 90.0,
+      "extreme_boundary_level": "LL/ONL",
+      "extreme_boundary_price": 88.0,
+      "qualification_boundary_price": 88.0
+    }
+  ],
+  "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"},
+  "focus_sequence": [
+    {
+      "prior_step2_focus": null,
+      "zone_transition": false,
+      "zone_transition_reason": "PMH is the working high-side liquidity zone.",
+      "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"}
+    },
+    {
+      "prior_step2_focus": "PMH Liquidity",
+      "zone_transition": true,
+      "zone_transition_reason": "Price reached/wicked into the next lower stacked liquidity zone.",
+      "active_liquidity": {"name": "PML/LL/ONL", "components": ["PML", "LL", "ONL"], "price": 88.0, "side": "LOW"}
+    }
+  ],
+  "candles": [
+    {"time": "2026-06-04T13:30:00Z", "open": 99.5, "high": 100.5, "low": 99.0, "close": 100.25},
+    {"time": "2026-06-04T13:33:00Z", "open": 91.0, "high": 91.5, "low": 88.0, "close": 89.0}
+  ],
+  "expected": [
+    {
+      "time": "2026-06-04T13:30:00Z",
+      "step": "Step 2",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": true,
+      "active_liquidity_name": "PMH Liquidity",
+      "setup_direction": "SHORT",
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "prior_step2_focus": null,
+      "current_step2_focus": "PMH Liquidity",
+      "step2_evaluation_target": "PMH Liquidity",
+      "zone_transition": false,
+      "stack_components": ["PMH"],
+      "stack_level_status": "ACTIVE",
+      "rejection_opportunity_status": "ACTIVE",
+      "continuation_opportunity_status": "ACTIVE"
+    },
+    {
+      "time": "2026-06-04T13:33:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "prior_step2_focus": "PMH Liquidity",
+      "current_step2_focus": "PML/LL/ONL Liquidity",
+      "step2_evaluation_target": "PML/LL/ONL Liquidity",
+      "zone_transition": true,
+      "zone_transition_reason": "Price reached/wicked into the next lower stacked liquidity zone.",
+      "stack_components": ["PML", "LL", "ONL"],
+      "stack_level_status": "WAIT",
+      "rejection_opportunity_status": "WAIT",
+      "continuation_opportunity_status": "WAIT"
+    }
+  ],
+  "notes": "Step 2 focus-only regression. It validates active liquidity focus, stack recognition, zone-to-zone transition, and Step 2 evaluation target only; it does not evaluate Step 4, Step 5, Step 6, entries, trade management, or lifecycle invalidation."
+}

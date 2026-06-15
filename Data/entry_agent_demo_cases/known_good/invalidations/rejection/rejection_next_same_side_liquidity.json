@@ -1,0 +1,36 @@
+{
+  "case_name": "Invalidation - Rejection next same-side liquidity",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Rejection Invalidations",
+  "scenario_type": "rejection",
+  "expected_result": "Rejection invalidates when next same-side liquidity takes over; continuation remains available.",
+  "symbol": "NQ",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 80.0,
+  "levels": {
+    "PMH": {"price": 100.0, "side": "HIGH"},
+    "ONH": {"price": 104.0, "side": "HIGH"},
+    "PML": {"price": 80.0, "side": "LOW"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"},
+  "level_lifecycle_events": [
+    {"candle_index": 0, "level": "PMH", "opportunity": "rejection", "reason": "NEXT_ZONE_ACCEPTANCE"}
+  ],
+  "candles": [
+    {"time": "2026-06-11T14:12:00Z", "open": 99.5, "high": 104.25, "low": 99.25, "close": 103.75, "highlight_label": "Next same-side"}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 104.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "NEXT_ZONE_ACCEPTANCE", "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 80.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]}
+  ],
+  "demo_display_text": "Rejection invalidated: next same-side liquidity. Continuation remains available.",
+  "notes": "Opposite-side Step 2 is not involved and is not treated as an invalidation event."
+}

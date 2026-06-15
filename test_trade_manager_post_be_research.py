@@ -171,6 +171,168 @@ class TradeManagerPostBeResearchTests(unittest.TestCase):
         self.assertEqual(trade["entry_leg_timestamp"], "2026-05-29T13:00:00Z")
         self.assertEqual(trade["entry_leg_source"], "entry_context")
 
+    def test_entry_leg_extremes_are_captured_from_successful_entry_fill_metadata(self):
+        manager = self._load_manager()
+        trade = {"symbol": "NQ", "entry_leg_high": None, "entry_leg_low": None}
+
+        manager.capture_entry_leg_extremes(
+            trade,
+            {
+                "ok": True,
+                "fill_price": 30439.75,
+                "current_1m_bar_high": 30451.0,
+                "current_1m_bar_low": 30424.5,
+                "current_1m_bar_timestamp": "2026-06-02T13:41:00",
+            },
+        )
+
+        self.assertEqual(trade["entry_leg_high"], 30451.0)
+        self.assertEqual(trade["entry_leg_low"], 30424.5)
+        self.assertEqual(trade["entry_leg_timestamp"], "2026-06-02T13:41:00")
+        self.assertEqual(trade["entry_leg_source"], "entry_context")
+
+    def test_submit_trade_persists_successful_entry_metadata_in_trade_state(self):
+        manager = self._load_manager()
+        persisted = []
+        manager.can_execute_trade = lambda **kwargs: (True, "ok")
+        manager.resolve_execution_symbol = lambda symbol: ("NQM6", "test")
+        manager.fetch_trade_entry_atr_snapshot = lambda symbol: {
+            "atr_value": 10.0,
+            "atr_source": "test_atr",
+            "atr_bar_timestamp": "2026-06-02T13:40:00",
+        }
+        manager.place_entry_order = lambda **kwargs: {
+            "ok": True,
+            "broker_order_id": "ENTRY-1",
+            "fill_price": 30439.75,
+            "fill_price_source": "executor_actual_fill",
+            "current_1m_bar_high": 30451.0,
+            "current_1m_bar_low": 30424.5,
+            "current_1m_bar_timestamp": "2026-06-02T13:41:00",
+            "order": {"filled_price": 30439.75},
+        }
+        manager.place_stop_order = lambda **kwargs: {"ok": True, "broker_order_id": "STOP-1"}
+        manager.place_limit_order = lambda **kwargs: {"ok": True, "broker_order_id": "LIMIT-1"}
+        manager.persist_trade_state = lambda trade: persisted.append(dict(trade))
+        manager.log_trade_event = lambda *args, **kwargs: None
+        manager.register_new_trade = lambda: None
+
+        trade = manager.submit_trade({
+            "event": "enter_trade",
+            "symbol": "NQ",
+            "direction": "long",
+            "position_size": 2,
+        })
+
+        self.assertEqual(trade["entry_leg_high"], 30451.0)
+        self.assertEqual(trade["entry_leg_low"], 30424.5)
+        self.assertEqual(trade["entry_leg_timestamp"], "2026-06-02T13:41:00")
+        self.assertEqual(trade["entry_price"], 30439.75)
+        self.assertEqual(trade["original_stop"], 30429.75)
+        self.assertEqual(trade["tp1_price"], 30449.75)
+        self.assertEqual(trade["be_trigger"], 30444.75)
+        self.assertTrue(any(item.get("entry_leg_high") == 30451.0 for item in persisted))
+
+    def test_research_row_uses_entry_metadata_for_half_atr_without_recovery(self):
+        manager = self._load_manager()
+        trade = self._base_trade(symbol="NQ", direction="long", entry=30439.75, leg_low=None)
+        trade["atr_value"] = 10.0
+        manager.capture_entry_leg_extremes(
+            trade,
+            {
+                "current_1m_bar_high": 30451.0,
+                "current_1m_bar_low": 30424.5,
+                "current_1m_bar_timestamp": "2026-06-02T13:41:00",
+            },
+        )
+
+        manager.update_post_be_analytics(trade, 30445.0, "2026-06-02T13:42:00Z")
+        manager.update_post_be_analytics(trade, 30455.25, "2026-06-02T13:43:00Z")
+        row = manager.build_trade_management_research_row(trade)
+
+        self.assertEqual(row["entry_leg_high"], 30451.0)
+        self.assertEqual(row["entry_leg_low"], 30424.5)
+        self.assertEqual(row["entry_leg_timestamp"], "2026-06-02T13:41:00")
+        self.assertTrue(row["half_atr_dynamic_enabled"])
+        self.assertTrue(row["half_atr_dynamic_trigger_reached"])
+        self.assertEqual(row["half_atr_dynamic_setup_extreme"], 30424.5)
+        self.assertEqual(row["half_atr_dynamic_exit_reason"], "tp1")
+
+    def test_half_atr_dynamic_trigger_adjusts_stop_and_tp1(self):
+        manager = self._load_manager()
+        trade = self._base_trade(symbol="NQ", direction="short", entry=100.0, leg_high=106.75)
+        trade["atr_value"] = 10.0
+
+        manager.update_post_be_analytics(trade, 95.0, "2026-05-29T13:01:00Z")
+
+        self.assertTrue(trade["half_atr_dynamic_enabled"])
+        self.assertTrue(trade["half_atr_dynamic_trigger_reached"])
+        self.assertEqual(trade["half_atr_dynamic_trigger_price"], 95.0)
+        self.assertEqual(trade["half_atr_dynamic_setup_extreme"], 106.75)
+        self.assertEqual(trade["half_atr_dynamic_offset_ticks"], 1)
+        self.assertEqual(trade["half_atr_dynamic_stop_price"], 107.0)
+        self.assertEqual(trade["half_atr_dynamic_stop_distance_ticks"], 28.0)
+        self.assertEqual(trade["half_atr_dynamic_tp1_price"], 93.0)
+        self.assertEqual(trade["half_atr_dynamic_tp1_distance_ticks"], 28.0)
+
+    def test_half_atr_dynamic_tp1_exits_at_adjusted_risk_distance(self):
+        manager = self._load_manager()
+        trade = self._base_trade(symbol="NQ", direction="short", entry=100.0, leg_high=106.75)
+        trade["atr_value"] = 10.0
+
+        manager.update_post_be_analytics(trade, 95.0, "2026-05-29T13:01:00Z")
+        manager.update_post_be_analytics(trade, 93.0, "2026-05-29T13:02:00Z")
+
+        self.assertEqual(trade["half_atr_dynamic_exit_price"], 93.0)
+        self.assertEqual(trade["half_atr_dynamic_exit_reason"], "tp1")
+        self.assertEqual(trade["half_atr_dynamic_result_r"], 1.0)
+
+    def test_half_atr_dynamic_keeps_original_when_structural_stop_worse(self):
+        manager = self._load_manager()
+        trade = self._base_trade(symbol="NQ", direction="short", entry=100.0, leg_high=106.75)
+        trade["atr_value"] = 10.0
+        trade["original_stop"] = 104.0
+        trade["tp1_price"] = 96.0
+
+        manager.update_post_be_analytics(trade, 95.0, "2026-05-29T13:01:00Z")
+
+        self.assertTrue(trade["half_atr_dynamic_enabled"])
+        self.assertTrue(trade["half_atr_dynamic_used_original_stop"])
+        self.assertEqual(trade["half_atr_dynamic_stop_price"], 104.0)
+        self.assertEqual(trade["half_atr_dynamic_stop_distance_ticks"], 16.0)
+        self.assertEqual(trade["half_atr_dynamic_tp1_price"], 96.0)
+
+    def test_half_atr_dynamic_missing_setup_extreme_is_not_evaluable(self):
+        manager = self._load_manager()
+        trade = self._base_trade(symbol="NQ", direction="short", entry=100.0, leg_high=None)
+        trade["atr_value"] = 10.0
+
+        manager.update_post_be_analytics(trade, 95.0, "2026-05-29T13:01:00Z")
+        row = manager.build_trade_management_research_row(trade)
+
+        self.assertFalse(row["half_atr_dynamic_enabled"])
+        self.assertFalse(row["half_atr_dynamic_trigger_reached"])
+        self.assertEqual(row["half_atr_dynamic_helped_hurt_same"], "unable_to_evaluate")
+        self.assertEqual(row["half_atr_dynamic_unable_to_evaluate_reason"], "missing_setup_extreme")
+
+    def test_half_atr_dynamic_live_trade_fields_are_unchanged(self):
+        manager = self._load_manager()
+        trade = self._base_trade(symbol="NQ", direction="short", entry=100.0, leg_high=106.75)
+        trade["atr_value"] = 10.0
+        before = {
+            "original_stop": trade["original_stop"],
+            "current_stop": trade["current_stop"],
+            "tp1_price": trade["tp1_price"],
+            "be_trigger": trade["be_trigger"],
+        }
+
+        manager.update_post_be_analytics(trade, 95.0, "2026-05-29T13:01:00Z")
+
+        self.assertEqual(trade["original_stop"], before["original_stop"])
+        self.assertEqual(trade["current_stop"], before["current_stop"])
+        self.assertEqual(trade["tp1_price"], before["tp1_price"])
+        self.assertEqual(trade["be_trigger"], before["be_trigger"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,31 @@
+{
+  "case_name": "Step 2 ATR stack - levels outside 10 percent ATR do not stack",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "regular",
+  "expected_result": "valid_step2",
+  "why": "PML 100 and ONL 89 are 11 points apart with simulated Daily ATR 100, exceeding the 10 point threshold, so PML remains regular and activates at 99.75.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "simulated_daily_atr": 100.0,
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONL": {"price": 89.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "candles": [
+    {"time": "2026-05-28T14:03:00Z", "open": 100.5, "high": 100.75, "low": 99.5, "close": 99.75}
+  ],
+  "expected": [
+    {"time": "2026-05-28T14:03:00Z", "step": "Step 2", "pathway_type": "Rejection", "current_pathway_control": "rejection", "rejection_mode_entered": true, "active_liquidity_name": "PML Liquidity", "setup_direction": "LONG", "leg1_state": "WAIT", "leg2_state": "WAIT"}
+  ],
+  "notes": "This fixture documents split behavior when outer level distance is greater than 10 percent of simulated Daily ATR."
+}

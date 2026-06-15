@@ -1,0 +1,73 @@
+{
+  "case_name": "Step 2 rejection edge - close through stale inactive level",
+  "case_type": "known_good",
+  "deprecated": true,
+  "hidden_from_review": true,
+  "review_status": "RETRACTED / NOT APPROVED",
+  "retracted_reason": "Too vague: stale/inactive was not a testable rule without an explicit inactive_reason.",
+  "replacement_fixtures": [
+    "investigations/step2_inactive_liquidity/close_through_consumed_level",
+    "investigations/step2_inactive_liquidity/close_through_session_expired_level",
+    "investigations/step2_inactive_liquidity/close_through_stack_owner_replaced_level",
+    "investigations/step2_inactive_liquidity/close_through_opposite_side_control_inactivated_level",
+    "investigations/step2_inactive_liquidity/close_through_continuation_reset_inactivated_structure"
+  ],
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "regular",
+  "expected_result": "ignored",
+  "why": "Candle closes through a nearby stale level, but the active liquidity boundary is different and not crossed.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {
+      "price": 100.0,
+      "side": "LOW"
+    },
+    "ONL": {
+      "price": 99.0,
+      "side": "LOW"
+    },
+    "ONH": {
+      "price": 120.0,
+      "side": "HIGH"
+    }
+  },
+  "stacks": [],
+  "active_liquidity": {
+    "name": "ONL",
+    "components": [
+      "ONL"
+    ],
+    "price": 99.0,
+    "side": "LOW"
+  },
+  "candles": [
+    {
+      "time": "2026-05-28T13:50:00Z",
+      "open": 100.5,
+      "high": 100.75,
+      "low": 99.5,
+      "close": 99.75
+    }
+  ],
+  "expected": [
+    {
+      "time": "2026-05-28T13:50:00Z",
+      "step": "Step 1",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": false,
+      "active_liquidity_name": null,
+      "setup_direction": null,
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT",
+      "wait_reason": "Waiting for Step 2 liquidity close-through."
+    }
+  ],
+  "notes": "Step 2 rejection-only fixture. No Leg 1, Leg 2, Step 6, trade manager, broker, or order behavior is evaluated."
+}

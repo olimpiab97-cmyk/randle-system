@@ -1,0 +1,159 @@
+{
+    "case_name":  "Step 2 continuation R/S stacked high - wick below stack boundary wait",
+    "case_type":  "known_good",
+    "review_status":  "APPROVED",
+    "user_review":  "APPROVED",
+    "scope":  "step2_continuation_only",
+    "scenario_type":  "continuation",
+    "continuation_type":  "R/S",
+    "level_type":  "stacked",
+    "expected_result":  "WAIT",
+    "symbol":  "NQ",
+    "date":  "2026-06-04",
+    "tick_size":  0.25,
+    "levels":  {
+                   "PMH":  {
+                               "price":  100.0,
+                               "side":  "HIGH"
+                           },
+                   "ONH":  {
+                               "price":  101.0,
+                               "side":  "HIGH"
+                           }
+               },
+    "stacks":  [
+                   {
+                       "name":  "PMH/ONH",
+                       "components":  [
+                                          "PMH",
+                                          "ONH"
+                                      ],
+                       "price":  101.0,
+                       "side":  "HIGH",
+                       "close_boundary_level":  "PMH",
+                       "close_boundary_price":  100.0,
+                       "extreme_boundary_level":  "ONH",
+                       "extreme_boundary_price":  101.0,
+                       "qualification_boundary_price":  101
+                   }
+               ],
+    "active_liquidity":  {
+                             "name":  "PMH/ONH",
+                             "components":  [
+                                                "PMH",
+                                                "ONH"
+                                            ],
+                             "price":  101.0,
+                             "side":  "HIGH",
+                             "close_boundary_level":  "PMH",
+                             "close_boundary_price":  100.0,
+                             "qualification_boundary_price":  101
+                         },
+    "candles":  [
+                    {
+                        "time":  "2026-06-04T13:45:00Z",
+                        "open":  101.25,
+                        "high":  101.5,
+                        "low":  100.5,
+                        "close":  101.25
+                    }
+                ],
+    "expected":  [
+                     {
+                         "continuation_type":  "R/S",
+                         "liquidity_level":  "PMH/ONH Liquidity",
+                         "stack_components":  [
+                                                  "PMH",
+                                                  "ONH"
+                                              ],
+                         "close_price":  101.25,
+                         "qualification_boundary":  101,
+                         "expected_step2_state":  "WAIT",
+                         "actual_step2_state":  "WAIT"
+                     }
+                 ],
+    "notes":  "Step 2 continuation-only fixture. Wick below the high-side stack boundary is not enough.",
+    "chart_context_candles":  [
+                                  {
+                                      "time":  "2026-06-04T13:36:00Z",
+                                      "open":  98.75,
+                                      "high":  99.1,
+                                      "low":  98.5,
+                                      "close":  98.9,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:37:00Z",
+                                      "open":  98.9,
+                                      "high":  99.6,
+                                      "low":  98.8,
+                                      "close":  99.45,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:38:00Z",
+                                      "open":  99.45,
+                                      "high":  100.4,
+                                      "low":  99.3,
+                                      "close":  100.2,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:39:00Z",
+                                      "open":  100.2,
+                                      "high":  101.45,
+                                      "low":  100.1,
+                                      "close":  101.25,
+                                      "display_only_context":  true,
+                                      "highlight_label":  "Prior rejection Step 2 activation"
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:40:00Z",
+                                      "open":  101.25,
+                                      "high":  101.7,
+                                      "low":  101,
+                                      "close":  101.45,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:41:00Z",
+                                      "open":  101.45,
+                                      "high":  101.6,
+                                      "low":  101.05,
+                                      "close":  101.25,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:42:00Z",
+                                      "open":  101.25,
+                                      "high":  101.4,
+                                      "low":  100.95,
+                                      "close":  101.15,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:43:00Z",
+                                      "open":  101.15,
+                                      "high":  101.3,
+                                      "low":  100.9,
+                                      "close":  101.1,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:44:00Z",
+                                      "open":  101.1,
+                                      "high":  101.25,
+                                      "low":  100.95,
+                                      "close":  101.05,
+                                      "display_only_context":  true
+                                  },
+                                  {
+                                      "time":  "2026-06-04T13:45:00Z",
+                                      "open":  101.25,
+                                      "high":  101.5,
+                                      "low":  100.5,
+                                      "close":  101.25,
+                                      "highlight_label":  "Continuation validation"
+                                  }
+                              ]
+}

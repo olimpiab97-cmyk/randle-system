@@ -606,6 +606,16 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
         self.assertIn('["Actual State", actual.actual_step2_state]', html)
         self.assertIn('["Reason", actual.reason]', html)
 
+    def test_step3_participation_has_demo_selector_and_chart_labels(self):
+        html = (ROOT / "entry_agent_demo.html").read_text(encoding="utf-8")
+        self.assertIn('id="step3ParticipationSelect"', html)
+        self.assertIn('id="loadStep3ParticipationBtn"', html)
+        self.assertIn('known_good/step3_participation/', html)
+        self.assertIn('fixture.scope === "step3_participation_demo"', html)
+        self.assertIn("function drawStep3ParticipationLabels", html)
+        self.assertIn("function drawStep3Badge", html)
+        self.assertIn("isStep3Participation ? [] : markerItemsForCandle", html)
+
     def test_step2_continuation_payload_uses_fixture_chart_context_for_ui(self):
         result = self.harness.evaluate_fixture_file("known_good/step2_continuation/regular/rs_close_below_pmh_active")
         fixture_chart_candles = result["fixture"]["chart_context_candles"]
@@ -622,6 +632,84 @@ class EntryAgentDemoHarnessTests(unittest.TestCase):
         self.assertEqual(fixture_chart_candles[8]["close"], 100.05)
         self.assertEqual(fixture_chart_candles[9]["close"], 99.75)
         self.assertEqual(fixture_chart_candles[9]["highlight_label"], "Continuation validation")
+
+    def test_step3_participation_demo_fixtures_cover_threshold_and_close_rules(self):
+        fixture_ids = [
+            name
+            for name in self.harness.list_fixtures()
+            if name.startswith("known_good/step3_participation/")
+        ]
+        self.assertEqual(len(fixture_ids), 12)
+
+        expected_labels = {
+            "short_wick_33_fail": ("Wick 33 FAIL", "FAIL"),
+            "short_wick_34_pass": ("Wick 34 PASS", "PASS"),
+            "short_wick_35_pass": ("Wick 35 PASS", "PASS"),
+            "long_wick_33_fail": ("Wick 33 FAIL", "FAIL"),
+            "long_wick_34_pass": ("Wick 34 PASS", "PASS"),
+            "long_wick_35_pass": ("Wick 35 PASS", "PASS"),
+            "short_close_above_a_fail": ("Close FAIL", "FAIL"),
+            "short_close_equal_a_fail": ("Close FAIL", "FAIL"),
+            "short_close_below_a_pass": ("Close PASS", "PASS"),
+            "long_close_below_a_fail": ("Close FAIL", "FAIL"),
+            "long_close_equal_a_fail": ("Close FAIL", "FAIL"),
+            "long_close_above_a_pass": ("Close PASS", "PASS"),
+        }
+
+        for fixture_id in fixture_ids:
+            short_name = fixture_id.rsplit("/", 1)[-1]
+            with self.subTest(fixture_id=fixture_id):
+                result = self.harness.evaluate_fixture_file(fixture_id)
+                self.assertTrue(result["overall_pass"])
+                self.assertEqual(result["fixture"]["review_status"], "APPROVED")
+                self.assertEqual(result["fixture"]["certification_status"], "CERTIFIED")
+                self.assertEqual(len(result["fixture"]["candles"]), 2)
+                self.assertEqual(result["fixture"]["scope"], "step3_participation_demo")
+                candle_a = result["fixture"]["candles"][0]
+                self.assertEqual(candle_a["highlight_label"], "A")
+                direction = result["fixture"]["setup_direction"]
+                self.assertEqual(result["fixture"]["levels"]["PML"]["price"], 100.0)
+                context_candles = result["fixture"]["chart_context_candles"]
+                self.assertEqual(len(context_candles), 10)
+                self.assertEqual(context_candles[8], result["fixture"]["candles"][0])
+                self.assertEqual(context_candles[9], result["fixture"]["candles"][1])
+                if direction == "SHORT":
+                    self.assertGreater(candle_a["close"], 100.0)
+                    for base_candle in context_candles[:8]:
+                        self.assertLess(base_candle["high"], 100.0)
+                else:
+                    self.assertLess(candle_a["close"], 100.0)
+                    for base_candle in context_candles[:8]:
+                        self.assertGreater(base_candle["low"], 100.0)
+                final = result["frames"][-1]["actual"]
+                label, participation_result = expected_labels[short_name]
+                self.assertEqual(final["participation_label"], label)
+                self.assertEqual(final["participation_result"], participation_result)
+                if "_wick_" in short_name:
+                    self.assertEqual(result["fixture"]["close_reference_guides"][0]["label"], "Candle A Extreme Close")
+                    self.assertFalse(final["close_participation_pass"])
+                if "close_" in short_name:
+                    candle_a = result["fixture"]["candles"][0]
+                    expected_extreme_close = candle_a["extreme_close"]
+                    self.assertEqual(result["fixture"]["close_reference_guides"][0]["price"], expected_extreme_close)
+                    self.assertEqual(result["fixture"]["close_reference_guides"][0]["label"], "Candle A Extreme Close")
+                    self.assertEqual(final["candle_a_extreme_close"], expected_extreme_close)
+                self.assertEqual(final["step"], "Step 3")
+                self.assertEqual(final["leg2_state"], "WAIT")
+                self.assertFalse(final["step5_confirmed"])
+                self.assertNotIn(final["step"], {"Step 5", "Step 6"})
+                self.assertEqual(result["frames"][-1]["candle"]["highlight_label"], label)
+
+        entries = {
+            entry["id"]: entry
+            for entry in self.harness.list_fixture_entries()
+            if entry["id"].startswith("known_good/step3_participation/")
+        }
+        self.assertEqual(len(entries), 12)
+        for entry in entries.values():
+            self.assertEqual(entry["review_status"], "APPROVED")
+            self.assertEqual(entry["certification_status"], "CERTIFIED")
+            self.assertTrue(entry["review_label"].startswith("[CERTIFIED]"))
 
     def test_continuation_wick_touch_next_same_side_level_invalidates_only_continuation(self):
         fixture = {

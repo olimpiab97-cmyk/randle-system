@@ -1,0 +1,31 @@
+{
+  "case_name": "Step 2 ATR stack - low-side close inside stack invalid",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "LONG",
+  "level_type": "stacked",
+  "expected_result": "ignored",
+  "why": "PML/ONL is detected as a stack, but the close is only through PML and not beyond the ONL extreme boundary.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "simulated_daily_atr": 100.0,
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONL": {"price": 95.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "candles": [
+    {"time": "2026-05-28T14:01:00Z", "open": 100.5, "high": 100.75, "low": 94.5, "close": 99.75}
+  ],
+  "expected": [
+    {"time": "2026-05-28T14:01:00Z", "step": "Step 1", "pathway_type": "Rejection", "current_pathway_control": "rejection", "rejection_mode_entered": false, "active_liquidity_name": null, "setup_direction": null, "leg1_state": "WAIT", "leg2_state": "WAIT", "wait_reason": "Waiting for Step 2 liquidity close-through."}
+  ],
+  "notes": "This proves a close inside a detected ATR stack does not activate Step 2 before the extreme boundary."
+}

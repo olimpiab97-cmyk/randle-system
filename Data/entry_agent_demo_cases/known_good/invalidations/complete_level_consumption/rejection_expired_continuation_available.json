@@ -1,0 +1,95 @@
+{
+  "case_name": "Complete Level Consumption - Rejection expires before continuation later consumes",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Complete Level Consumption",
+  "scenario_type": "rejection",
+  "expected_result": "The level is only partially consumed after rejection expires, then becomes fully consumed when continuation later invalidates.",
+  "symbol": "YM",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "lifecycle_context": [
+    "Level: PML 100",
+    "Starting state: rejection and continuation opportunities available",
+    "Result: level remains active until continuation is also dead"
+  ],
+  "lifecycle_event_progression": [
+    {"event_number": 1, "label": "Rejection Invalidated", "detail": "Reason: STEP2_STEP4_4_CANDLE_EXPIRED"},
+    {"event_number": 2, "label": "Continuation Invalidated", "detail": "Continuation Opportunity DEAD"}
+  ],
+  "lifecycle_final_state": [
+    "Rejection: DEAD",
+    "Continuation: DEAD",
+    "Level: CONSUMED"
+  ],
+  "level_lifecycle_events": [
+    {"candle_index": 1, "level": "PML", "opportunity": "rejection", "reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "event_label": "Rejection opportunity expires"},
+    {"candle_index": 2, "level": "PML", "opportunity": "continuation", "reason": "CONTINUATION_FAILURE", "event_label": "Continuation opportunity fails"}
+  ],
+  "lifecycle_progression": [
+    {
+      "state": "A",
+      "label": "Initial state",
+      "description": "PML rejection is available and PML S/R continuation is available.",
+      "rejection_status": "ACTIVE",
+      "continuation_status": "ACTIVE",
+      "level_status": "ACTIVE"
+    },
+    {
+      "event": "Rejection consumption/invalidation event",
+      "description": "The rejection opportunity expires after the Step 2 to Step 4 four-candle window.",
+      "level_lifecycle_event": {"candle_index": 1, "level": "PML", "opportunity": "rejection", "reason": "STEP2_STEP4_4_CANDLE_EXPIRED"}
+    },
+    {
+      "state": "B",
+      "label": "Continuation still available",
+      "description": "PML is only partially consumed because continuation remains available.",
+      "rejection_status": "INVALIDATED",
+      "continuation_status": "ACTIVE",
+      "level_status": "ACTIVE"
+    },
+    {
+      "event": "Continuation consumption/invalidation event",
+      "description": "The continuation opportunity later fails, removing the remaining opportunity on the level.",
+      "level_lifecycle_event": {"candle_index": 2, "level": "PML", "opportunity": "continuation", "reason": "CONTINUATION_FAILURE"}
+    },
+    {
+      "state": "C",
+      "label": "Final level state",
+      "description": "Both opportunities are dead, so the PML level is fully consumed.",
+      "rejection_status": "INVALIDATED",
+      "continuation_status": "INVALIDATED",
+      "level_status": "CONSUMED"
+    }
+  ],
+  "candles": [
+    {"time": "2026-06-11T14:39:00Z", "open": 100.25, "high": 100.5, "low": 99.75, "close": 100.0, "highlight_label": "State A - rejection and continuation available"},
+    {"time": "2026-06-11T14:40:00Z", "open": 100.5, "high": 100.75, "low": 99.25, "close": 99.5, "highlight_label": "Event - rejection expired; State B partial"},
+    {"time": "2026-06-11T14:41:00Z", "open": 99.5, "high": 99.75, "low": 98.75, "close": 99.0, "highlight_label": "Event - continuation failed; State C consumed"}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 120.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]},
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 120.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]},
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 120.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP2_STEP4_4_CANDLE_EXPIRED", "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "CONTINUATION_FAILURE", "level_status": "CONSUMED"}
+    ]}
+  ],
+  "demo_display_text": "State A: rejection and continuation available -> rejection expires -> State B: continuation still available -> continuation fails -> State C: level consumed.",
+  "notes": "This fixture preserves the partial-consumption midpoint, then continues the lifecycle to show how the level becomes fully consumed."
+}

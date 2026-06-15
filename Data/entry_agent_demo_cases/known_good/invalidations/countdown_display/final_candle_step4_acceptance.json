@@ -1,0 +1,36 @@
+{
+  "case_name": "Countdown Display - Step 4 accepted on final allowed candle",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Countdown Display",
+  "scenario_type": "rejection",
+  "expected_result": "Candle 4 is still eligible to become Step 4 Candle B; expiration occurs only if Candle 4 also fails.",
+  "symbol": "YM",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "candles": [
+    {"time": "2026-06-11T13:50:00Z", "open": 100.5, "high": 100.5, "low": 99.4, "close": 99.5, "highlight_label": "Step 2 / 4 left"},
+    {"time": "2026-06-11T13:51:00Z", "open": 99.4, "high": 99.4, "low": 99.2, "close": 99.2, "highlight_label": "C1 fail"},
+    {"time": "2026-06-11T13:52:00Z", "open": 99.3, "high": 99.3, "low": 99.1, "close": 99.1, "highlight_label": "C2 fail"},
+    {"time": "2026-06-11T13:53:00Z", "open": 99.2, "high": 99.2, "low": 99.0, "close": 99.0, "highlight_label": "C3 fail"},
+    {"time": "2026-06-11T13:54:00Z", "open": 99.0, "high": 99.7, "low": 99.0, "close": 99.6, "highlight_label": "C4 Step 4"}
+  ],
+  "expected": [
+    {"leg1_window_candle_index": 0, "leg1_window_remaining": 4, "leg1_state": "WAIT"},
+    {"leg1_window_candle_index": 1, "leg1_window_remaining": 3, "leg1_state": "WAIT"},
+    {"leg1_window_candle_index": 2, "leg1_window_remaining": 2, "leg1_state": "WAIT"},
+    {"leg1_window_candle_index": 3, "leg1_window_remaining": 1, "leg1_state": "WAIT"},
+    {"step": "Step 5", "leg1_window_candle_index": 4, "leg1_window_remaining": 0, "leg1_state": "COMPLETE", "invalidation_reason": null}
+  ],
+  "demo_display_text": "Final-candle save: Candle 4 can still fire Step 4. It does not expire unless Candle 4 fails.",
+  "notes": "Countdown display demo showing the boundary: the fourth counted candle is accepted when it forms valid Candle B."
+}

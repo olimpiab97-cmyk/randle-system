@@ -1,0 +1,34 @@
+{
+  "case_name": "Invalidation - Rejection 50% exhaustion",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Rejection Invalidations",
+  "scenario_type": "rejection",
+  "expected_result": "Only the rejection opportunity is invalidated; continuation remains available and the level is not fully consumed.",
+  "symbol": "YM",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "level_lifecycle_events": [
+    {"candle_index": 0, "level": "PML", "opportunity": "rejection", "reason": "EXHAUSTION_50_LEG1"}
+  ],
+  "candles": [
+    {"time": "2026-06-11T14:10:00Z", "open": 100.5, "high": 100.75, "low": 99.25, "close": 99.5, "highlight_label": "50% exhaustion"}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 120.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "EXHAUSTION_50_LEG1", "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]}
+  ],
+  "demo_display_text": "Rejection invalidated: 50% exhaustion. Continuation remains available.",
+  "notes": "Lifecycle demo for rejection-only invalidation. The full level is not consumed because continuation remains active."
+}

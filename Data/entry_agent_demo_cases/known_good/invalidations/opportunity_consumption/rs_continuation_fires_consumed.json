@@ -1,0 +1,35 @@
+{
+  "case_name": "Opportunity Consumption - R/S continuation fires and is consumed",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Opportunity Consumption",
+  "scenario_type": "continuation",
+  "continuation_type": "R/S",
+  "expected_result": "Successful R/S continuation firing consumes only the continuation opportunity; rejection remains available.",
+  "symbol": "NQ",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 80.0,
+  "levels": {
+    "PMH": {"price": 100.0, "side": "HIGH"},
+    "PML": {"price": 80.0, "side": "LOW"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"},
+  "level_lifecycle_events": [
+    {"candle_index": 0, "level": "PMH", "opportunity": "continuation", "reason": "STEP6_ENTRY_TRIGGERED"}
+  ],
+  "candles": [
+    {"time": "2026-06-11T14:31:00Z", "open": 99.5, "high": 101.0, "low": 99.25, "close": 100.5, "highlight_label": "R/S fired"}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "STEP6_ENTRY_TRIGGERED", "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 80.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"}
+    ]}
+  ],
+  "demo_display_text": "R/S continuation consumed: setup fired. Rejection remains available.",
+  "notes": "Consumption scenario separated from continuation invalidations."
+}

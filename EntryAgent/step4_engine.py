@@ -9,6 +9,7 @@ from step7_engine import terminate_interaction
 
 FINAL_PARTICIPATION_CANDLE_NUMBER = 4
 LEG1_WINDOW_INVALIDATION_REASON = "Leg 1 invalid: no valid Candle B formed within 4 candles after Step 2 confirmation."
+STEP2_STEP4_50_LINE_TOUCHED = "STEP2_STEP4_50_LINE_TOUCHED"
 
 
 def as_float(value: Any) -> float | None:
@@ -54,31 +55,41 @@ def close_based_participation(candle_a: dict[str, Any], candle_b: dict[str, Any]
     if close_b is None:
         return False
     if direction == "SHORT":
-        high_a = as_float(candle_a.get("high"))
-        return high_a is not None and close_b <= high_a
+        high_a = as_float(candle_a.get("extreme_close"))
+        if high_a is None:
+            high_a = as_float(candle_a.get("high"))
+        return high_a is not None and close_b < high_a
     if direction == "LONG":
-        low_a = as_float(candle_a.get("low"))
-        return low_a is not None and close_b >= low_a
+        low_a = as_float(candle_a.get("extreme_close"))
+        if low_a is None:
+            low_a = as_float(candle_a.get("low"))
+        return low_a is not None and close_b > low_a
     return False
 
 
-def wick_participation(candle_b: dict[str, Any], direction: str) -> bool:
+def wick_participation_percent(candle_b: dict[str, Any], direction: str) -> float | None:
     full_range = candle_range(candle_b)
     if full_range is None:
-        return False
+        return None
+    open_price = as_float(candle_b.get("open"))
     high = as_float(candle_b.get("high"))
     low = as_float(candle_b.get("low"))
-    if high is None or low is None:
-        return False
+    if open_price is None or high is None or low is None:
+        return None
     if direction == "SHORT":
-        top_body = body_high(candle_b)
-        wick = high - top_body if top_body is not None else None
+        wick = high - open_price
     elif direction == "LONG":
-        bottom_body = body_low(candle_b)
-        wick = bottom_body - low if bottom_body is not None else None
+        wick = open_price - low
     else:
-        wick = None
-    return wick is not None and wick / full_range >= 0.34
+        return None
+    if wick < 0:
+        return 0.0
+    return wick / full_range * 100.0
+
+
+def wick_participation(candle_b: dict[str, Any], direction: str) -> bool:
+    percent = wick_participation_percent(candle_b, direction)
+    return percent is not None and percent >= 34.0
 
 
 def leg1_extreme(candle_a: dict[str, Any], candle_b: dict[str, Any], direction: str) -> tuple[float | None, str | None]:
@@ -162,6 +173,68 @@ def apply_leg1_50_percent_rule(state: dict[str, Any], extreme: float | None, dir
     passed = percent <= 50.0
     state["leg1_50_percent_rule_passed"] = passed
     return passed
+
+
+def step2_step4_reference_liquidity(state: dict[str, Any]) -> dict[str, Any] | None:
+    reference = state.get("step2_step4_reference_liquidity")
+    if isinstance(reference, dict):
+        return reference
+    reference = state.get("next_break_side_liquidity")
+    if isinstance(reference, dict):
+        return reference
+    return None
+
+
+def step2_step4_50_line(state: dict[str, Any]) -> float | None:
+    active = state.get("active_liquidity")
+    reference = step2_step4_reference_liquidity(state)
+    if not isinstance(active, dict) or reference is None:
+        return None
+    active_price = as_float(active.get("price"))
+    reference_price = as_float(reference.get("price"))
+    if active_price is None or reference_price is None or active_price == reference_price:
+        return None
+    return (active_price + reference_price) / 2.0
+
+
+def candle_touches_step2_step4_50_line(state: dict[str, Any], candle: dict[str, Any], direction: str | None) -> bool:
+    active = state.get("active_liquidity")
+    reference = step2_step4_reference_liquidity(state)
+    if not isinstance(active, dict) or reference is None:
+        return False
+    active_price = as_float(active.get("price"))
+    reference_price = as_float(reference.get("price"))
+    line = step2_step4_50_line(state)
+    if active_price is None or reference_price is None or line is None:
+        return False
+    high = as_float(candle.get("high"))
+    low = as_float(candle.get("low"))
+    if direction == "SHORT":
+        return high is not None and high >= line
+    if direction == "LONG":
+        return low is not None and low <= line
+    if reference_price > active_price:
+        return high is not None and high >= line
+    if reference_price < active_price:
+        return low is not None and low <= line
+    return False
+
+
+def invalidate_step2_step4_50_line_touch(
+    state: dict[str, Any],
+    candle: dict[str, Any],
+    candidate_count: int,
+) -> dict[str, Any]:
+    reason = STEP2_STEP4_50_LINE_TOUCHED
+    apply_leg1_window_fields(state, candle, candidate_count, invalidated=True, invalidation_reason=reason)
+    state["leg1_window_remaining"] = 0
+    state["leg1_window_active"] = False
+    state["step2_step4_50_line"] = step2_step4_50_line(state)
+    state["step2_step4_50_line_touched_at"] = candle.get("timestamp")
+    state["invalidation_source"] = "step2_step4_50_line"
+    state["invalidation_source_step"] = "Step 4"
+    state["invalidation_source_candle_time"] = candle.get("timestamp")
+    return terminate_interaction(state, "Step 4", reason)
 
 
 def normalize_mode(mode: Any) -> str:
@@ -401,8 +474,21 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
         return terminate_interaction(state, "Step 4", side_violation)
 
     candidate_count = register_participation_candidate(state, candidate_b)
+    if candle_touches_step2_step4_50_line(state, candidate_b, direction):
+        return invalidate_step2_step4_50_line_touch(state, candidate_b, candidate_count)
+
     close_pass = close_based_participation(candle_a, candidate_b, direction)
-    wick_pass = wick_participation(candidate_b, direction)
+    wick_pct = wick_participation_percent(candidate_b, direction)
+    wick_pass = wick_pct is not None and wick_pct >= 34.0
+    candle_a_extreme = as_float(candle_a.get("extreme_close"))
+    if candle_a_extreme is None:
+        candle_a_extreme = as_float(candle_a.get("high")) if direction == "SHORT" else as_float(candle_a.get("low"))
+    state["step3_participation_rule_certification"] = "CERTIFIED"
+    state["step3_participation_direction"] = direction
+    state["step3_participation_candle_a_extreme"] = candle_a_extreme
+    state["step3_close_participation_pass"] = close_pass
+    state["step3_wick_participation_pct"] = round(wick_pct, 2) if wick_pct is not None else None
+    state["step3_wick_participation_pass"] = wick_pass
     if not (close_pass or wick_pass):
         reason = "Candle B failed both close-based participation and 34% wick-based participation."
         if candidate_count < FINAL_PARTICIPATION_CANDLE_NUMBER:
@@ -497,6 +583,9 @@ def evaluate_step4(interaction: dict[str, Any], candle_b: dict[str, Any] | None 
             "reason": reason,
             "close_based_participation": close_pass,
             "wick_based_participation": wick_pass,
+            "step3_participation_rule_certification": "CERTIFIED",
+            "step3_participation_candle_a_extreme": candle_a_extreme,
+            "step3_wick_participation_pct": state.get("step3_wick_participation_pct"),
             "leg1_reference": reference,
             "leg1_extreme": extreme,
             "leg1_extreme_owner": owner,

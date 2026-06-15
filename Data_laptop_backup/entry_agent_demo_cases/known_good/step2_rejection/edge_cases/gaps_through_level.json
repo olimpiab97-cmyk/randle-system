@@ -1,0 +1,60 @@
+{
+  "case_name": "Step 2 rejection edge - gaps through level",
+  "case_type": "known_good",
+  "classification": "APPROVED PASS",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "scope": "step2_rejection_only",
+  "scenario_type": "rejection",
+  "direction": "SHORT",
+  "level_type": "regular",
+  "expected_result": "valid_step2",
+  "why": "A gap through the high-side level still activates when the completed close is beyond the level.",
+  "symbol": "NQ",
+  "date": "2026-05-28",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 80.0,
+  "levels": {
+    "PMH": {
+      "price": 100.0,
+      "side": "HIGH"
+    },
+    "ONL": {
+      "price": 80.0,
+      "side": "LOW"
+    }
+  },
+  "stacks": [],
+  "active_liquidity": {
+    "name": "PMH",
+    "components": [
+      "PMH"
+    ],
+    "price": 100.0,
+    "side": "HIGH"
+  },
+  "candles": [
+    {
+      "time": "2026-05-28T13:56:00Z",
+      "open": 100.5,
+      "high": 100.75,
+      "low": 100.25,
+      "close": 100.5
+    }
+  ],
+  "expected": [
+    {
+      "time": "2026-05-28T13:56:00Z",
+      "step": "Step 2",
+      "pathway_type": "Rejection",
+      "current_pathway_control": "rejection",
+      "rejection_mode_entered": true,
+      "active_liquidity_name": "PMH Liquidity",
+      "setup_direction": "SHORT",
+      "leg1_state": "WAIT",
+      "leg2_state": "WAIT"
+    }
+  ],
+  "notes": "Step 2 rejection-only fixture. No Leg 1, Leg 2, Step 6, trade manager, broker, or order behavior is evaluated."
+}

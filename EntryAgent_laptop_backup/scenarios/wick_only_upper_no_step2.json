@@ -1,0 +1,11 @@
+{
+  "symbol": "NQ",
+  "daily_atr": 500,
+  "tick_size": 0.25,
+  "levels": [
+    {"name": "PMH", "price": 29200, "status": "ACTIVE", "group": "NONE"}
+  ],
+  "candles": [
+    {"time": "2026-05-20T13:30:00Z", "open": 29195, "high": 29202, "low": 29194, "close": 29199}
+  ]
+}

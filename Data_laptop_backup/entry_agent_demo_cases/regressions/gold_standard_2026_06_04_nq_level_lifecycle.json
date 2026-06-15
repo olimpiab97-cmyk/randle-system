@@ -1,0 +1,63 @@
+{
+  "case_name": "Gold Standard - 2026-06-04 NQ level lifecycle",
+  "scenario_type": "rejection",
+  "symbol": "NQ",
+  "date": "2026-06-04",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 110.0,
+  "levels": {
+    "PMH": {"price": 100.0, "side": "HIGH"},
+    "PML/LL/ONL": {"price": 88.0, "side": "LOW"}
+  },
+  "stacks": [
+    {
+      "name": "PML/LL/ONL",
+      "components": ["PML", "LL", "ONL"],
+      "price": 88.0,
+      "side": "LOW",
+      "close_boundary_level": "PML",
+      "close_boundary_price": 90.0,
+      "extreme_boundary_level": "LL/ONL",
+      "extreme_boundary_price": 88.0,
+      "qualification_boundary_price": 88.0
+    }
+  ],
+  "active_liquidity": {"name": "PMH", "components": ["PMH"], "price": 100.0, "side": "HIGH"},
+  "level_lifecycle_initial": {
+    "PML/LL/ONL": {
+      "rejection_status": "WAIT",
+      "continuation_status": "WAIT",
+      "level_status": "WAIT"
+    }
+  },
+  "level_lifecycle_events": [
+    {"candle_index": 0, "level": "PMH", "opportunity": "rejection", "reason": "STEP6_ENTRY_TRIGGERED"},
+    {"candle_index": 0, "level": "PMH", "opportunity": "continuation", "reason": "NEXT_LEVEL_TOUCH"}
+  ],
+  "candles": [
+    {"time": "2026-06-04T13:30:00Z", "open": 99.5, "high": 100.5, "low": 99.0, "close": 100.25},
+    {"time": "2026-06-04T13:31:00Z", "open": 100.25, "high": 100.5, "low": 90.5, "close": 92.0},
+    {"time": "2026-06-04T13:32:00Z", "open": 92.0, "high": 93.0, "low": 89.5, "close": 91.0},
+    {"time": "2026-06-04T13:33:00Z", "open": 91.0, "high": 91.5, "low": 88.25, "close": 89.0}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP6_ENTRY_TRIGGERED", "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "NEXT_LEVEL_TOUCH", "level_status": "CONSUMED"},
+      {"level_name": "PML/LL/ONL", "price": 88.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "WAIT", "rejection_invalidation_reason": null, "continuation_status": "WAIT", "continuation_invalidation_reason": null, "level_status": "WAIT"}
+    ]},
+    {"level_lifecycle": [
+      {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP6_ENTRY_TRIGGERED", "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "NEXT_LEVEL_TOUCH", "level_status": "CONSUMED"},
+      {"level_name": "PML/LL/ONL", "price": 88.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "WAIT", "rejection_invalidation_reason": null, "continuation_status": "WAIT", "continuation_invalidation_reason": null, "level_status": "WAIT"}
+    ]},
+    {"level_lifecycle": [
+      {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP6_ENTRY_TRIGGERED", "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "NEXT_LEVEL_TOUCH", "level_status": "CONSUMED"},
+      {"level_name": "PML/LL/ONL", "price": 88.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "WAIT", "rejection_invalidation_reason": null, "continuation_status": "WAIT", "continuation_invalidation_reason": null, "level_status": "WAIT"}
+    ]},
+    {"level_lifecycle": [
+      {"level_name": "PMH", "price": 100.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "INVALIDATED", "rejection_invalidation_reason": "STEP6_ENTRY_TRIGGERED", "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "NEXT_LEVEL_TOUCH", "level_status": "CONSUMED"},
+      {"level_name": "PML/LL/ONL", "price": 88.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "WAIT", "rejection_invalidation_reason": null, "continuation_status": "WAIT", "continuation_invalidation_reason": null, "level_status": "WAIT"}
+    ]}
+  ],
+  "notes": "Reviewed 2026-06-04 NQ lifecycle target: PMH consumed; PML/LL/ONL is one stacked low-side watched zone and remains WAIT until a qualifying Step 2 close through the stack occurs."
+}

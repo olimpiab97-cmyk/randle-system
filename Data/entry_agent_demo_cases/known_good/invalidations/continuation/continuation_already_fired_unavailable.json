@@ -1,0 +1,35 @@
+{
+  "case_name": "Invalidation - Continuation unavailable after opportunity already fired",
+  "case_type": "known_good",
+  "review_status": "APPROVED",
+  "user_review": "APPROVED",
+  "invalidation_demo_category": "Continuation Invalidations",
+  "scenario_type": "continuation",
+  "continuation_type": "S/R",
+  "expected_result": "Continuation is unavailable because it was already consumed; rejection remains available unless separately dead.",
+  "symbol": "YM",
+  "date": "2026-06-11",
+  "tick_size": 0.25,
+  "atr_1m_14": 20.0,
+  "nearest_opposing_liquidity": 120.0,
+  "levels": {
+    "PML": {"price": 100.0, "side": "LOW"},
+    "ONH": {"price": 120.0, "side": "HIGH"}
+  },
+  "stacks": [],
+  "active_liquidity": {"name": "PML", "components": ["PML"], "price": 100.0, "side": "LOW"},
+  "level_lifecycle_initial": {
+    "PML": {"rejection_status": "ACTIVE", "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "STEP6_ENTRY_TRIGGERED"}
+  },
+  "candles": [
+    {"time": "2026-06-11T14:21:00Z", "open": 100.5, "high": 100.75, "low": 99.25, "close": 99.5, "highlight_label": "Already fired"}
+  ],
+  "expected": [
+    {"level_lifecycle": [
+      {"level_name": "ONH", "price": 120.0, "side": "HIGH", "continuation_type": "R/S", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "ACTIVE", "continuation_invalidation_reason": null, "level_status": "ACTIVE"},
+      {"level_name": "PML", "price": 100.0, "side": "LOW", "continuation_type": "S/R", "rejection_status": "ACTIVE", "rejection_invalidation_reason": null, "continuation_status": "INVALIDATED", "continuation_invalidation_reason": "STEP6_ENTRY_TRIGGERED", "level_status": "ACTIVE"}
+    ]}
+  ],
+  "demo_display_text": "Continuation unavailable: opportunity already fired. Rejection remains available.",
+  "notes": "Opportunity consumption demo represented in continuation invalidation category because this is an unavailable-after-fired view."
+}
