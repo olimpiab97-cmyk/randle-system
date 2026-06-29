@@ -24,21 +24,23 @@
     }
     .command-layout {
       display: grid;
-      grid-template-columns: minmax(680px, 2fr) minmax(360px, 1fr);
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
       gap: 16px;
       align-items: start;
     }
     .main-column {
       display: grid;
       gap: 16px;
+      min-width: 0;
     }
     .side-column {
       display: grid;
       gap: 16px;
+      min-width: 0;
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(320px, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
     }
     .card {
@@ -135,6 +137,61 @@
       border: 1px solid #2d3a4f;
       font-size: 13px;
       color: #dbe7f5;
+    }
+    .mode-control-card {
+      margin-top: 16px;
+      padding: 14px;
+      border: 1px solid #2d3a4f;
+      border-radius: 8px;
+      background: #0e1726;
+    }
+    .mode-control-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .mode-control-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8ea0b8;
+    }
+    .mode-control-value {
+      margin-top: 6px;
+      font-size: 20px;
+      font-weight: 700;
+      color: #f8fbff;
+      word-break: break-word;
+    }
+    .mode-control-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .mode-control-status {
+      margin-top: 10px;
+      min-height: 18px;
+      font-size: 12px;
+      color: #9fb0c7;
+    }
+    .mode-indicator {
+      border-color: #22d3ee;
+      box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.18);
+    }
+    .tracking-live {
+      border-color: #16a34a;
+      background: #0d2015;
+      color: #d8ffe3;
+      box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.18);
+    }
+    .tracking-test {
+      border-color: #f59e0b;
+      background: #24170a;
+      color: #fff0c7;
+      box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.2);
     }
     .metric-grid {
       display: grid;
@@ -668,6 +725,35 @@
       position: absolute;
       inset: 56px 16px 56px 16px;
     }
+    .demo-setup-candle {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .demo-candle-wick {
+      position: absolute;
+      left: 58%;
+      width: 2px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: rgba(226, 232, 240, 0.9);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.5);
+    }
+    .demo-candle-body {
+      position: absolute;
+      left: calc(58% - 14px);
+      width: 28px;
+      border-radius: 6px;
+      border: 1px solid rgba(15, 23, 42, 0.7);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.35);
+    }
+    .demo-candle-body.bull {
+      background: rgba(34, 197, 94, 0.85);
+    }
+    .demo-candle-body.bear {
+      background: rgba(239, 68, 68, 0.85);
+    }
     .level-line {
       position: absolute;
       left: 0;
@@ -716,6 +802,11 @@
     .level-pill .price {
       color: inherit;
       opacity: 0.92;
+    }
+    .level-pill .detail {
+      color: #cbd5e1;
+      font-size: 10px;
+      font-weight: 500;
     }
     .level-pill.live-pill {
       min-height: 38px;
@@ -768,6 +859,21 @@
       animation: livePulseDown 650ms ease-out;
     }
     .level-stop { color: #f87171; }
+    .level-selected-extreme {
+      color: #cbd5e1;
+      border-top-style: dotted;
+      opacity: 0.42;
+      z-index: 12;
+      filter: none;
+    }
+    .level-selected-extreme::before {
+      opacity: 0.55;
+      box-shadow: none;
+    }
+    .level-faded {
+      opacity: 0.28;
+      filter: none;
+    }
     .level-be {
       color: #22d3ee;
       border-top-width: 3px;
@@ -868,12 +974,40 @@
       gap: 8px;
       margin-top: 10px;
     }
+    .entry-leg-box {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      background: #0c1320;
+      display: grid;
+      gap: 6px;
+    }
+    .entry-leg-title {
+      color: #dbe7f5;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .entry-leg-values {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      color: #9fb0c7;
+      font-size: 12px;
+    }
     .backend-truth-item {
       background: #111826;
       border: 1px solid #223047;
       border-radius: 8px;
       padding: 8px 10px;
       min-width: 0;
+    }
+    .backend-truth-secondary {
+      margin-top: 4px;
+      font-size: 11px;
+      color: #94a3b8;
+      line-height: 1.35;
+      word-break: break-word;
     }
     .backend-truth-label {
       font-size: 10px;
@@ -1022,28 +1156,34 @@
       font-weight: 900;
       letter-spacing: 0.06em;
     }
+    .entry-agent-header-main {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .entry-agent-session-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .entry-agent-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .entry-agent-context-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-bottom: 10px;
+      gap: 6px;
     }
     .entry-agent-pathway-layout {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      gap: 8px;
       align-items: start;
     }
     .entry-agent-pathway-panel {
       min-width: 0;
       border: 1px solid #223047;
       border-radius: 8px;
-      padding: 10px;
+      padding: 8px;
       background: #0f1726;
     }
     .entry-agent-panel-title {
@@ -1061,29 +1201,275 @@
     .entry-agent-field {
       background: #111826;
       border-radius: 8px;
-      padding: 8px 10px;
+      padding: 7px 9px;
       min-width: 0;
     }
     .entry-agent-field.wide {
       grid-column: 1 / -1;
+    }
+    .entry-agent-field.full {
+      grid-column: 1 / -1;
+    }
+    .liquidity-lock-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      margin-bottom: 12px;
+    }
+    .liquidity-lock-card {
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 10px;
+      background: #0f1726;
+    }
+    .liquidity-lock-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .liquidity-lock-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .liquidity-lock-field {
+      background: #111826;
+      border-radius: 8px;
+      padding: 8px 10px;
+      min-width: 0;
+    }
+    .liquidity-lock-field.wide {
+      grid-column: 1 / -1;
+    }
+    .liquidity-lock-label {
+      font-size: 10px;
+      color: #9aa4b2;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .liquidity-lock-value {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+    .liquidity-lock-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .liquidity-lock-override-btn {
+      background: #132238;
+      color: #dbeafe;
+      border: 1px solid #2b4d72;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .liquidity-lock-override-btn:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+    .liquidity-lock-override-result {
+      margin-top: 10px;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #111826;
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .liquidity-lock-section {
+      margin-top: 10px;
+      border-top: 1px solid #223047;
+      padding-top: 10px;
+    }
+    .liquidity-lock-section-title {
+      margin-bottom: 8px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .liquidity-lock-subtitle {
+      margin: 10px 0 6px;
+      color: #93c5fd;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .liquidity-lock-stack-title {
+      margin: 8px 0 6px;
+      color: #e2e8f0;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .liquidity-lock-stack-title.active-owner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #bbf7d0;
+      background: #0b1b16;
+      border: 1px solid #166534;
+      border-radius: 6px;
+      padding: 5px 8px;
+    }
+    .liquidity-contract-list {
+      display: grid;
+      gap: 2px;
+    }
+    .liquidity-contract-row {
+      display: grid;
+      grid-template-columns: minmax(72px, auto) minmax(0, 1fr) auto;
+      align-items: baseline;
+      gap: 10px;
+      padding: 2px 0;
+    }
+    .liquidity-contract-level {
+      font-size: 14px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .liquidity-contract-price {
+      font-size: 13px;
+      font-weight: 700;
+      color: #cbd5e1;
+      justify-self: start;
+    }
+    .liquidity-contract-flag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 18px;
+      padding: 0 6px;
+      border-radius: 999px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #cbd5e1;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      justify-self: end;
+    }
+    .liquidity-midpoint-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 8px;
+    }
+    .liquidity-midpoint-card {
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #111826;
+    }
+    .liquidity-midpoint-name {
+      color: #f8fafc;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .liquidity-midpoint-values {
+      margin-top: 6px;
+      display: grid;
+      gap: 4px;
+    }
+    .liquidity-midpoint-values div {
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 650;
     }
     .entry-agent-label {
       font-size: 10px;
       color: #9aa4b2;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      white-space: nowrap;
     }
     .entry-agent-value {
-      margin-top: 4px;
-      font-size: 13px;
+      margin-top: 3px;
+      font-size: 12px;
       font-weight: 650;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
+      word-break: normal;
+      white-space: normal;
+    }
+    .entry-agent-compact-row {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .entry-agent-compact-row.owner-group-row {
+      grid-template-columns: minmax(0, 2.8fr) minmax(0, 1fr);
+    }
+    .entry-agent-compact-row.owner-group-row .entry-agent-field:last-child {
+      text-align: right;
+    }
+    .entry-agent-compact-row.owner-group-row .entry-agent-field:first-child .entry-agent-value {
+      white-space: normal;
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+    .entry-agent-step-block {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .entry-agent-step-title {
+      grid-column: 1 / -1;
+      color: #cbd5e1;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .entry-agent-step-details {
+      grid-column: 1 / -1;
+      margin-top: -2px;
+      background: #111826;
+      border: 1px solid #223047;
+      border-radius: 8px;
+      padding: 5px 8px;
+    }
+    .entry-agent-step-details summary {
+      margin: 0;
+      color: #9ecbff;
+      font-size: 11px;
+      font-weight: 700;
+      list-style: none;
+    }
+    .entry-agent-step-details summary::-webkit-details-marker {
+      display: none;
+    }
+    .entry-agent-step-detail-copy {
+      margin-top: 6px;
+      color: #cbd5e1;
+      font-size: 10px;
+      line-height: 1.4;
+      word-break: break-word;
     }
     .entry-agent-token {
       display: inline-flex;
       align-items: center;
       min-height: 24px;
       padding: 0 8px;
+      white-space: nowrap;
+      flex-shrink: 0;
       border-radius: 999px;
       border: 1px solid #334155;
       background: #101a2b;
@@ -1095,6 +1481,11 @@
       border-color: #75581d;
       color: #fde68a;
       background: #2d1b08;
+    }
+    .entry-agent-token.idle {
+      border-color: #334155;
+      color: #cbd5e1;
+      background: #0f172a;
     }
     .entry-agent-token.complete {
       border-color: #166534;
@@ -1122,6 +1513,7 @@
       font-weight: 800;
     }
     .status-green { color: #7CFC92; }
+    .status-blue { color: #7dd3fc; }
     .status-red { color: #ff8f8f; }
     .status-amber { color: #f6c86b; }
     .muted { color: #94a3b8; }
@@ -1173,6 +1565,7 @@
       .trade-grid,
       .entry-agent-grid,
       .entry-agent-context-grid,
+      .liquidity-lock-grid,
       .entry-agent-pathway-layout,
       .kpi-summary-grid,
       .manual-exit-grid,
@@ -1201,7 +1594,7 @@
         <div>
           <h1>Trade Manager Command Center</h1>
           <div class="hero-subtitle">Operator dashboard for live trade state, risk posture, execution visibility, and QA signals.</div>
-          <div class="small">Rithmic live contract ticks, not TradingView price. Exact charts: NQM6/NQM2026 and RTYM6/RTYM2026. Continuous symbols NQ1!/RTY1! are visual reference only.</div>
+          <div class="small">Rithmic live contract ticks, not TradingView price. Exact charts: NQM6/NQM2026 and YMM6/YM2026. Continuous symbols NQ1!/YM1! are visual reference only.</div>
         </div>
         <div class="small" id="dashboardClock">--</div>
       </div>
@@ -1210,6 +1603,48 @@
         <div class="badge" id="heroEngineBadge">Engine: --</div>
         <div class="badge" id="heroTvAtrBadge">TV ATR: --</div>
         <div class="badge" id="heroNoonBadge">Noon Runner Flatten: --</div>
+      </div>
+      <div class="mode-control-card">
+        <div class="mode-control-header">
+          <div>
+            <div class="mode-control-title">Trade Manager Mode</div>
+            <div class="mode-control-value" id="tradeManagerModeIndicator">LEGACY</div>
+          </div>
+          <div class="badge mode-indicator" id="tradeManagerModeBadge">New trades only</div>
+        </div>
+        <div class="mode-control-grid">
+          <label>
+            Select mode
+            <select id="tradeManagerModeSelect">
+              <option value="LEGACY">LEGACY</option>
+              <option value="DYNAMIC_RISK_RESET">DYNAMIC_RISK_RESET</option>
+            </select>
+          </label>
+          <button type="button" id="tradeManagerModeSaveButton">Apply Mode</button>
+        </div>
+        <div class="small" style="margin-top: 8px;">Applies to new trades only. Existing trades keep the mode they were created with.</div>
+        <div class="mode-control-status" id="tradeManagerModeStatus">Loading Trade Manager mode…</div>
+      </div>
+      <div class="mode-control-card">
+        <div class="mode-control-header">
+          <div>
+            <div class="mode-control-title">Execution Tracking Mode</div>
+            <div class="mode-control-value" id="submissionTrackingModeIndicator">LIVE MODE</div>
+          </div>
+          <div class="badge tracking-live" id="submissionTrackingModeBadge">LIVE MODE</div>
+        </div>
+        <div class="mode-control-grid">
+          <label>
+            Select tracking mode
+            <select id="submissionTrackingModeSelect">
+              <option value="LIVE">LIVE</option>
+              <option value="TEST_EXCLUDED">TEST / EXCLUDED</option>
+            </select>
+          </label>
+          <button type="button" id="submissionTrackingModeSaveButton">Apply Tracking</button>
+        </div>
+        <div class="small" style="margin-top: 8px;">Applies to new manual Command Center trades only. Existing trades keep the mode they were created with.</div>
+        <div class="mode-control-status" id="submissionTrackingModeStatus">LIVE mode submits normal KPI-eligible manual trades.</div>
       </div>
     </div>
     <div class="hero-panel">
@@ -1324,6 +1759,10 @@
             </p>
           </details>
 
+          <div id="liquidityLockBox" class="liquidity-lock-list">
+            <div class="entry-agent-offline">Liquidity lock unavailable</div>
+          </div>
+
           <div class="atr-status-list" id="tvAtrStatusBox"></div>
         </div>
       </div>
@@ -1389,6 +1828,7 @@
               <div class="demo-live-map-controls">
                 <input id="demoLivePriceInput" type="number" step="0.25" placeholder="27402" />
                 <button id="demoLivePriceBtn" type="button">Set Demo Price</button>
+                <button id="demoLiveResetBtn" type="button">Reset Scenario</button>
                 <button id="demoLiveMapToggle" type="button">Demo Live Map</button>
               </div>
             </div>
@@ -1428,7 +1868,6 @@
           <button type="button" class="entry-agent-filter-button active" data-entry-agent-symbol-filter="All">All</button>
           <button type="button" class="entry-agent-filter-button" data-entry-agent-symbol-filter="NQ">NQ</button>
           <button type="button" class="entry-agent-filter-button" data-entry-agent-symbol-filter="YM">YM</button>
-          <button type="button" class="entry-agent-filter-button" data-entry-agent-symbol-filter="RTY">RTY</button>
         </div>
         <div id="entryAgentBox" class="entry-agent-list">
           <div class="entry-agent-offline">Entry Agent offline</div>
@@ -1489,6 +1928,8 @@
                 <th>Rejection/Continuation</th>
                 <th>Pathway</th>
                 <th>Direction</th>
+                <th>Liquidity</th>
+                <th>ATR Dist %</th>
                 <th>Result</th>
                 <th>R multiple</th>
                 <th>PnL</th>
@@ -1547,18 +1988,22 @@
     let riskStateInFlight = false;
     let qaFeedInFlight = false;
     let entryAgentInFlight = false;
+    let liquidityLockOverrideInFlight = false;
     let entryAgentSymbolFilter = "All";
     let latestEntryAgentPayload = null;
+    const liquidityLockOverrideResultBySymbol = {};
     let previousTvAtrStatusBySymbol = {};
     let latestTvAtrStatusBySymbol = {};
     let latestRiskPayload = null;
+    let latestTradeManagerModeConfig = null;
     let latestTradesPayload = null;
     let latestEventsPayload = null;
+    let manualSubmissionTrackingMode = "LIVE";
     const latestLivePriceBySymbol = {};
     const livePriceReceivedAtBySymbol = {};
     let selectedActiveTradeId = null;
     let demoLiveMapEnabled = false;
-    let selectedDemoTradeId = "DEMO-NQ";
+    let selectedDemoTradeId = "DEMO-NQ-LEGACY";
     const demoLivePrices = {};
     const demoLivePriceUpdatedAtByTrade = {};
     const demoLiveLifecycleByTrade = {};
@@ -1568,16 +2013,32 @@
     const kpiScreenshotDebugByTradeId = {};
     const DEMO_LIVE_MAP_TRADES = [
       {
-        trade_id: "DEMO-NQ",
+        trade_id: "DEMO-NQ-LEGACY",
         symbol: "NQM6",
         execution_symbol: "NQM6",
         requested_symbol: "NQ",
+        demo_label: "NQ LEGACY",
         direction: "long",
-        entry_price: 27400,
-        current_stop: 27390,
-        original_stop: 27390,
-        be_trigger: 27405,
-        tp1_price: 27410,
+        trade_manager_mode: "LEGACY",
+        entry_price: 30352.00,
+        current_stop: 30322.00,
+        original_stop: 30322.00,
+        be_trigger: 30367.00,
+        tp1_price: 30382.00,
+        original_tp1_price: 30382.00,
+        dynamic_risk_reset_applied: false,
+        selected_adverse_extreme: null,
+        selected_extreme_time: null,
+        dynamic_adjusted_stop: null,
+        dynamic_adjusted_tp1: null,
+        dynamic_adjusted_risk: null,
+        dynamic_reference_extreme: 30335.75,
+        dynamic_offset_ticks: 12,
+        dynamic_offset_price: 3.00,
+        entry_leg_high: 30354.50,
+        entry_leg_low: 30335.75,
+        entry_leg_open: 30346.25,
+        entry_leg_close: 30350.75,
         remaining_size: 2,
         position_size: 2,
         status: "active",
@@ -1585,16 +2046,32 @@
         is_demo_live_map: true
       },
       {
-        trade_id: "DEMO-YM",
-        symbol: "YMM6",
-        execution_symbol: "YMM6",
-        requested_symbol: "YM",
+        trade_id: "DEMO-NQ-DYNAMIC",
+        symbol: "NQM6",
+        execution_symbol: "NQM6",
+        requested_symbol: "NQ",
+        demo_label: "NQ DYNAMIC",
         direction: "long",
-        entry_price: 49400,
-        current_stop: 49390,
-        original_stop: 49390,
-        be_trigger: 49405,
-        tp1_price: 49410,
+        trade_manager_mode: "DYNAMIC_RISK_RESET",
+        entry_price: 30352.00,
+        current_stop: 30322.00,
+        original_stop: 30322.00,
+        be_trigger: 30367.00,
+        tp1_price: 30382.00,
+        original_tp1_price: 30382.00,
+        dynamic_risk_reset_applied: false,
+        selected_adverse_extreme: 30334.75,
+        selected_extreme_time: "2026-06-17T12:59:00Z",
+        dynamic_adjusted_stop: 30331.75,
+        dynamic_adjusted_tp1: 30372.25,
+        dynamic_adjusted_risk: 20.25,
+        dynamic_reference_extreme: 30334.75,
+        dynamic_offset_ticks: 12,
+        dynamic_offset_price: 3.00,
+        entry_leg_high: 30354.50,
+        entry_leg_low: 30334.75,
+        entry_leg_open: 30346.25,
+        entry_leg_close: 30350.75,
         remaining_size: 2,
         position_size: 2,
         status: "active",
@@ -1621,12 +2098,109 @@
       return String(value);
     }
 
+    function formatPtTimestamp(value) {
+      if (!value) return EMPTY_FIELD;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return typeof value === "string" && value.trim() ? value : EMPTY_FIELD;
+      }
+      return `${date.toLocaleTimeString([], {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        timeZone: "America/Los_Angeles"
+      })} PT`;
+    }
+
+    function getEntryAgentSessionWindow(now = new Date()) {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "America/Los_Angeles"
+      }).formatToParts(now);
+      const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
+      const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
+      const minutesSinceMidnight = hour * 60 + minute;
+
+      if (minutesSinceMidnight >= 390 && minutesSinceMidnight <= 450) {
+        return { label: "LIVE", tokenClass: "complete" };
+      }
+      if (minutesSinceMidnight >= 375 && minutesSinceMidnight <= 389) {
+        return { label: "OBSERVATIONAL", tokenClass: "wait" };
+      }
+      return { label: "CLOSED", tokenClass: "idle" };
+    }
+
+    function formatEntryAgentLifecycleLineValue(symbol, value) {
+      if (value === null || value === undefined || value === "") {
+        return "n/a";
+      }
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return formatValue(value);
+      }
+      const root = normalizeSymbolRoot(symbol);
+      const tickSize = root === "NQ" ? 0.25 : root === "YM" ? 1.0 : null;
+      if (!tickSize) {
+        return formatValue(value);
+      }
+      const rounded = Math.round(numeric / tickSize) * tickSize;
+      const decimals = tickSize >= 1 ? 0 : 2;
+      return rounded.toFixed(decimals);
+    }
+
+    function normalizeTradeManagerMode(value) {
+      const mode = String(value || "LEGACY").trim().toUpperCase();
+      return mode === "DYNAMIC_RISK_RESET" ? "DYNAMIC_RISK_RESET" : "LEGACY";
+    }
+
+    function normalizeSubmissionTrackingMode(value) {
+      const mode = String(value || "LIVE").trim().toUpperCase();
+      return mode === "TEST_EXCLUDED" ? "TEST_EXCLUDED" : "LIVE";
+    }
+
+    function loadSubmissionTrackingModePreference() {
+      try {
+        const stored = window.localStorage.getItem("command_center_submission_tracking_mode");
+        manualSubmissionTrackingMode = normalizeSubmissionTrackingMode(stored);
+      } catch {
+        manualSubmissionTrackingMode = "LIVE";
+      }
+    }
+
+    function persistSubmissionTrackingModePreference() {
+      try {
+        window.localStorage.setItem("command_center_submission_tracking_mode", manualSubmissionTrackingMode);
+      } catch {}
+    }
+
     function normalizeSymbolRoot(symbol) {
       const raw = String(symbol ?? "").trim().toUpperCase();
       if (!raw) return "";
       const cleaned = raw.replace("!", "").replace(/[^A-Z0-9]/g, "");
       if (!cleaned) return "";
       return cleaned.replace(/[FGHJKMNQUVXZ]\d+$/, "");
+    }
+
+    const LIVE_UI_ROOTS = ["NQ", "YM"];
+
+    function isLiveUiRootSymbol(symbol) {
+      return LIVE_UI_ROOTS.includes(normalizeSymbolRoot(symbol));
+    }
+
+    function filterLiveUiSnapshotPayload(payload) {
+      if (!payload || typeof payload !== "object") {
+        return payload;
+      }
+      const symbols = (payload && payload.symbols) || {};
+      return {
+        ...payload,
+        symbols: Object.fromEntries(
+          Object.entries(symbols).filter(([symbol]) => isLiveUiRootSymbol(symbol))
+        )
+      };
     }
 
     function resolveSnapshotSymbolForInput(symbol) {
@@ -1750,8 +2324,22 @@
         return "Hit";
       }
       const stopState = String(trade.stop_state || "").toLowerCase();
-      if (trade.moved_to_be || stopState === "break_even") {
+      const entryPrice = toPositivePrice(trade.entry_price);
+      const currentStop = toPositivePrice(trade.current_stop);
+      if (
+        stopState === "break_even"
+        || (
+          trade.moved_to_be
+          && !trade.tp1_hit
+          && entryPrice !== null
+          && currentStop !== null
+          && Math.abs(currentStop - entryPrice) <= 1e-9
+        )
+      ) {
         return "Active";
+      }
+      if (trade.be_trigger_processed_at) {
+        return "Hit";
       }
       return "Pending";
     }
@@ -1799,7 +2387,6 @@
 
     function getTradePointValue(symbol) {
       const root = normalizeSymbolRoot(symbol);
-      if (root === "RTY") return 50;
       if (root === "YM") return 5;
       if (root === "NQ") return 20;
       return 1;
@@ -1989,10 +2576,36 @@
       return numeric === null ? EMPTY_FIELD : formatPrice(numeric);
     }
 
-    function getClosedJournalTrades(payload = latestTradesPayload) {
+    function formatKpiPercent(value) {
+      const numeric = toFiniteNumber(value);
+      return numeric === null ? EMPTY_FIELD : `${numeric.toFixed(1)}%`;
+    }
+
+    function isKpiEligibleTrade(trade) {
+      if (!trade) return false;
+      if (trade.exclude_from_stats === true || trade.test_trade === true) return false;
+      if (trade.kpi_eligible === true) return true;
+      if (trade.kpi_eligible === false) return false;
+
+      const status = String(trade.status || "").toLowerCase();
+      if (status === "error" || status === "rejected") return false;
+      if (firstKpiValue(trade, ["entry_price"]) === null) return false;
+      const fillPriceSource = String(firstKpiValue(trade, ["fill_price_source"]) || "").toLowerCase();
+      if (!fillPriceSource) return false;
+      if (fillPriceSource === "stale_or_missing_execution_price") return false;
+      if (fillPriceSource.includes("reject")) return false;
+      return true;
+    }
+
+    function isStatsExcludedTrade(trade) {
+      return Boolean(trade && (trade.exclude_from_stats === true || trade.test_trade === true));
+    }
+
+    function getClosedJournalTrades(payload = latestTradesPayload, options = {}) {
       if (!payload || payload.ok === false) {
         return null;
       }
+      const kpiEligibleOnly = options.kpiEligibleOnly === true;
       const sourceTrades = Array.isArray(payload.trades)
         ? payload.trades.map((trade, index) => [trade && trade.trade_id ? trade.trade_id : String(index), trade])
         : Object.entries((payload && payload.trades) || {});
@@ -2006,7 +2619,13 @@
         }))
         .filter((trade) => {
           const status = String(trade.status || "").toLowerCase();
-          return status === "closed" || status === "archived" || trade.archived === true;
+          if (!(status === "closed" || status === "archived" || trade.archived === true)) {
+            return false;
+          }
+          if (kpiEligibleOnly && !isKpiEligibleTrade(trade)) {
+            return false;
+          }
+          return true;
         })
         .sort((a, b) => {
           const aTime = new Date(getClosedTradeTimeValue(a) || 0).getTime();
@@ -2066,10 +2685,7 @@
         const candidate = toFiniteNumber(firstKpiValue(latestAccountSnapshot, [
           "starting_balance",
           "starting_equity",
-          "baseline",
-          "balance",
-          "net_liq",
-          "cash_balance"
+          "baseline"
         ]));
         if (candidate !== null) return candidate;
       }
@@ -2081,7 +2697,7 @@
     }
 
     function getNormalizedClosedKpiRows(payload = latestTradesPayload) {
-      return buildKpiRows(getClosedJournalTrades(payload) || []);
+      return buildKpiRows(getClosedJournalTrades(payload, { kpiEligibleOnly: true }) || []);
     }
 
     function getNormalizedClosedProfit(payload = latestTradesPayload) {
@@ -2189,6 +2805,12 @@
         const pathwayRaw = firstKpiValue(trade, ["pathway", "continuation_type", "sr_rs_context", "setup_pathway"]);
         const beValue = firstKpiValue(trade, ["be_price", "break_even_price", "be_trigger", "break_even_trigger"]);
         const tradeIdValue = firstKpiValue(trade, ["trade_id", "id"]);
+        const legAnchorLiquidity = firstKpiValue(trade, ["leg_anchor_liquidity"]);
+        const nextActiveLiquidity = firstKpiValue(trade, ["next_active_liquidity", "active_liquidity", "active_liquidity_name"]);
+        const activeLiquidity = legAnchorLiquidity && nextActiveLiquidity
+          ? `${legAnchorLiquidity} -> ${nextActiveLiquidity}`
+          : nextActiveLiquidity;
+        const liquidityAtrDistancePct = firstKpiValue(trade, ["liquidity_leg_atr_distance_pct", "liquidity_atr_distance_pct"]);
         return {
           timestamp,
           pnl,
@@ -2201,6 +2823,8 @@
             displayKpiField(firstKpiValue(trade, ["rejection_continuation", "setup_type", "entry_type", "trade_type"])),
             displayKpiField(pathwayRaw === null ? null : entryAgentPathwayDisplay(pathwayRaw)),
             displayKpiField(firstKpiValue(trade, ["direction", "side"])),
+            displayKpiField(activeLiquidity),
+            formatKpiPercent(liquidityAtrDistancePct),
             displayKpiField(getKpiResult(trade, pnl)),
             rMultiple === null ? EMPTY_FIELD : rMultiple.toFixed(2),
             pnl === null ? EMPTY_FIELD : formatMoney(pnl),
@@ -2246,10 +2870,10 @@
       const fragment = document.createDocumentFragment();
       if (!rows.length) {
         const row = document.createElement("tr");
-        row.innerHTML = `<td colspan="18">${EMPTY_FIELD}</td>`;
+        row.innerHTML = `<td colspan="20">${EMPTY_FIELD}</td>`;
         fragment.appendChild(row);
       } else {
-        for (const item of rows) {
+        for (const item of [...rows].reverse()) {
           const row = document.createElement("tr");
           row.innerHTML = `${item.cells.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}${renderKpiScreenshotCell(item.screenshotKey)}`;
           fragment.appendChild(row);
@@ -2467,9 +3091,11 @@
         return;
       }
 
-      const trades = getClosedJournalTrades(payload) || [];
-      hydrateKpiScreenshotsFromTrades(trades);
-      const rows = buildKpiRows(trades);
+      const closedTrades = getClosedJournalTrades(payload) || [];
+      const eligibleClosedTrades = getClosedJournalTrades(payload, { kpiEligibleOnly: true }) || [];
+      hydrateKpiScreenshotsFromTrades(closedTrades);
+      const rows = buildKpiRows(eligibleClosedTrades);
+      const journalRows = buildKpiRows(closedTrades);
       const pnls = rows.map((row) => row.pnl).filter((value) => value !== null);
       const rValues = rows.map((row) => row.rMultiple).filter((value) => value !== null);
       const totalPnl = pnls.reduce((sum, value) => sum + value, 0);
@@ -2486,7 +3112,7 @@
       const winRate = rows.length ? `${((wins / rows.length) * 100).toFixed(1)}%` : EMPTY_FIELD;
 
       renderKpiSummary([
-        { label: "Total trades", value: String(rows.length), subtext: "Closed/archived" },
+        { label: "Total trades", value: String(rows.length), subtext: "KPI-eligible closed/archived" },
         { label: "Wins", value: String(wins), subtext: "PnL > 0" },
         { label: "Losses", value: String(losses), subtext: "PnL < 0" },
         { label: "Breakevens", value: String(breakevens), subtext: "PnL = 0" },
@@ -2498,7 +3124,7 @@
         { label: "Worst trade", value: worstTrade === null ? EMPTY_FIELD : formatMoney(worstTrade), subtext: "Smallest PnL" },
         { label: "Current synthetic equity", value: formatMoney(currentEquity), subtext: "Account snapshot or curve" }
       ]);
-      renderKpiJournal(rows);
+      renderKpiJournal(journalRows);
 
       let cumulative = 0;
       const points = [{ equity: startingEquity }];
@@ -2510,7 +3136,7 @@
       }
       $("kpiEquityMeta").textContent = `Baseline ${formatMoney(startingEquity)} | Current ${formatMoney(startingEquity + cumulative)}`;
       drawEquityCurve(points);
-      $("kpiMeta").textContent = `${rows.length} closed/archived trades | last update ${new Date().toISOString()}`;
+      $("kpiMeta").textContent = `${rows.length} KPI-eligible trades | ${journalRows.length} closed/archived shown | last update ${new Date().toISOString()}`;
     }
 
     function getTradeTimestamp(trade) {
@@ -2528,7 +3154,9 @@
     }
 
     function buildOrphanExposureTrades(payload = latestTradesPayload) {
-      return getOrphanExposureItems(payload).map((item) => {
+      return getOrphanExposureItems(payload)
+        .filter((item) => isLiveUiRootSymbol(item && item.symbol))
+        .map((item) => {
         const symbol = String(item.symbol || "").toUpperCase();
         const qty = Number(item.position_qty || 0);
         const stopOrder = item.stop_order || (Array.isArray(item.working_orders)
@@ -2654,6 +3282,7 @@
       }
 
       return {
+        trade,
         trade_id: trade && trade.trade_id,
         direction: trade && trade.direction,
         entry: trade && trade.entry_price,
@@ -2694,7 +3323,50 @@
       `;
     }
 
+    function backendTruthFieldWithSecondary(label, value, secondaryText = "", extraClass = "", secondaryTitle = "") {
+      const secondaryMarkup = secondaryText
+        ? `<div class="backend-truth-secondary"${secondaryTitle ? ` title="${escapeHtml(secondaryTitle)}"` : ""}>${escapeHtml(secondaryText)}</div>`
+        : "";
+      return `
+        <div class="backend-truth-item">
+          <div class="backend-truth-label">${escapeHtml(label)}</div>
+          <div class="backend-truth-value ${extraClass}">${escapeHtml(formatValue(value))}</div>
+          ${secondaryMarkup}
+        </div>
+      `;
+    }
+
+    function dynamicRiskResetAppliedForDisplay(trade) {
+      return Boolean(
+        trade
+        && String(trade.trade_manager_mode || "").toUpperCase() === "DYNAMIC_RISK_RESET"
+        && trade.dynamic_risk_reset_applied
+        && toPositivePrice(trade.dynamic_adjusted_stop) !== null
+      );
+    }
+
+    function hasVisibleSelectedExtreme(trade) {
+      return Boolean(
+        trade
+        && dynamicRiskResetAppliedForDisplay(trade)
+        && String(trade.status || "").toLowerCase() === "active"
+        && toPositivePrice(trade.selected_adverse_extreme) !== null
+      );
+    }
+
     function renderBackendTruthPanel(model) {
+      const trade = model.trade || {};
+      const dynamicApplied = dynamicRiskResetAppliedForDisplay(trade);
+      const originalRisk = Number.isFinite(Number(trade.entry_price)) && Number.isFinite(Number(trade.original_stop))
+        ? Math.abs(Number(trade.entry_price) - Number(trade.original_stop))
+        : null;
+      const adjustedRisk = dynamicApplied ? toFiniteNumber(trade.dynamic_adjusted_risk) : null;
+      const riskReductionPct = originalRisk !== null && adjustedRisk !== null && originalRisk > 0
+        ? ((originalRisk - adjustedRisk) / originalRisk) * 100
+        : null;
+      const dynamicDecision = dynamicApplied ? "applied" : (trade.dynamic_risk_reset_decision || "not_applied");
+      const selectedExtremeValue = dynamicApplied ? trade.selected_adverse_extreme : null;
+      const selectedExtremeTime = dynamicApplied ? trade.selected_extreme_time : null;
       const statusClassName = model.statusKind === "danger" ? "danger" : (model.statusKind === "warning" ? "warning" : "");
       return `
         <div class="backend-status-line ${statusClassName}">${escapeHtml(model.statusLine)}</div>
@@ -2716,6 +3388,19 @@
           ${backendTruthField("Executor Stop Qty", model.active_stop_qty, model.positionDiffers ? "status-amber" : "")}
           ${backendTruthField("Executor Stop Price", formatTradePriceField(model.active_stop_price), model.stopDiffers ? "status-amber" : "status-green")}
           ${backendTruthField("Executor Position", model.executor_position_qty, model.positionDiffers ? "status-amber" : "")}
+          ${backendTruthField("Dynamic Decision", formatValue(dynamicDecision))}
+          ${backendTruthField("Dynamic Skip Reason", formatValue(trade.dynamic_risk_reset_skip_reason))}
+          ${backendTruthFieldWithSecondary(
+            "Selected Extreme",
+            formatTradePriceField(selectedExtremeValue),
+            selectedExtremeTime ? `Frozen ${formatValue(selectedExtremeTime)}` : "",
+            "",
+            formatValue(selectedExtremeTime)
+          )}
+          ${backendTruthField("Dynamic Adjusted Stop", formatTradePriceField(dynamicApplied ? trade.dynamic_adjusted_stop : null))}
+          ${backendTruthField("Original Risk", originalRisk === null ? "n/a" : formatPrice(originalRisk))}
+          ${backendTruthField("Adjusted Risk", adjustedRisk === null ? "n/a" : formatPrice(adjustedRisk))}
+          ${backendTruthField("Risk Reduction", riskReductionPct === null ? "n/a" : `${riskReductionPct.toFixed(1)}%`, riskReductionPct !== null && riskReductionPct > 0 ? "status-green" : "")}
           ${backendTruthField("TP1 Order Status", model.tp1_order_status)}
           ${backendTruthField("OCO Group", model.oco_group || "n/a")}
         </div>
@@ -2934,11 +3619,13 @@
       const riskState = riskPayload.risk_state || {};
       const failureState = riskPayload.failure_state || {};
       const noonStatus = riskPayload.noon_runner_flatten || {};
-      const snapshotSymbols = (latestSnapshot && latestSnapshot.symbols) || {};
+      const snapshotSymbols = Object.fromEntries(
+        Object.entries((latestSnapshot && latestSnapshot.symbols) || {}).filter(([symbol]) => isLiveUiRootSymbol(symbol))
+      );
       const tvStatuses = Object.values(latestTvAtrStatusBySymbol || {});
       const activeTrades = trades.filter((trade) => trade.status === "active");
       const orphanTrades = buildOrphanExposureTrades();
-      const closedTrades = trades.filter((trade) => trade.status === "closed");
+      const closedTrades = trades.filter((trade) => trade.status === "closed" && !isStatsExcludedTrade(trade));
       const openRunners = activeTrades.filter((trade) => Number(trade.remaining_size) > 0 && Number(trade.position_size) > Number(trade.remaining_size || 0));
       const workingOrders = Object.values(snapshotSymbols).reduce((sum, symbolState) => {
         return sum + ((symbolState.working_orders || []).length);
@@ -2971,10 +3658,87 @@
       setMetric("metricWorkingOrders", String(workingOrders), `${Object.keys(snapshotSymbols).length} symbols in snapshot`);
     }
 
+    function renderTradeManagerModeControl() {
+      const configuredMode = normalizeTradeManagerMode(
+        (latestTradeManagerModeConfig && latestTradeManagerModeConfig.trade_manager_mode)
+        || "LEGACY"
+      );
+      $("tradeManagerModeIndicator").textContent = configuredMode;
+      $("tradeManagerModeSelect").value = configuredMode;
+      $("tradeManagerModeBadge").textContent = "New trades only";
+    }
+
+    function renderSubmissionTrackingModeControl() {
+      const mode = normalizeSubmissionTrackingMode(manualSubmissionTrackingMode);
+      const isTestMode = mode === "TEST_EXCLUDED";
+      $("submissionTrackingModeIndicator").textContent = isTestMode
+        ? "TEST MODE - EXCLUDED FROM STATS"
+        : "LIVE MODE";
+      $("submissionTrackingModeSelect").value = mode;
+      $("submissionTrackingModeBadge").textContent = isTestMode
+        ? "TEST MODE - EXCLUDED FROM STATS"
+        : "LIVE MODE";
+      $("submissionTrackingModeBadge").classList.toggle("tracking-live", !isTestMode);
+      $("submissionTrackingModeBadge").classList.toggle("tracking-test", isTestMode);
+      $("submissionTrackingModeStatus").textContent = isTestMode
+        ? "Manual Command Center submits will include test_trade = true and be excluded from KPI, counters, PnL summaries, and performance cards."
+        : "Manual Command Center submits will behave as normal live KPI-eligible trades.";
+    }
+
+    async function refreshTradeManagerModeConfig() {
+      try {
+        const data = await fetchJson(`${TM_BASE}/config/trade_manager_mode`);
+        latestTradeManagerModeConfig = data;
+        renderTradeManagerModeControl();
+        $("tradeManagerModeStatus").textContent = `Configured mode: ${normalizeTradeManagerMode(data.trade_manager_mode)}. Applies to new trades only.`;
+      } catch (error) {
+        $("tradeManagerModeStatus").textContent = `Mode load failed: ${error.message}`;
+      }
+    }
+
+    async function saveTradeManagerModeConfig() {
+      const button = $("tradeManagerModeSaveButton");
+      const selectedMode = normalizeTradeManagerMode($("tradeManagerModeSelect").value);
+      button.disabled = true;
+      $("tradeManagerModeStatus").textContent = `Saving ${selectedMode}…`;
+      try {
+        const data = await fetchJson(`${TM_BASE}/config/trade_manager_mode`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trade_manager_mode: selectedMode })
+        });
+        latestTradeManagerModeConfig = data;
+        renderTradeManagerModeControl();
+        $("tradeManagerModeStatus").textContent = data.message || `Trade Manager mode set to ${selectedMode}. Applies to new trades only.`;
+      } catch (error) {
+        $("tradeManagerModeStatus").textContent = `Mode save failed: ${error.message}`;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function saveSubmissionTrackingModeConfig() {
+      manualSubmissionTrackingMode = normalizeSubmissionTrackingMode($("submissionTrackingModeSelect").value);
+      persistSubmissionTrackingModePreference();
+      renderSubmissionTrackingModeControl();
+    }
+
     function getLivePriceForTrade(trade) {
       const resolvedSymbol = resolveSnapshotSymbolForTrade(trade);
       const livePriceEntry = getLivePriceEntry(resolvedSymbol || getKnownTradeSymbol(trade));
       const marketData = getMarketDataState(livePriceEntry);
+      if (isStaticDynamicDemoTrade(trade)) {
+        const manualDemoPrice = toFiniteNumber(demoLivePrices[trade.trade_id]);
+        return {
+          price: manualDemoPrice !== null ? manualDemoPrice : Number(trade.entry_price),
+          resolvedSymbol,
+          source: manualDemoPrice !== null ? "demo.manual_price" : "demo.static_entry_price",
+          updatedText: manualDemoPrice !== null
+            ? (demoLivePriceUpdatedAtByTrade[trade.trade_id] ? formatClockTime(demoLivePriceUpdatedAtByTrade[trade.trade_id]) : "n/a")
+            : "static setup",
+          pulseKey: trade.trade_id
+        };
+      }
       const manualDemoPrice = trade && trade.is_demo_live_map ? toFiniteNumber(demoLivePrices[trade.trade_id]) : null;
 
       if (manualDemoPrice !== null) {
@@ -3017,28 +3781,117 @@
     }
 
     function deriveVisualLevels(trade, livePriceInfo) {
+      const mode = String(trade.trade_manager_mode || "LEGACY").toUpperCase();
+      const direction = String(trade.direction || "").toLowerCase();
       const entryPrice = toPositivePrice(trade.entry_price);
       const currentStop = toPositivePrice(trade.current_stop);
       const originalStop = toPositivePrice(trade.original_stop);
-      const stopPrice = currentStop !== null ? currentStop : originalStop;
+      const dynamicStop = toPositivePrice(trade.dynamic_adjusted_stop);
       const beTrigger = toPositivePrice(trade.be_trigger);
       const tp1Price = toPositivePrice(trade.tp1_price);
-      const beStatus = getBreakEvenStatus(trade);
+      const originalRisk = (
+        Number.isFinite(entryPrice)
+        && Number.isFinite(originalStop)
+      ) ? Math.abs(entryPrice - originalStop) : null;
+      const derivedOriginalTp1 = (
+        originalRisk !== null
+        && direction === "long"
+      ) ? (entryPrice + originalRisk) : (
+        originalRisk !== null
+        && direction === "short"
+      ) ? (entryPrice - originalRisk) : null;
+      const originalTp1 = toPositivePrice(trade.original_tp1_price ?? derivedOriginalTp1);
+      const dynamicTp1 = toPositivePrice(trade.dynamic_adjusted_tp1);
+      const stopState = String(trade.stop_state || "").toLowerCase();
+      const dynamicApplied = mode === "DYNAMIC_RISK_RESET" && Boolean(
+        trade.dynamic_risk_reset_applied
+        || stopState === "dynamic_risk_reset"
+        || stopState === "runner_dynamic"
+      );
+      const supportsDynamicStop = mode === "DYNAMIC_RISK_RESET"
+        && dynamicStop !== null
+        && originalStop !== null
+        && Math.abs(dynamicStop - originalStop) > 1e-9;
 
-      const levels = [
-        { key: "entry_price", label: "Entry", value: entryPrice, className: "level-entry" },
-        { key: "stop", label: currentStop !== null ? "STOP" : "STOP (orig)", value: stopPrice, className: "level-stop" },
-        {
-          key: "be_trigger",
-          label: "BE",
-          value: beTrigger,
-          className: beStatus === "Hit" ? "level-be-hit" : "level-be"
-        },
-        { key: "tp1_price", label: "TP1", value: tp1Price, className: "level-tp1" }
-      ].filter((item) => item && Number.isFinite(item.value));
+      const levels = [];
+      if (Number.isFinite(entryPrice)) {
+        levels.push({ key: "entry_price", label: "Entry", value: entryPrice, className: "level-entry" });
+      }
+
+      if (mode === "DYNAMIC_RISK_RESET" && supportsDynamicStop) {
+        if (!dynamicApplied) {
+          levels.push(
+            { key: "stop_price", label: "Stop", value: originalStop, className: "level-stop" },
+            { key: "ms_trigger", label: "MS", value: beTrigger, className: "level-be" },
+            { key: "tp1_price", label: "TP1", value: originalTp1 !== null ? originalTp1 : tp1Price, className: "level-tp1" }
+          );
+        } else {
+          levels.push(
+            { key: "prior_stop_price", label: "Stop", value: originalStop, className: "level-stop level-faded" },
+            {
+              key: "dynamic_stop_price",
+              label: "Dynamic Stop",
+              value: dynamicStop,
+              className: "level-stop"
+            }
+          );
+          if (originalTp1 !== null) {
+            levels.push({
+              key: "prior_tp1_price",
+              label: "TP1",
+              value: originalTp1,
+              className: "level-tp1 level-faded"
+            });
+          }
+          if (hasVisibleSelectedExtreme(trade)) {
+            levels.push({
+              key: "selected_adverse_extreme",
+              label: "Selected Extreme",
+              value: toPositivePrice(trade.selected_adverse_extreme),
+              className: "level-selected-extreme",
+              pillSide: "right",
+              title: formatValue(trade.selected_extreme_time)
+            });
+          }
+          levels.push({
+            key: "dynamic_tp1_price",
+            label: "Dynamic TP1",
+            value: dynamicTp1 !== null ? dynamicTp1 : tp1Price,
+            className: "level-tp1"
+          });
+        }
+      } else {
+        const stopPrice = currentStop !== null ? currentStop : originalStop;
+        const beStatus = getBreakEvenStatus(trade);
+        levels.push(
+          { key: "stop", label: currentStop !== null ? "ACTIVE STOP" : "STOP (orig)", value: stopPrice, className: "level-stop" },
+          {
+            key: "be_trigger",
+            label: mode === "DYNAMIC_RISK_RESET" ? "0.5 ATR Trigger" : "BE",
+            value: beTrigger,
+            className: beStatus === "Hit" ? "level-be-hit" : "level-be"
+          },
+          { key: "tp1_price", label: "TP1", value: tp1Price, className: "level-tp1" }
+        );
+
+        if (
+          originalTp1 !== null &&
+          tp1Price !== null &&
+          Math.abs(originalTp1 - tp1Price) > 1e-9
+        ) {
+          levels.push({
+            key: "original_tp1_price",
+            label: "TP1 (orig)",
+            value: originalTp1,
+            className: "level-entry"
+          });
+        }
+      }
+
+      const filteredLevels = levels.filter((item) => item && Number.isFinite(item.value));
 
       if (livePriceInfo && Number.isFinite(livePriceInfo.price)) {
-        levels.unshift({
+        filteredLevels.unshift({
           key: "live_price",
           label: "LIVE",
           value: livePriceInfo.price,
@@ -3048,12 +3901,12 @@
         });
       }
 
-      if (!levels.length) {
+      if (!filteredLevels.length) {
         return { levels: [], min: 0, max: 0 };
       }
 
-      let min = Math.min(...levels.map((item) => item.value));
-      let max = Math.max(...levels.map((item) => item.value));
+      let min = Math.min(...filteredLevels.map((item) => item.value));
+      let max = Math.max(...filteredLevels.map((item) => item.value));
       if (min === max) {
         min -= 1;
         max += 1;
@@ -3061,7 +3914,7 @@
 
       const padding = Math.max((max - min) * 0.28, 2);
       return {
-        levels,
+        levels: filteredLevels,
         min: min - padding,
         max: max + padding
       };
@@ -3139,6 +3992,46 @@
       }));
     }
 
+    function renderDemoSetupCandle(trade, min, max) {
+      if (!trade || !trade.is_demo_live_map) {
+        return "";
+      }
+
+      const high = toPositivePrice(trade.entry_leg_high);
+      const low = toPositivePrice(trade.entry_leg_low);
+      if (high === null || low === null || high < low) {
+        return "";
+      }
+
+      const range = (max - min) || 1;
+      const positionPct = (value) => Math.min(Math.max(((max - value) / range) * 100, 3), 97);
+      const highPct = positionPct(high);
+      const lowPct = positionPct(low);
+      const wickTop = Math.min(highPct, lowPct);
+      const wickHeight = Math.max(Math.abs(lowPct - highPct), 4);
+      const open = toPositivePrice(trade.entry_leg_open);
+      const close = toPositivePrice(trade.entry_leg_close);
+      const hasBody = open !== null && close !== null;
+      const bodyTop = hasBody ? Math.min(positionPct(open), positionPct(close)) : null;
+      const bodyHeight = hasBody ? Math.max(Math.abs(positionPct(open) - positionPct(close)), 10) : null;
+      const bodyClass = hasBody && close >= open ? "bull" : "bear";
+      const mode = String(trade.trade_manager_mode || "LEGACY").toUpperCase();
+      const stopState = String(trade.stop_state || "").toLowerCase();
+      const dynamicApplied = mode === "DYNAMIC_RISK_RESET" && Boolean(
+        trade.dynamic_risk_reset_applied
+        || stopState === "dynamic_risk_reset"
+        || stopState === "runner_dynamic"
+        || stopState === "stopped"
+      );
+
+      return `
+        <div class="demo-setup-candle" aria-hidden="true">
+          <div class="demo-candle-wick" style="top:${wickTop}%;height:${wickHeight}%;"></div>
+          ${hasBody ? `<div class="demo-candle-body ${bodyClass}" style="top:${bodyTop}%;height:${bodyHeight}%;"></div>` : ""}
+        </div>
+      `;
+    }
+
     function renderTradeVisual(trade) {
       const container = $("tradeVisualBox");
 
@@ -3149,7 +4042,7 @@
       }
 
       const livePriceInfo = getLivePriceForTrade(trade);
-      if (trade.is_demo_live_map && Number.isFinite(livePriceInfo.price)) {
+      if (trade.is_demo_live_map && Number.isFinite(livePriceInfo.price) && !isStaticDynamicDemoTrade(trade)) {
         applyDemoLifecycleForPrice(livePriceInfo.price, trade.trade_id);
         Object.assign(trade, buildDemoLiveMapTrade(trade.trade_id));
         updateDemoLiveMapControls();
@@ -3211,6 +4104,31 @@
       const visualSymbol = getTradeVisualSymbol(trade, livePriceInfo.resolvedSymbol);
       const visualMarketData = getMarketDataState(getLivePriceEntry(visualSymbol));
       const beLevel = layoutLevels.find((level) => level.key === "be_trigger") || null;
+      const mode = String(visualTrade.trade_manager_mode || "LEGACY").toUpperCase();
+      const isDynamicDemo = trade.is_demo_live_map && mode === "DYNAMIC_RISK_RESET";
+      const contractsValue = isDynamicDemo ? Number(visualTrade.remaining_size ?? 0) : null;
+      const tradeStateValue = isDynamicDemo
+        ? (contractsValue <= 0
+          ? "CLOSED"
+          : (String(visualTrade.stop_state || "").toLowerCase() === "runner_dynamic" ? "ACTIVE RUNNER" : "ACTIVE"))
+        : null;
+      const tradeStateClass = tradeStateValue === "CLOSED"
+        ? "status-red"
+        : (tradeStateValue === "ACTIVE RUNNER" ? "status-blue" : "status-green");
+      const originalRisk = Number.isFinite(Number(visualTrade.entry_price)) && Number.isFinite(Number(visualTrade.original_stop))
+        ? Math.abs(Number(visualTrade.entry_price) - Number(visualTrade.original_stop))
+        : null;
+      const dynamicApplied = dynamicRiskResetAppliedForDisplay(visualTrade);
+      const adjustedRisk = dynamicApplied ? toFiniteNumber(visualTrade.dynamic_adjusted_risk) : null;
+      const riskReductionPct = originalRisk !== null && adjustedRisk !== null && originalRisk > 0
+        ? ((originalRisk - adjustedRisk) / originalRisk) * 100
+        : null;
+      const dynamicDecisionText = dynamicApplied
+        ? "applied"
+        : (visualTrade.dynamic_risk_reset_decision || "not_applied");
+      const dynamicReasonText = dynamicApplied
+        ? "Dynamic risk reset applied"
+        : (visualTrade.dynamic_risk_reset_skip_reason ? `Dynamic reset skipped: ${visualTrade.dynamic_risk_reset_skip_reason}` : "Dynamic reset not applied");
       console.log("[CommandCenter] rendered trade visual levels", {
         trade_id: trade.trade_id,
         symbol: trade.symbol,
@@ -3234,16 +4152,24 @@
               <span class="live-updated">updated ${escapeHtml(level.updatedText || "n/a")}</span>
             </div>
           `
+          : level.key === "selected_adverse_extreme"
+            ? `
+            <div class="level-pill level-pill-right" style="transform: translateY(calc(-50% + ${level.labelOffset}px));" title="${escapeHtml(level.title || "")}">
+              <span>${escapeHtml(level.label)}</span>
+              <span class="price">${escapeHtml(formatPrice(level.value))}</span>
+            </div>
+          `
           : level.key === "be_trigger"
             ? `
             <div class="level-pill level-pill-left" style="transform: translateY(calc(-50% + ${level.labelOffset}px));">
-              <span>BE ${escapeHtml(formatPrice(level.value))}</span>
+              <span>${escapeHtml(level.label)} ${escapeHtml(formatPrice(level.value))}</span>
             </div>
           `
           : `
             <div class="level-pill level-pill-left" style="transform: translateY(calc(-50% + ${level.labelOffset}px));">
               <span>${escapeHtml(level.label)}</span>
               <span class="price">${escapeHtml(formatPrice(level.value))}</span>
+              ${level.detail ? `<span class="detail">${escapeHtml(level.detail)}</span>` : ""}
             </div>
           `;
         return `
@@ -3258,6 +4184,20 @@
           <span>${escapeHtml(level.label)}</span>
         </div>
       `).join("");
+      const demoSetupCandleMarkup = renderDemoSetupCandle(visualTrade, min, max);
+      const entryLegHigh = toPositivePrice(visualTrade.entry_leg_high);
+      const entryLegLow = toPositivePrice(visualTrade.entry_leg_low);
+      const entryLegMarkup = trade.is_demo_live_map && (entryLegHigh !== null || entryLegLow !== null)
+        ? `
+          <div class="entry-leg-box">
+            <div class="entry-leg-title">Entry Leg</div>
+            <div class="entry-leg-values">
+              <span>High: ${escapeHtml(entryLegHigh === null ? "n/a" : formatPrice(entryLegHigh))}</span>
+              <span>Low: ${escapeHtml(entryLegLow === null ? "n/a" : formatPrice(entryLegLow))}</span>
+            </div>
+          </div>
+        `
+        : "";
       const liveWaitingMarkup = Number.isFinite(livePriceInfo.price)
         ? ""
         : `
@@ -3276,7 +4216,7 @@
           <div class="small">${escapeHtml(trade.is_demo_live_map ? "frontend only" : formatValue(trade.stop_state))}</div>
         </div>
         ${validationWarnings.length ? `<div class="visual-warning">${validationWarnings.map(escapeHtml).join("<br>")}</div>` : ""}
-        ${trade.is_demo_live_map ? "" : renderBackendTruthPanel(backendModel)}
+        ${trade.is_demo_live_map ? renderDemoTradeManagerPanel(visualTrade) : renderBackendTruthPanel(backendModel)}
         <div class="source-strip">
           <span>Price Source: Listener</span>
           <span>Order Source: Executor</span>
@@ -3285,17 +4225,19 @@
           <span>Market Data Age ${escapeHtml(formatValue(visualMarketData.age))}s</span>
           <span>Last price ${escapeHtml(formatValue(visualMarketData.tickTimestamp))}</span>
         </div>
+        ${entryLegMarkup}
         <div class="level-chart">
           <div class="chart-axis">
+            ${demoSetupCandleMarkup}
             ${levelMarkup}
             ${liveWaitingMarkup}
           </div>
         </div>
         <div class="visual-stats">
           <div class="visual-stat">
-            <div class="visual-stat-label">Unrealized P/L</div>
-            <div class="visual-stat-value ${unrealizedPnl === null ? "" : (unrealizedPnl >= 0 ? "status-green" : "status-red")}">${escapeHtml(unrealizedPnl === null ? "n/a" : formatNumber(unrealizedPnl, 2))}</div>
-            <div class="visual-stat-sub">Based on live snapshot price and remaining size</div>
+            <div class="visual-stat-label">ACTIVE STOP</div>
+            <div class="visual-stat-value status-green">${escapeHtml(formatTradePriceField(visualTrade.current_stop))}</div>
+            <div class="visual-stat-sub">${escapeHtml(mode === "DYNAMIC_RISK_RESET" ? (dynamicApplied ? "Dynamic stop is the active protection" : `Original stop remains active | ${dynamicReasonText}`) : "Current protective stop managed by legacy mode")}</div>
           </div>
           <div class="visual-stat">
             <div class="visual-stat-label">Distance To TP1</div>
@@ -3307,6 +4249,23 @@
             <div class="visual-stat-value ${distanceToStop === null ? "" : (distanceToStop >= 0 ? "status-red" : "status-green")}">${escapeHtml(distanceToStop === null ? "n/a" : formatPrice(distanceToStop))}</div>
             <div class="visual-stat-sub">Positive means stop remains above price</div>
           </div>
+          <div class="visual-stat">
+            <div class="visual-stat-label">${escapeHtml(mode === "DYNAMIC_RISK_RESET" ? "Risk Reset" : "Unrealized P/L")}</div>
+            <div class="visual-stat-value ${mode === "DYNAMIC_RISK_RESET" ? "status-green" : (unrealizedPnl === null ? "" : (unrealizedPnl >= 0 ? "status-green" : "status-red"))}">${escapeHtml(mode === "DYNAMIC_RISK_RESET" ? `Orig ${originalRisk === null ? "n/a" : formatPrice(originalRisk)} | Adj ${adjustedRisk === null ? "n/a" : formatPrice(adjustedRisk)}` : (unrealizedPnl === null ? "n/a" : formatNumber(unrealizedPnl, 2)))}</div>
+            <div class="visual-stat-sub">${escapeHtml(mode === "DYNAMIC_RISK_RESET" ? `${dynamicDecisionText} | Risk Reduction: ${riskReductionPct === null ? "n/a" : `${riskReductionPct.toFixed(1)}%`}` : "Based on live snapshot price and remaining size")}</div>
+          </div>
+          ${isDynamicDemo ? `
+          <div class="visual-stat">
+            <div class="visual-stat-label">CONTRACTS</div>
+            <div class="visual-stat-value">${escapeHtml(formatValue(contractsValue))}</div>
+            <div class="visual-stat-sub">Remaining demo contracts</div>
+          </div>
+          <div class="visual-stat">
+            <div class="visual-stat-label">TRADE STATE</div>
+            <div class="visual-stat-value ${tradeStateClass}">${escapeHtml(tradeStateValue)}</div>
+            <div class="visual-stat-sub">Demo lifecycle state</div>
+          </div>
+          ` : ""}
         </div>
         <div class="visual-legend">${legendMarkup}</div>
       `;
@@ -3373,7 +4332,7 @@
 
     function renderTvAtrStatuses(data) {
       const container = $("tvAtrStatusBox");
-      const statuses = Array.isArray(data && data.symbols) ? data.symbols : [];
+      const statuses = (Array.isArray(data && data.symbols) ? data.symbols : []).filter((item) => isLiveUiRootSymbol(item && item.symbol));
       const fragment = document.createDocumentFragment();
       const nextStatusBySymbol = {};
 
@@ -3495,6 +4454,9 @@
 
     function formatMapTradeState(trade) {
       const stopState = String(trade.stop_state || "").toLowerCase();
+      if (stopState === "dynamic_risk_reset") {
+        return "dyn";
+      }
       if (stopState === "stopped" || trade.status === "closed") {
         return "stopped";
       }
@@ -3513,13 +4475,86 @@
       return "original";
     }
 
+    function renderDemoTradeManagerPanel(trade) {
+      const mode = String(trade.trade_manager_mode || "LEGACY").toUpperCase();
+      const originalTp1 = trade.original_tp1_price ?? trade.tp1_price;
+      const originalRisk = Number.isFinite(Number(trade.entry_price)) && Number.isFinite(Number(trade.original_stop))
+        ? Math.abs(Number(trade.entry_price) - Number(trade.original_stop))
+        : null;
+      const adjustedRisk = toFiniteNumber(trade.dynamic_adjusted_risk);
+      const riskReductionPct = originalRisk !== null && adjustedRisk !== null && originalRisk > 0
+        ? ((originalRisk - adjustedRisk) / originalRisk) * 100
+        : null;
+      const triggerLabel = mode === "DYNAMIC_RISK_RESET" ? "Move Stop Trigger" : "BE Trigger";
+      return `
+        <div class="backend-status-line">${escapeHtml(`Demo validation scenario | ${mode}`)}</div>
+        <div class="backend-truth-grid">
+          ${backendTruthField("Scenario", trade.demo_label || trade.trade_id)}
+          ${backendTruthField("Trade Manager Mode", mode)}
+          ${backendTruthField("Original Stop", formatTradePriceField(trade.original_stop))}
+          ${backendTruthField("ACTIVE STOP", formatTradePriceField(trade.current_stop), "status-green")}
+          ${backendTruthField("Original TP1", formatTradePriceField(originalTp1))}
+          ${backendTruthField("Current TP1", formatTradePriceField(trade.tp1_price))}
+          ${backendTruthField("Dynamic Applied", trade.dynamic_risk_reset_applied ? "true" : "false")}
+          ${backendTruthField("Dynamic Adjusted Stop", formatTradePriceField(trade.dynamic_adjusted_stop))}
+          ${backendTruthField("Dynamic Adjusted TP1", formatTradePriceField(trade.dynamic_adjusted_tp1))}
+          ${backendTruthField("Dynamic Adjusted Risk", formatTradePriceField(trade.dynamic_adjusted_risk))}
+          ${backendTruthField("Reference Extreme", formatTradePriceField(trade.dynamic_reference_extreme))}
+          ${hasVisibleSelectedExtreme(trade) ? backendTruthFieldWithSecondary(
+            "Selected Extreme",
+            formatTradePriceField(trade.selected_adverse_extreme),
+            `Frozen ${formatValue(trade.selected_extreme_time)}`,
+            "",
+            formatValue(trade.selected_extreme_time)
+          ) : ""}
+          ${backendTruthField("Offset Ticks", trade.dynamic_offset_ticks)}
+          ${backendTruthField("Offset Price", formatTradePriceField(trade.dynamic_offset_price))}
+          ${backendTruthField(triggerLabel, formatTradePriceField(trade.be_trigger))}
+          ${backendTruthField("Trigger Reached", trade.stop_state === "break_even" || trade.stop_state === "dynamic_risk_reset" || trade.tp1_hit ? "true" : "false")}
+          ${backendTruthField("Stop State", trade.stop_state)}
+          ${backendTruthField("Trigger At", trade.dynamic_risk_reset_triggered_at || trade.be_hit_at)}
+          ${backendTruthField("Original Risk", originalRisk === null ? "n/a" : formatPrice(originalRisk))}
+          ${backendTruthField("Adjusted Risk", adjustedRisk === null ? "n/a" : formatPrice(adjustedRisk))}
+          ${backendTruthField("Risk Reduction", riskReductionPct === null ? "n/a" : `${riskReductionPct.toFixed(1)}%`, riskReductionPct !== null && riskReductionPct > 0 ? "status-green" : "")}
+        </div>
+      `;
+    }
+
     function getDemoTradeTemplate(tradeId) {
       return DEMO_LIVE_MAP_TRADES.find((trade) => trade.trade_id === tradeId) || DEMO_LIVE_MAP_TRADES[0];
+    }
+
+    function isStaticDynamicDemoTrade(trade) {
+      return Boolean(
+        trade
+        && trade.is_demo_live_map
+        && String(trade.trade_manager_mode || "").toUpperCase() === "DYNAMIC_RISK_RESET"
+      );
+    }
+
+    function ensureDemoTradeSelection() {
+      if (!Array.isArray(DEMO_LIVE_MAP_TRADES) || !DEMO_LIVE_MAP_TRADES.length) {
+        selectedDemoTradeId = null;
+        return null;
+      }
+
+      if (!selectedDemoTradeId || !DEMO_LIVE_MAP_TRADES.some((trade) => trade.trade_id === selectedDemoTradeId)) {
+        selectedDemoTradeId = DEMO_LIVE_MAP_TRADES[0].trade_id;
+      }
+
+      const trade = getDemoTradeTemplate(selectedDemoTradeId);
+      if (trade && !demoLiveLifecycleByTrade[trade.trade_id]) {
+        demoLiveLifecycleByTrade[trade.trade_id] = createDemoLifecycleState(trade);
+      }
+      return trade || null;
     }
 
     function renderActiveTradeMapSelector(activeTrades) {
       const container = $("activeTradeMapSelector");
       const fragment = document.createDocumentFragment();
+      if (demoLiveMapEnabled) {
+        ensureDemoTradeSelection();
+      }
       const selectorTrades = demoLiveMapEnabled
         ? DEMO_LIVE_MAP_TRADES.map((trade) => buildDemoLiveMapTrade(trade.trade_id))
         : activeTrades;
@@ -3539,12 +4574,15 @@
         const direction = String(trade.direction || "").toLowerCase();
         const remaining = formatValue(trade.remaining_size);
         const state = formatMapTradeState(trade);
+        const demoLabel = String(trade.demo_label || trade.trade_manager_mode || trade.trade_id || "").trim();
         button.type = "button";
         const selectedId = demoLiveMapEnabled ? selectedDemoTradeId : selectedActiveTradeId;
         button.className = `map-trade-chip ${trade.orphan_exposure ? "orphan" : ""} ${trade.trade_id === selectedId ? "selected" : ""}`;
         button.dataset.tradeId = trade.trade_id || "";
         button.dataset.demoTrade = trade.is_demo_live_map ? "true" : "false";
-        button.textContent = `${symbol} ${direction} x${remaining} ${state}`;
+        button.textContent = demoLiveMapEnabled
+          ? `${demoLabel} ${state}`.trim()
+          : `${symbol} ${direction} x${remaining} ${state}`;
         fragment.appendChild(button);
       }
 
@@ -3554,17 +4592,52 @@
     function createDemoLifecycleState(trade) {
       return {
         current_stop: trade.current_stop,
+        current_tp1: trade.tp1_price,
         remaining_size: trade.remaining_size,
         moved_to_be: false,
         be_hit_at: null,
         tp1_hit: false,
         status: trade.status,
-        stop_state: trade.stop_state
+        stop_state: trade.stop_state,
+        dynamic_risk_reset_applied: Boolean(trade.dynamic_risk_reset_applied),
+        dynamic_risk_reset_triggered_at: null,
+        selected_adverse_extreme: trade.selected_adverse_extreme,
+        selected_extreme_time: trade.selected_extreme_time,
+        dynamic_adjusted_stop: trade.dynamic_adjusted_stop,
+        dynamic_adjusted_tp1: trade.dynamic_adjusted_tp1,
+        dynamic_adjusted_risk: trade.dynamic_adjusted_risk,
+        dynamic_reference_extreme: trade.dynamic_reference_extreme,
+        dynamic_offset_ticks: trade.dynamic_offset_ticks,
+        dynamic_offset_price: trade.dynamic_offset_price
       };
     }
 
     function getDemoLifecycleState(tradeId = selectedDemoTradeId) {
-      const trade = getDemoTradeTemplate(tradeId);
+      const selectedTrade = ensureDemoTradeSelection();
+      const effectiveTradeId = tradeId || (selectedTrade && selectedTrade.trade_id);
+      if (!effectiveTradeId) {
+        return {
+          current_stop: null,
+          current_tp1: null,
+          remaining_size: 0,
+          moved_to_be: false,
+          be_hit_at: null,
+          tp1_hit: false,
+          status: "inactive",
+          stop_state: "inactive",
+          dynamic_risk_reset_applied: false,
+          dynamic_risk_reset_triggered_at: null,
+          selected_adverse_extreme: null,
+          selected_extreme_time: null,
+          dynamic_adjusted_stop: null,
+          dynamic_adjusted_tp1: null,
+          dynamic_adjusted_risk: null,
+          dynamic_reference_extreme: null,
+          dynamic_offset_ticks: null,
+          dynamic_offset_price: null
+        };
+      }
+      const trade = getDemoTradeTemplate(effectiveTradeId);
       if (!demoLiveLifecycleByTrade[trade.trade_id]) {
         demoLiveLifecycleByTrade[trade.trade_id] = createDemoLifecycleState(trade);
       }
@@ -3574,12 +4647,17 @@
     function demoLifecycleLabel() {
       const state = getDemoLifecycleState(selectedDemoTradeId);
       if (state.stop_state === "stopped" || state.status === "closed") return "STOPPED OUT";
+      if (state.stop_state === "runner_dynamic") return "RUNNER LIVE";
+      if (state.stop_state === "dynamic_risk_reset") return "MS TRIGGERED";
       if (state.tp1_hit) return "RUNNER ORIGINAL";
       if (state.moved_to_be) return "BREAK EVEN ARMED";
       return "ORIGINAL STOP";
     }
 
     function updateDemoLiveMapControls() {
+      if (demoLiveMapEnabled) {
+        ensureDemoTradeSelection();
+      }
       $("demoLiveMapStatus").textContent = demoLiveMapEnabled ? demoLifecycleLabel() : "disabled";
       $("demoLiveMapToggle").textContent = demoLiveMapEnabled ? "Hide Demo Map" : "Demo Live Map";
     }
@@ -3593,9 +4671,55 @@
       const trade = getDemoTradeTemplate(tradeId);
       const state = getDemoLifecycleState(trade.trade_id);
       const direction = String(trade.direction || "").toLowerCase();
+      const mode = String(trade.trade_manager_mode || "LEGACY").toUpperCase();
       const entry = Number(trade.entry_price);
       const beTrigger = Number(trade.be_trigger);
-      const tp1Price = Number(trade.tp1_price);
+
+      if (mode === "DYNAMIC_RISK_RESET") {
+        if (state.stop_state === "stopped" || state.status === "closed") {
+          return;
+        }
+
+        const activeStopPrice = Number(state.current_stop);
+        const stopHit = direction === "short"
+          ? numericPrice >= activeStopPrice
+          : numericPrice <= activeStopPrice;
+        if (Number.isFinite(activeStopPrice) && stopHit) {
+          state.remaining_size = 0;
+          state.status = "closed";
+          state.stop_state = "stopped";
+          return;
+        }
+
+        if (!state.dynamic_risk_reset_applied) {
+          const msReached = direction === "short"
+            ? numericPrice <= beTrigger
+            : numericPrice >= beTrigger;
+          if (msReached) {
+            state.current_stop = trade.dynamic_adjusted_stop;
+            state.current_tp1 = trade.dynamic_adjusted_tp1;
+            state.dynamic_risk_reset_applied = true;
+            state.dynamic_risk_reset_triggered_at = state.dynamic_risk_reset_triggered_at || new Date().toISOString();
+            state.remaining_size = 2;
+            state.status = "active";
+            state.stop_state = "dynamic_risk_reset";
+          }
+        }
+
+        const effectiveDynamicTp1Price = Number(state.current_tp1);
+        const dynamicTp1Hit = direction === "short"
+          ? numericPrice <= effectiveDynamicTp1Price
+          : numericPrice >= effectiveDynamicTp1Price;
+        if (!state.tp1_hit && Number.isFinite(effectiveDynamicTp1Price) && dynamicTp1Hit) {
+          state.tp1_hit = true;
+          state.remaining_size = 1;
+          state.status = "active";
+          state.stop_state = "runner_dynamic";
+          state.current_stop = trade.dynamic_adjusted_stop;
+        }
+        return;
+      }
+
       const stopPrice = Number(state.current_stop);
       const stopHit = direction === "short"
         ? numericPrice >= stopPrice
@@ -3616,40 +4740,67 @@
         ? numericPrice <= beTrigger
         : numericPrice >= beTrigger;
       if (!state.tp1_hit && beReached) {
-        state.current_stop = entry;
-        state.moved_to_be = true;
-        state.be_hit_at = state.be_hit_at || new Date().toISOString();
-        state.stop_state = "break_even";
+        if (mode === "DYNAMIC_RISK_RESET" && !state.dynamic_risk_reset_applied) {
+          state.current_stop = trade.dynamic_adjusted_stop;
+          state.current_tp1 = trade.dynamic_adjusted_tp1;
+          state.dynamic_risk_reset_applied = true;
+          state.dynamic_risk_reset_triggered_at = state.dynamic_risk_reset_triggered_at || new Date().toISOString();
+          state.stop_state = "dynamic_risk_reset";
+        } else {
+          state.current_stop = entry;
+          state.moved_to_be = true;
+          state.be_hit_at = state.be_hit_at || new Date().toISOString();
+          state.stop_state = "break_even";
+        }
       }
 
+      const activeTp1Price = Number(state.current_tp1);
       const tp1Reached = direction === "short"
-        ? numericPrice <= tp1Price
-        : numericPrice >= tp1Price;
+        ? numericPrice <= activeTp1Price
+        : numericPrice >= activeTp1Price;
       if (!state.tp1_hit && tp1Reached) {
         state.tp1_hit = true;
         state.remaining_size = 1;
-        state.current_stop = trade.original_stop;
-        state.stop_state = "runner_original";
+        if (mode === "DYNAMIC_RISK_RESET" && state.dynamic_risk_reset_applied) {
+          state.current_stop = trade.dynamic_adjusted_stop;
+          state.stop_state = "runner_dynamic";
+        } else {
+          state.current_stop = trade.original_stop;
+          state.stop_state = "runner_original";
+        }
       }
     }
 
     function buildDemoLiveMapTrade(tradeId = selectedDemoTradeId) {
-      const trade = getDemoTradeTemplate(tradeId);
+      const selectedTrade = ensureDemoTradeSelection();
+      const trade = getDemoTradeTemplate(tradeId || (selectedTrade && selectedTrade.trade_id));
       const state = getDemoLifecycleState(trade.trade_id);
       return {
         ...trade,
         current_stop: state.current_stop,
+        tp1_price: state.current_tp1,
         remaining_size: state.remaining_size,
         moved_to_be: state.moved_to_be,
         be_hit_at: state.be_hit_at,
         tp1_hit: state.tp1_hit,
         status: state.status,
-        stop_state: state.stop_state
+        stop_state: state.stop_state,
+        dynamic_risk_reset_applied: state.dynamic_risk_reset_applied,
+        dynamic_risk_reset_triggered_at: state.dynamic_risk_reset_triggered_at,
+        selected_adverse_extreme: state.selected_adverse_extreme,
+        selected_extreme_time: state.selected_extreme_time,
+        dynamic_adjusted_stop: state.dynamic_adjusted_stop,
+        dynamic_adjusted_tp1: state.dynamic_adjusted_tp1,
+        dynamic_adjusted_risk: state.dynamic_adjusted_risk,
+        dynamic_reference_extreme: state.dynamic_reference_extreme,
+        dynamic_offset_ticks: state.dynamic_offset_ticks,
+        dynamic_offset_price: state.dynamic_offset_price
       };
     }
 
     function getSelectedActiveTrade() {
       if (demoLiveMapEnabled) {
+        ensureDemoTradeSelection();
         return buildDemoLiveMapTrade();
       }
 
@@ -3670,17 +4821,42 @@
 
     function setDemoLiveMapEnabled(enabled) {
       if (enabled && !demoLiveMapEnabled) {
-        selectedDemoTradeId = "DEMO-NQ";
         for (const trade of DEMO_LIVE_MAP_TRADES) {
           demoLiveLifecycleByTrade[trade.trade_id] = createDemoLifecycleState(trade);
           delete demoLivePrices[trade.trade_id];
           delete demoLivePriceUpdatedAtByTrade[trade.trade_id];
         }
+        selectedDemoTradeId = null;
         $("demoLivePriceInput").value = "";
       }
       demoLiveMapEnabled = Boolean(enabled);
+      if (demoLiveMapEnabled) {
+        const selectedTrade = ensureDemoTradeSelection();
+        const currentDemoPrice = selectedTrade ? demoLivePrices[selectedTrade.trade_id] : null;
+        $("demoLivePriceInput").value = Number.isFinite(Number(currentDemoPrice)) ? currentDemoPrice : "";
+      }
       updateDemoLiveMapControls();
-      renderActiveTradeMapSelector(getLatestSelectableTrades());
+      renderActiveTradeMapSelector(demoLiveMapEnabled ? [] : getLatestSelectableTrades());
+      renderSelectedActiveTradeVisual();
+    }
+
+    function resetSelectedDemoScenario() {
+      const trade = ensureDemoTradeSelection();
+      if (!trade) {
+        return;
+      }
+      demoLiveLifecycleByTrade[trade.trade_id] = createDemoLifecycleState(trade);
+      delete demoLivePriceUpdatedAtByTrade[trade.trade_id];
+      if (isStaticDynamicDemoTrade(trade)) {
+        delete demoLivePrices[trade.trade_id];
+        $("demoLivePriceInput").value = formatPrice(Number(trade.entry_price));
+      } else {
+        demoLivePrices[trade.trade_id] = Number(trade.entry_price);
+        $("demoLivePriceInput").value = formatPrice(Number(trade.entry_price));
+      }
+      demoLiveMapEnabled = true;
+      updateDemoLiveMapControls();
+      renderActiveTradeMapSelector([]);
       renderSelectedActiveTradeVisual();
     }
 
@@ -3691,7 +4867,7 @@
         return;
       }
 
-      const targetTradeId = selectedDemoTradeId || "DEMO-NQ";
+      const targetTradeId = selectedDemoTradeId || "DEMO-NQ-LEGACY";
       demoLivePrices[targetTradeId] = nextPrice;
       demoLivePriceUpdatedAtByTrade[targetTradeId] = new Date();
       if (!demoLiveMapEnabled) {
@@ -3720,11 +4896,20 @@
         .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
       const orphanTrades = buildOrphanExposureTrades(data);
       const selectableTrades = [...filterExecutorLiveActiveTrades(activeTrades), ...orphanTrades];
-      const closedTrades = trades
-        .filter((trade) => trade.status === "closed")
+      const historicalTrades = trades
+        .filter((trade) => {
+          const status = String(trade.status || "").toLowerCase();
+          if (!(status === "closed" || status === "archived" || status === "error" || status === "rejected")) {
+            return false;
+          }
+          return isKpiEligibleTrade(trade);
+        })
         .sort((a, b) => String(b.closed_at || b.created_at || "").localeCompare(String(a.closed_at || a.created_at || "")));
-      const errorTrades = trades
-        .filter((trade) => trade.status === "error")
+      const errorTrades = historicalTrades
+        .filter((trade) => {
+          const status = String(trade.status || "").toLowerCase();
+          return status === "error" || status === "rejected";
+        })
         .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
 
       if (!selectableTrades.some((trade) => trade.trade_id === selectedActiveTradeId)) {
@@ -3739,8 +4924,8 @@
         orphanTrades.length ? "CRITICAL ORPHAN EXPOSURE" : "No active trades."
       );
       renderActiveTradeMapSelector(selectableTrades);
-      renderTradeList("closedTradesBox", closedTrades, "closed", "No closed trades yet.");
-      $("closedTradeCount").textContent = `${closedTrades.length} shown`;
+      renderTradeList("closedTradesBox", historicalTrades, "closed", "No historical trades yet.");
+      $("closedTradeCount").textContent = `${historicalTrades.length} shown`;
       renderTradeList("errorTradesBox", errorTrades, "error", "No hidden error trades.");
       renderSelectedActiveTradeVisual();
       updateManualExitPanel();
@@ -3786,6 +4971,7 @@
       $("riskStateGrid").replaceChildren(fragment);
       $("riskStateMeta").textContent = `last update ${new Date().toISOString()}`;
       updateDashboardSummary();
+      renderTradeManagerModeControl();
     }
 
     function classifyEvent(event) {
@@ -3848,11 +5034,11 @@
 
     function entryAgentTokenClass(value) {
       const text = String(value || "").toUpperCase();
-      if (text.includes("STEP 6") || text.includes("ENTRY")) return "candidate";
       if (text.includes("INVALIDATE") || text.includes("INVALID") || text.includes("TERMINATED") || text.includes("BLOCKED")) return "invalidate";
-      if (text === "CONTROLLING" || text === "ACTIVE") return "complete";
+      if (text === "IDLE" || text === "INACTIVE" || text === "FROZEN") return "idle";
+      if (text.includes("STEP 6") || text.includes("ENTRY")) return "candidate";
+      if (text === "CONTROLLING" || text === "ACTIVE") return "candidate";
       if (text === "CANDIDATE") return "candidate";
-      if (text === "FROZEN" || text === "INACTIVE") return "wait";
       if (text === "NORMAL" || text === "S/R" || text === "R/S") return "complete";
       if (text.includes("COMPLETE") || text.includes("CONFIRM") || text.includes("READY") || text.includes("ALLOW") || text.includes("VALIDATED") || text.includes("LOCKED")) return "complete";
       if (text.includes("WAIT") || text.includes("STEP 2") || text.includes("STEP 3") || text.includes("STEP 4") || text.includes("STEP 5")) return "wait";
@@ -3911,13 +5097,16 @@
       return timeText ? `${text} @ ${timeText}` : text;
     }
 
-    function entryAgentSideCurrentStepDisplay(item, side) {
-      const reason = item && item.invalidation_reason;
-      if (reason && side && side.pathway_status === "invalidated") return `INVALIDATED - ${reason}`;
-      const label = side && (side.current_step_label || side.current_step);
-      const status = side && side.current_step_status;
-      const display = label && status === "CONFIRMED" ? `${label} confirmed` : label;
-      return entryAgentWithConfirmedAt(display, side && side.current_step_confirmed_at);
+    function formatEntryAgentInvalidationReason(reason) {
+      const normalized = String(reason || "").trim();
+      if (!normalized) return "n/a";
+      if (normalized === "STEP2_STEP4_50_LINE_TOUCHED") {
+        return "Step 2/4 50% Line Touched";
+      }
+      if (normalized === "STEP6_NEXT_SAME_SIDE_LIQUIDITY_CLOSE_TOUCHED") {
+        return "Step 6 Next Liquidity Touched";
+      }
+      return normalized;
     }
 
     function entryAgentFallbackSide(item, sideName) {
@@ -3957,23 +5146,224 @@
       };
     }
 
+    function entryAgentLaneFallback(item, laneName) {
+      const side = laneName === "continuation"
+        ? (item && (item.continuation_side || entryAgentFallbackSide(item, "continuation")))
+        : (item && (item.rejection_side || entryAgentFallbackSide(item, "rejection")));
+      const group = item && item.active_liquidity_group;
+      const groupName = group && typeof group === "object" ? group.name : null;
+      return {
+        lane_name: laneName,
+        lane_status: side && side.pathway_status ? side.pathway_status : "idle",
+        pathway_status: side && side.pathway_status ? side.pathway_status : "idle",
+        active_liquidity_name: laneName === "rejection" ? item && item.active_liquidity_name : null,
+        liquidity_group: laneName === "rejection" ? (groupName || (item && item.liquidity_group)) : null,
+        active_liquidity_price: laneName === "rejection" ? item && item.active_liquidity_price : null,
+        close_boundary: laneName === "rejection" ? item && item.close_boundary : null,
+        extreme_boundary: laneName === "rejection" ? item && item.extreme_boundary : null,
+        wick_boundary_extreme: laneName === "rejection" ? item && item.wick_boundary_extreme : null,
+        step2_candle_count: laneName === "rejection" ? item && item.step2_candle_count : null,
+        step4_candle_count: laneName === "rejection" ? (item && item.leg1_window_candle_index) : null,
+        step2_status: normalizeEntryAgentStepStatus("Step 2", laneName === "rejection" ? item && item.step2_status : "WAIT"),
+        step4_status: normalizeEntryAgentStepStatus("Step 4", laneName === "rejection" ? item && item.step4_status : "WAIT"),
+        step2_step4_50_line: laneName === "rejection" ? item && item.step2_step4_50_line : null,
+        step4_step5_75_line: laneName === "rejection" ? item && item.step4_step5_75_line : null,
+        invalidation_reason: item && item.invalidation_reason,
+        continuation_type: side && side.continuation_type
+      };
+    }
+
+    function normalizeEntryAgentStepStatus(stepName, value) {
+      const text = String(value == null ? "" : value).trim().toUpperCase();
+      if (["TERMINATED", "INVALID", "INVALIDATED", "BLOCKED"].includes(text)) return "TERMINATED";
+      if (["BLOCKED_PREOPEN_OBSERVATION", "WAITING_FOR_CANDLE_B", "WAITING_FOR_STEP_4", "WAIT"].includes(text)) return "WAIT";
+      if (stepName === "Step 4" && text === "READY") return "CONFIRMED";
+      if (["CONFIRMED", "ENTRY_CONFIRMED"].includes(text)) return "CONFIRMED";
+      return "WAIT";
+    }
+
+    function formatEntryAgentCandleCount(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric < 1) return "n/a";
+      return `${Math.min(Math.trunc(numeric), 4)} / 4`;
+    }
+
     function entryAgentField(label, value, options = {}) {
       const wide = options.wide ? " wide" : "";
+      const full = options.full ? " full" : "";
       const tokenClass = options.token ? entryAgentTokenClass(value) : "";
       const valueMarkup = options.token
         ? `<span class="entry-agent-token ${tokenClass}">${escapeHtml(formatValue(value))}</span>`
         : escapeHtml(formatValue(value));
       return `
-        <div class="entry-agent-field${wide}">
+        <div class="entry-agent-field${wide}${full}">
           <div class="entry-agent-label">${escapeHtml(label)}</div>
           <div class="entry-agent-value">${valueMarkup}</div>
         </div>
       `;
     }
 
+    function laneGroupObject(side, item, laneName) {
+      if (side && side.active_liquidity_group && typeof side.active_liquidity_group === "object") {
+        return side.active_liquidity_group;
+      }
+      if (laneName === "rejection" && item && item.active_liquidity_group && typeof item.active_liquidity_group === "object") {
+        return item.active_liquidity_group;
+      }
+      return null;
+    }
+
+    function laneFieldValue(side, group, item, laneName, fieldName) {
+      if (side && side[fieldName] !== undefined && side[fieldName] !== null) {
+        return side[fieldName];
+      }
+      if (group && group[fieldName] !== undefined && group[fieldName] !== null) {
+        return group[fieldName];
+      }
+      if (laneName === "rejection" && item && item[fieldName] !== undefined && item[fieldName] !== null) {
+        return item[fieldName];
+      }
+      return null;
+    }
+
+    function entryAgentLaneStep2Time(side, item, laneName) {
+      if (side && side.step2_confirmed_at) return side.step2_confirmed_at;
+      if (laneName === "rejection") return item && item.step2_confirmed_at;
+      if (side && side.current_step === "Step 2" && side.current_step_confirmed_at) return side.current_step_confirmed_at;
+      return null;
+    }
+
+    function entryAgentLaneStep4Time(side) {
+      if (side && side.leg1_confirmed_at) return side.leg1_confirmed_at;
+      if (side && side.current_step === "Step 4" && side.current_step_confirmed_at) return side.current_step_confirmed_at;
+      return null;
+    }
+
+    function entryAgentLaneStep2Reason(item, side, laneName) {
+      if (side && side.step2_status && String(side.step2_status).toUpperCase() === "CONFIRMED") {
+        return item && item.step2_reason;
+      }
+      if (laneName === "rejection" && item && item.step2_reason && side && side.pathway_status === "frozen") {
+        return item.step2_reason;
+      }
+      return null;
+    }
+
+    function entryAgentLaneStep4Reason(item, side) {
+      if (side && side.leg1_confirmed_at) return item && item.step4_reason;
+      if (side && side.step4_status && ["CONFIRMED", "READY", "ENTRY_CONFIRMED"].includes(String(side.step4_status).toUpperCase())) {
+        return item && item.step4_reason;
+      }
+      if (side && side.invalidation_reason) return item && item.step4_reason;
+      return null;
+    }
+
+    function entryAgentInvalidationSource(item, side) {
+      if (!(side && side.invalidation_reason)) return null;
+      const source = [item && item.invalidation_source_step, item && item.invalidation_source].filter(Boolean).join(" / ");
+      const sourceTime = formatPtTimestamp(item && item.invalidation_source_candle_time);
+      if (source && sourceTime && sourceTime !== EMPTY_FIELD) return `${source} at ${sourceTime}`;
+      if (source) return source;
+      return sourceTime && sourceTime !== EMPTY_FIELD ? sourceTime : null;
+    }
+
+    function entryAgentLaneMode(side) {
+      if (!side || typeof side !== "object") return null;
+      return side.continuation_type && side.continuation_type !== "none"
+        ? side.continuation_type
+        : side.current_controlling_mode
+        || side.current_pathway_control
+        || side.pathway_status
+        || side.lane_status
+        || null;
+    }
+
+    function renderEntryAgentCompactRow(fields, options = {}) {
+      const className = options.className ? ` ${options.className}` : "";
+      return `<div class="entry-agent-compact-row${className}">${fields.join("")}</div>`;
+    }
+
+    function entryAgentCandleCountTime(rawCount, confirmedAt) {
+      const numeric = Number(rawCount);
+      if (!Number.isFinite(numeric) || numeric < 1 || !confirmedAt) return "n/a";
+      const parsed = new Date(confirmedAt);
+      if (Number.isNaN(parsed.getTime())) return "n/a";
+      parsed.setMinutes(parsed.getMinutes() + Math.max(Math.trunc(numeric) - 1, 0));
+      return formatPtTimestamp(parsed.toISOString());
+    }
+
+    function renderEntryAgentStepBlock(stepName, status, mode, candleCount, time, reason, rawCount, lineLabel = null, lineValue = null, lineSymbol = null) {
+      const detailReason = formatValue(reason);
+      const stepTime = time ? formatPtTimestamp(time) : "n/a";
+      const candleCountTime = entryAgentCandleCountTime(rawCount, time);
+      const formattedLineValue = lineLabel ? formatEntryAgentLifecycleLineValue(lineSymbol, lineValue) : null;
+      return `
+        <div class="entry-agent-step-block">
+          <div class="entry-agent-step-title">${escapeHtml(stepName)}</div>
+          <details class="entry-agent-step-details">
+            <summary>${escapeHtml(`${stepName} Details`)}</summary>
+            <div class="entry-agent-step-detail-copy">${escapeHtml(detailReason)}</div>
+          </details>
+          ${renderEntryAgentCompactRow([
+            entryAgentField("Status", status, { token: true }),
+            entryAgentField("Time", stepTime)
+          ])}
+          ${renderEntryAgentCompactRow([
+            entryAgentField("Candle Count", candleCount),
+            entryAgentField("Candle Count Time", candleCountTime)
+          ])}
+          ${lineLabel ? entryAgentField(lineLabel, formattedLineValue, { wide: true }) : ""}
+          ${entryAgentField("Mode", mode, { wide: true })}
+        </div>
+      `;
+    }
+
+    function renderEntryAgentInvalidationBlock(reason, source) {
+      const detailLines = [
+        `Reason: ${formatValue(reason)}`,
+        `Source: ${formatValue(source)}`
+      ].join("\n");
+      return `
+        <div class="entry-agent-step-block">
+          <div class="entry-agent-step-title">Invalidation</div>
+          <details class="entry-agent-step-details">
+            <summary>Invalidation Details</summary>
+            <div class="entry-agent-step-detail-copy">${escapeHtml(detailLines)}</div>
+          </details>
+          ${entryAgentField("Reason", reason)}
+          ${entryAgentField("Source", source)}
+        </div>
+      `;
+    }
+
     function renderEntryAgentSidePanel(title, side, item, options = {}) {
-      const status = side && side.pathway_status;
-      const currentStepDisplay = entryAgentSideCurrentStepDisplay(item, side);
+      const laneName = options.continuation ? "continuation" : "rejection";
+      const isContinuationLane = laneName === "continuation";
+      const group = laneGroupObject(side, item, laneName);
+      const components = entryAgentGroupComponents(group);
+      const status = side && (side.lane_status || side.pathway_status);
+      const publicStep2Status = normalizeEntryAgentStepStatus("Step 2", side && side.step2_status);
+      const publicStep4Status = normalizeEntryAgentStepStatus("Step 4", side && side.step4_status);
+      const invalidationReason = formatEntryAgentInvalidationReason(side && side.invalidation_reason);
+      const invalidationSource = entryAgentInvalidationSource(item, side);
+      const owner = laneFieldValue(side, group, item, laneName, "active_liquidity_name");
+      const laneSymbol = item && item.symbol;
+      const liquidityGroup = laneFieldValue(side, group, item, laneName, "liquidity_group") || (group && group.name);
+      const closeBoundary = laneFieldValue(side, group, item, laneName, "close_boundary");
+      const extremeBoundary = laneFieldValue(side, group, item, laneName, "extreme_boundary");
+      const wickBoundary = laneFieldValue(side, group, item, laneName, "wick_boundary_extreme");
+      const participation50 = laneFieldValue(side, group, item, laneName, "step2_step4_50_line");
+      const participation75 = laneFieldValue(side, group, item, laneName, "step4_step5_75_line");
+      const laneMode = entryAgentLaneMode(side);
+      const step2Time = entryAgentLaneStep2Time(side, item, laneName);
+      const step4Time = entryAgentLaneStep4Time(side);
+      const step2Reason = entryAgentLaneStep2Reason(item, side, laneName);
+      const step4Reason = entryAgentLaneStep4Reason(item, side);
+      const publicLaneMode = formatValue(laneMode);
+      const step2RawCandleCount = side && side.step2_candle_count;
+      const step4RawCandleCount = side && side.step4_candle_count;
+      const step2CandleCount = formatEntryAgentCandleCount(step2RawCandleCount);
+      const step4CandleCount = formatEntryAgentCandleCount(step4RawCandleCount);
       return `
         <div class="entry-agent-pathway-panel">
           <div class="entry-agent-panel-title">
@@ -3981,16 +5371,208 @@
             <span class="entry-agent-token ${entryAgentTokenClass(status)}">${escapeHtml(formatValue(status))}</span>
           </div>
           <div class="entry-agent-grid">
-            ${options.continuation ? entryAgentField("Continuation Type", side && side.continuation_type, { token: true }) : ""}
-            ${entryAgentField("Pathway Status", status, { token: true })}
-            ${entryAgentField("Current Step", currentStepDisplay, { token: true })}
-            ${entryAgentField("Setup Direction", side && side.setup_direction)}
-            ${entryAgentField("Shared Leg 1", entryAgentWithConfirmedAt(side && side.leg1_status, side && side.leg1_confirmed_at), { token: true })}
-            ${entryAgentField("Shared Leg 2", entryAgentWithConfirmedAt(side && side.leg2_status, side && side.leg2_confirmed_at), { token: true })}
-            ${entryAgentField("Entry Status", entryAgentWithConfirmedAt(side && side.entry_status, side && side.entry_status_confirmed_at), { token: true })}
+            ${renderEntryAgentCompactRow([
+              entryAgentField("Owner", owner),
+              entryAgentField("Group", liquidityGroup)
+            ], { className: "owner-group-row" })}
+            ${entryAgentField("Stack Components", components, { wide: true })}
+            ${renderEntryAgentCompactRow([
+              entryAgentField("Close", closeBoundary),
+              entryAgentField("Extreme", extremeBoundary),
+              entryAgentField("Wick", wickBoundary)
+            ])}
+            ${renderEntryAgentStepBlock("Step 2", publicStep2Status, publicLaneMode, step2CandleCount, step2Time, step2Reason, step2RawCandleCount, !isContinuationLane ? "50% Line" : null, !isContinuationLane ? participation50 : null, laneSymbol)}
+            ${renderEntryAgentStepBlock("Step 4", publicStep4Status, publicLaneMode, step4CandleCount, step4Time, step4Reason, step4RawCandleCount, !isContinuationLane ? "75% Line" : null, !isContinuationLane ? participation75 : null, laneSymbol)}
+            ${renderEntryAgentInvalidationBlock(invalidationReason, invalidationSource)}
           </div>
         </div>
       `;
+    }
+
+    function renderLiquidityLockOverrideResult(symbol) {
+      const result = liquidityLockOverrideResultBySymbol[String(symbol || "").toUpperCase()];
+      if (!result) return "";
+      if (result.pending) {
+        return `<div class="liquidity-lock-override-result">Override in progress…</div>`;
+      }
+      if (result.ok !== true) {
+        return `<div class="liquidity-lock-override-result">${escapeHtml(`Override failed: ${formatValue(result.error)}`)}</div>`;
+      }
+      const lines = [
+        `Session ${formatValue(result.session_date)}`,
+        `Applied ${formatPtTimestamp(result.override_applied_at)}`,
+        `Changed ${Array.isArray(result.levels_changed) ? result.levels_changed.map((item) => `${item.name}: ${formatValue(item.before)} -> ${formatValue(item.after)}`).join(", ") : EMPTY_FIELD}`,
+        `Frozen lock locked ${result.frozen_lock_still_locked ? "yes" : "no"}`
+      ];
+      return `<div class="liquidity-lock-override-result">${escapeHtml(lines.join("\n"))}</div>`;
+    }
+
+    function liquidityLockField(label, value, options = {}) {
+      const wide = options.wide ? " wide" : "";
+      const tokenClass = options.token ? entryAgentTokenClass(value) : "";
+      const valueMarkup = options.token
+        ? `<span class="entry-agent-token ${tokenClass}">${escapeHtml(formatValue(value))}</span>`
+        : escapeHtml(formatValue(value));
+      return `
+        <div class="liquidity-lock-field${wide}">
+          <div class="liquidity-lock-label">${escapeHtml(label)}</div>
+          <div class="liquidity-lock-value">${valueMarkup}</div>
+        </div>
+      `;
+    }
+
+    function prettyLiquidityContractKey(value) {
+      const text = String(value == null ? "" : value).trim();
+      if (!text) return "Contract Slice";
+      if (text.includes("->")) return text.replace(/\s*->\s*/g, " -> ");
+      if (text.includes("_")) return text.split("_").filter(Boolean).join(" -> ");
+      return text;
+    }
+
+    function liquidityExceptionStatus(level) {
+      const status = String(level && level.status || "").trim().toUpperCase();
+      return ["REACTIVATED", "INACTIVE"].includes(status) ? status : "";
+    }
+
+    function renderFrozenContractRow(level) {
+      const status = liquidityExceptionStatus(level);
+      return `
+        <div class="liquidity-contract-row">
+          <span class="liquidity-contract-level">${escapeHtml(formatValue(level && level.name))}</span>
+          <span class="liquidity-contract-price">${escapeHtml(formatValue(level && level.price))}</span>
+          ${status ? `<span class="liquidity-contract-flag">${escapeHtml(status)}</span>` : `<span></span>`}
+        </div>
+      `;
+    }
+
+    function renderFrozenSessionContract(lock) {
+      const contract = lock && lock.frozen_session_contract && typeof lock.frozen_session_contract === "object"
+        ? lock.frozen_session_contract
+        : {};
+      const levels = Array.isArray(contract.levels) ? contract.levels : [];
+      if (!levels.length) {
+        return `
+          <div class="liquidity-lock-section">
+            <div class="liquidity-lock-section-title">Frozen Session Contract</div>
+            <div class="entry-agent-offline">No frozen session contract available</div>
+          </div>
+        `;
+      }
+      const sections = [
+        { title: "HIGH SIDE", groups: [] },
+        { title: "LOW SIDE", groups: [] },
+        { title: "UNSTACKED", groups: [] }
+      ];
+      const grouped = {
+        upper: new Map(),
+        lower: new Map(),
+        unstacked: new Map()
+      };
+
+      levels.forEach((level) => {
+        const stackTitle = String(level && level.stack_group || "").trim() || null;
+        const normalizedStackTitle = stackTitle ? stackTitle.toUpperCase() : "";
+        const bucket = !normalizedStackTitle || normalizedStackTitle === "NONE" || normalizedStackTitle === "UNSTACKED"
+          ? "unstacked"
+          : normalizedStackTitle.startsWith("HIGH")
+            ? "upper"
+            : normalizedStackTitle.startsWith("LOW")
+              ? "lower"
+              : "unstacked";
+        const groupKey = stackTitle || "__unstacked__";
+        if (!grouped[bucket].has(groupKey)) {
+          grouped[bucket].set(groupKey, {
+            title: bucket === "unstacked" ? null : stackTitle,
+            rows: []
+          });
+        }
+        grouped[bucket].get(groupKey).rows.push(level);
+      });
+
+      sections[0].groups = Array.from(grouped.upper.values());
+      sections[1].groups = Array.from(grouped.lower.values());
+      sections[2].groups = Array.from(grouped.unstacked.values());
+
+      return `
+        <div class="liquidity-lock-section">
+          <div class="liquidity-lock-section-title">Frozen Ladder</div>
+          ${sections.map((section) => {
+            if (!section.groups.length) return "";
+            return `
+              <div class="liquidity-lock-subtitle">${escapeHtml(section.title)}</div>
+              ${section.groups.map((group) => `
+                ${group.title ? `<div class="liquidity-lock-stack-title">${escapeHtml(group.title)}</div>` : ""}
+                <div class="liquidity-contract-list">
+                  ${group.rows.map((level) => renderFrozenContractRow(level)).join("")}
+                </div>
+              `).join("")}
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    function renderFrozenMidpoints(lock) {
+      const contract = lock && lock.frozen_session_contract && typeof lock.frozen_session_contract === "object"
+        ? lock.frozen_session_contract
+        : {};
+      const midpoints = contract && typeof contract.midpoints === "object" ? contract.midpoints : {};
+      const exhaustion = contract && typeof contract.exhaustion_boundaries === "object" ? contract.exhaustion_boundaries : {};
+      const orderedKeys = [...Object.keys(midpoints), ...Object.keys(exhaustion).filter((key) => !(key in midpoints))];
+      if (!orderedKeys.length) {
+        return "";
+      }
+      return `
+        <div class="liquidity-lock-section">
+          <div class="liquidity-lock-section-title">Frozen Midpoints / Exhaustion</div>
+          <div class="liquidity-midpoint-grid">
+            ${orderedKeys.map((key) => `
+              <div class="liquidity-midpoint-card">
+                <div class="liquidity-midpoint-name">${escapeHtml(prettyLiquidityContractKey(key))}</div>
+                <div class="liquidity-midpoint-values">
+                  ${key in midpoints ? `<div>50% ${escapeHtml(formatValue(midpoints[key]))}</div>` : ""}
+                  ${key in exhaustion ? `<div>75% ${escapeHtml(formatValue(exhaustion[key]))}</div>` : ""}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLiquidityLockPanel(data) {
+      const symbols = Array.isArray(data && data.symbols) ? data.symbols : [];
+      if (!symbols.length) {
+        $("liquidityLockBox").innerHTML = `<div class="entry-agent-offline">Liquidity lock unavailable</div>`;
+        return;
+      }
+      $("liquidityLockBox").innerHTML = symbols.map((item) => {
+        const symbolRoot = normalizeSymbolRoot(item && item.symbol);
+        const overrideState = liquidityLockOverrideResultBySymbol[String(symbolRoot || "").toUpperCase()];
+        const lock = item && item.liquidity_lock && typeof item.liquidity_lock === "object"
+          ? item.liquidity_lock
+          : {};
+        const status = lock.locked ? "LOCKED" : "UNLOCKED";
+        return `
+          <div class="liquidity-lock-card">
+            <div class="liquidity-lock-header">
+              <span>Liquidity Lock ${escapeHtml(formatValue(item && item.symbol))}</span>
+              <span class="entry-agent-token ${entryAgentTokenClass(status)}">${escapeHtml(status)}</span>
+            </div>
+            <div class="liquidity-lock-grid">
+              ${liquidityLockField("Status", status, { token: true })}
+              ${liquidityLockField("Session", lock.session_date)}
+              ${liquidityLockField("Lock Time", lock.lock_time)}
+              ${liquidityLockField("Source", lock.lock_source)}
+            </div>
+            <div class="liquidity-lock-actions">
+              <button type="button" class="liquidity-lock-override-btn" data-liquidity-lock-override="${escapeHtml(symbolRoot)}"${overrideState && overrideState.pending ? " disabled" : ""}>Override Frozen Lock From Latest TV</button>
+            </div>
+            ${renderLiquidityLockOverrideResult(symbolRoot)}
+            ${renderFrozenSessionContract(lock)}
+          </div>
+        `;
+      }).join("");
     }
 
     function renderEntryAgentOffline() {
@@ -3999,6 +5581,7 @@
       health.className = "entry-agent-health offline";
       $("entryAgentMeta").textContent = "Entry Agent offline";
       $("entryAgentBox").innerHTML = `<div class="entry-agent-offline">Entry Agent offline</div>`;
+      $("liquidityLockBox").innerHTML = `<div class="entry-agent-offline">Liquidity lock unavailable</div>`;
     }
 
     function renderEntryAgentStatus(data) {
@@ -4012,6 +5595,7 @@
       health.className = "entry-agent-health online";
       updateEntryAgentFilterButtons();
       $("entryAgentMeta").textContent = `${visibleSymbols.length} of ${symbols.length} symbols shown ${new Date().toLocaleTimeString()}`;
+      renderLiquidityLockPanel(data);
 
       if (!symbols.length) {
         $("entryAgentBox").innerHTML = `<div class="entry-agent-offline">Entry Agent offline</div>`;
@@ -4024,15 +5608,11 @@
       }
 
       $("entryAgentBox").innerHTML = visibleSymbols.map((item) => {
-        const group = item && item.active_liquidity_group;
-        const groupName = group && typeof group === "object" ? group.name : null;
-        const components = entryAgentGroupComponents(group);
-        const closeBoundary = group && typeof group === "object" ? group.close_boundary : null;
-        const extremeBoundary = group && typeof group === "object" ? group.extreme_boundary : null;
         const currentStep = item && item.current_step;
         const entryStatus = item && item.entry_status;
-        const rejectionSide = item && (item.rejection_side || entryAgentFallbackSide(item, "rejection"));
-        const continuationSide = item && (item.continuation_side || entryAgentFallbackSide(item, "continuation"));
+        const rejectionSide = item && (item.rejection_lane || entryAgentLaneFallback(item, "rejection"));
+        const continuationSide = item && (item.continuation_lane || entryAgentLaneFallback(item, "continuation"));
+        const sessionWindow = getEntryAgentSessionWindow();
         const candidateClass = [
           currentStep,
           entryStatus,
@@ -4044,15 +5624,14 @@
         return `
           <div class="entry-agent-card${candidateClass}">
             <div class="entry-agent-topline">
-              <div class="entry-agent-symbol">${escapeHtml(item && item.symbol)}</div>
+              <div class="entry-agent-header-main">
+                <div class="entry-agent-symbol">${escapeHtml(item && item.symbol)}</div>
+                <div class="entry-agent-session-row">
+                  <span class="entry-agent-label">Session Window</span>
+                  <span class="entry-agent-token ${sessionWindow.tokenClass}">${escapeHtml(sessionWindow.label)}</span>
+                </div>
+              </div>
               <span class="entry-agent-token ${entryAgentTokenClass(entryStatus)}">${escapeHtml(formatValue(entryStatus))}</span>
-            </div>
-            <div class="entry-agent-context-grid">
-              ${entryAgentField("Active Liquidity / Stack Owner", item && item.active_liquidity_name)}
-              ${entryAgentField("Liquidity Group", groupName || (item && item.liquidity_group))}
-              ${entryAgentField("Stack Components", components, { wide: true })}
-              ${entryAgentField("Close Boundary", closeBoundary)}
-              ${entryAgentField("Extreme Boundary", extremeBoundary)}
             </div>
             <div class="entry-agent-pathway-layout">
               ${renderEntryAgentSidePanel("Rejection", rejectionSide, item)}
@@ -4077,28 +5656,110 @@
     }
 
     async function fetchJson(url, options = {}) {
-      const res = await fetch(url, {
-        cache: "no-store",
-        ...options,
-        headers: {
-          ...(options.headers || {}),
-          "Cache-Control": "no-cache"
-        }
-      });
-      const text = await res.text();
+      const {
+        timeoutMs = 5000,
+        ...fetchOptions
+      } = options;
+      const controller = typeof AbortController === "function"
+        ? new AbortController()
+        : null;
+      const timeoutHandle = controller && Number.isFinite(timeoutMs) && timeoutMs > 0
+        ? setTimeout(() => controller.abort(), timeoutMs)
+        : null;
+
       try {
-        return JSON.parse(text);
-      } catch {
-        return { ok: false, raw: text, status: res.status };
+        const res = await fetch(url, {
+          cache: "no-store",
+          ...fetchOptions,
+          signal: controller ? controller.signal : fetchOptions.signal,
+          headers: {
+            ...(fetchOptions.headers || {}),
+            "Cache-Control": "no-cache"
+          }
+        });
+        const text = await res.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          return { ok: false, raw: text, status: res.status };
+        }
+      } catch (error) {
+        const isAbort = error && error.name === "AbortError";
+        return {
+          ok: false,
+          error: isAbort ? `request_timeout:${timeoutMs}ms` : String((error && error.message) || error || "request_failed"),
+        };
+      } finally {
+        if (timeoutHandle !== null) {
+          clearTimeout(timeoutHandle);
+        }
+      }
+    }
+
+    async function overrideFrozenLockFromLatestTv(symbol) {
+      if (liquidityLockOverrideInFlight) {
+        return;
+      }
+      const root = normalizeSymbolRoot(symbol);
+      if (!LIVE_UI_ROOTS.includes(root)) {
+        return;
+      }
+      liquidityLockOverrideInFlight = true;
+      liquidityLockOverrideResultBySymbol[root] = { pending: true };
+      if (latestEntryAgentPayload) {
+        renderEntryAgentStatus(latestEntryAgentPayload);
+      }
+      try {
+        const result = await fetchJson(`${ENTRY_AGENT_BASE}/operator/liquidity-lock/override-from-latest-tv`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol: root }),
+          timeoutMs: 10000
+        });
+        liquidityLockOverrideResultBySymbol[root] = result;
+      } finally {
+        liquidityLockOverrideInFlight = false;
+        await refreshEntryAgentStatus();
       }
     }
 
     function buildTradePacket() {
-      return {
+      const payload = {
         event: "enter_trade",
         symbol: $("symbol").value.trim().toUpperCase(),
         direction: $("direction").value,
         position_size: Number($("position_size").value)
+      };
+      const entryAgentTelemetry = getSelectedEntryAgentTelemetry();
+      if (entryAgentTelemetry) {
+        Object.assign(payload, entryAgentTelemetry);
+      }
+      if (manualSubmissionTrackingMode === "TEST_EXCLUDED") {
+        payload.test_trade = true;
+      }
+      return payload;
+    }
+
+    function getSelectedEntryAgentTelemetry() {
+      const symbols = Array.isArray(latestEntryAgentPayload && latestEntryAgentPayload.symbols)
+        ? latestEntryAgentPayload.symbols
+        : [];
+      if (!symbols.length) return null;
+      const selectedSymbol = $("symbol").value.trim().toUpperCase();
+      const selectedRoot = normalizeSymbolRoot(selectedSymbol);
+      const item = symbols.find((candidate) => normalizeSymbolRoot(candidate && candidate.symbol) === selectedRoot);
+      if (!item) return null;
+      const marketContext = item && item.market_context && typeof item.market_context === "object"
+        ? item.market_context
+        : {};
+      return {
+        leg_anchor_liquidity: firstKpiValue(item, ["leg_anchor_liquidity"]),
+        leg_anchor_price: toFiniteNumber(firstKpiValue(item, ["leg_anchor_price"])),
+        next_active_liquidity: firstKpiValue(item, ["next_active_liquidity"]),
+        next_active_liquidity_price: toFiniteNumber(firstKpiValue(item, ["next_active_liquidity_price"])),
+        distance_points: toFiniteNumber(firstKpiValue(item, ["distance_points"])),
+        daily_atr14: toFiniteNumber(firstKpiValue(item, ["daily_atr14"])),
+        liquidity_leg_atr_distance_pct: toFiniteNumber(firstKpiValue(item, ["liquidity_leg_atr_distance_pct"]))
       };
     }
 
@@ -4113,11 +5774,21 @@
         return;
       }
 
+      const liquidityLockOverrideButton = event.target.closest("[data-liquidity-lock-override]");
+      if (liquidityLockOverrideButton) {
+        void overrideFrozenLockFromLatestTv(liquidityLockOverrideButton.getAttribute("data-liquidity-lock-override") || "");
+        return;
+      }
+
       const mapTradeChip = event.target.closest("#activeTradeMapSelector .map-trade-chip[data-trade-id]");
       if (mapTradeChip) {
         const tradeId = mapTradeChip.dataset.tradeId || null;
         if (mapTradeChip.dataset.demoTrade === "true") {
-          selectedDemoTradeId = tradeId || "DEMO-NQ";
+          selectedDemoTradeId = tradeId || "DEMO-NQ-LEGACY";
+          const selectedDemoTrade = getDemoTradeTemplate(selectedDemoTradeId);
+          demoLiveLifecycleByTrade[selectedDemoTradeId] = createDemoLifecycleState(selectedDemoTrade);
+          delete demoLivePrices[selectedDemoTradeId];
+          delete demoLivePriceUpdatedAtByTrade[selectedDemoTradeId];
           demoLiveMapEnabled = true;
           const currentDemoPrice = demoLivePrices[selectedDemoTradeId];
           $("demoLivePriceInput").value = Number.isFinite(Number(currentDemoPrice)) ? currentDemoPrice : "";
@@ -4167,11 +5838,7 @@
         return;
       }
 
-      const mergedSymbols = Array.from(new Set([
-        "NQ",
-        "YM",
-        ...instruments.map((instrument) => String(instrument.root_symbol || "").toUpperCase()).filter(Boolean)
-      ]));
+      const mergedSymbols = LIVE_UI_ROOTS.slice();
       select.innerHTML = mergedSymbols
         .map((symbol) => `<option value="${escapeHtml(symbol)}">${escapeHtml(symbol)}</option>`)
         .join("");
@@ -4210,10 +5877,11 @@
         const data = await fetchJson(`${TM_BASE}/submit_trade`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          timeoutMs: 10000
         });
         $("submitResult").textContent = pretty(data);
-        await forceRefreshAll("submit");
+        void forceRefreshAll("submit");
       } finally {
         submitInFlight = false;
         updateSubmitAvailability();
@@ -4252,9 +5920,9 @@
       snapshotRefreshInFlight = true;
       const data = await fetchJson(`${EX_BASE}/sync_snapshot`);
       try {
-        latestSnapshot = data;
+        latestSnapshot = filterLiveUiSnapshotPayload(data);
         latestSnapshotFetchedAt = new Date();
-        for (const [symbol, symbolState] of Object.entries((data && data.symbols) || {})) {
+        for (const [symbol, symbolState] of Object.entries((latestSnapshot && latestSnapshot.symbols) || {})) {
           const price = toFiniteNumber(symbolState && symbolState.last_price);
           if (price !== null) {
             const normalizedSymbol = String(symbol || "").toUpperCase();
@@ -4262,7 +5930,7 @@
             livePriceReceivedAtBySymbol[normalizedSymbol] = latestSnapshotFetchedAt;
           }
         }
-        $("snapshotBox").textContent = pretty(data);
+        $("snapshotBox").textContent = pretty(latestSnapshot);
         renderSelectedActiveTradeVisual();
         updateSubmitAvailability();
         updateDashboardSummary();
@@ -4412,7 +6080,7 @@
       }
       entryAgentInFlight = true;
       try {
-        const response = await fetch(`${ENTRY_AGENT_BASE}/entry/status?symbols=NQ,YM,RTY`, {
+        const response = await fetch(`${ENTRY_AGENT_BASE}/entry/status?symbols=NQ,YM`, {
           method: "GET",
           mode: "cors"
         });
@@ -4437,6 +6105,7 @@
         refreshTrades(),
         refreshTvAtrStatuses(),
         refreshRiskState(),
+        refreshTradeManagerModeConfig(),
         refreshQaFeed(),
         refreshAccountSnapshot(),
         refreshEntryAgentStatus()
@@ -4504,6 +6173,8 @@
     document.querySelectorAll("[data-tab-target]").forEach((button) => {
       button.addEventListener("click", () => activateTab(button.getAttribute("data-tab-target")));
     });
+    loadSubmissionTrackingModePreference();
+    renderSubmissionTrackingModeControl();
     $("kpiJournalBody").addEventListener("click", (event) => {
       const attachButton = event.target.closest("[data-kpi-attach]");
       if (attachButton) {
@@ -4557,8 +6228,11 @@
     $("flattenBtn").onclick = flattenSymbol;
     $("refreshSnapshotBtn").onclick = refreshSnapshot;
     $("refreshTradesBtn").onclick = refreshTrades;
+    $("tradeManagerModeSaveButton").onclick = saveTradeManagerModeConfig;
+    $("submissionTrackingModeSaveButton").onclick = saveSubmissionTrackingModeConfig;
     $("demoLiveMapToggle").onclick = () => setDemoLiveMapEnabled(!demoLiveMapEnabled);
     $("demoLivePriceBtn").onclick = setDemoLivePriceFromInput;
+    $("demoLiveResetBtn").onclick = resetSelectedDemoScenario;
     $("manualExitTradeSelect").onchange = () => updateManualExitPanel(true);
     $("manualExitSubmitBtn").onclick = submitManualExitLimit;
     $("demoLivePriceInput").addEventListener("keydown", (event) => {

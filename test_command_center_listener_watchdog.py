@@ -1,4 +1,5 @@
-﻿import unittest
+import json
+import unittest
 from pathlib import Path
 
 
@@ -8,6 +9,7 @@ ROOT = Path(__file__).resolve().parent
 class CommandCenterListenerWatchdogTests(unittest.TestCase):
     def setUp(self):
         self.html = (ROOT / "command_center.html").read_text(encoding="utf-8")
+        self.persistence = json.loads((ROOT / "Data" / "persistence_state.json").read_text(encoding="utf-8"))
 
     def test_operator_warning_names_rithmic_execution_truth_and_exact_contract_charts(self):
         self.assertIn("Rithmic live contract ticks", self.html)
@@ -18,7 +20,7 @@ class CommandCenterListenerWatchdogTests(unittest.TestCase):
 
     def test_submit_gate_uses_listener_status_errors(self):
         self.assertIn("function getSelectedListenerStatus()", self.html)
-        self.assertIn("selectedListener.status !== \"fresh\"", self.html)
+        self.assertIn('selectedListener.status !== "fresh"', self.html)
         self.assertIn("LISTENER_STALE", self.html)
         self.assertIn("LISTENER_MISSING", self.html)
         self.assertIn("Listener Stale", self.html)
@@ -86,6 +88,64 @@ class CommandCenterListenerWatchdogTests(unittest.TestCase):
         self.assertIn("Backend synced", self.html)
         self.assertIn("display_stop_price", self.html)
         self.assertIn("display_remaining_size", self.html)
+
+    def test_trade_history_panel_shows_all_non_active_historical_statuses(self):
+        self.assertIn('return status === "closed" || status === "archived" || status === "error" || status === "rejected";', self.html)
+        self.assertIn('renderTradeList("closedTradesBox", historicalTrades, "closed", "No historical trades yet.");', self.html)
+        self.assertIn('renderTradeList("errorTradesBox", errorTrades, "error", "No hidden error trades.");', self.html)
+        self.assertNotIn('renderTradeList("closedTradesBox", closedTrades, "closed", "No closed trades yet.");', self.html)
+
+    def test_kpi_starting_equity_ignores_stale_snapshot_balance_fields(self):
+        start = self.html.index("function getKpiStartingEquity()")
+        end = self.html.index("function getCurrentSyntheticEquity")
+        body = self.html[start:end]
+        self.assertIn('"starting_balance"', body)
+        self.assertIn('"starting_equity"', body)
+        self.assertIn('"baseline"', body)
+        self.assertNotIn('"balance"', body)
+        self.assertNotIn('"net_liq"', body)
+        self.assertNotIn('"cash_balance"', body)
+
+    def test_current_persistence_snapshot_contains_16_historical_trade_records(self):
+        trades = self.persistence.get("trades", {})
+        self.assertEqual(len(trades), 16)
+        self.assertTrue(all(str(trade.get("status", "")).lower() == "closed" for trade in trades.values()))
+
+    def test_entry_agent_ui_exposes_manual_override_and_compact_step_timestamps(self):
+        self.assertIn("Override Frozen Lock From Latest TV", self.html)
+        self.assertIn("data-liquidity-lock-override", self.html)
+        self.assertIn("formatPtTimestamp", self.html)
+        self.assertNotIn("Step Timeline", self.html)
+        self.assertNotIn("Active Liquidity Price", self.html)
+        self.assertNotIn("Step Milestones", self.html)
+        self.assertIn("renderEntryAgentStepBlock", self.html)
+        self.assertIn("renderEntryAgentCompactRow", self.html)
+        self.assertIn('renderEntryAgentStepBlock("Step 2"', self.html)
+        self.assertIn('renderEntryAgentStepBlock("Step 4"', self.html)
+        self.assertIn("renderEntryAgentInvalidationBlock", self.html)
+        self.assertNotIn("renderEntryAgentSectionTitle", self.html)
+        self.assertNotIn("entry-agent-section-title", self.html)
+        self.assertIn("Mode", self.html)
+        self.assertIn("Time", self.html)
+        self.assertIn("Candle Count", self.html)
+        self.assertIn("Candle Count Time", self.html)
+        self.assertIn('"n/a"', self.html)
+        self.assertNotIn("Mode / Event", self.html)
+        self.assertIn("Details", self.html)
+        self.assertIn("Invalidation Details", self.html)
+        self.assertIn("Source", self.html)
+        self.assertIn("Session Window", self.html)
+        self.assertIn("CLOSED", self.html)
+        self.assertIn("OBSERVATIONAL", self.html)
+        self.assertIn("LIVE", self.html)
+        self.assertIn("Rejection", self.html)
+        self.assertIn("Continuation", self.html)
+        self.assertNotIn("Lane State", self.html)
+        self.assertIn("Wick", self.html)
+        self.assertIn("candleCount", self.html)
+        self.assertNotIn("Current Candle", self.html)
+        self.assertNotIn("Current Step Candle", self.html)
+        self.assertIn("Reason", self.html)
 
 
 if __name__ == "__main__":
