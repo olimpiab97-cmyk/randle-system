@@ -3,6 +3,7 @@ Formal Domain Definitions for Rejection and Continuation
 Document Type: Lifecycle Vocabulary
 Status: Canonical
 Authority: Binding terminology standard subordinate only to the Randle AI Constitution
+Decision Basis: Incorporates approved ADR-006 Rejection Step 4 Count Window and ADR-007 Rejection Step 4 Participation Rule
 Applies to: Entry Agent, replay tools, lifecycle state, event journals, status projections, Codex prompts, tests, and operator documentation.
 
 1. Purpose
@@ -16,6 +17,7 @@ derived projections;
 decisions;
 execution facts.
 Ambiguous words such as “current,” “active,” “confirmed,” “boundary,” “reset,” and “state” must always be tied to a specific owner and lifecycle.
+For Rejection Step 4, the governing sequence terminology is Count 0 through Count 4, immediately previous completed candle, current candidate candle, Participation, Step 4 Confirmation, Step 4 Expiration, and Terminal Step 4 Window.
 
 2. Core Domain Objects
 2.1 Session
@@ -291,6 +293,8 @@ captured volatility values;
 rule version.
 After confirmation, these values are immutable unless the formal specification defines an explicit correction event.
 
+For a Rejection Lifecycle, Step 2 Confirmation establishes immutable Count 0 and initializes the Rejection Step 4 Evaluation Window. Count 0 performs no Step 4 participation evaluation.
+
 7.3 Step 2 Event ID
 A Step 2 Event ID uniquely identifies the Step 2 confirmation event.
 Step 4 must reference this exact event.
@@ -312,9 +316,11 @@ Once confirmed, it is frozen.
 
 7.5 Step 2 Count 0
 Count 0 is the Step 2 confirmation candle.
-The confirmation candle is not Count 1.
-The next completed authorized candle is Count 1.
-The following completed authorized candle is Count 2.
+Count 0 is immutable and remains tied to the exact Step 2 confirmation event.
+Count 0 initializes the Rejection Step 4 Evaluation Window.
+Count 0 does not evaluate Step 4 participation.
+The next completed authorized candle is Count 1, the first eligible Step 4 participation opportunity.
+Count 0 and the Step 4 Evaluation Window never restart, reseed, shift, or expand.
 This terminology must be identical in:
 live processing;
 replay;
@@ -325,58 +331,114 @@ status endpoints.
 
 8. Step 4 Vocabulary
 8.1 Step 4 Evaluation Window
-The Step 4 Evaluation Window is the authorized candle sequence following Step 2 confirmation.
-It begins and ends according to the formal lifecycle rules.
-It must be tied to the Step 2 event ID.
+The Rejection Step 4 Evaluation Window is the fixed sequence initialized by Count 0 and containing exactly four eligible completed-candle participation opportunities:
+Count 1;
+Count 2;
+Count 3;
+Count 4.
 
-8.2 Step 4 Ready
-Step 4 Ready is a reserved label for a readiness condition if an approved canonical Step 4 specification uses it.
-The exact meaning, timing, and transition associated with Ready remain unresolved in Architecture Documentation Release v1.0. Ready is not a canonical Step 4 outcome until an approved specification defines it.
+The window belongs to the exact Rejection Step 2 confirmation event and Rejection Lifecycle ID that established Count 0.
+Count 1 is the first eligible evaluation.
+Count 4 is the final eligible evaluation.
+Count 5 does not exist within the same Rejection Step 4 Evaluation Window.
+The window never restarts, reseeds, shifts, or expands.
+
+8.2 Participation
+Participation is the approved Rejection Step 4 condition evaluated for the current Count 1-through-Count 4 candidate relative to the immediately previous completed candle.
+
+For a SHORT rejection, Participation is satisfied when either:
+the current candidate candle has at least 34% wick participation under the existing wick-participation formula, relative to the immediately previous completed candle; or
+the current candidate candle closes lower than the immediately previous completed candle.
+
+For a LONG rejection, Participation is satisfied when either:
+the current candidate candle has at least 34% wick participation under the existing wick-participation formula, relative to the immediately previous completed candle; or
+the current candidate candle closes higher than the immediately previous completed candle.
+
+The term Participation does not alter or reinterpret the existing 34% wick-participation formula.
 
 8.3 Step 4 Confirmation
-Step 4 Confirmation is the authoritative event that a formally approved Step 4 rule has been satisfied for one lifecycle.
-If an approved canonical specification defines this event, it must reference:
+Step 4 Confirmation is the authoritative event that Participation was satisfied at Count 1, Count 2, Count 3, or Count 4 for one Rejection Lifecycle.
+It must reference:
 lifecycle ID;
 upstream Step 2 confirmation event ID;
 Step 4 event ID;
-the evaluation facts required by the approved rule;
+confirming count;
+current candidate candle identity;
+immediately previous completed candle identity;
+direction;
+accepted participation result;
 rule version.
 Step 4 confirmation cannot exist without a valid upstream Step 2 confirmation event in the same lifecycle.
+Step 4 Confirmation is accepted at most once and closes the Step 4 Evaluation Window to further participation evaluation.
 
-8.4 Step 4 Termination
-Step 4 Termination is a reserved label for an outcome that an approved canonical Step 4 specification may classify as terminal.
-The conditions, timing, and relationship to retry, failure, and expiration remain unresolved. If an approved specification defines termination as terminal, it inherits the Lifecycle Engine's sticky-terminal protections.
-A later valid setup requires a new lifecycle.
+8.4 Step 4 Count Progression
+Step 4 Count Progression is the monotonic movement through the fixed evaluation sequence after an unsuccessful nonterminal participation evaluation.
 
-8.5 Step 4 Failure
-Step 4 Failure is a reserved label for an unsuccessful evaluation if an approved canonical Step 4 specification uses that outcome. The lifecycle may or may not remain eligible depending on the future approved rule.
-Failure must not be used interchangeably with termination.
-The formal specification must state whether failure is:
-temporary;
-final;
-retryable;
-non-retryable.
+The only ordinary progression is:
+unsuccessful Count 1 to Count 2 eligibility;
+unsuccessful Count 2 to Count 3 eligibility;
+unsuccessful Count 3 to Count 4 eligibility.
+
+Progression remains subject to any independently authorized terminal invalidation. Progression never changes Count 0 and never restarts, reseeds, shifts, or expands the Step 4 Evaluation Window.
+
+8.5 Terminal Step 4 Window
+A Terminal Step 4 Window is a Rejection Step 4 Evaluation Window in which no later ordinary completed candle may produce another Step 4 participation evaluation.
+
+Step 4 Confirmation makes the window terminal because participation has succeeded.
+Step 4 Expiration makes the window terminal because Count 4 completed without participation.
+A terminal window cannot reopen, return to an earlier count, or advance to Count 5.
 
 8.6 Step 4 Expiration
-Step 4 Expiration means the authorized evaluation window ended without confirmation.
-Whether expiration exists, whether it is terminal, and how it relates to retry or termination are defined only by an approved canonical Step 4 specification. The current Step 4 draft does not decide those rules.
+Step 4 Expiration is the terminal outcome produced when Count 4 completes without Step 4 Confirmation.
 
-9. Candle-Sequence Vocabulary
-9.1 Confirmation Candle
-The Confirmation Candle is the completed candle that satisfies Step 2.
-It is Count 0.
+Expiration means all four eligible participation opportunities were exhausted without satisfying Participation.
+After expiration:
+Count 5 or later is prohibited within the same window;
+the window cannot restart, reseed, shift, or expand;
+the confirmed Step 2 event and Count 0 remain unchanged;
+no later ordinary completed candle may confirm that expired Step 4 window.
 
-9.2 Candle A
-Candle A is the first completed authorized candle after the Step 2 confirmation candle.
-Candle A is Count 1.
+9. Count-Sequence Vocabulary
+9.1 Count 0
+Count 0 is the completed Rejection Step 2 confirmation candle.
+It initializes the Rejection Step 4 Evaluation Window, performs no Step 4 participation evaluation, and is immutable.
 
-9.3 Candle B
-Candle B is the second completed authorized candle after the Step 2 confirmation candle.
-Candle B is Count 2.
+9.2 Count 1
+Count 1 is the first completed authorized candle after Count 0 and the first eligible Step 4 participation opportunity.
+Count 1 is evaluated relative to Count 0.
 
-These count labels define vocabulary only. They do not determine the authorized Step 4 evaluation count, retry behavior, terminal window, or Candle A replacement policy; those rules remain unresolved pending an approved canonical Step 4 specification.
+9.3 Count 2
+Count 2 is the second eligible Step 4 participation opportunity.
+Count 2 is evaluated relative to Count 1.
 
-9.4 Authorized Candle
+9.4 Count 3
+Count 3 is the third eligible Step 4 participation opportunity.
+Count 3 is evaluated relative to Count 2.
+
+9.5 Count 4
+Count 4 is the fourth and final eligible Step 4 participation opportunity.
+Count 4 is evaluated relative to Count 3.
+If Participation is not satisfied at Count 4, Step 4 expires.
+
+9.6 Count 5 Prohibition
+Count 5 is not a canonical Rejection Step 4 count and does not exist within the same Step 4 Evaluation Window.
+No later count may be created within the same window.
+
+9.7 Immediately Previous Completed Candle
+The Immediately Previous Completed Candle is the completed authorized candle at the count directly preceding the current candidate:
+Count 0 for Count 1;
+Count 1 for Count 2;
+Count 2 for Count 3;
+Count 3 for Count 4.
+
+It is the only governing comparison reference for the current Step 4 participation evaluation.
+
+9.8 Current Candidate Candle
+The Current Candidate Candle is the completed authorized candle assigned to the Count 1-through-Count 4 opportunity currently being evaluated for Participation.
+
+The Current Candidate Candle does not replace Count 0 or restart the Step 4 Evaluation Window.
+
+9.9 Authorized Candle
 An Authorized Candle is a completed candle that:
 belongs to the correct symbol;
 belongs to the correct session;
@@ -385,6 +447,14 @@ falls within the authorized evaluation window;
 has not already been applied;
 satisfies freshness and ordering requirements.
 A duplicate candle is not a second authorized candle.
+
+9.10 Deprecated Historical Candle Terms
+Candle A and Candle B are deprecated legacy implementation terms for Rejection Step 4.
+They are not governing architectural concepts and SHALL NOT be used as aliases for Count 0, Count 1, Count 2, Count 3, Count 4, the immediately previous completed candle, or the current candidate candle.
+
+Historical material may retain these labels only when clearly marked as deprecated. New architecture, specifications, tests, projections, and operator documentation SHALL use the canonical Count 0-through-Count 4 terminology.
+
+Anchor-based Rejection Step 4 sequence terminology is noncanonical and has no entry in this vocabulary. The immutable Step 2 Anchor defined in Section 7.4 is a separate Step 2 fact; it is not a Step 4 count or participation-sequence role.
 
 10. Boundary Vocabulary
 10.1 Liquidity Boundary
