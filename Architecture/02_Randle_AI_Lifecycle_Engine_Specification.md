@@ -4,7 +4,7 @@ Document Type: Core Architecture Specification
 Status: Canonical
 Authority: Subordinate to the Randle AI Constitution and Randle AI Lifecycle Vocabulary
 Scope: Universal lifecycle-engine mechanics for rejection, continuation, entry, management, and terminal decision lifecycles
-Release Boundary: Universal constraints may reference continuation concepts, but this release does not define canonical continuation lifecycle behavior after Continuation Eligibility Creation and does not authorize continuation implementation.
+Release Boundary: This release incorporates ADR-009's universal Continuation Boundary ownership, independence, formation, evaluation, progression, confirmation, freeze, history, and session constraints. It does not define or authorize Continuation Creation sequencing, Continuation Evaluation Start, continuation direction mapping, continuation Count 0, continuation participation, continuation Step 4, or continuation implementation.
 
 1. Purpose
 The Randle AI Lifecycle Engine is the shared architectural system responsible for creating, advancing, freezing, terminating, persisting, restoring, replaying, and exposing all Randle AI trading lifecycles.
@@ -54,6 +54,8 @@ Lifecycle behavior SHALL follow this authority order:
 8. Operator projections
 Only explicitly approved canonical lifecycle specifications occupy item 4. Draft specifications and audit documents do not enter or alter this authority order.
 A lower authority SHALL NOT contradict, weaken, bypass, or reinterpret a higher authority.
+The general authority order remains governing. An explicitly approved, scope-specific constitutional amendment governs only the conflicts it expressly identifies.
+ADR-009 is such a narrow amendment for the Rejection Step 2 pattern and boundary statements listed in its supersession ledger. Within that scope, stale conflicting language does not remain governing. ADR-009 does not generally override the Constitution, and all unaffected constitutional and universal invariants remain higher authority.
 When implementation behavior conflicts with a canonical specification, the implementation is defective.
 Observed runtime behavior does not become authoritative merely because it currently exists in code.
 
@@ -236,6 +238,29 @@ A lifecycle SHALL NOT move backward to an earlier state.
 One event SHALL NOT cause multiple incompatible transitions for the same lifecycle.
 When one event legitimately causes a sequence of transitions, the sequence SHALL be deterministic, ordered, and defined by specification.
 
+11.6 ADR-009 Derived-Boundary Evaluation
+Boundary ownership and boundary evaluation authority are distinct. Ownership identifies the Candidate or Lifecycle that owns the boundary identity and state. Evaluation authority identifies whether a particular completed candle is permitted to evaluate that boundary under the owning specialized specification.
+
+Where ADR-009 governs a derived boundary, the engine SHALL:
+accept authoritative formation, progression, confirmation, and freeze effects only from authorized completed candles;
+validate universal guards and evaluation authority before boundary evaluation;
+produce no boundary evaluation or change when evaluation is unauthorized, and not treat that candle as a failed confirmation;
+snapshot the committed incoming provisional boundary before processing the candle;
+evaluate confirmation before same-candle progression;
+freeze exactly the committed incoming value when confirmation succeeds;
+prohibit a confirming candle from progressing the same boundary;
+permit strictly farther outward progression only after confirmation fails;
+treat an equal extreme or absence of a farther extreme as no change;
+preserve complete authoritative formation, progression, and evaluation history with stable linkage.
+
+A boundary-formation candle SHALL NOT confirm the boundary it just formed. Strictly farther provisional progression remains within the same boundary identity and PROVISIONAL state and SHALL NOT be treated as reseeding, restart, Candidate replacement, or lifecycle replacement.
+
+Before Rejection Step 2 Confirmation, the Rejection Candidate owns the ABSENT or PROVISIONAL Rejection Boundary. Accepted confirmation SHALL atomically freeze the committed incoming value, create the Rejection Lifecycle, establish the frozen boundary as its immutable fact, preserve Candidate identity and authoritative history as lineage, and establish the confirmation candle as Rejection Count 0.
+
+The requirement to preserve authoritative history and stable linkage does not prescribe physical duplication of the entire history in one event payload or any particular persistence or serialization design.
+
+Boundary independence does not automatically authorize one completed candle to evaluate multiple owners. Multi-owner routing requires a separately approved lifecycle rule.
+
 12. Mutable and Immutable Data
 12.1 Immutable data
 Immutable lifecycle data SHALL include, at minimum:
@@ -278,6 +303,8 @@ It SHALL NOT depend on a later lookup into mutable global state to reconstruct w
 13.3 Snapshot inheritance
 A child lifecycle may inherit frozen values from its parent.
 Inherited values SHALL be copied or immutably referenced in a way that prevents later mutation.
+Snapshot inheritance preserves only the exact parent facts required as immutable lineage or input by an approved governing rule. It does not transfer ownership or boundary identity.
+A Rejection Boundary SHALL NOT be copied, transferred, promoted, or automatically transformed into a Continuation Boundary. Numerical equality does not merge boundary identities.
 13.4 No recomputation
 After freezing, a value SHALL NOT be recalculated from newer candles, current ATR, revised liquidity data, current prices, or reconstructed runtime assumptions.
 
@@ -375,16 +402,19 @@ A status request SHALL not advance a count.
 20.1 Single confirmation per phase and event type
 Within one lifecycle, each canonical phase-specific confirmation event type SHALL be accepted at most once. Rejection Step 2 confirmation and Rejection Step 4 confirmation are distinct event types within the same Rejection Lifecycle.
 20.2 Confirmation data
-Each accepted confirmation event SHALL atomically freeze the fields required for its phase and event type.
+Each accepted confirmation event SHALL atomically freeze the fields required by its governing phase and event type. An anchor is required only when the governing rule independently defines one.
 At minimum:
 phase identifier;
 confirmation state;
 confirmation candle;
 confirmation timestamp;
 confirmation event;
-applicable anchor;
-applicable boundary;
+anchor when independently required;
+boundary identity and committed incoming value when independently required;
+frozen boundary value when independently required;
 lifecycle version.
+For ADR-009 Rejection Step 2, confirmation data SHALL preserve or maintain stable authoritative linkage to Candidate identity, boundary-formation and provisional-progression history, each authorized evaluation and its incoming provisional value, confirmation evidence, the frozen Rejection Boundary, Rejection Count 0 identity, canonical tick-source identity, Candidate-to-Lifecycle lineage, and applicable rule and lifecycle versions.
+This requirement does not prescribe an event-payload storage layout or require the complete linked history to be duplicated inside the confirmation event.
 20.3 Confirmation immutability
 Once a confirmation event is accepted, its frozen confirmation data SHALL NOT change.
 20.4 No retroactive confirmation
@@ -421,6 +451,8 @@ A separate future opportunity SHALL require a separate lifecycle.
 Failure and expiration SHALL remain semantically distinct when both exist.
 Failure means an authorized evaluation occurred and the required condition was not satisfied.
 Expiration means the permitted evaluation window closed without further legal advancement.
+An unsuccessful authorized derived-boundary confirmation evaluation is not automatically Lifecycle Failure or termination.
+Under ADR-009, a failed boundary-confirmation close may produce strictly farther provisional progression or an unchanged authorized result. Only an explicitly defined terminal transition may terminate the owning Candidate or Lifecycle.
 23.2 No ambiguous terminal state
 A lifecycle SHALL NOT be simultaneously failed and expired unless the canonical specialized specification explicitly defines a combined representation.
 23.3 Reason codes
@@ -435,6 +467,7 @@ When a parent transition creates only child eligibility, the engine SHALL atomic
 the parent transition;
 the parent’s frozen prospective-child inputs;
 the eligibility record.
+For Continuation Eligibility, the parent's frozen prospective-child inputs are limited to approved Eligibility and lineage facts. They do not include, create, own, form, progress, or freeze a Continuation Boundary.
 24.3 Authorized child creation
 If a future approved canonical specification separately authorizes child lifecycle creation, that creation SHALL atomically persist the child identity and parent-child relationship.
 24.4 Single child creation
@@ -442,6 +475,8 @@ A duplicate parent transition SHALL NOT create duplicate children.
 24.5 Child input preservation
 The child SHALL inherit the exact frozen parent data required by its canonical specialized specification.
 The child SHALL NOT derive those values from later global state.
+Eligibility and child input preservation transfer approved facts as immutable lineage only; they do not transfer boundary ownership or identity.
+A Rejection Boundary SHALL NOT become a Continuation Boundary. No Continuation Boundary exists before its Continuation Lifecycle identity. This specification does not select whether Continuation Creation precedes initial boundary formation or occurs atomically with it, and it does not authorize a Continuation Lifecycle with an ABSENT boundary.
 
 25. Prevention of Lifecycle Overwrite
 One lifecycle SHALL NOT overwrite another lifecycle’s authoritative state.
@@ -563,6 +598,9 @@ last decisions;
 rejection boundaries;
 continuation boundaries;
 unless a canonical specialized specification explicitly authorizes cross-session inheritance.
+When an owning Candidate or Lifecycle loses boundary-evaluation authority through its approved session or terminal event, an unconfirmed provisional boundary SHALL NOT freeze, return to ABSENT, progress, transfer, or remain active in another session.
+Its final provisional value and authoritative formation, progression, and evaluation history SHALL remain preserved as inactive historical evidence. No fourth boundary state is created. The owning specialized specification continues to define the exact terminal-session deadline.
+A frozen Liquidity Level remains preserved as a historical session market-truth object after active session applicability ends.
 31.4 Rollover reset
 Reset logic SHALL affect only fields designated as session-scoped.
 Historical lifecycle records SHALL not be deleted merely to initialize a new session.
@@ -620,6 +658,13 @@ Entry Agent owns entry lifecycles and decision state;
 ATR subsystem owns ATR snapshot calculation;
 Command Center owns display projections only.
 One subsystem SHALL NOT fabricate authoritative state belonging to another.
+
+The session-scoped Liquidity Level market-truth aggregate root owns Liquidity Level identity, value state, price, calculation provenance, freeze record, and history.
+The Session-lock layer owns the authoritative 06:15 America/Los_Angeles lock fact that causes the freeze and is not a second Liquidity Level owner.
+Rejection Candidates, Rejection Lifecycles, Continuation Eligibility records, and Continuation Lifecycles are Liquidity Level consumers and lineage holders only. They SHALL NOT calculate, recalculate, replace, or modify it. Its strategy-specific calculation remains governed by a separately approved, versioned Liquidity Level Calculation Contract.
+If no valid provisional Liquidity Level exists at the freeze event, no guessed, cached, zero, prior-session, or later-derived substitute may be used. Activity requiring that level SHALL fail closed, and no derived boundary requiring it may form.
+
+A Rejection Candidate owns its Rejection Boundary while it is ABSENT or PROVISIONAL. Accepted Rejection Step 2 atomically freezes the incoming value and establishes the frozen boundary as a Rejection Lifecycle fact while preserving Candidate lineage. A Continuation Lifecycle owns its Continuation Boundary from first formation onward. Continuation Eligibility owns no boundary.
 
 36. Error Handling
 Lifecycle errors SHALL fail safely.
@@ -823,6 +868,21 @@ child-creation behavior;
 restart behavior;
 replay checkpoints;
 minimum specialized regression tests.
+A specialized lifecycle specification governed by ADR-009 SHALL additionally define:
+Candidate or Lifecycle evaluation authority;
+boundary ownership for every permitted value state;
+strict-wick formation beyond the FROZEN governing Liquidity Level and the insufficiency of a touch;
+completed-candle authority;
+committed incoming provisional-boundary snapshot timing;
+confirmation-first precedence;
+progression and unchanged outcomes after failed confirmation;
+exact freeze effect;
+lineage and authoritative history preservation;
+session-termination custody;
+prohibited cross-boundary effects.
+
+It SHALL NOT add a retired Rejection Step 2 predicate, import Step 4 participation or qualification into Step 2, transfer boundary identity through lineage, or choose a deferred Continuation Creation sequence.
+These requirements do not authorize implementation.
 A canonical specialized specification may strengthen this engine contract but SHALL NOT weaken it.
 
 42. Codex Implementation Requirements

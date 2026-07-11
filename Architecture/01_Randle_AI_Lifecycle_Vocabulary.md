@@ -2,9 +2,12 @@ Randle AI Lifecycle Vocabulary
 Formal Domain Definitions for Rejection and Continuation
 Document Type: Lifecycle Vocabulary
 Status: Canonical
-Authority: Binding terminology standard subordinate only to the Randle AI Constitution
-Decision Basis: Incorporates approved ADR-006 Rejection Step 4 Count Window and ADR-007 Rejection Step 4 Participation Rule
+Authority: Binding terminology standard subordinate to the Randle AI Constitution; approved ADR-009 governs only its expressly identified narrow amendment scope, while all unaffected constitutional and universal invariants remain higher authority
+Decision Basis: Incorporates approved ADR-006 Rejection Step 4 Count Window, ADR-007 Rejection Step 4 Participation Rule, ADR-008 Rejection Step 4 Continuation-Eligibility Handoff Contract, and ADR-009 Boundary Architecture
 Applies to: Entry Agent, replay tools, lifecycle state, event journals, status projections, Codex prompts, tests, and operator documentation.
+
+Effective 2026-07-11, ADR-009 is a narrow constitutional and architectural amendment limited to the Rejection Step 2 pattern and boundary statements expressly identified in its supersession ledger. The terms aligned here record that approved decision. They do not create general ADR supremacy, and all unaffected constitutional and universal invariants remain governing.
+ADR-009 separately and narrowly supersedes only ADR-008's copied-and-immediately-frozen Continuation Boundary model. All unaffected ADR-008 Eligibility, lineage, uniqueness, session, idempotency, cardinality, atomicity, and terminal-behavior decisions remain governing.
 
 1. Purpose
 The purpose of this vocabulary is to ensure that every component uses the same meaning for each lifecycle term.
@@ -82,37 +85,32 @@ completion status.
 Only completed candles may advance deterministic lifecycle rules unless a rule explicitly authorizes intrabar evaluation.
 
 2.5 Liquidity Level
-A Liquidity Level is a named, session-qualified market reference used by the strategy.
-Examples:
-YH
-YL
-ONH
-ONL
-PMH
-PML
-LH
-LL
-RTH high
-RTH low
-A liquidity level includes:
-liquidity_level_id
-level_type
-price
-session_id
-source_window
-locked_at
-rule_version
+A Liquidity Level is a session-scoped market-truth aggregate root used as the governing market reference for derived-boundary formation.
+It exclusively owns:
+liquidity_level_id;
+session_id;
+symbol or instrument identity;
+level type or side;
+current value state;
+provisional or frozen price when one exists;
+calculation-contract identity and version;
+source-window identity;
+freeze timestamp and freeze record;
+calculation and source-data provenance;
+complete historical record.
 
-Example:
-NQ-2026-07-10-ONH
+The Session-lock layer owns the authoritative session-lock fact that causes the 06:15 America/Los_Angeles freeze. It is not a second Liquidity Level owner. The Liquidity Level aggregate owns the resulting value state, freeze record, provenance, and history. Rejection Candidates, Rejection Lifecycles, Continuation Eligibility records, and Continuation Lifecycles consume or retain lineage to a Liquidity Level; they do not own or recalculate it.
 
-A liquidity level is not merely a price.
-It is a permanent identity consisting of:
-type;
-price;
-symbol;
-session;
-source window.
+A Liquidity Level uses these value states:
+ABSENT before its authorized calculation produces a valid value;
+PROVISIONAL after its first valid session value is produced and before freeze;
+FROZEN at 06:15 local time in America/Los_Angeles, including daylight-saving transitions.
+
+Before 06:15, a separately approved, versioned Liquidity Level Calculation Contract may update the provisional value according to that contract. At 06:15, the latest valid provisional value freezes and becomes immutable. Derived Rejection or Continuation Boundary formation is prohibited until the governing Liquidity Level is FROZEN.
+
+The Liquidity Level Calculation Contract must govern the strategy-specific formation window, output side set, price calculation, aggregation, rounding and tick normalization, 06:15 interval membership, missing-data treatment, ordering, correction, and replay behavior. This vocabulary does not invent those rules.
+
+If no valid provisional Liquidity Level exists at the freeze event, no frozen zero-price object or substitute is created. No guessed, cached, prior-session, zero, or later-derived value may be used, and activity requiring that level must fail closed with a deterministic missing-governing-reference outcome.
 
 3. Lifecycle Types
 A lifecycle type identifies an independent lifecycle domain, such as REJECTION or CONTINUATION. A lifecycle phase type or phase identifier, such as REJECTION_STEP2 or REJECTION_STEP4, identifies a stage within that lifecycle; it does not create another independent trading lifecycle. Rejection Step 2 and Rejection Step 4 therefore belong to one Rejection Lifecycle and share its lifecycle ID.
@@ -120,9 +118,11 @@ A lifecycle type identifies an independent lifecycle domain, such as REJECTION o
 References in this vocabulary to Rejection Step 5, Rejection Step 6, or continuation phases reserve terminology and universal ownership distinctions only. They do not define canonical behavior for those phases or authorize their implementation in Architecture Documentation Release v1.0.
 
 3.1 Rejection Lifecycle
-A Rejection Lifecycle is the deterministic evaluation of whether price interacted with a liquidity level and rejected away from it according to the defined rejection rules.
+A Rejection Lifecycle is the lifecycle created by accepted Rejection Step 2 confirmation of a Candidate-owned provisional Rejection Boundary.
 A rejection lifecycle:
-begins from a specific liquidity interaction;
+is created atomically with Rejection Step 2 confirmation and freeze of the incoming provisional Rejection Boundary;
+owns the resulting frozen Rejection Boundary as an immutable lifecycle fact;
+preserves its Rejection Candidate identity and authoritative provisional history as lineage;
 owns its own Step 2;
 owns its own Step 4;
 may advance to Step 5 and Step 6;
@@ -133,7 +133,7 @@ NQ-2026-07-10-ONH-REJECTION-001
 
 
 3.2 Continuation Lifecycle
-A Continuation Lifecycle is a new lifecycle created from a completed and eligible rejection lifecycle when price later satisfies the continuation creation rule.
+A Continuation Lifecycle is a distinct child lifecycle whose future approved Creation rule consumes one AVAILABLE Continuation Eligibility record.
 A continuation lifecycle:
 has its own lifecycle ID;
 has one rejection parent;
@@ -141,8 +141,10 @@ owns its own Step 2;
 owns its own Step 4;
 owns its own timestamps;
 owns its own candle count;
-owns its own continuation boundary;
+owns any Continuation Boundary from first formation onward;
 must never overwrite the rejection lifecycle.
+
+A Continuation Boundary cannot exist before its Continuation Lifecycle identity and is owned exclusively by that Lifecycle from first formation onward. This vocabulary does not define the Continuation Creation market trigger or select whether Creation precedes initial boundary formation or occurs atomically with it. It does not authorize a Continuation Lifecycle with an ABSENT boundary, a Continuation Candidate, or another pre-lifecycle boundary owner.
 Example lifecycle ID:
 NQ-2026-07-10-ONH-CONTINUATION-001
 
@@ -199,6 +201,9 @@ A candidate is provisional.
 A candidate may change or disappear before confirmation.
 A candidate is not a confirmed lifecycle fact.
 
+For Rejection Step 2, the Rejection Candidate must exist no later than initial provisional Rejection Boundary formation and exclusively owns that boundary while its value state is ABSENT or PROVISIONAL. The Candidate may already exist or may be established atomically with initial formation under a separately approved Candidate-establishment rule. ADR-009 does not define that rule or introduce a separate boundary-formation owner.
+Once a Rejection Boundary has formed, provisional progression does not replace or erase the Rejection Candidate. Its identity and authoritative history remain preserved through confirmation or terminal loss of evaluation authority.
+
 5.2 Candidate Identity
 A candidate may have a temporary identity for deduplication and tracking.
 Example:
@@ -215,6 +220,8 @@ A candidate ID must not be presented as a permanent lifecycle ID until the forma
 Candidate Replacement is the authorized substitution of one provisional candidate for another before Step 2 confirmation.
 Candidate replacement is allowed only before immutable lifecycle confirmation.
 Candidate replacement must never rewrite a confirmed Step 2 lifecycle.
+Progression of a provisional Rejection Boundary within the same Rejection Candidate is not Candidate Replacement and does not change Candidate identity.
+This vocabulary does not authorize a Candidate Replacement rule for Rejection Step 2.
 
 5.4 Reseed
 The word reseed must be used only for provisional candidate creation before confirmation.
@@ -226,6 +233,7 @@ changing lifecycle identity;
 transferring continuation values into rejection;
 reviving prior-session state.
 After Step 2 confirmation, “reseed” is prohibited for that lifecycle.
+Provisional boundary formation or progression within one owner is not reseeding.
 
 6. Step Terminology
 6.1 Step
@@ -276,24 +284,33 @@ The parent must be identified through lifecycle and event IDs.
 A Step 2 Candidate is a provisional setup being evaluated for Step 2 confirmation.
 It may contain temporary values.
 Those values are not immutable until confirmation.
+For Rejection Step 2, this term means the Rejection Candidate that owns the ABSENT or PROVISIONAL Rejection Boundary. It does not imply a separately named establishment event or another boundary owner.
 
 7.2 Step 2 Confirmation
 Step 2 Confirmation is the authoritative event that the formal Step 2 rule has been satisfied for one lifecycle.
-It must create or finalize:
+For Rejection Step 2, it is the confirmation and freeze of the Candidate-owned provisional Rejection Boundary. It is not participation, Step 4 qualification, or a mandatory Leg 1/Leg 2 pattern.
+
+An authorized completed candle evaluates its close against the Incoming Provisional Boundary. If the close confirms at least one canonical instrument tick beyond that incoming value in the applicable outward direction, that exact value freezes. Accepted confirmation atomically creates the Rejection Lifecycle, establishes its frozen Rejection Boundary, preserves Candidate identity and authoritative history as lineage, and establishes the confirmation candle as Rejection Count 0.
+
+Rejection Step 2 Confirmation must create or establish authoritative linkage to:
 lifecycle ID;
 Step 2 event ID;
 confirmation timestamp;
 confirmation candle identity;
 direction;
 liquidity-level identity;
-Leg 1 identity;
-Step 2 anchor;
-applicable boundary;
-captured volatility values;
+Rejection Candidate identity;
+Rejection Boundary identity;
+Incoming Provisional Boundary value;
+frozen Rejection Boundary value;
+boundary-formation, provisional-progression, and authorized-evaluation history;
+confirmation evidence;
+Candidate-to-Lifecycle lineage;
 rule version.
-After confirmation, these values are immutable unless the formal specification defines an explicit correction event.
+These facts and their authoritative links remain immutable after confirmation. Corrected-candle treatment requires a separately approved canonical contract and must not be inferred from this vocabulary. This preservation requirement does not prescribe a database, serialization form, or requirement to duplicate the complete history inside the confirmation event payload.
 
 For a Rejection Lifecycle, Step 2 Confirmation establishes immutable Count 0 and initializes the Rejection Step 4 Evaluation Window. Count 0 performs no Step 4 participation evaluation.
+Subsequent Count Window behavior is governed exclusively by ADR-006. Rejection Step 4 Participation is governed exclusively by ADR-007. Neither Step 4 participation nor Step 4 qualification is evaluated as part of Rejection Step 2, and later Step 4 outcomes cannot retroactively alter accepted Step 2 or its frozen boundary.
 
 7.3 Step 2 Event ID
 A Step 2 Event ID uniquely identifies the Step 2 confirmation event.
@@ -313,6 +330,7 @@ derivation rule;
 confirmation time;
 rule version.
 Once confirmed, it is frozen.
+A separately governed generic Step 2 Anchor may remain a rule-specific evidence term. For Rejection Step 2 under ADR-009, it does not replace the Incoming Provisional Boundary, alter the one-tick confirmation predicate, change the frozen value, or become an additional or hidden prerequisite.
 
 7.5 Step 2 Count 0
 Count 0 is the Step 2 confirmation candle.
@@ -457,71 +475,72 @@ Historical material may retain these labels only when clearly marked as deprecat
 Anchor-based Rejection Step 4 sequence terminology is noncanonical and has no entry in this vocabulary. The immutable Step 2 Anchor defined in Section 7.4 is a separate Step 2 fact; it is not a Step 4 count or participation-sequence role.
 
 10. Boundary Vocabulary
-10.1 Liquidity Boundary
-A Liquidity Boundary is the original named liquidity level used to initiate or classify the market interaction.
-Example:
-ONH at 30,250.00
+10.1 Governing Liquidity Level
+The Governing Liquidity Level is the FROZEN, session-scoped market-truth aggregate used as the reference for derived-boundary formation. It is neither a Rejection Boundary nor a Continuation Boundary.
 
+10.2 Boundary Value States
+A derived boundary uses the owner-scoped value states ABSENT, PROVISIONAL, and FROZEN.
+The only boundary state transitions are:
+ABSENT to PROVISIONAL;
+PROVISIONAL to FROZEN.
 
-10.2 Rejection Boundary
-A Rejection Boundary is the frozen lifecycle value used to evaluate the rejection pathway after Step 2 confirmation.
-It belongs only to the rejection lifecycle.
-It must include:
-price;
-source candle;
-source field;
-capture time;
-rule version.
+A strictly farther outward value while PROVISIONAL is value progression within the same state. It is not another state transition, reseeding, restart, Candidate replacement, lifecycle replacement, or mutation of a frozen fact.
+A FROZEN boundary has no outgoing boundary transition. Duplicate processing may produce an idempotent no-op, but FROZEN to FROZEN is not a domain transition.
 
-10.3 Continuation Boundary
-A Continuation Boundary is the frozen value created from an eligible confirmed rejection lifecycle for use by the continuation lifecycle.
-It belongs to the continuation lifecycle after creation.
-It may be derived from a rejection fact, but it is not the rejection boundary itself unless the formal rule explicitly makes them numerically equal.
-Identity and ownership remain separate even when prices are equal.
+ABSENT is an owner-scoped value state, not an ownerless object. For Rejection, the existing Rejection Candidate owns an ABSENT or PROVISIONAL Rejection Boundary. Before Continuation Creation there is no Continuation Boundary object; that nonexistence must not be described as an ownerless ABSENT boundary. ADR-009 does not authorize a Continuation Lifecycle with an ABSENT boundary.
 
-10.4 Frozen Boundary
-A Frozen Boundary is a confirmed boundary whose numerical value and source identity may no longer change within the lifecycle.
-“Frozen” refers to immutability.
-It does not mean:
-currently displayed;
-cached;
-copied into a UI field;
-temporarily unavailable;
-inferred from a later candle.
+10.3 Rejection Boundary
+A Rejection Boundary is a derived price object owned by a Rejection Candidate while ABSENT or PROVISIONAL and established as an immutable Rejection Lifecycle fact when Rejection Step 2 confirms.
 
-10.5 Public Boundary
-A Public Boundary is the operator-facing projection of an authoritative lifecycle boundary.
-Examples:
-Rejection Boundary
-Continuation Boundary
-The public field is not authoritative by itself.
-It must identify or be traceable to its lifecycle-owned source.
+Its first provisional value forms only when the governing Liquidity Level is FROZEN and an authorized completed candle wicks strictly beyond that level. Touching the Liquidity Level is insufficient.
 
-11. Leg Vocabulary
-11.1 Leg 1
-Leg 1 is the first formally defined market movement used by the confirmation model.
-Leg 1 must have:
-candle identity;
-direction;
-open;
-high;
-low;
-close;
-extreme;
-relationship to the liquidity level.
-The formal Step 2 specification will define exactly when Leg 1 begins and ends.
+For every authorized completed candle evaluating an existing provisional Rejection Boundary, confirmation is evaluated against the Incoming Provisional Boundary before same-candle wick progression. If confirmation succeeds, the exact incoming value freezes. Only when the confirmation close fails may a strictly farther outward wick progress the provisional value. Equal extremes do not progress it.
 
-11.2 Leg 1 Close
-The Leg 1 Close is the confirmed close value belonging to the selected Leg 1 candle.
-It is not interchangeable with:
-confirmation candle close;
-current candle close;
-liquidity-level price;
-Leg 1 extreme.
+10.4 Continuation Boundary
+A Continuation Boundary is a derived price object owned exclusively by its Continuation Lifecycle from first formation onward. It uses the same common boundary mechanics but has its own identity, value, progression history, confirmation, and owner.
 
-11.3 Leg 1 Extreme
-The Leg 1 Extreme is the high or low of the selected Leg 1 candle, depending on direction.
-Once captured at Step 2 confirmation, it belongs to that lifecycle.
+It cannot exist before its Continuation Lifecycle identity. Continuation Eligibility does not own, form, progress, confirm, or freeze it. It is not copied, transferred, promoted, or transformed from the Rejection Boundary.
+
+This vocabulary does not choose whether Continuation Creation precedes initial boundary formation or occurs atomically with it, and it introduces no Continuation Candidate or other pre-lifecycle owner.
+
+10.5 Boundary-Formation Candle
+A Boundary-Formation Candle is an authorized completed candle that first wicks strictly beyond the governing FROZEN Liquidity Level and establishes a PROVISIONAL derived boundary at its outward wick extreme.
+For an upper boundary, the high must be strictly above the Liquidity Level. For a lower boundary, the low must be strictly below the Liquidity Level. Touching is insufficient.
+A valid boundary-formation candle cannot confirm the boundary it just formed because it cannot close one canonical tick above its own high or one canonical tick below its own low.
+
+10.6 Boundary-Evaluation Candle
+A Boundary-Evaluation Candle is an authorized completed candle permitted to evaluate an existing PROVISIONAL boundary. This term is distinct from the Rejection Step 4 Authorized Candle defined in Section 9.9.
+A candle without evaluation authority produces no boundary confirmation, progression, or transition and is not a failed-confirmation candle.
+
+10.7 Incoming Provisional Boundary
+The Incoming Provisional Boundary, written P_in, is the committed provisional boundary value that existed immediately before the current authorized completed candle was evaluated.
+The current candle's wick cannot redefine P_in before its close is evaluated. The exact P_in tested for confirmation is the exact value frozen when confirmation succeeds.
+
+10.8 Boundary Confirmation and Progression
+Boundary Confirmation is the owning Step 2's acceptance of an authorized completed candle close at least one canonical instrument tick beyond P_in in the applicable outward direction.
+Confirmation is evaluated before progression. A confirming candle freezes P_in and cannot progress the same boundary.
+
+Only after the confirmation close fails may a strictly farther outward wick progress the provisional boundary. A higher high progresses an upper provisional boundary; a lower low progresses a lower provisional boundary. Equal or less-extreme wicks leave the value unchanged.
+
+10.9 Frozen Boundary
+A Frozen Boundary is the exact Incoming Provisional Boundary whose one-tick close predicate was satisfied by its own Step 2 confirmation.
+Its identity, numerical value, source lineage, and freeze record may no longer change. A later wick, Step 4 outcome, projection, restart, or another boundary cannot modify it.
+
+10.10 Public Boundary
+A Public Boundary is the operator-facing projection of an authoritative owner-scoped boundary.
+The public field is not authoritative by itself. It must identify or be traceable to its boundary identity and authoritative owner.
+
+10.11 Session Termination and Boundary Independence
+When the Candidate or Lifecycle loses evaluation authority through its approved terminal or session event, an unconfirmed provisional boundary does not freeze, return to ABSENT, progress further, transfer, or carry forward actively into another session. Its final value and complete authoritative history remain preserved as inactive historical evidence under the existing owner.
+
+Liquidity Level, Rejection Boundary, and Continuation Boundary have separate identities and owners. Rejection and Continuation Boundaries cannot create, progress, confirm, freeze, reset, replace, transfer, or invalidate one another. Numerical equality and lineage references do not merge identities or create shared numerical ownership. Evaluation routing remains governed by each Candidate or Lifecycle rule; boundary independence does not automatically authorize one candle to evaluate multiple owners.
+
+11. Retired Rejection Step 2 Leg Terminology
+Leg 1, Leg 1 Close, Leg 1 Extreme, Leg 2, and the Leg 1/Leg 2 sequence are superseded and removed as governing Rejection Step 2 terminology; they are not reassigned.
+
+They do not govern Rejection Step 2, and they are not moved into Candidate formation, participation, or Step 4 qualification. They are not dormant, fallback, supplemental, or hidden predicates. A close relative to Leg 1 does not govern Rejection Step 2.
+
+Historical material may retain these labels only when explicitly marked as superseded. They may return as governing concepts only through a separately approved future ADR defining a new purpose.
 
 12. Invalidity and Consumption Vocabulary
 12.1 Invalidation
@@ -561,24 +580,27 @@ A sticky state may only be followed by an allowed downstream event or a new life
 The terms in this section reserve consistent vocabulary and universal ownership distinctions. They do not define a canonical continuation lifecycle state machine, trading rule, transition sequence, or implementation. Architecture Documentation Release v1.0's specialized lifecycle scope ends at Continuation Eligibility Creation.
 
 13.1 Continuation Eligibility
-Continuation Eligibility is a derived condition stating that a completed rejection lifecycle has satisfied all prerequisites required to create a continuation lifecycle.
+Continuation Eligibility is the unique authorization and lineage record created atomically with one accepted Rejection Step 4 Confirmation under ADR-008.
 Eligibility is not continuation creation.
 Eligibility is not Step 2 confirmation.
+Continuation Eligibility does not own, form, progress, confirm, or freeze a Continuation Boundary. Its frozen parent references preserve lineage only; they do not transfer boundary identity or numerical ownership.
 
 13.2 Continuation Creation
-Continuation Creation is the explicit event that establishes a new continuation lifecycle.
+Continuation Creation is the explicit event that establishes a new continuation lifecycle and consumes its unique Continuation Eligibility under ADR-008's lineage and cardinality rules.
 It must include:
 continuation lifecycle ID;
 parent rejection lifecycle ID;
 parent Step 4 event ID;
-continuation boundary;
-direction;
+Continuation Eligibility identity;
+session identity;
 creation time;
 rule version.
 
+This vocabulary does not define the Continuation Creation trigger, continuation direction mapping, or whether Creation precedes initial boundary formation or occurs atomically with it. No Continuation Boundary may exist before the Continuation Lifecycle identity. No Continuation Candidate or other pre-lifecycle boundary owner is introduced.
+
 13.3 Continuation Evaluation Start
-Continuation Evaluation Start is the first authorized market event after continuation creation that begins the continuation Step 2 search.
-It must not alter the parent rejection lifecycle.
+Continuation Evaluation Start is a reserved term whose trigger, timing, and relationship to Continuation Creation and initial boundary formation remain deferred to a future approved Continuation Creation ADR.
+It must not alter the parent rejection lifecycle. This vocabulary does not authorize that behavior.
 
 13.4 Continuation Confirmation
 Continuation Confirmation means the continuation lifecycle’s own Step 2 rule has confirmed.
@@ -661,6 +683,8 @@ convert rejection into continuation;
 load yesterday’s lifecycle as today’s;
 make the UI look current by deleting evidence.
 
+Provisional boundary progression is not reset, reseed, Candidate replacement, lifecycle restart, or boundary replacement. Session termination does not reset a PROVISIONAL boundary to ABSENT; it preserves the final value and authoritative history as inactive evidence.
+
 17. State Vocabulary
 The generic word state must be qualified.
 Use:
@@ -721,6 +745,13 @@ An Ownership Violation occurs when one component or lifecycle attempts to alter 
 Example:
 Continuation Step 2 overwrites rejection Step 2 boundary.
 
+An Ownership Violation also occurs when:
+a Rejection Boundary mutates a Continuation Boundary;
+a Continuation Boundary mutates a Rejection Boundary;
+Continuation Eligibility owns, forms, progresses, confirms, or freezes a Continuation Boundary;
+a boundary exists without its authorized owner;
+numerical equality or lineage is treated as shared numerical ownership.
+
 
 19.3 Parent Mismatch
 A Parent Mismatch occurs when a distinct child lifecycle references the wrong parent lifecycle. An Upstream Event Mismatch occurs when a Step 4 phase event references the wrong Step 2 confirmation event or a different Rejection Lifecycle.
@@ -780,6 +811,18 @@ Missing is not stale.
 A numerical match does not establish shared ownership.
 
 A displayed value does not establish authority.
+
+Eligibility is not Boundary ownership.
+
+Boundary lineage is not shared ownership.
+
+PROVISIONAL progression is not reseeding.
+
+A confirming candle cannot progress the same boundary.
+
+The Incoming Provisional Boundary tested is the exact value frozen.
+
+Session termination is not boundary confirmation or return to ABSENT.
 
 
 22. Foundational Vocabulary Standard

@@ -10,7 +10,7 @@ APPROVED
 
 ## Purpose
 
-This Architecture Decision Record establishes the authoritative handoff contract from an accepted Rejection Step 4 Confirmation to Continuation Eligibility. It governs only the creation, identity, ownership, cardinality, frozen facts, boundary, and terminal outcomes of the eligibility record. It does not create a continuation lifecycle, define continuation evaluation behavior, or authorize implementation.
+This Architecture Decision Record establishes the authoritative handoff contract from an accepted Rejection Step 4 Confirmation to Continuation Eligibility. It governs only the creation, identity, ownership, cardinality, frozen parent references, and terminal outcomes of the eligibility record. It does not create a continuation lifecycle; form, own, progress, or freeze a Continuation Boundary; define continuation evaluation behavior; or authorize implementation.
 
 ## Governing Decisions
 
@@ -88,15 +88,17 @@ These remain parent-owned facts. Recording their identities or values in the eli
 
 ### 6. Continuation Boundary
 
-The Continuation Boundary is a separate continuation-handoff fact derived from the eligible confirmed rejection.
+Continuation Eligibility does not form, own, progress, or freeze a Continuation Boundary. The continuation handoff is not a Continuation Boundary owner.
 
-At Continuation Eligibility creation:
+The Rejection Boundary SHALL NOT be copied as, transferred to, promoted to, or automatically transformed into a Continuation Boundary.
 
-- the frozen Rejection Boundary value SHALL be copied as the Continuation Boundary;
-- the Continuation Boundary SHALL receive separate continuation-handoff ownership;
-- its source Rejection Lifecycle and source Rejection Boundary SHALL remain traceable;
-- it SHALL be frozen atomically with the eligibility record;
-- it SHALL NOT later be recalculated, replaced, promoted, reseeded, or shifted.
+A Continuation Boundary is owned exclusively by its Continuation Lifecycle from first formation onward. It cannot exist before that Continuation Lifecycle identity exists.
+
+Before Continuation Creation, the confirmed Rejection Lifecycle coexists with no Continuation Boundary object.
+
+ADR-008 does not select whether Continuation Creation precedes initial Continuation Boundary formation or occurs atomically with it. That sequence remains deferred. ADR-008 does not authorize a Continuation Lifecycle with an ABSENT boundary and introduces no Continuation Candidate or other pre-lifecycle provisional owner.
+
+The source Rejection Lifecycle and source Rejection Boundary remain traceable as parent lineage. Lineage does not transfer boundary ownership or create numerical coupling.
 
 The Continuation Boundary and Rejection Boundary remain distinct architectural facts even when their numeric values are identical.
 
@@ -123,8 +125,7 @@ The following SHALL form one atomic handoff:
 
 - accepted Rejection Step 4 Confirmation;
 - Continuation Eligibility creation;
-- frozen parent references;
-- frozen Continuation Boundary.
+- frozen parent references.
 
 Duplicate delivery or repeated evaluation of the same accepted Rejection Step 4 Confirmation SHALL return the existing eligibility identity rather than create a second record.
 
@@ -153,7 +154,8 @@ The architecture explicitly prohibits:
 - treating eligibility as continuation Step 2 confirmation;
 - reopening or mutating the rejection parent;
 - reusing the Rejection Lifecycle identity;
-- recalculating or shifting the frozen Continuation Boundary;
+- copying the Rejection Boundary as, transferring it to, promoting it to, or automatically transforming it into a Continuation Boundary at Eligibility creation;
+- forming, owning, progressing, or freezing a Continuation Boundary through Continuation Eligibility or its handoff;
 - carrying AVAILABLE eligibility into another session;
 - returning CONSUMED, EXPIRED, or INVALIDATED eligibility to AVAILABLE;
 - introducing continuation counts or activation rules in ADR-008.
@@ -177,6 +179,10 @@ Those matters belong to a subsequent Continuation Lifecycle ADR.
 ## Authority
 
 This ADR is an approved Architecture Decision Document governed by the authority hierarchy established in `Architecture/README.md`. It is subordinate to the Randle AI Constitution, Lifecycle Vocabulary, Lifecycle Engine Specification, and canonical lifecycle specifications.
+
+ADR-009 narrowly supersedes only ADR-008's copied-and-immediately-frozen Continuation Boundary model. Within that expressly limited scope, ADR-009's replacement rules govern; this is not a general reversal of the architecture authority hierarchy.
+
+The following ADR-008 decisions remain governing: accepted Rejection Step 4 Confirmation produces Continuation Eligibility; Eligibility creation is atomic with that accepted confirmation; Eligibility is unique and may produce at most one Continuation Lifecycle; Continuation Creation consumes Eligibility; the Rejection parent remains terminal and immutable; parent and Eligibility lineage, session isolation, idempotency, duplicate protection, and terminal Eligibility behavior remain governing; and Continuation Creation and Continuation Evaluation Start remain outside ADR-008.
 
 ADR-008 does not alter the completed Rejection Step 2 or Rejection Step 4 architecture. It authorizes future architecture-document alignment within its approved scope only.
 

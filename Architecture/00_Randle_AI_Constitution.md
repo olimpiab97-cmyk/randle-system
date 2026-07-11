@@ -5,6 +5,11 @@ Status: Canonical
 Authority: Foundational Architecture Authority
 Applies to: Entry Agent, Rithmic Listener, Executor, Trade Manager, replay systems, status endpoints, Command Center projections, research tools, and future AI or machine-learning components.
 
+ADR-009 Amendment Record
+Effective 2026-07-11, ADR-009 — Boundary Architecture is a narrow constitutional and architectural amendment limited to the Rejection Step 2 pattern and boundary statements expressly identified in ADR-009's supersession ledger.
+Those identified statements ceased to govern when ADR-009 was approved. All unaffected constitutional and universal lifecycle, evidence, identity, immutability, lineage, session, uniqueness, idempotency, and atomicity invariants remain higher authority and unchanged.
+ADR-009 does not generally override this Constitution. Later documentation alignment records the approved decision; it does not make ADR-009 dependent on stale conflicting language.
+
 1. Purpose
 Randle AI is a deterministic market-structure system built around liquidity, volatility, confirmation, rejection, continuation, risk, and execution.
 Its purpose is not to guess what the market may do through unrestricted artificial intelligence.
@@ -53,7 +58,7 @@ direction;
 Step 2 confirmation;
 Step 2 anchor;
 confirmation candle;
-Leg 1 values;
+for Rejection Step 2, Rejection Candidate identity and authoritative boundary-formation, provisional-progression, authorized-evaluation, incoming-boundary, confirmation, frozen-boundary, and lineage evidence;
 rejection boundary;
 continuation boundary;
 Step 4 confirmation;
@@ -106,12 +111,16 @@ A confirmed Step 2 anchor may not be recalculated from later candles.
 Article 4.4
 A confirmed rejection boundary may not be replaced because a newer candidate appears.
 Article 4.5
-A confirmed continuation boundary belongs to its continuation lifecycle and may not overwrite the rejection lifecycle that created it.
+A confirmed Continuation Boundary belongs to its Continuation Lifecycle and may not overwrite the parent Rejection Lifecycle preserved in its lineage. The Rejection Lifecycle does not create, own, transfer, or supply that Continuation Boundary.
 Article 4.6
 Historical correction must occur through a new explicit correction, reversal, invalidation, or superseding event.
 Historical records may not be silently edited.
 Article 4.7
 No fallback path may substitute a different market value for a missing confirmed value unless the formal lifecycle specification explicitly authorizes that substitution.
+Article 4.8
+For a provisional Rejection or Continuation Boundary, an authorized completed candle must evaluate confirmation against the committed incoming provisional value before any same-candle wick progression is considered.
+If confirmation succeeds, that exact incoming value freezes. The confirming candle cannot progress the same boundary, and a frozen boundary has no outgoing boundary transition.
+Only a failed boundary-confirmation close may permit a strictly farther outward wick to progress the same provisional boundary. Equal extremes produce no progression.
 
 5. Lifecycle Identity Doctrine
 Every independent market opportunity must have a permanent lifecycle identity.
@@ -141,10 +150,18 @@ Information
 Authoritative owner
 Completed candle
 Market-data layer
+Liquidity Level identity, session and instrument identity, level type or side, value state, provisional or frozen price, calculation-contract identity and version, source-window identity, calculation provenance, freeze timestamp, and complete historical record
+Session-scoped Liquidity Level market-truth aggregate root
 Session liquidity lock
 Session-lock layer
 ATR observation
 Volatility layer
+ABSENT or PROVISIONAL Rejection Boundary
+Rejection Candidate
+FROZEN Rejection Boundary after accepted Rejection Step 2
+Rejection Lifecycle
+Continuation Boundary from first formation onward
+Continuation Lifecycle
 Step 2 confirmation
 Rejection or continuation lifecycle
 Step 4 confirmation
@@ -181,7 +198,11 @@ derive execution truth;
 mutate state during a read-only status request.
 
 8. Step 2 Doctrine
-Step 2 recognizes and records the defined confirmation of a rejection or continuation lifecycle.
+Step 2 recognizes and records rule-defined confirmation according to the ownership and lifecycle-creation sequence established by the governing rule.
+For Rejection Step 2, ADR-009 replaces the retired Leg 1/Leg 2 pattern. Rejection Step 2 is confirmation and freeze of an existing Candidate-owned provisional Rejection Boundary. It is not a participation rule, a Step 4 qualification rule, or a mandatory multi-candle Leg pattern.
+The Rejection Candidate must exist no later than initial provisional Rejection Boundary formation. It may already exist or may be established atomically with initial formation under a separately approved Candidate-establishment rule; ADR-009 does not define that rule.
+An authorized completed Rejection Step 2 evaluation uses the provisional boundary committed before the candle was processed. Confirmation is evaluated first. Accepted confirmation atomically freezes that exact incoming value, creates the Rejection Lifecycle, preserves Candidate identity and authoritative history as lineage, and establishes the confirmation candle as Rejection Count 0.
+If the authorized confirmation close fails, a strictly farther outward wick may progress the same provisional boundary. Equal extremes do not progress it. A candle that lacks evaluation authority or fails a universal validity or integrity guard does not confirm, progress, or transition the boundary.
 Once Step 2 confirms, the system must preserve:
 the lifecycle ID;
 parent lifecycle ID when applicable;
@@ -192,8 +213,8 @@ direction;
 liquidity-level identity;
 confirmation candle time;
 confirmation candle values;
-Leg 1 identity and values;
-Step 2 anchor;
+for Rejection Step 2, Candidate identity and stable linkage to boundary formation, every provisional progression, every authorized evaluation and its incoming boundary value, confirmation evidence, frozen-boundary evidence, and Candidate-to-Lifecycle lineage;
+Step 2 anchor when independently required by the governing rule;
 rejection or continuation boundary;
 ATR or volatility snapshot required by the rule;
 rule version;
@@ -202,6 +223,8 @@ Later candles may advance the lifecycle.
 They may not redefine the confirmed Step 2 event.
 A new valid opportunity requires a new lifecycle identity.
 It does not justify rewriting the existing Step 2 lifecycle.
+A Step 2 Anchor or volatility snapshot remains required only when an independently governing rule requires it. For Rejection Step 2 governed by ADR-009, neither may replace the committed incoming provisional boundary, change the one-tick confirmation predicate or frozen value, or add a hidden, supplemental, or fallback prerequisite.
+The Rejection Step 2 confirmation candle remains Rejection Count 0. Subsequent Count Window behavior is governed exclusively by ADR-006, and Rejection Step 4 Participation is governed exclusively by ADR-007. No Step 4 participation or qualification predicate is evaluated as part of Step 2, and a later Step 4 outcome cannot retroactively alter accepted Step 2 or its frozen boundary.
 
 9. Step 4 Doctrine
 Step 4 is a later stage of the same lifecycle whose specific Step 2 event confirmed.
@@ -241,6 +264,8 @@ its own confirmation timestamps;
 its own boundary ownership.
 The rejection lifecycle remains preserved after continuation begins.
 Continuation does not rename, clear, or overwrite rejection.
+The Rejection Boundary and Continuation Boundary retain separate identities, values, owners, histories, and confirmations. One cannot create, progress, freeze, reset, replace, invalidate, transfer into, or transform into the other, and numerical equality does not merge them.
+Continuation Eligibility does not own, form, progress, or freeze a Continuation Boundary. No Continuation Boundary exists before its Continuation Lifecycle identity exists. The future Continuation Creation architecture must decide its creation sequence; this Constitution does not select that sequence or authorize a Continuation Lifecycle with an ABSENT boundary.
 
 Release v1.0 Scope Boundary
 All continuation references in this Constitution establish universal rejection/continuation separation and ownership invariants only. They are conditional concepts for any future approved canonical continuation specification. This Constitution does not define continuation trading rules, a post-eligibility continuation state machine, or continuation implementation. The current specialized lifecycle specification boundary ends at Continuation Eligibility Creation.
@@ -321,6 +346,8 @@ New locks and liquidity levels are recorded under that session.
 Prior-session state may be reviewed but not treated as current.
 Session rollover must not depend on clearing arbitrary fields until the UI appears correct.
 It must be a formal domain transition.
+When an approved terminal or session event ends evaluation authority for an unconfirmed provisional boundary, that boundary does not freeze, return to ABSENT, transfer to another owner, or carry forward as active state into another session.
+Its final provisional value and complete authoritative history remain preserved as inactive historical evidence under its existing Candidate or Lifecycle owner. No fourth boundary value state is created.
 
 16. Read-Only Boundary Doctrine
 Read-only operations must be truly read-only.
@@ -349,6 +376,11 @@ defined ownership.
 A volatility observation used at confirmation must be captured with the lifecycle when required by the rule.
 It may not later change merely because the rolling volatility value changed.
 The same applies to liquidity identity, session levels, and captured boundaries.
+The Liquidity Level is a session-scoped market-truth aggregate root. It owns its identity, current value state, calculation provenance, freeze record, and historical record.
+It freezes at 06:15 local time in the America/Los_Angeles time zone, including daylight-saving transitions. The Session-lock layer owns the authoritative session-lock fact that causes the 06:15 freeze. It is not a second Liquidity Level owner. Once frozen, the Liquidity Level price is immutable and no Rejection or Continuation object may recalculate or modify it.
+Its strategy-specific calculation must be defined by a separately approved, versioned Liquidity Level Calculation Contract. This Constitution does not define the calculation, formation window, output side set, price formula, 06:15 interval membership, or corrected-data and out-of-order-data behavior.
+A derived Rejection or Continuation Boundary may form only after its governing Liquidity Level is FROZEN. Initial formation requires an authorized completed candle to wick strictly beyond that level; touching it is insufficient. The new derived boundary begins PROVISIONAL, and only authorized completed candles may authoritatively form, evaluate, progress, confirm, or freeze it.
+If no valid provisional Liquidity Level exists at the freeze event, the system must fail closed for activity requiring that governing level. No guessed, cached, zero, prior-session, or later-derived substitute may be used, and the missing-level outcome must be recorded deterministically.
 
 18. AI Boundary Doctrine
 Artificial intelligence or machine learning may:
@@ -361,7 +393,7 @@ detect anomalous data;
 assist research.
 Artificial intelligence or machine learning may not:
 rewrite market history;
-redefine a confirmed liquidity level;
+redefine a frozen Liquidity Level;
 alter Step 2 or Step 4 history;
 create undocumented lifecycle transitions;
 declare an execution fill;

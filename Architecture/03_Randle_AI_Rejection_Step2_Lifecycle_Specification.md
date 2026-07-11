@@ -2,689 +2,578 @@ Randle AI Rejection Step 2 Lifecycle Specification
 Formal Deterministic Contract
 Document Type: Specialized Lifecycle Specification
 Status: Canonical
-Authority: Subordinate to the Randle AI Constitution, Lifecycle Vocabulary, and Lifecycle Engine Specification
+Authority: Specialized lifecycle authority governed by the Randle AI Constitution, Randle AI Lifecycle Vocabulary, Randle AI Lifecycle Engine Specification, and approved ADR-009 Boundary Architecture
+Decision Basis: ADR-009 — Boundary Architecture, effective 2026-07-11
 Domain: Rejection lifecycle
 Step: Step 2
 Applies to: Entry Agent live processing, replay, lifecycle persistence, event journals, tests, reasoning logs, and /entry/status.
+Implementation Authority: None
 
 1. Purpose
-Rejection Step 2 determines whether price has completed the defined rejection-confirmation pattern at an eligible liquidity level.
-Its sole responsibilities are:
-Evaluate an authorized rejection candidate.
-determine whether the Step 2 confirmation rule has completed;
-create one rejection lifecycle;
-capture the Step 2 facts;
-emit one immutable REJECTION_STEP2_CONFIRMED event.
-Rejection Step 2 does not:
-confirm Step 4;
-create continuation;
-execute a trade;
-manage orders;
-determine current positions;
-rewrite liquidity levels;
-modify confirmed lifecycle history;
-make status endpoints stateful.
+This specification defines the canonical Rejection Step 2 contract after the narrow amendment approved in ADR-009.
 
-2. Domain Ownership
-Rejection Step 2 belongs to one:
-REJECTION_LIFECYCLE
+Rejection Step 2 is the confirmation and freeze of an existing Rejection Candidate-owned PROVISIONAL Rejection Boundary.
+Accepted Rejection Step 2 creates the Rejection Lifecycle and establishes the confirmation candle as Rejection Count 0.
 
-It must never share mutable ownership with:
-a continuation lifecycle;
-another liquidity level;
-another session;
-another symbol;
-another rejection candidate;
-an execution order;
-a UI projection.
-The lifecycle established by Step 2 remains a rejection lifecycle permanently.
-REJECTION_STEP2 and REJECTION_STEP4 are phase identifiers for stages owned by this same REJECTION_LIFECYCLE. Neither identifier denotes a separate independent trading lifecycle.
+This specification defines:
+Rejection Candidate and Rejection Boundary ownership;
+strict-wick provisional-boundary formation;
+provisional-boundary progression;
+authorized completed-candle evaluation;
+confirmation-first processing;
+upper and lower one-tick confirmation rules;
+freeze at the incoming provisional value;
+atomic Rejection Lifecycle creation;
+Candidate history and lineage preservation;
+session-termination custody;
+deterministic, idempotent outcomes.
 
-3. Authoritative Inputs
-Rejection Step 2 may use only authorized inputs.
-3.1 Session Inputs
-Required:
-session_id
-session_date
-session_status
-entry_window_start
-entry_window_end
-session_lock_event_id
+This specification does not define or authorize implementation.
 
-The session must be active and valid for new rejection evaluation.
+2. Governing Authority and Narrow Amendment
+ADR-009 is the governing decision for Liquidity Level, Rejection Boundary, and Continuation Boundary semantics.
 
-3.2 Symbol Inputs
-Required:
-logical_symbol
-market_data_contract
-contract_mapping_version
+Effective 2026-07-11, ADR-009 is a narrow constitutional and architectural amendment limited to the Rejection Step 2 pattern and boundary statements expressly listed in its supersession ledger.
+The retired Rejection Step 2 Leg 1/Leg 2 model ceased to govern when ADR-009 was approved.
+All unaffected constitutional and universal lifecycle, evidence, identity, immutability, lineage, session, uniqueness, idempotency, and atomicity invariants remain higher authority and unchanged.
 
-The candle stream and liquidity level must belong to the same authorized symbol mapping.
+Stale terminology or specialized-specification language cannot silently restore a superseded Rejection Step 2 rule.
 
-3.3 Liquidity-Level Inputs
-Required:
-liquidity_level_id
-liquidity_level_type
-liquidity_level_price
-liquidity_level_session_id
-liquidity_level_locked_at
-liquidity_level_status
+3. Separation of Responsibilities
+3.1 Boundary formation
+Boundary formation is the first authorized completed-candle wick strictly beyond the governing FROZEN Liquidity Level.
+It creates a PROVISIONAL Rejection Boundary owned by the Rejection Candidate.
 
-The liquidity level must:
-belong to the active session;
-remain eligible under the level-consumption rules;
-not be invalidated;
-not be consumed;
-be authorized for rejection evaluation.
+3.2 Provisional-boundary progression
+Progression is movement of the same PROVISIONAL Rejection Boundary to a strictly farther outward wick extreme after an authorized boundary-confirmation close fails.
+It is not a state transition, Candidate replacement, reseeding, restart, lifecycle replacement, or mutation of a frozen fact.
 
-3.4 Candle Inputs
-Only completed and authorized candles may participate.
-Each candle must include:
-candle_id
-logical_symbol
-contract
-session_id
-interval
-open_time
-close_time
-open
-high
-low
-close
-volume
-source
-completed
+3.3 Rejection Step 2
+Rejection Step 2 confirms and freezes the Candidate-owned PROVISIONAL Rejection Boundary.
+It is not a participation rule.
+It is not a Step 4 qualification rule.
+It is not a mandatory multi-candle Leg 1/Leg 2 pattern.
 
-Every accepted candle must pass:
-symbol validation;
-contract validation;
-session validation;
-completion validation;
-chronological-order validation;
-duplicate validation;
-freshness validation where applicable.
+3.4 Rejection Step 4
+The Rejection Step 2 confirmation candle remains Rejection Count 0.
+Subsequent Rejection Step 4 Count Window behavior is governed exclusively by ADR-006.
+Rejection Step 4 Participation is governed exclusively by ADR-007.
+This specification neither changes nor restates their detailed counting, participation, confirmation, retry, or expiration behavior.
 
-3.5 Volatility Inputs
-When Step 2 rules or captured audit data require volatility normalization, Step 2 may use:
-atr_value
-atr_interval
-atr_as_of
-atr_source
-atr_freshness_status
-atr_version
+No Step 4 participation or qualification predicate is evaluated as part of Rejection Step 2.
+A later Step 4 outcome cannot retroactively alter accepted Rejection Step 2 or its frozen Rejection Boundary.
 
-The Step 2 event must capture the volatility value actually used at confirmation.
-Later ATR changes must not alter the confirmed Step 2 event.
+4. Domain Objects and Ownership
+4.1 Liquidity Level
+The Liquidity Level is a session-scoped market-truth aggregate root.
+It owns its identity, value state, calculation provenance, freeze record, and historical record.
+It freezes at 06:15 local time in America/Los_Angeles, including daylight-saving transitions.
 
-4. Preconditions
-Rejection Step 2 evaluation may begin only when all of the following are true:
-The session is valid for entry evaluation.
-The logical symbol is authorized.
-The contract mapping is valid.
-The liquidity level belongs to the active session.
-The liquidity level remains available.
-No terminal level-consumption event blocks reuse.
-Market data is sufficiently fresh.
-Required volatility data is sufficiently fresh.
-The candidate is classified as rejection.
-No confirmed rejection Step 2 already owns the same candidate identity.
-No prohibited duplicate lifecycle is being created.
-The candle is completed and has not already been applied.
-If any precondition fails, Step 2 must not confirm.
+The Session-lock layer owns the authoritative session-lock fact that causes the 06:15 freeze. It is not a second Liquidity Level owner.
+The Rejection Candidate and Rejection Lifecycle consume and retain lineage to the Liquidity Level; they do not calculate, recalculate, replace, or modify it.
 
-5. Rejection Candidate Identity
-Before confirmation, each provisional candidate must have a stable candidate identity.
-Recommended form:
-candidate_id =
-symbol
-+ session_id
-+ liquidity_level_id
-+ direction
-+ initial_interaction_candle_id
+Its strategy-specific calculation is governed by a separately approved, versioned Liquidity Level Calculation Contract.
+This specification does not define its formation window, output side set, price calculation, aggregation, exact 06:15 interval membership, correction behavior, or out-of-order-data behavior.
 
-Example:
-NQ-2026-07-10-ONH-SHORT-CANDIDATE-001
+If no valid provisional Liquidity Level exists at the freeze event, no guessed, cached, zero, prior-session, or later-derived substitute is permitted.
+Activity requiring that governing level must fail closed, and no Rejection Boundary requiring it may form.
 
-The candidate identity exists to:
-prevent duplicate evaluation;
-track candidate replacement;
-establish causation;
-support audit.
-A candidate ID is not yet a permanent lifecycle ID.
+4.2 Rejection Candidate
+The Rejection Candidate is the stable owner of the Rejection Boundary while its value state is ABSENT or PROVISIONAL.
+The Candidate must exist no later than initial provisional Rejection Boundary formation.
 
-6. Direction
-Rejection direction must be explicit.
-Examples:
-Upper liquidity rejection:
-direction = SHORT
+The Candidate may already exist or may be established atomically with initial formation under a separately approved Candidate-establishment rule.
+ADR-009 and this specification do not define that independent establishment trigger or introduce a new identity component, event, candle role, or boundary owner for it.
 
-Lower liquidity rejection:
-direction = LONG
+### Candidate Replacement boundary
 
-Direction must be assigned from the formal liquidity-interaction rule.
-It must not be inferred later from current price.
+ADR-009 does not define or authorize a Candidate Replacement trigger.
 
-7. Formal Step 2 Pattern
-The existing Randle rejection-confirmation structure is:
-Price interacts with or sweeps the eligible liquidity level.
-Leg 1 shows movement away from the liquidity side.
-Leg 2 confirms by closing beyond the Leg 1 close in the rejection direction.
-The authorized sequence must complete within the defined candle limit.
-The currently established confirmation framework is:
-Leg 1:
-Opposite-side rejection movement is shown.
+Provisional Rejection Boundary formation and outward progression remain within the same Rejection Candidate and Rejection Boundary identities. They are not Candidate Replacement.
 
-Leg 2:
-A completed candle closes beyond the Leg 1 close
-in the rejection direction.
+Before Rejection Step 2 Confirmation, Candidate Replacement may occur only when a separately approved Candidate-selection rule expressly authorizes it.
 
-Timing:
-The required Leg 1 extreme sweep and confirmation sequence
-must occur within the authorized maximum of three candles.
+Any separately authorized Candidate Replacement must:
 
-All directional comparisons must be explicitly defined.
+- remain within the governing session;
+- remain within the authorized Liquidity Level context or establish a distinct Candidate identity as required by its governing rule;
+- preserve the prior Candidate, its Rejection Boundary, and its complete authoritative history as immutable historical evidence;
+- not mutate a confirmed Rejection Lifecycle;
+- not reuse a confirmed Rejection Lifecycle identity;
+- not alter another Candidate, owner, boundary, or Lifecycle;
+- remain deterministic, unique, idempotent, and replayable.
 
-8. Directional Confirmation Rules
-8.1 Short Rejection
-A short rejection originates from an upper liquidity level.
-The formal comparison must establish:
-Leg 2 close < Leg 1 close
+After Rejection Step 2 Confirmation, Candidate Replacement is prohibited.
 
-The implementation must also verify all required sweep, interaction, candle-order, and candle-limit conditions.
-A mere price movement below the level is not enough.
-A wick alone is not enough unless the entry-type rule explicitly authorizes it.
-The completed Step 2 pattern must satisfy the full rejection rule.
+The existence of these safeguards does not authorize Candidate Replacement and does not define when it may occur.
 
-8.2 Long Rejection
-A long rejection originates from a lower liquidity level.
-The formal comparison must establish:
-Leg 2 close > Leg 1 close
+4.3 Rejection Lifecycle
+The Rejection Lifecycle does not own the provisional Rejection Boundary before confirmation.
+It is created atomically when Rejection Step 2 confirms.
+At that operation, it establishes the exact frozen incoming boundary as its immutable Rejection Boundary fact and preserves the Candidate identity and authoritative history as lineage.
 
-The implementation must also verify all required sweep, interaction, candle-order, and candle-limit conditions.
-A mere price movement above the level is not enough.
-A wick alone is not enough unless the entry-type rule explicitly authorizes it.
+4.4 Evaluation authority
+Boundary ownership and boundary evaluation authority are distinct.
+Ownership identifies the Candidate that owns the Rejection Boundary identity and state before confirmation.
+Evaluation authority identifies whether a particular completed candle is permitted to form or evaluate that boundary under this specification and the applicable universal contracts.
 
-9. Entry-Type Classification
-The rejection candidate may be classified under an authorized Step 2 entry type.
-Current known categories include:
-WICK_SWEEP_RECLAIM
-BODY_RECLAIM
-DOUBLE_WICK
-IMPULSE_OPEN
+5. Boundary Value-State Model
+The Rejection Boundary uses exactly these owner-scoped value states:
+ABSENT;
+PROVISIONAL;
+FROZEN.
 
-Entry-type classification must occur through explicit deterministic rules.
-Each type must ultimately define:
-qualifying liquidity interaction;
-Leg 1 selection;
-Leg 2 requirement;
-confirmation candle;
-boundary derivation;
-volatility requirement;
-maximum candle sequence;
-invalidating conditions.
-The entry type must be captured at Step 2 confirmation.
-It may not be silently changed later.
+The only boundary state transitions are:
+ABSENT to PROVISIONAL;
+PROVISIONAL to FROZEN.
 
-10. Leg 1 Selection
-Leg 1 must be selected by one deterministic function.
-The selection must not depend on:
-dictionary iteration order;
-the most recently written field;
-whichever candidate is currently displayed;
-UI state;
-future candles not authorized by the rule;
-continuation state.
-The selected Leg 1 must capture:
-leg1_candle_id
-leg1_open_time
-leg1_close_time
-leg1_open
-leg1_high
-leg1_low
-leg1_close
-leg1_extreme
-leg1_direction
-leg1_selection_rule
+A strictly farther outward value while PROVISIONAL is value progression within the same state.
+A FROZEN Rejection Boundary has no outgoing boundary transition.
+Duplicate processing may produce an idempotent no-op, but FROZEN to FROZEN is not a domain transition.
 
-For short rejection:
-leg1_extreme = leg1_high
+6. Symbols and Authoritative Inputs
+Every symbol in the price rules is defined before use:
 
-For long rejection:
-leg1_extreme = leg1_low
+LL
+The price of the governing FROZEN Liquidity Level for the same symbol, instrument mapping, session, level identity, and boundary side.
 
-Once Step 2 confirms, the selected Leg 1 is immutable.
+P_in
+The committed PROVISIONAL Rejection Boundary value that existed immediately before the current authorized completed candle was evaluated.
 
-11. Leg 2 Selection
-Leg 2 is the completed candle that satisfies the Step 2 close-confirmation rule.
-It must occur after Leg 1.
-It must capture:
-leg2_candle_id
-leg2_open_time
-leg2_close_time
-leg2_open
-leg2_high
-leg2_low
-leg2_close
-leg2_confirmation_rule
+P_new
+The initial PROVISIONAL Rejection Boundary value created by the authorized boundary-formation candle.
 
-The Leg 2 candle is the Step 2 confirmation candle.
-Therefore:
-Step 2 confirmation candle = Count 0
+P_out
+The authoritative PROVISIONAL Rejection Boundary value after an authorized evaluation that does not confirm.
 
+P_frozen
+The immutable Rejection Boundary value established by accepted Rejection Step 2 confirmation.
 
-12. Maximum Candle Sequence
-The rejection pattern must complete within the authorized sequence limit.
-The currently established limit is:
-maximum three candles
+H
+The high of the current authorized completed candle.
 
-The origin used by this maximum sequence is a trading-rule input, not an implementation decision. It must be supplied by the governing approved trading-rule definition. This architecture specification does not select or change whether that origin is the initial interaction candle, Leg 1, Leg 2, or another formally defined point.
+Lo
+The low of the current authorized completed candle.
 
-Implementation, live processing, archive replay, tests, status projections, and reasoning logs must use the same governing origin and may not independently define, infer, or reinterpret it.
+C
+The close of the current authorized completed candle.
 
-13. Candidate Replacement Before Confirmation
-Before Step 2 confirmation, a provisional candidate may be replaced only when the formal candidate-selection rule authorizes replacement.
-Candidate replacement must:
-Remain within the same session.
-remain tied to the same authorized liquidity context or explicitly create another candidate;
-preserve an audit record of the prior candidate;
-not mutate any confirmed lifecycle;
-not reuse a confirmed lifecycle ID;
-not alter another lifecycle.
-After confirmation:
-candidate replacement is prohibited
+τ
+One canonical instrument tick for the applicable instrument. The Rejection Boundary record must preserve the identity or version of the authoritative governing tick-size source used for the evaluation.
 
-A later valid setup must receive a new candidate and lifecycle identity.
-
-14. Confirmation Event
-When the full rule completes, Step 2 must emit exactly one:
-REJECTION_STEP2_CONFIRMED
-
-Recommended event structure:
-{
-    "event_id": "...",
-    "event_type": "REJECTION_STEP2_CONFIRMED",
-    "event_version": 1,
-    "lifecycle_id": "...",
-    "candidate_id": "...",
-    "symbol": "NQ",
-    "contract": "NQU6",
-    "session_id": "2026-07-10-RTH-PT",
-    "liquidity_level_id": "NQ-2026-07-10-ONH",
-    "direction": "SHORT",
-    "entry_type": "WICK_SWEEP_RECLAIM",
-    "occurred_at": "...",
-    "source_candle_time": "...",
-    "sequence": 1,
-    "causation_id": "...",
-    "rule_version": "...",
-    "payload": {
-        "liquidity_level_price": 30250.00,
-        "leg1": {...},
-        "leg2": {...},
-        "step2_anchor": {...},
-        "rejection_boundary": {...},
-        "atr_snapshot": {...},
-        "confirmation_count": 0
-    }
-}
-
-The lifecycle field step2_event_id SHALL equal the event_id of this one REJECTION_STEP2_CONFIRMED event. Rejection Step 4 SHALL reference that exact identifier.
-
-
-15. Lifecycle Creation
-A permanent rejection lifecycle is established when Step 2 confirms.
-Recommended lifecycle ID:
-{symbol}-{session_date}-{liquidity_level_type}-REJECTION-{sequence}
-
-Example:
-NQ-2026-07-10-ONH-REJECTION-001
-
-The lifecycle must capture:
-lifecycle_id
-lifecycle_type = REJECTION
-session_id
-symbol
-contract
-direction
-liquidity_level_id
-candidate_id
-step2_event_id
-rule_version
-created_at
-
-The lifecycle type is immutable.
-
-16. Step 2 Anchor
-The Step 2 anchor is the lifecycle-owned market reference created by the Step 2 rule.
-It must include:
-anchor_price
-anchor_type
-anchor_source_candle_id
-anchor_source_field
-anchor_created_at
-anchor_rule_version
-
-The specification for each entry type must identify exactly which price becomes the anchor.
-After Step 2 confirmation:
-anchor_price cannot change
-anchor_source_candle_id cannot change
-anchor_type cannot change
-
-A new candle may not improve, replace, move, or reseed the confirmed anchor.
-
-17. Rejection Boundary
-Step 2 must capture the rejection boundary required for downstream rejection evaluation.
-The boundary record must include:
-boundary_price
-boundary_type = REJECTION
-boundary_source_candle_id
-boundary_source_field
-boundary_created_at
-boundary_rule_version
-
-After confirmation, the rejection boundary is frozen.
-The following are prohibited:
-recalculating it from the latest candle;
-replacing it with a continuation boundary;
-replacing it with the liquidity-level price;
-replacing it with a fallback value;
-clearing it during Step 4 evaluation;
-changing it because another candidate appears;
-deriving it from a projection field.
-
-18. Captured Step 2 Facts
-At confirmation, Step 2 must permanently capture at least:
-lifecycle_id
-step2_event_id
-candidate_id
-session_id
-session_date
-logical_symbol
-contract
-direction
-entry_type
-liquidity_level_id
-liquidity_level_type
-liquidity_level_price
-interaction_candle_id
-leg1 identity and OHLC
-leg1 close
-leg1 extreme
-leg2 identity and OHLC
-confirmation candle ID
-confirmation timestamp
-step2 anchor
-rejection boundary
-ATR or volatility snapshot
-rule version
-event version
-Count 0 designation
-
-These are lifecycle facts.
-They are not current-status fields.
-
-19. Immutable Fields
-After REJECTION_STEP2_CONFIRMED, the following may never be changed within the same lifecycle:
-lifecycle ID;
-lifecycle type;
-session ID;
-symbol;
+The evaluation must also possess authoritative identity and lineage for:
+Rejection Candidate;
+Rejection Boundary;
+governing Liquidity Level;
+symbol and authorized instrument mapping;
+session;
 direction;
-liquidity-level identity;
-entry type;
-selected Leg 1;
-Leg 1 close;
-Leg 1 extreme;
-selected Leg 2;
-confirmation candle;
-confirmation timestamp;
-Step 2 anchor;
-rejection boundary;
-captured ATR snapshot;
-Step 2 event ID;
-rule version used for confirmation.
-A later event may terminate, invalidate, consume, or complete the lifecycle.
-It may not rewrite these facts.
+completed candle;
+event ordering;
+applicable rule and lifecycle versions.
 
-20. Derived Fields
-The following are projections and may be rebuilt:
-current_step
-step2_status_label
-step2_candle_count_display
-wait_reason
-operator_message
-public_rejection_boundary
-elapsed_candles
-eligible_for_step4
+7. Universal Guards and Evaluation Authorization
+Before a candle may form or evaluate a Rejection Boundary, the engine must validate all applicable universal validity and integrity guards, including:
+active valid session;
+authorized symbol and instrument mapping;
+stable Rejection Candidate identity;
+governing Liquidity Level identity;
+FROZEN governing Liquidity Level;
+authoritative completed-candle data;
+evaluation authority;
+required evidence and lineage;
+deterministic event ordering;
+uniqueness;
+idempotency;
+duplicate protection.
 
-Derived fields must always trace back to the immutable Step 2 event.
-They may not become the source of truth.
+These guards determine whether the candle is authorized to evaluate the boundary.
+They are not additional Rejection Step 2 price predicates.
 
-21. Legal Outcomes Before Confirmation
-A candidate being evaluated by Step 2 may produce:
-NO_CHANGE
-CANDIDATE_STARTED
-CANDIDATE_UPDATED
-CANDIDATE_REPLACED
-CANDIDATE_DISCARDED
-CANDIDATE_EXPIRED
-REJECTION_STEP2_CONFIRMED
-LEVEL_INVALIDATED
-LEVEL_CONSUMED
-SESSION_CLOSED
+If a candle lacks evaluation authority or fails an applicable universal guard:
+it does not form a boundary;
+it does not confirm Step 2;
+it does not progress the boundary;
+it produces no boundary transition;
+an existing P_in remains unchanged;
+the candle is not classified as a failed-confirmation candle.
 
-Each outcome must be generated by an explicit rule.
+Retired interaction, sweep, entry-type pattern, Leg sequence, and volatility gates attached to the old Rejection Step 2 model are not universal guards and do not govern this specification.
 
-22. Legal Outcomes After Confirmation
-After Step 2 confirmation, the same Rejection Lifecycle may advance into its Rejection Step 4 phase. The exact Step 4 outcome set and transition map are governed only by an approved canonical Rejection Step 4 specification.
+8. Direction Identity
+An upper Rejection Boundary corresponds to the existing upper/SHORT Rejection direction identity.
+A lower Rejection Boundary corresponds to the existing lower/LONG Rejection direction identity.
 
-Because the current Step 4 specification is a draft, this document does not canonically select among READY, CONFIRMED, FAILED, TERMINATED, or EXPIRED outcomes.
+These direction identities select the symmetric upper or lower boundary rule only.
+They do not restore a Leg-based close relationship, participation predicate, Step 4 qualification predicate, continuation direction mapping, or other retired trading-pattern gate.
 
-Step 2 itself remains confirmed.
-It does not return to:
-SEARCHING
-CANDIDATE
-NOT_STARTED
+9. Provisional Rejection Boundary Formation
+Derived-boundary formation is prohibited until the governing Liquidity Level is FROZEN.
+Only an authorized completed candle may authoritatively form a Rejection Boundary.
+Intrabar extremes may be observed, but they cannot change authoritative boundary state before the candle closes.
 
-within the same lifecycle.
+9.1 Upper formation
+In plain English, an upper provisional Rejection Boundary forms when the completed candle high is strictly above the governing frozen Liquidity Level. The new provisional value is that candle high.
 
-23. Prohibited Transitions
-The following transitions are invalid:
-REJECTION_STEP2_CONFIRMED
-→ REJECTION_STEP2_SEARCHING
+H > LL
 
-REJECTION_STEP2_CONFIRMED
-→ CANDIDATE_REPLACED
+P_new = H
 
-REJECTION_STEP2_CONFIRMED
-→ CONFIRMED_WITH_NEW_BOUNDARY
+9.2 Lower formation
+In plain English, a lower provisional Rejection Boundary forms when the completed candle low is strictly below the governing frozen Liquidity Level. The new provisional value is that candle low.
 
-REJECTION_STEP2_CONFIRMED
-→ CONTINUATION_STEP2_CONFIRMED
-using the same lifecycle ID
+Lo < LL
 
-REJECTION_STEP2_CONFIRMED
-→ PRIOR_SESSION_ACTIVE
+P_new = Lo
 
-REJECTION_STEP2_CONFIRMED
-→ CLEARED_BY_STATUS_REQUEST
+9.3 Touch is insufficient
+For either direction, equality with LL is not formation.
+A candle that merely touches the governing Liquidity Level leaves an ABSENT Rejection Boundary unchanged.
 
-REJECTION_STEP2_CONFIRMED
-→ RESEEDED_FROM_LATER_CANDLE
+9.4 Formation-candle logical consequence
+The candle that first forms a boundary cannot also confirm that newly formed boundary under valid OHLC data.
 
+For an upper formation candle:
 
-24. Idempotency Contract
-Reprocessing the same confirmation candle must not create:
-another Step 2 event;
-another lifecycle;
-another sequence increment;
-another candle count;
-another boundary;
-a modified confirmation timestamp.
-The idempotency key should include sufficient identity, such as:
-event_type
-session_id
-symbol
-liquidity_level_id
-candidate_id
-confirmation_candle_id
-rule_version
+P_new = H
 
-When the same logical confirmation is encountered again:
-result = NO_OP_DUPLICATE
+C <= H
 
+Therefore, the candle cannot close at or above H plus τ.
 
-25. Out-of-Order Candle Contract
-If a candle older than the last accepted Step 2 input arrives:
-it must not replace Leg 1;
-it must not replace Leg 2;
-it must not move the anchor;
-it must not change the confirmation time;
-it must not decrement or increment counts;
-it must not create another lifecycle.
-The candle must be:
-rejected
-quarantined
-or safely ignored
+For a lower formation candle:
 
-with an audit record.
+P_new = Lo
 
-26. Session Contract
-A rejection Step 2 lifecycle belongs to exactly one session.
-A prior-session Step 2 confirmation may be displayed historically.
-It may not become the active Step 2 for a new session.
-On session rollover:
-confirmed Step 2 history remains preserved;
-active eligibility ends according to the session rules;
-the projection for the new session begins empty;
-a new candidate requires the new session ID.
-No Step 2 field should be “carried forward” merely because it exists in persistent storage.
+C >= Lo
 
-27. Status Endpoint Contract
-/entry/status may report the Step 2 projection.
-It may not:
-evaluate a new Step 2;
-create a candidate;
-replace a candidate;
-confirm Step 2;
-write lifecycle state;
-update candle count;
-persist an anchor;
-modify a boundary;
-trigger session rollover;
-alter reasoning history.
-Repeated requests must be observationally pure.
+Therefore, the candle cannot close at or below Lo minus τ.
 
-28. Replay Contract
-Given the same:
-ordered completed candles;
-session lock;
-liquidity levels;
-volatility inputs;
-rule version;
-contract mapping;
-replay must reproduce exactly:
-candidate selection;
-Leg 1;
-Leg 2;
-confirmation candle;
-confirmation timestamp;
-lifecycle ID;
-Step 2 anchor;
-rejection boundary;
-entry type;
-volatility snapshot;
-event sequence.
-Any difference between live and replay is a defect unless caused by a documented difference in authoritative input.
+This is a logical consequence of valid OHLC data, not an additional discretionary prohibition.
 
-29. Required Invariants
-The following must always hold:
-Step 2 confirmation has exactly one lifecycle ID.
+10. Incoming-Boundary and Candle-Processing Precedence
+For every authorized completed candle evaluating an existing PROVISIONAL Rejection Boundary:
+1. Load the committed provisional boundary that existed before the candle was processed.
+2. Define that value as P_in.
+3. Evaluate the candle close against P_in.
+4. If the close confirms, set P_frozen equal to P_in.
+5. Atomically complete Rejection Step 2 and stop evaluation for that boundary.
+6. Only when the confirmation close fails may the candle wick progress the provisional value.
+7. If the close fails and no strictly farther outward wick exists, retain P_in unchanged.
 
-The lifecycle type is REJECTION.
+The current candle's wick must never redefine P_in before its close is evaluated.
+Confirmation and progression are mutually exclusive for the same boundary and candle.
 
-The confirmation candle is Count 0.
+11. Upper Rejection Boundary Rule
+An upper provisional Rejection Boundary confirms when an authorized completed candle closes at least one canonical instrument tick above the provisional boundary that existed before the candle was processed.
 
-Leg 2 occurs after Leg 1.
+Confirmation:
 
-The Step 2 event belongs to the same session as the liquidity level.
+C >= P_in + τ
 
-The Step 2 event belongs to the same symbol as the candles.
+When confirmation succeeds:
 
-The confirmed boundary is immutable.
+P_frozen = P_in
 
-The selected Leg 1 is immutable.
+The confirming candle cannot progress the same boundary, even when H is strictly above P_in.
 
-A duplicate confirmation is a no-op.
+If the close does not confirm and the candle reaches a strictly higher high, the same provisional Rejection Boundary progresses to that higher high.
 
-A continuation lifecycle cannot overwrite rejection Step 2.
+Progression only after failed confirmation:
 
-A read-only request cannot create or modify Step 2.
+C < P_in + τ
 
+and
 
-30. Minimum Regression Tests
-The implementation must include tests proving:
-Short rejection Step 2 confirms correctly.
-Long rejection Step 2 confirms correctly.
-Leg 2 must close beyond the Leg 1 close.
-A wick without the required close does not confirm.
-The sequence respects the maximum candle limit.
-The confirmation candle is Count 0.
-A duplicate candle does not double-confirm.
-A restart immediately after confirmation reproduces the same Step 2.
-A later candidate does not replace confirmed Step 2.
-A continuation candidate does not overwrite rejection Step 2.
-A stale candle does not replace Leg 1.
-An out-of-order candle does not replace Leg 2.
-A prior-session Step 2 does not become active today.
-/entry/status does not mutate Step 2.
-Replay produces the same lifecycle and boundary.
-The rejected or consumed liquidity level cannot improperly generate Step 2.
-Contract mismatch blocks confirmation.
-Missing or stale required ATR blocks confirmation when the rule requires fresh ATR.
-Candidate replacement remains possible only before confirmation.
-Step 2 remains confirmed after any later Step 4 outcome.
+H > P_in
 
-31. Codex Modification Requirements
-Before changing Rejection Step 2 code, Codex must report:
-Authoritative input source
+Then:
 
-Candidate identity rule
+P_out = H
 
-Lifecycle creation point
+If the close fails and the high is equal to or below P_in, the provisional value does not change:
 
-Leg 1 selection function
+C < P_in + τ
 
-Leg 2 confirmation function
+and
 
-Anchor derivation function
+H <= P_in
 
-Boundary derivation function
+Then:
 
-Persistence writer
+P_out = P_in
 
-Projection reader
+12. Lower Rejection Boundary Rule
+A lower provisional Rejection Boundary confirms when an authorized completed candle closes at least one canonical instrument tick below the provisional boundary that existed before the candle was processed.
 
-Duplicate protection
+Confirmation:
 
-Session guard
+C <= P_in - τ
 
-Replay test coverage
+When confirmation succeeds:
 
-Codex must not modify Step 2 until it can identify every writer capable of changing:
-Step 2 confirmation status;
-Step 2 timestamp;
-Leg 1 identity;
-anchor;
-rejection boundary;
-lifecycle ID;
-candle count.
+P_frozen = P_in
 
-32. Acceptance Standard
-Rejection Step 2 is correctly implemented only when:
-One valid market pattern
-creates one rejection lifecycle
-with one immutable Step 2 event
-and one reproducible set of captured facts.
+The confirming candle cannot progress the same boundary, even when Lo is strictly below P_in.
 
-No polling, restart, later candle, continuation process, UI projection, stale file, or fallback path may change those captured facts.
+If the close does not confirm and the candle reaches a strictly lower low, the same provisional Rejection Boundary progresses to that lower low.
+
+Progression only after failed confirmation:
+
+C > P_in - τ
+
+and
+
+Lo < P_in
+
+Then:
+
+P_out = Lo
+
+If the close fails and the low is equal to or above P_in, the provisional value does not change:
+
+C > P_in - τ
+
+and
+
+Lo >= P_in
+
+Then:
+
+P_out = P_in
+
+13. Legal Evaluation Outcomes
+Each completed candle presented for this Candidate and boundary has exactly one deterministic candle-processing result. Separately, an approved terminal or session event may produce the authority-termination semantic result in Section 13.6.
+
+13.1 Unauthorized result
+The candle lacks evaluation authority or fails an applicable universal guard.
+No boundary evaluation or change occurs.
+
+13.2 Initial formation result
+An authorized completed candle strictly wicks beyond LL while the Candidate-owned Rejection Boundary is ABSENT.
+The boundary moves from ABSENT to PROVISIONAL at that candle's outward extreme.
+
+13.3 Confirmation result
+An authorized completed candle satisfies the applicable one-tick close predicate against P_in.
+Exactly P_in freezes, and the atomic Rejection Step 2 confirmation operation occurs.
+
+13.4 Progression result
+The authorized one-tick confirmation close fails and the completed candle has a strictly farther outward wick.
+The value progresses within PROVISIONAL state.
+
+13.5 Unchanged result
+The authorized one-tick confirmation close fails and the completed candle has no strictly farther outward wick.
+The value remains P_in.
+
+13.6 Authority-termination result
+An approved terminal or session event ends further evaluation authority while the boundary remains unconfirmed.
+The boundary remains PROVISIONAL as inactive historical evidence and receives no further evaluation.
+
+An unsuccessful authorized boundary-confirmation close is not automatically lifecycle Failure or termination.
+These descriptions define permitted semantic effects only. They do not create event names, persisted outcome codes, lifecycle statuses, or a fourth boundary value state.
+
+14. Atomic Rejection Step 2 Confirmation
+Accepted Rejection Step 2 confirmation is one atomic domain operation with separate semantic effects:
+1. validate evaluation authority and all applicable universal guards;
+2. validate the applicable one-tick close predicate against P_in;
+3. freeze exactly P_in;
+4. emit exactly one REJECTION_STEP2_CONFIRMED event;
+5. create exactly one Rejection Lifecycle;
+6. establish the frozen Rejection Boundary as the Lifecycle's immutable boundary fact;
+7. preserve the Rejection Candidate identity and authoritative provisional history as lineage;
+8. establish the confirmation candle as Rejection Count 0.
+
+No partial state is legal.
+A confirmation event without the frozen P_in, a Lifecycle without the accepted confirmation, or a frozen boundary without its Candidate lineage is prohibited.
+
+15. Confirmation Evidence and Historical Lineage
+The authoritative evidence includes:
+Rejection Candidate identity;
+Rejection Boundary identity;
+governing Liquidity Level identity;
+symbol, instrument mapping, session, and direction;
+boundary-formation candle identity, completed OHLC, and initial provisional value;
+every provisional progression, its source completed-candle identity, completed OHLC, and resulting provisional value;
+every authorized boundary-evaluation candle identity, completed OHLC, P_in, and evaluation outcome;
+confirmation candle identity, completed OHLC, and close;
+identity or version of the governing canonical tick-size source;
+source-data provenance;
+P_frozen;
+REJECTION_STEP2_CONFIRMED event identity and timestamp;
+created Rejection Lifecycle identity;
+Rejection Count 0 identity;
+Candidate-to-Lifecycle lineage;
+applicable rule and lifecycle versions.
+
+The Candidate remains immutable historical evidence after confirmation.
+It is not a second active owner of the frozen boundary.
+
+These facts must be authoritatively preserved and stably linked under the canonical evidence contract. This specification does not require complete history duplication inside one event payload and does not select a persistence or serialization design.
+
+16. Freeze and Immutability
+For Rejection Step 2:
+the boundary freezes only when its own one-tick confirmation predicate succeeds;
+the exact value tested is the exact value frozen;
+the confirming candle's farther wick is ignored for progression;
+future farther wicks cannot alter the frozen value;
+later Step 4 outcomes cannot alter the frozen value;
+provisional progression never alters a frozen fact;
+Candidate history is not deleted or rewritten;
+freeze and Lifecycle adoption are separate semantic effects even though they commit atomically.
+
+17. Generic Step 2 Anchor
+A generic Step 2 Anchor may remain where a separately approved rule independently requires one.
+For Rejection Step 2 governed by ADR-009, an Anchor:
+does not replace P_in;
+does not alter the one-tick confirmation predicate;
+does not change P_frozen;
+does not become a required, hidden, supplemental, or fallback Rejection Step 2 predicate.
+
+18. Session Termination
+When the Rejection Candidate loses evaluation authority through its approved terminal or session event:
+an unconfirmed PROVISIONAL Rejection Boundary does not freeze;
+it does not return to ABSENT;
+it does not progress further;
+it does not transfer to another owner;
+it cannot carry forward as active state into another session;
+its final provisional value and complete authoritative history remain preserved as inactive historical evidence under the Candidate.
+
+No fourth boundary value state is created.
+The exact Candidate terminal-session deadline remains governed by a separately approved session rule; this specification does not invent a universal deadline.
+
+19. Event Ordering, Idempotency, and Replay
+Only authorized completed candles may authoritatively form, evaluate, progress, confirm, or freeze the Rejection Boundary.
+Intrabar extremes cannot alter committed boundary state.
+
+P_in must be stable for the full evaluation of one completed candle.
+The same canonical completed candle and incoming committed state must produce the same result in live processing, restart recovery, and replay.
+
+Duplicate delivery of a candle, formation effect, progression effect, or accepted confirmation must produce an idempotent no-op after its first valid application.
+It must not:
+form a second boundary;
+progress the boundary twice;
+change P_in;
+freeze twice;
+emit duplicate confirmation events;
+create duplicate Rejection Lifecycles;
+change Rejection Count 0.
+
+Corrected-candle and out-of-order-event handling remain deferred pending a separately approved canonical system-wide market-data correction and ordering contract.
+This specification does not create that contract, invent a local correction engine, or select a correction policy.
+
+20. Rejection Count 0 and Step 4 Isolation
+The accepted Rejection Step 2 confirmation candle is Rejection Count 0.
+Its identity is immutable and tied to the exact REJECTION_STEP2_CONFIRMED event and Rejection Lifecycle.
+
+Subsequent Count Window behavior is governed exclusively by ADR-006.
+Rejection Step 4 Participation is governed exclusively by ADR-007.
+ADR-009 and this specification neither change nor reinterpret ADR-006 or ADR-007.
+
+No Step 4 participation or qualification predicate is evaluated during Rejection Step 2.
+No Step 4 outcome may retroactively invalidate or modify accepted Step 2, Rejection Count 0, Candidate lineage, or the frozen Rejection Boundary.
+
+21. Explicitly Superseded and Prohibited Rejection Step 2 Rules
+The following retired rules do not govern Rejection Step 2:
+Leg 1 as a mandatory pattern component;
+Leg 2 as a mandatory pattern component;
+Leg 1 Close as the confirmation reference;
+an upper/SHORT Leg 2 close below Leg 1 Close;
+a lower/LONG Leg 2 close above Leg 1 Close;
+any Leg 1/Leg 2 sequence limit used only by the retired confirmation model;
+interaction or sweep as a Rejection Step 2 trading gate;
+entry-type pattern as a Rejection Step 2 trading gate;
+retired volatility logic as a Rejection Step 2 trading gate;
+delegated boundary derivation that conflicts with strict-wick formation;
+participation as a Rejection Step 2 predicate;
+Step 4 qualification as a Rejection Step 2 predicate.
+
+These rules are superseded and removed; not reassigned.
+They are not moved into Candidate formation, Participation, or Step 4 qualification.
+They are not preserved as dormant, hidden, supplemental, or fallback predicates.
+They may return only through a separately approved future ADR defining a new purpose.
+
+22. Cross-Boundary Protection
+The Rejection Boundary retains its own identity, owner, value, progression history, confirmation, and session lineage.
+It cannot create, progress, confirm, freeze, reset, replace, transfer into, or invalidate a Continuation Boundary.
+A Continuation Boundary cannot create, progress, confirm, freeze, reset, replace, transfer into, or invalidate the Rejection Boundary.
+Lineage references and numerical equality do not merge boundary identities or authorize either boundary to mutate the other.
+
+The Rejection Boundary is not copied, transferred, promoted, or transformed into a Continuation Boundary.
+Continuation Eligibility does not own, form, progress, confirm, or freeze a Continuation Boundary.
+No Continuation Boundary exists before its Continuation Lifecycle identity.
+
+This specification does not select a Continuation Creation trigger or sequence and does not authorize a Continuation Lifecycle with an ABSENT boundary.
+
+23. Read-Only Purity and Traceability
+Read-only projections, status requests, audits, serialization, reporting, and operator displays must not:
+form or progress a boundary;
+authoritatively accept confirmation or produce a boundary or lifecycle transition;
+freeze a boundary;
+create a Candidate or Lifecycle;
+change P_in;
+change Rejection Count 0;
+rewrite Candidate history;
+alter session authority.
+
+Every projected boundary must remain traceable to its authoritative boundary identity, owner, session, governing Liquidity Level, and lifecycle lineage when applicable.
+
+24. Deferred Contracts and Decisions
+The following remain outside this specification:
+Liquidity Level formation-window start and end;
+Liquidity Level price calculation and output side set;
+exact market-interval membership at 06:15;
+canonical corrected-candle and out-of-order-data rules;
+exact Rejection Candidate establishment sequencing before or with initial boundary formation;
+precise Candidate terminal-session deadline;
+Continuation Creation trigger and sequence;
+Continuation Evaluation Start;
+continuation direction mapping;
+continuation Count 0;
+continuation participation and Step 4;
+multi-owner candle routing.
+
+These deferrals do not reopen this specification's strict-wick formation, confirmation-first precedence, one-tick close, failed-close-only progression, freeze-at-P_in, ownership, or immutability decisions.
+
+25. Canonical Invariants
+The following invariants must always hold:
+1. The governing Liquidity Level is FROZEN before Rejection Boundary formation.
+2. A strict wick beyond LL is required; touching LL is insufficient.
+3. Only an authorized completed candle may authoritatively form, evaluate, progress, confirm, or freeze the boundary.
+4. The Rejection Candidate owns the boundary while it is ABSENT or PROVISIONAL.
+5. The Candidate must exist no later than initial provisional formation.
+6. ADR-009 does not define the Candidate's independent establishment trigger.
+7. The only boundary transitions are ABSENT to PROVISIONAL and PROVISIONAL to FROZEN.
+8. Provisional progression retains the same Candidate and boundary identities.
+9. Every authorized evaluation of an existing provisional boundary snapshots P_in before processing the candle.
+10. Confirmation is evaluated before same-candle wick progression.
+11. The exact P_in tested is the exact value frozen.
+12. A confirming candle cannot progress the same boundary.
+13. Only a failed one-tick confirmation close may permit strictly farther outward progression.
+14. Equal extremes do not progress the boundary.
+15. A boundary-formation candle cannot confirm its newly formed boundary.
+16. Accepted confirmation atomically creates exactly one Rejection Lifecycle and exactly one REJECTION_STEP2_CONFIRMED event.
+17. The confirmation candle is Rejection Count 0.
+18. Candidate identity and authoritative history remain preserved as lineage.
+19. A FROZEN boundary has no outgoing boundary transition.
+20. Session termination does not freeze or reset an unconfirmed provisional boundary.
+21. No retired Rejection Step 2 predicate remains governing or is reassigned.
+22. Step 4 participation and qualification are not Step 2 predicates.
+23. A later Step 4 outcome cannot change accepted Step 2 or its frozen boundary.
+24. Rejection and Continuation Boundaries remain independent.
+25. This specification does not choose Continuation Creation sequencing.
+
+26. Acceptance Standard and Authorization Boundary
+This specification is aligned only when architecture, implementation, tests, replay, persistence, and projections use the same approved Rejection Step 2 meaning without restoring a retired predicate or changing ADR-006 or ADR-007.
+
+This document defines architecture only.
+Its approval and alignment do not authorize:
+implementation changes;
+test changes;
+runtime-state changes;
+database or persistence changes;
+migration;
+deployment;
+canonical market-data correction policy;
+Continuation Creation architecture;
+execution;
+a Git commit.
