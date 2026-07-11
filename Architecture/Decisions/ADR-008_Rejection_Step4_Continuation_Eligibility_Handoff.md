@@ -1,0 +1,183 @@
+# ADR-008: Rejection Step 4 Continuation-Eligibility Handoff Contract
+
+## Status
+
+APPROVED
+
+## Date
+
+2026-07-11
+
+## Purpose
+
+This Architecture Decision Record establishes the authoritative handoff contract from an accepted Rejection Step 4 Confirmation to Continuation Eligibility. It governs only the creation, identity, ownership, cardinality, frozen facts, boundary, and terminal outcomes of the eligibility record. It does not create a continuation lifecycle, define continuation evaluation behavior, or authorize implementation.
+
+## Governing Decisions
+
+### 1. Eligibility-Producing Event
+
+Accepted Rejection Step 4 Confirmation is both necessary and sufficient to produce Continuation Eligibility.
+
+There are no unspecified additional eligibility prerequisites.
+
+Continuation Eligibility SHALL be created atomically with the accepted Rejection Step 4 Confirmation transition.
+
+A Rejection Lifecycle whose Step 4 phase failed, expired, was invalidated, was cancelled, or otherwise did not confirm cannot produce Continuation Eligibility.
+
+### 2. Eligibility Is Not Continuation Creation
+
+Continuation Eligibility records that a completed rejection is authorized to seed a future continuation lifecycle.
+
+It does not:
+
+- create a continuation lifecycle;
+- create continuation Step 2;
+- begin continuation evaluation;
+- confirm continuation;
+- reopen or extend the completed Rejection Lifecycle.
+
+Continuation Creation and Continuation Evaluation Start remain outside the scope of ADR-008.
+
+### 3. Parent Lifecycle Immutability
+
+The completed Rejection Lifecycle remains terminal, immutable, independently identifiable, and independently auditable.
+
+Continuation processing SHALL NOT:
+
+- reopen the Rejection Lifecycle;
+- modify its Step 2 or Step 4 facts;
+- reuse its lifecycle identity;
+- rename it as a continuation;
+- clear or repurpose its state.
+
+Any future continuation lifecycle SHALL receive a separate lifecycle identity and retain an immutable reference to exactly one rejection parent.
+
+### 4. Eligibility Identity and Cardinality
+
+Each accepted Rejection Step 4 Confirmation SHALL produce exactly one Continuation Eligibility record with one stable eligibility identity.
+
+Each eligibility record:
+
+- belongs to exactly one Rejection Lifecycle;
+- references exactly one accepted Rejection Step 4 Confirmation;
+- may produce at most one continuation lifecycle;
+- cannot be duplicated by replay, polling, restart, or repeated processing.
+
+One Rejection Lifecycle SHALL NOT seed multiple continuation lifecycles.
+
+Continuation Creation consumes the eligibility record. A consumed eligibility record cannot create another continuation lifecycle.
+
+### 5. Frozen Parent References
+
+The eligibility record SHALL preserve immutable references to the accepted parent facts required to identify and audit the handoff, including:
+
+- Rejection Lifecycle identity;
+- symbol;
+- session identity;
+- direction;
+- liquidity identity;
+- Step 2 Confirmation identity;
+- Count 0 identity;
+- Rejection Boundary;
+- accepted Rejection Step 4 Confirmation identity;
+- Step 4 confirmation timestamp;
+- confirming Count identity;
+- governing rule version.
+
+These remain parent-owned facts. Recording their identities or values in the eligibility record does not transfer ownership or permit mutation.
+
+### 6. Continuation Boundary
+
+The Continuation Boundary is a separate continuation-handoff fact derived from the eligible confirmed rejection.
+
+At Continuation Eligibility creation:
+
+- the frozen Rejection Boundary value SHALL be copied as the Continuation Boundary;
+- the Continuation Boundary SHALL receive separate continuation-handoff ownership;
+- its source Rejection Lifecycle and source Rejection Boundary SHALL remain traceable;
+- it SHALL be frozen atomically with the eligibility record;
+- it SHALL NOT later be recalculated, replaced, promoted, reseeded, or shifted.
+
+The Continuation Boundary and Rejection Boundary remain distinct architectural facts even when their numeric values are identical.
+
+ADR-008 does not introduce multiple continuation reference boundaries. Any such boundary requires separate approval through later architecture.
+
+### 7. Eligibility Record Outcomes
+
+Continuation Eligibility has the following permitted outcomes:
+
+- **AVAILABLE:** Created atomically with accepted Rejection Step 4 Confirmation and available for one future Continuation Creation.
+- **CONSUMED:** A continuation lifecycle has been created from it.
+- **EXPIRED:** It reached the terminal session boundary without being consumed.
+- **INVALIDATED:** A future governing continuation specification authorizes a specific pre-creation invalidation event.
+
+ADR-008 does not define a market condition for invalidation. Until a later ADR defines such a condition, no intrawindow market movement independently invalidates eligibility.
+
+Eligibility from a previous session SHALL NOT silently become current-session eligibility.
+
+Terminal eligibility records remain preserved for audit and SHALL NOT return to AVAILABLE.
+
+### 8. Idempotency and Atomicity
+
+The following SHALL form one atomic handoff:
+
+- accepted Rejection Step 4 Confirmation;
+- Continuation Eligibility creation;
+- frozen parent references;
+- frozen Continuation Boundary.
+
+Duplicate delivery or repeated evaluation of the same accepted Rejection Step 4 Confirmation SHALL return the existing eligibility identity rather than create a second record.
+
+Partial handoff states are prohibited.
+
+### 9. Permitted Transitions
+
+The architecture permits:
+
+- `Rejection Step 4 Confirmation → Continuation Eligibility AVAILABLE`;
+- `Continuation Eligibility AVAILABLE → Continuation Eligibility CONSUMED` only through future-defined Continuation Creation;
+- `Continuation Eligibility AVAILABLE → Continuation Eligibility EXPIRED` at the governing session boundary if unused;
+- `Continuation Eligibility AVAILABLE → Continuation Eligibility INVALIDATED` only under a future explicitly approved continuation rule.
+
+### 10. Prohibited Transitions
+
+The architecture explicitly prohibits:
+
+- eligibility before accepted Rejection Step 4 Confirmation;
+- eligibility from Step 4 expiration or any other nonconfirmation result;
+- duplicate eligibility for one rejection;
+- multiple continuation children from one rejection;
+- multiple continuation children from one eligibility record;
+- treating eligibility as Continuation Creation;
+- treating eligibility as Continuation Evaluation Start;
+- treating eligibility as continuation Step 2 confirmation;
+- reopening or mutating the rejection parent;
+- reusing the Rejection Lifecycle identity;
+- recalculating or shifting the frozen Continuation Boundary;
+- carrying AVAILABLE eligibility into another session;
+- returning CONSUMED, EXPIRED, or INVALIDATED eligibility to AVAILABLE;
+- introducing continuation counts or activation rules in ADR-008.
+
+## Scope Boundary
+
+ADR-008 stops at Continuation Eligibility.
+
+It does not define:
+
+- the market event that creates the continuation lifecycle;
+- Continuation Evaluation Start;
+- continuation Step 2;
+- continuation Count 0-through-Count 4 behavior;
+- continuation participation;
+- continuation confirmation;
+- continuation trading or entry rules.
+
+Those matters belong to a subsequent Continuation Lifecycle ADR.
+
+## Authority
+
+This ADR is an approved Architecture Decision Document governed by the authority hierarchy established in `Architecture/README.md`. It is subordinate to the Randle AI Constitution, Lifecycle Vocabulary, Lifecycle Engine Specification, and canonical lifecycle specifications.
+
+ADR-008 does not alter the completed Rejection Step 2 or Rejection Step 4 architecture. It authorizes future architecture-document alignment within its approved scope only.
+
+It does not authorize implementation, code changes, test changes, runtime-state changes, or executable behavior.
