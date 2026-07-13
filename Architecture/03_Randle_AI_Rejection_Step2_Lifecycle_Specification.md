@@ -9,6 +9,8 @@ Step: Step 2
 Applies to: Entry Agent live processing, replay, lifecycle persistence, event journals, tests, reasoning logs, and /entry/status.
 Implementation Authority: None
 
+ADR-010 Amendment Record: Effective 2026-07-13, all normative candle references in this Rejection-to-Continuation chain mean authoritative completed one-minute candles from the canonical one-minute series. ADR-010 also makes next-Liquidity-Level consumption an evaluation-authority guard before Rejection Step 2 evaluation. It does not change ADR-009's Boundary formulas, ownership, `P_in`, confirmation-first precedence, progression, or freeze mechanics.
+
 1. Purpose
 This specification defines the canonical Rejection Step 2 contract after the narrow amendment approved in ADR-009.
 
@@ -186,6 +188,8 @@ deterministic event ordering;
 uniqueness;
 idempotency;
 duplicate protection.
+
+For this chain, the candle must be an authoritative completed one-minute candle. Before Rejection Step 2 evaluation, ADR-010 next-Liquidity-Level consumption authority must also remain untriggered. When consumption occurs first, the Candidate loses evaluation authority and this specification performs no formation, confirmation, or progression for that candle.
 
 These guards determine whether the candle is authorized to evaluate the boundary.
 They are not additional Rejection Step 2 price predicates.
@@ -502,7 +506,7 @@ The Rejection Boundary is not copied, transferred, promoted, or transformed into
 Continuation Eligibility does not own, form, progress, confirm, or freeze a Continuation Boundary.
 No Continuation Boundary exists before its Continuation Lifecycle identity.
 
-This specification does not select a Continuation Creation trigger or sequence and does not authorize a Continuation Lifecycle with an ABSENT boundary.
+ADR-010 governs Continuation Creation, initial Boundary formation, and Evaluation Start. This specification continues to prohibit a Continuation Lifecycle with an ABSENT boundary.
 
 23. Read-Only Purity and Traceability
 Read-only projections, status requests, audits, serialization, reporting, and operator displays must not:
@@ -525,9 +529,6 @@ exact market-interval membership at 06:15;
 canonical corrected-candle and out-of-order-data rules;
 exact Rejection Candidate establishment sequencing before or with initial boundary formation;
 precise Candidate terminal-session deadline;
-Continuation Creation trigger and sequence;
-Continuation Evaluation Start;
-continuation direction mapping;
 continuation Count 0;
 continuation participation and Step 4;
 multi-owner candle routing.
@@ -560,7 +561,7 @@ The following invariants must always hold:
 22. Step 4 participation and qualification are not Step 2 predicates.
 23. A later Step 4 outcome cannot change accepted Step 2 or its frozen boundary.
 24. Rejection and Continuation Boundaries remain independent.
-25. This specification does not choose Continuation Creation sequencing.
+25. ADR-010, not this specification, governs Continuation Creation sequencing and Evaluation Start.
 
 26. Acceptance Standard and Authorization Boundary
 This specification is aligned only when architecture, implementation, tests, replay, persistence, and projections use the same approved Rejection Step 2 meaning without restoring a retired predicate or changing ADR-006 or ADR-007.

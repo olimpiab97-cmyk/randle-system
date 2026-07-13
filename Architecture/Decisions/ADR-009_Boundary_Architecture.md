@@ -10,6 +10,8 @@ Explicit owner approval was granted effective July 11, 2026.
 
 Approval authorizes the architecture decision, its narrow supersessions, and creation of this ADR-009 file. It does not authorize modification of any other architecture document, canonical-document alignment, implementation, tests, migration, runtime changes, staging, a commit, or any other file operation.
 
+ADR-010 Narrow Amendment Record: Effective 2026-07-13, the Rejection-to-Continuation chain uses authoritative completed one-minute candles from the canonical one-minute series. ADR-010 supplies Continuation Creation, initial Continuation Boundary formation, and Evaluation Start, and makes governing-Liquidity-Level consumption an evaluation-authority guard before `P_in` evaluation. It does not change this ADR's three Boundary value states, strict-wick formation, `P_in`, confirmation-first precedence, failed-close-only progression, freeze-at-`P_in`, ownership, post-freeze immutability, or historical custody.
+
 ## 2. Context
 
 The existing Rejection Step 2 architecture incorrectly combines:
@@ -509,6 +511,8 @@ ADR-009 does not define:
 
 ## 11. Candle-Processing Precedence
 
+For the Rejection-to-Continuation chain, ADR-010 requires the canonical authoritative completed one-minute source and applies governing-Liquidity-Level consumption authority before this ADR evaluates `P_in`. Once that guard authorizes evaluation, this ADR's mechanics govern unchanged.
+
 For every completed candle presented for boundary processing:
 
 1. Validate evaluation authority and universal guards.
@@ -816,7 +820,7 @@ The following must always hold:
 - Intrabar event order cannot move the same candle’s confirmation target.
 - Farther provisional extremes are preserved without mutating frozen facts.
 - No retired Step 2 predicate survives as hidden Step 4 behavior.
-- ADR-006 and ADR-007 remain unchanged.
+- ADR-006 and ADR-007 retain all unaffected substantive decisions; ADR-010 narrowly amends their candle source for this chain.
 - Rejection and Continuation retain independent boundary identities and histories.
 - Continuation Creation sequencing remains open for its dedicated ADR.
 
@@ -904,7 +908,7 @@ The following ADR-008 decisions remain governing:
 - parent and Eligibility lineage remain preserved;
 - session isolation remains governing;
 - duplicate processing remains idempotent;
-- Continuation Creation and Evaluation Start remain outside ADR-008.
+- Continuation Creation and Evaluation Start remain outside ADR-008 and are governed by ADR-010.
 
 Later alignment of ADR-008 will record this narrow supersession. ADR-009 does not otherwise revise ADR-008, and its approval does not authorize that alignment.
 
@@ -919,10 +923,6 @@ The following remain intentionally outside ADR-009:
 - canonical corrected-candle rules;
 - canonical out-of-order-data rules;
 - exact Rejection Candidate establishment sequencing before or with initial boundary formation;
-- Continuation Creation market trigger;
-- whether Continuation Creation precedes initial boundary formation or occurs atomically with it;
-- Continuation Evaluation Start;
-- continuation direction mapping;
 - continuation Count 0;
 - continuation participation;
 - continuation Step 4;
@@ -933,7 +933,6 @@ Required future contracts include:
 
 - a versioned Liquidity Level Calculation Contract;
 - a canonical market-data correction and ordering contract;
-- a Continuation Creation ADR;
 - an authorized canonical-document alignment revision.
 
 These deferred matters do not reopen ADR-009’s strict-wick formation, provisional progression, confirmation-first precedence, one-tick close, freeze-at-`P_in`, ownership, or post-freeze immutability decisions.
@@ -1066,7 +1065,7 @@ ADR-009 was explicitly approved effective July 11, 2026:
 - [x] Candidate ownership and atomic Lifecycle adoption are accepted.
 - [x] Rejection Count 0 remains the Step 2 confirmation candle.
 - [x] Step 4 participation and qualification remain separate from Step 2.
-- [x] ADR-006 and ADR-007 remain unchanged.
+- [x] All unaffected ADR-006 and ADR-007 substantive decisions remain governing; ADR-010 narrowly amends their candle source for this chain.
 - [x] Continuation uses independent boundary mechanics.
 - [x] No Continuation Boundary may exist before its Lifecycle identity.
 - [x] ADR-009 does not authorize a Continuation Lifecycle with an `ABSENT` boundary.

@@ -10,6 +10,8 @@ APPROVED
 
 ## Purpose
 
+ADR-010 Narrow Amendment Record: Effective 2026-07-13, the current and immediately previous Participation candle sources in the Rejection-to-Continuation chain are authoritative completed one-minute candles from the canonical one-minute series. This does not change Participation predicates, wick requirements, direction-specific close requirements, or any other ADR-007 decision.
+
 This Architecture Decision Record establishes the authoritative Rejection Step 4 participation timing and confirmation rule. It replaces legacy Candle A / Candle B terminology with a direct Count-and-Participation rule and records an architecture decision only; it is not a trading-rule implementation.
 
 ## Governing Decision

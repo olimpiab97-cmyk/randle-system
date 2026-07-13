@@ -10,6 +10,9 @@ Effective 2026-07-11, ADR-009 is a narrow constitutional and architectural amend
 ADR-009 separately and narrowly supersedes only ADR-008's copied-and-immediately-frozen Continuation Boundary model. All unaffected ADR-008 Eligibility, lineage, uniqueness, session, idempotency, cardinality, atomicity, and terminal-behavior decisions remain governing.
 
 1. Purpose
+ADR-010 Alignment Record
+Effective 2026-07-13, ADR-010 narrowly amends the Rejection-to-Continuation chain with authoritative completed one-minute candle sourcing, governing-Liquidity-Level consumption authority, the specified AVAILABLE-to-INVALIDATED trigger, Continuation Creation, initial Continuation Boundary formation, and Evaluation Start. All unaffected ADR-006 through ADR-009 decisions remain governing.
+
 The purpose of this vocabulary is to ensure that every component uses the same meaning for each lifecycle term.
 No term in this document may be used interchangeably with another term unless explicitly stated.
 The system must distinguish between:
@@ -84,6 +87,8 @@ source;
 completion status.
 Only completed candles may advance deterministic lifecycle rules unless a rule explicitly authorizes intrabar evaluation.
 
+For the Rejection-to-Continuation lifecycle chain, a completed candle means an authoritative completed one-minute candle from the canonical one-minute series. No other interval, incomplete candle, or intrabar fact authoritatively advances that chain.
+
 2.5 Liquidity Level
 A Liquidity Level is a session-scoped market-truth aggregate root used as the governing market reference for derived-boundary formation.
 It exclusively owns:
@@ -105,6 +110,8 @@ A Liquidity Level uses these value states:
 ABSENT before its authorized calculation produces a valid value;
 PROVISIONAL after its first valid session value is produced and before freeze;
 FROZEN at 06:15 local time in America/Los_Angeles, including daylight-saving transitions.
+
+Consumption is not a Liquidity Level value state. A consumed Liquidity Level remains FROZEN immutable market truth; consumption is the separate ADR-010 authority fact ending its ability to govern further activity in that lineage.
 
 Before 06:15, a separately approved, versioned Liquidity Level Calculation Contract may update the provisional value according to that contract. At 06:15, the latest valid provisional value freezes and becomes immutable. Derived Rejection or Continuation Boundary formation is prohibited until the governing Liquidity Level is FROZEN.
 
@@ -144,7 +151,7 @@ owns its own candle count;
 owns any Continuation Boundary from first formation onward;
 must never overwrite the rejection lifecycle.
 
-A Continuation Boundary cannot exist before its Continuation Lifecycle identity and is owned exclusively by that Lifecycle from first formation onward. This vocabulary does not define the Continuation Creation market trigger or select whether Creation precedes initial boundary formation or occurs atomically with it. It does not authorize a Continuation Lifecycle with an ABSENT boundary, a Continuation Candidate, or another pre-lifecycle boundary owner.
+A Continuation Boundary cannot exist before its Continuation Lifecycle identity and is owned exclusively by that Lifecycle from first formation onward. ADR-010 defines the Creation trigger, atomic relationship to initial Boundary formation, and Evaluation Start. It does not authorize a Continuation Lifecycle with an ABSENT boundary, a Continuation Candidate, or another pre-lifecycle boundary owner.
 Example lifecycle ID:
 NQ-2026-07-10-ONH-CONTINUATION-001
 
@@ -501,7 +508,7 @@ A Continuation Boundary is a derived price object owned exclusively by its Conti
 
 It cannot exist before its Continuation Lifecycle identity. Continuation Eligibility does not own, form, progress, confirm, or freeze it. It is not copied, transferred, promoted, or transformed from the Rejection Boundary.
 
-This vocabulary does not choose whether Continuation Creation precedes initial boundary formation or occurs atomically with it, and it introduces no Continuation Candidate or other pre-lifecycle owner.
+ADR-010 chooses atomic Continuation Creation and initial Boundary formation, and this vocabulary introduces no Continuation Candidate or other pre-lifecycle owner.
 
 10.5 Boundary-Formation Candle
 A Boundary-Formation Candle is an authorized completed candle that first wicks strictly beyond the governing FROZEN Liquidity Level and establishes a PROVISIONAL derived boundary at its outward wick extreme.
@@ -596,10 +603,10 @@ session identity;
 creation time;
 rule version.
 
-This vocabulary does not define the Continuation Creation trigger, continuation direction mapping, or whether Creation precedes initial boundary formation or occurs atomically with it. No Continuation Boundary may exist before the Continuation Lifecycle identity. No Continuation Candidate or other pre-lifecycle boundary owner is introduced.
+ADR-010 defines the Continuation Creation trigger, opposite parent-to-child direction mapping, and atomic initial Boundary formation. No Continuation Boundary may exist before the Continuation Lifecycle identity. No Continuation Candidate or other pre-lifecycle boundary owner is introduced.
 
 13.3 Continuation Evaluation Start
-Continuation Evaluation Start is a reserved term whose trigger, timing, and relationship to Continuation Creation and initial boundary formation remain deferred to a future approved Continuation Creation ADR.
+Continuation Evaluation Start is the ADR-010 fact recorded with Creation and initial Boundary formation. It becomes effective only after the formation authoritative completed one-minute candle; that candle cannot evaluate the newly formed Boundary.
 It must not alter the parent rejection lifecycle. This vocabulary does not authorize that behavior.
 
 13.4 Continuation Confirmation

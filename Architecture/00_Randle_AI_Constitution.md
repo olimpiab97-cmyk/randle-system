@@ -11,6 +11,9 @@ Those identified statements ceased to govern when ADR-009 was approved. All unaf
 ADR-009 does not generally override this Constitution. Later documentation alignment records the approved decision; it does not make ADR-009 dependent on stale conflicting language.
 
 1. Purpose
+ADR-010 Amendment Record
+Effective 2026-07-13, ADR-010 is a narrow cross-lifecycle amendment. It establishes the canonical authoritative completed one-minute candle source for the Rejection-to-Continuation chain; governs next-Liquidity-Level consumption as an authority fact rather than a Liquidity Level value-state transition; supplies the stated pre-Creation Eligibility invalidation trigger; and defines Continuation Creation, initial Continuation Boundary formation, and Evaluation Start. All unaffected ADR-006 through ADR-009 and constitutional decisions remain governing.
+
 Randle AI is a deterministic market-structure system built around liquidity, volatility, confirmation, rejection, continuation, risk, and execution.
 Its purpose is not to guess what the market may do through unrestricted artificial intelligence.
 Its purpose is to:
@@ -121,6 +124,8 @@ Article 4.8
 For a provisional Rejection or Continuation Boundary, an authorized completed candle must evaluate confirmation against the committed incoming provisional value before any same-candle wick progression is considered.
 If confirmation succeeds, that exact incoming value freezes. The confirming candle cannot progress the same boundary, and a frozen boundary has no outgoing boundary transition.
 Only a failed boundary-confirmation close may permit a strictly farther outward wick to progress the same provisional boundary. Equal extremes produce no progression.
+Article 4.9
+For the Rejection-to-Continuation chain, the authoritative candle source is the canonical completed one-minute series. The governing Liquidity Level remains FROZEN market truth when consumed; consumption is a separate authority fact whose effects are limited by ADR-010's temporal rules.
 
 5. Lifecycle Identity Doctrine
 Every independent market opportunity must have a permanent lifecycle identity.

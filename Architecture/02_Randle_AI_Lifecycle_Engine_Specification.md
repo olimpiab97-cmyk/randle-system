@@ -4,7 +4,7 @@ Document Type: Core Architecture Specification
 Status: Canonical
 Authority: Subordinate to the Randle AI Constitution and Randle AI Lifecycle Vocabulary
 Scope: Universal lifecycle-engine mechanics for rejection, continuation, entry, management, and terminal decision lifecycles
-Release Boundary: This release incorporates ADR-009's universal Continuation Boundary ownership, independence, formation, evaluation, progression, confirmation, freeze, history, and session constraints. It does not define or authorize Continuation Creation sequencing, Continuation Evaluation Start, continuation direction mapping, continuation Count 0, continuation participation, continuation Step 4, or continuation implementation.
+Release Boundary: This release incorporates ADR-009's universal Boundary mechanics and ADR-010's approved Continuation Creation, initial Boundary formation, Evaluation Start, one-minute source, and consumption-authority rules. It does not define continuation Count 0, participation, Count Window, Step 4, later Continuation lifecycle behavior, or implementation.
 
 1. Purpose
 The Randle AI Lifecycle Engine is the shared architectural system responsible for creating, advancing, freezing, terminating, persisting, restoring, replaying, and exposing all Randle AI trading lifecycles.
@@ -56,6 +56,7 @@ Only explicitly approved canonical lifecycle specifications occupy item 4. Draft
 A lower authority SHALL NOT contradict, weaken, bypass, or reinterpret a higher authority.
 The general authority order remains governing. An explicitly approved, scope-specific constitutional amendment governs only the conflicts it expressly identifies.
 ADR-009 is such a narrow amendment for the Rejection Step 2 pattern and boundary statements listed in its supersession ledger. Within that scope, stale conflicting language does not remain governing. ADR-009 does not generally override the Constitution, and all unaffected constitutional and universal invariants remain higher authority.
+ADR-010 is a further narrow cross-lifecycle amendment. For the Rejection-to-Continuation chain it requires the canonical authoritative completed one-minute series, makes next-Liquidity-Level consumption an evaluation-authority guard with its stated temporal effects, supplies the pre-Creation Eligibility invalidation trigger, and defines Creation, initial Continuation Boundary formation, and Evaluation Start. It leaves all unaffected ADR-006 through ADR-009 decisions governing.
 When implementation behavior conflicts with a canonical specification, the implementation is defective.
 Observed runtime behavior does not become authoritative merely because it currently exists in code.
 
@@ -260,6 +261,8 @@ Before Rejection Step 2 Confirmation, the Rejection Candidate owns the ABSENT or
 The requirement to preserve authoritative history and stable linkage does not prescribe physical duplication of the entire history in one event payload or any particular persistence or serialization design.
 
 Boundary independence does not automatically authorize one completed candle to evaluate multiple owners. Multi-owner routing requires a separately approved lifecycle rule.
+
+ADR-010 expressly authorizes the accepted Rejection Step 4 one-minute candle, after ADR-008 has created AVAILABLE Eligibility, to supply Creation and initial Continuation Boundary formation evidence when it qualifies. This does not authorize generic multi-owner routing.
 
 12. Mutable and Immutable Data
 12.1 Immutable data

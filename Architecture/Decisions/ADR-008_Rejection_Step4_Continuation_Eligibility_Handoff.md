@@ -10,6 +10,8 @@ APPROVED
 
 ## Purpose
 
+ADR-010 Narrow Amendment Record: Effective 2026-07-13, the accepted Rejection Step 4 source candle in this lifecycle chain is an authoritative completed one-minute candle. ADR-010 supplies the specific pre-Creation invalidation rule: consumption of the exact inherited governing Liquidity Level transitions AVAILABLE Eligibility to INVALIDATED. ADR-010 also authorizes same-source Step-4-to-Creation routing only after this ADR has created AVAILABLE Eligibility. All other handoff, identity, uniqueness, cardinality, lineage, session, atomicity, idempotency, CONSUMED, and EXPIRED decisions remain governing.
+
 This Architecture Decision Record establishes the authoritative handoff contract from an accepted Rejection Step 4 Confirmation to Continuation Eligibility. It governs only the creation, identity, ownership, cardinality, frozen parent references, and terminal outcomes of the eligibility record. It does not create a continuation lifecycle; form, own, progress, or freeze a Continuation Boundary; define continuation evaluation behavior; or authorize implementation.
 
 ## Governing Decisions
@@ -96,7 +98,7 @@ A Continuation Boundary is owned exclusively by its Continuation Lifecycle from 
 
 Before Continuation Creation, the confirmed Rejection Lifecycle coexists with no Continuation Boundary object.
 
-ADR-008 does not select whether Continuation Creation precedes initial Continuation Boundary formation or occurs atomically with it. That sequence remains deferred. ADR-008 does not authorize a Continuation Lifecycle with an ABSENT boundary and introduces no Continuation Candidate or other pre-lifecycle provisional owner.
+ADR-008 does not itself select Continuation Creation sequencing. ADR-010 selects the atomic Creation-and-initial-Boundary sequence. ADR-008 does not authorize a Continuation Lifecycle with an ABSENT boundary and introduces no Continuation Candidate or other pre-lifecycle provisional owner.
 
 The source Rejection Lifecycle and source Rejection Boundary remain traceable as parent lineage. Lineage does not transfer boundary ownership or create numerical coupling.
 
@@ -111,9 +113,9 @@ Continuation Eligibility has the following permitted outcomes:
 - **AVAILABLE:** Created atomically with accepted Rejection Step 4 Confirmation and available for one future Continuation Creation.
 - **CONSUMED:** A continuation lifecycle has been created from it.
 - **EXPIRED:** It reached the terminal session boundary without being consumed.
-- **INVALIDATED:** A future governing continuation specification authorizes a specific pre-creation invalidation event.
+- **INVALIDATED:** ADR-010 authorizes the specific pre-Creation event in which the exact inherited governing Liquidity Level is consumed.
 
-ADR-008 does not define a market condition for invalidation. Until a later ADR defines such a condition, no intrawindow market movement independently invalidates eligibility.
+ADR-008 does not independently define a market condition for invalidation. The ADR-010 consumption trigger is the approved exception; no other intrawindow movement independently invalidates Eligibility.
 
 Eligibility from a previous session SHALL NOT silently become current-session eligibility.
 
@@ -138,7 +140,7 @@ The architecture permits:
 - `Rejection Step 4 Confirmation → Continuation Eligibility AVAILABLE`;
 - `Continuation Eligibility AVAILABLE → Continuation Eligibility CONSUMED` only through future-defined Continuation Creation;
 - `Continuation Eligibility AVAILABLE → Continuation Eligibility EXPIRED` at the governing session boundary if unused;
-- `Continuation Eligibility AVAILABLE → Continuation Eligibility INVALIDATED` only under a future explicitly approved continuation rule.
+- `Continuation Eligibility AVAILABLE → Continuation Eligibility INVALIDATED` when ADR-010's governing-Liquidity-Level-consumption rule applies before Creation.
 
 ### 10. Prohibited Transitions
 
@@ -182,7 +184,7 @@ This ADR is an approved Architecture Decision Document governed by the authority
 
 ADR-009 narrowly supersedes only ADR-008's copied-and-immediately-frozen Continuation Boundary model. Within that expressly limited scope, ADR-009's replacement rules govern; this is not a general reversal of the architecture authority hierarchy.
 
-The following ADR-008 decisions remain governing: accepted Rejection Step 4 Confirmation produces Continuation Eligibility; Eligibility creation is atomic with that accepted confirmation; Eligibility is unique and may produce at most one Continuation Lifecycle; Continuation Creation consumes Eligibility; the Rejection parent remains terminal and immutable; parent and Eligibility lineage, session isolation, idempotency, duplicate protection, and terminal Eligibility behavior remain governing; and Continuation Creation and Continuation Evaluation Start remain outside ADR-008.
+The following ADR-008 decisions remain governing: accepted Rejection Step 4 Confirmation produces Continuation Eligibility; Eligibility creation is atomic with that accepted confirmation; Eligibility is unique and may produce at most one Continuation Lifecycle; Continuation Creation consumes Eligibility; the Rejection parent remains terminal and immutable; parent and Eligibility lineage, session isolation, idempotency, duplicate protection, and terminal Eligibility behavior remain governing. Continuation Creation and Evaluation Start remain outside ADR-008 itself and are governed by ADR-010.
 
 ADR-008 does not alter the completed Rejection Step 2 or Rejection Step 4 architecture. It authorizes future architecture-document alignment within its approved scope only.
 
