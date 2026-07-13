@@ -38,6 +38,21 @@ This Architecture Decision Record establishes the authoritative Rejection Step 4
 12. Count 5 or later is not permitted within the same Rejection Step 4 window.
 13. The original Count 0 identity and four-candle window never restart.
 
+## ADR-011 Formula Completion Amendment
+
+Effective 2026-07-13, ADR-011 completes the previously referenced but unstated 34% wick-participation mathematics for this ADR. This is a narrow documentation and architecture amendment. It does not change ADR-007's approved Count Window, Rejection direction, inclusive 34% threshold, `OR` relationship, higher-close LONG rule, lower-close SHORT rule, or other Rejection Participation behavior.
+
+For the current Rejection Count candidate candle, let `O`, `H`, `L`, and `C` be its completed OHLC and let `R = H - L`.
+
+- For Rejection LONG, the opposing wick is the current candidate's lower wick: `W_long = min(O, C) - L`. Wick Participation qualifies when `W_long / R >= 0.34`.
+- For Rejection SHORT, the opposing wick is the current candidate's upper wick: `W_short = H - max(O, C)`. Wick Participation qualifies when `W_short / R >= 0.34`.
+
+The threshold is inclusive. The immediately previous completed candle is not used for the wick calculation; it is used only for the alternative directional-close predicate already approved by this ADR.
+
+A current candidate with incomplete OHLC, malformed prices, non-authoritative normalization, or `R <= 0` cannot satisfy wick Participation and cannot be used to invent a percentage. The canonical market-data correction-and-ordering contract governs authoritative treatment of that input. This ADR does not create a Count Window terminal result solely from malformed market data.
+
+The formula is preserved as the ADR-007 current-candidate opposing-wick formula completed on 2026-07-13. Later formula changes require an explicit ADR-007 amendment and do not silently change ADR-011's independent Continuation formula.
+
 ## Terminology Decision
 
 - Candle A and Candle B are legacy implementation terms.
