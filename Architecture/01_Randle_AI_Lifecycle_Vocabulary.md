@@ -3,7 +3,7 @@ Formal Domain Definitions for Rejection and Continuation
 Document Type: Lifecycle Vocabulary
 Status: Canonical
 Authority: Binding terminology standard subordinate to the Randle AI Constitution; approved ADR-009 governs only its expressly identified narrow amendment scope, while all unaffected constitutional and universal invariants remain higher authority
-Decision Basis: Incorporates approved ADR-006 Rejection Step 4 Count Window, ADR-007 Rejection Step 4 Participation Rule, ADR-008 Rejection Step 4 Continuation-Eligibility Handoff Contract, and ADR-009 Boundary Architecture
+Decision Basis: Incorporates approved ADR-006 Rejection Step 4 Count Window, ADR-007 Rejection Step 4 Participation Rule, ADR-008 Rejection Step 4 Continuation-Eligibility Handoff Contract, ADR-009 Boundary Architecture, ADR-010 Continuation Lifecycle Creation and Initial Boundary Activation, and ADR-011 Continuation Step 4 Count Window and Participation Rule
 Applies to: Entry Agent, replay tools, lifecycle state, event journals, status projections, Codex prompts, tests, and operator documentation.
 
 Effective 2026-07-11, ADR-009 is a narrow constitutional and architectural amendment limited to the Rejection Step 2 pattern and boundary statements expressly identified in its supersession ledger. The terms aligned here record that approved decision. They do not create general ADR supremacy, and all unaffected constitutional and universal invariants remain governing.
@@ -12,6 +12,9 @@ ADR-009 separately and narrowly supersedes only ADR-008's copied-and-immediately
 1. Purpose
 ADR-010 Alignment Record
 Effective 2026-07-13, ADR-010 narrowly amends the Rejection-to-Continuation chain with authoritative completed one-minute candle sourcing, governing-Liquidity-Level consumption authority, the specified AVAILABLE-to-INVALIDATED trigger, Continuation Creation, initial Continuation Boundary formation, and Evaluation Start. All unaffected ADR-006 through ADR-009 decisions remain governing.
+
+ADR-011 Alignment Record
+Effective 2026-07-13, ADR-011 governs Continuation Count 0, Counts 1 through 4, immediately previous-Count comparison, current-candle opposing-wick Participation, directional-close Participation, and Continuation Step 4 outcomes. Its exact 34% formula is independently adopted for Continuation; ADR-006 and ADR-007 remain Rejection authorities.
 
 The purpose of this vocabulary is to ensure that every component uses the same meaning for each lifecycle term.
 No term in this document may be used interchangeably with another term unless explicitly stated.
@@ -584,7 +587,7 @@ completed.
 A sticky state may only be followed by an allowed downstream event or a new lifecycle.
 
 13. Continuation Vocabulary
-The terms in this section reserve consistent vocabulary and universal ownership distinctions. They do not define a canonical continuation lifecycle state machine, trading rule, transition sequence, or implementation. Architecture Documentation Release v1.0's specialized lifecycle scope ends at Continuation Eligibility Creation.
+The terms in this section reserve consistent vocabulary and universal ownership distinctions. ADR-010 governs Continuation Creation through Step 2 entry; ADR-011 governs Continuation Count 0 through Step 4. This vocabulary does not define post-Step-4 behavior or implementation.
 
 13.1 Continuation Eligibility
 Continuation Eligibility is the unique authorization and lineage record created atomically with one accepted Rejection Step 4 Confirmation under ADR-008.
@@ -612,6 +615,13 @@ It must not alter the parent rejection lifecycle. This vocabulary does not autho
 13.4 Continuation Confirmation
 Continuation Confirmation means the continuation lifecycle’s own Step 2 rule has confirmed.
 It is not inherited from the rejection lifecycle.
+
+13.5 Continuation Count and Step 4
+The authoritative completed one-minute candle that confirms Continuation Step 2 becomes immutable Continuation Count 0 under ADR-011. Count 0 does not participate and is the immediately previous Count candle for Count 1. Counts 1 through 4 are distinct, sequential authoritative completed one-minute Participation opportunities. Each current Count compares only with its immediately previous Count candle for the directional-close predicate.
+
+For current Count OHLC `O`, `H`, `L`, and `C`, the full range is `R = H - L`. A Continuation LONG uses its current lower wick, `min(O, C) - L`, and a Continuation SHORT uses its current upper wick, `H - max(O, C)`. The applicable wick ratio qualifies when it is at least `0.34`, inclusive. The previous Count candle is not used in the wick calculation; it is used only for the alternative directional-close predicate: current close greater than previous close for LONG, or current close less than previous close for SHORT. Participation is wick OR directional close. Incomplete, malformed, non-authoritatively normalized, or non-positive-range OHLC cannot satisfy the wick predicate.
+
+The first qualifying Count directly confirms Continuation Step 4. Failed Counts 1 through 3 advance; a failed Count 4 or governing session expiration produces `EXPIRED`; consumption of the inherited governing Liquidity Level after Step 2 but before Step 4 produces `INVALIDATED`. Consumption precedes Count assignment and Participation evaluation. No Count 5, reset, reseed, rolling anchor, or retry aggregate is authorized.
 
 14. Projection Vocabulary
 14.1 Projection

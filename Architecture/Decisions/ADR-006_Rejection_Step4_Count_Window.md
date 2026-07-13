@@ -12,6 +12,8 @@ APPROVED
 
 ADR-010 Narrow Amendment Record: Effective 2026-07-13, every Count Window candle source in the Rejection-to-Continuation chain is an authoritative completed one-minute candle from the canonical one-minute series. This does not change Count indexing, Count Window length, retry behavior, expiration, terminal behavior, or any other ADR-006 decision.
 
+ADR-011 Relationship Record: ADR-011 separately governs the Continuation Count 0 and Count 1 through Count 4 Window after Continuation Step 2 Confirmation. It does not extend, replace, or otherwise alter this ADR's Rejection Count Window.
+
 This Architecture Decision Record establishes the authoritative Rejection Step 4 Count-window trading rule. It records the approved decision only; it is not a trading-rule implementation and does not modify code, tests, runtime state, or an existing specification.
 
 ## Evidence Basis

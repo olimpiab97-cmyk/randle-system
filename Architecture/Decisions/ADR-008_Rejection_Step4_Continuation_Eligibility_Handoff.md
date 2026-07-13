@@ -12,6 +12,8 @@ APPROVED
 
 ADR-010 Narrow Amendment Record: Effective 2026-07-13, the accepted Rejection Step 4 source candle in this lifecycle chain is an authoritative completed one-minute candle. ADR-010 supplies the specific pre-Creation invalidation rule: consumption of the exact inherited governing Liquidity Level transitions AVAILABLE Eligibility to INVALIDATED. ADR-010 also authorizes same-source Step-4-to-Creation routing only after this ADR has created AVAILABLE Eligibility. All other handoff, identity, uniqueness, cardinality, lineage, session, atomicity, idempotency, CONSUMED, and EXPIRED decisions remain governing.
 
+ADR-011 Relationship Record: ADR-011 governs the child Continuation lifecycle only after its Step 2 Confirmation. It does not alter this ADR's accepted Rejection Step 4-to-Eligibility handoff, Eligibility identity, uniqueness, one-child cardinality, lineage, session isolation, handoff atomicity, or idempotency.
+
 This Architecture Decision Record establishes the authoritative handoff contract from an accepted Rejection Step 4 Confirmation to Continuation Eligibility. It governs only the creation, identity, ownership, cardinality, frozen parent references, and terminal outcomes of the eligibility record. It does not create a continuation lifecycle; form, own, progress, or freeze a Continuation Boundary; define continuation evaluation behavior; or authorize implementation.
 
 ## Governing Decisions

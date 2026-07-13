@@ -11,6 +11,8 @@ Implementation Authority: None
 
 ADR-010 Amendment Record: Effective 2026-07-13, all normative candle references in this Rejection-to-Continuation chain mean authoritative completed one-minute candles from the canonical one-minute series. ADR-010 also makes next-Liquidity-Level consumption an evaluation-authority guard before Rejection Step 2 evaluation. It does not change ADR-009's Boundary formulas, ownership, `P_in`, confirmation-first precedence, progression, or freeze mechanics.
 
+ADR-011 Relationship Record: ADR-011 begins only after accepted Continuation Step 2 Confirmation. It governs the child Continuation Count Window and Participation through Step 4; it does not alter this Rejection Step 2 specification.
+
 1. Purpose
 This specification defines the canonical Rejection Step 2 contract after the narrow amendment approved in ADR-009.
 

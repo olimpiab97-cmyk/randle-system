@@ -12,6 +12,8 @@ Approval authorizes the architecture decision, its narrow supersessions, and cre
 
 ADR-010 Narrow Amendment Record: Effective 2026-07-13, the Rejection-to-Continuation chain uses authoritative completed one-minute candles from the canonical one-minute series. ADR-010 supplies Continuation Creation, initial Continuation Boundary formation, and Evaluation Start, and makes governing-Liquidity-Level consumption an evaluation-authority guard before `P_in` evaluation. It does not change this ADR's three Boundary value states, strict-wick formation, `P_in`, confirmation-first precedence, failed-close-only progression, freeze-at-`P_in`, ownership, post-freeze immutability, or historical custody.
 
+ADR-011 Relationship Record: Effective 2026-07-13, ADR-011 governs Continuation Count 0 through Step 4 after this ADR's Continuation Step 2 Confirmation. It does not change this ADR's Boundary mechanics or Step 2 Confirmation.
+
 ## 2. Context
 
 The existing Rejection Step 2 architecture incorrectly combines:
@@ -488,25 +490,18 @@ A Continuation Boundary is owned exclusively by its Continuation Lifecycle from 
 
 Before Continuation Creation, the confirmed Rejection Lifecycle coexists with no Continuation Boundary object.
 
-ADR-009 does not decide whether:
+ADR-009 itself did not decide whether Continuation Creation precedes initial Boundary formation or occurs atomically. ADR-010 subsequently selected atomic Continuation Creation and initial Boundary formation and aligned the Lifecycle Vocabulary.
 
-- Continuation Creation precedes initial boundary formation; or
-- Continuation Creation and initial boundary formation occur atomically.
-
-Mentioning those possibilities does not authorize either sequence.
-
-ADR-009 does not authorize a Continuation Lifecycle with an `ABSENT` boundary where current canonical Vocabulary prohibits that state. The future Continuation Creation ADR must select the sequence and explicitly align the Lifecycle Vocabulary.
+ADR-009 does not authorize a Continuation Lifecycle with an `ABSENT` Boundary where current canonical Vocabulary prohibits that state. ADR-010 preserves that prohibition.
 
 No Continuation Candidate or other pre-lifecycle provisional owner is introduced.
 
 ADR-009 does not define:
 
-- the Continuation Creation market trigger;
-- Continuation Evaluation Start;
-- continuation direction mapping;
-- continuation Count 0;
-- continuation participation;
-- continuation Step 4;
+- the Continuation Creation market trigger, which ADR-010 governs;
+- Continuation Evaluation Start, which ADR-010 governs;
+- continuation direction mapping, which ADR-010 governs;
+- continuation Count 0, participation, and Step 4, which ADR-011 governs;
 - continuation entry behavior.
 
 ## 11. Candle-Processing Precedence
@@ -764,7 +759,7 @@ Under the approved lifecycle order:
 
 - a provisional Rejection Boundary and provisional Continuation Boundary cannot coexist;
 - before Continuation Creation, a frozen Rejection Boundary may coexist with no Continuation Boundary object;
-- after a Continuation Lifecycle and its boundary exist through a future authorized Creation sequence, the frozen Rejection Boundary may coexist with that Continuation Boundary while it is `PROVISIONAL` or `FROZEN`.
+- after a Continuation Lifecycle and its Boundary exist through ADR-010's authorized Creation sequence, the frozen Rejection Boundary may coexist with that Continuation Boundary while it is `PROVISIONAL` or `FROZEN`.
 
 An `ABSENT` Continuation Boundary is only a conceptual owner-scoped value state if a future Continuation Creation ADR explicitly authorizes a Lifecycle to exist before initial boundary formation. ADR-009 does not presently authorize that state.
 
@@ -822,7 +817,7 @@ The following must always hold:
 - No retired Step 2 predicate survives as hidden Step 4 behavior.
 - ADR-006 and ADR-007 retain all unaffected substantive decisions; ADR-010 narrowly amends their candle source for this chain.
 - Rejection and Continuation retain independent boundary identities and histories.
-- Continuation Creation sequencing remains open for its dedicated ADR.
+- ADR-010 governs Continuation Creation sequencing; ADR-011 governs the later Count Window and Participation sequence.
 
 ### Costs and required follow-up
 
@@ -923,9 +918,7 @@ The following remain intentionally outside ADR-009:
 - canonical corrected-candle rules;
 - canonical out-of-order-data rules;
 - exact Rejection Candidate establishment sequencing before or with initial boundary formation;
-- continuation Count 0;
-- continuation participation;
-- continuation Step 4;
+- behavior after confirmed Continuation Step 4;
 - multi-owner candle routing;
 - precise Candidate or Lifecycle terminal-session deadlines.
 
@@ -951,9 +944,8 @@ ADR-009 does not define or authorize:
 - APIs;
 - projections;
 - implementation architecture;
-- Continuation Creation behavior;
-- continuation participation;
-- continuation Step 4;
+- Continuation Creation behavior (governed by ADR-010);
+- continuation participation and Step 4 behavior (governed by ADR-011);
 - entries;
 - execution;
 - risk management;

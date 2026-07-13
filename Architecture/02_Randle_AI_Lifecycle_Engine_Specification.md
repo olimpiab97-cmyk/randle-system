@@ -4,7 +4,7 @@ Document Type: Core Architecture Specification
 Status: Canonical
 Authority: Subordinate to the Randle AI Constitution and Randle AI Lifecycle Vocabulary
 Scope: Universal lifecycle-engine mechanics for rejection, continuation, entry, management, and terminal decision lifecycles
-Release Boundary: This release incorporates ADR-009's universal Boundary mechanics and ADR-010's approved Continuation Creation, initial Boundary formation, Evaluation Start, one-minute source, and consumption-authority rules. It does not define continuation Count 0, participation, Count Window, Step 4, later Continuation lifecycle behavior, or implementation.
+Release Boundary: This release incorporates ADR-009's universal Boundary mechanics, ADR-010's approved Continuation Creation, initial Boundary formation, Evaluation Start, one-minute source, and consumption-authority rules, and ADR-011's approved Continuation Count 0 through Step 4 rules. It does not define later post-Step-4 Continuation lifecycle behavior or implementation.
 
 1. Purpose
 The Randle AI Lifecycle Engine is the shared architectural system responsible for creating, advancing, freezing, terminating, persisting, restoring, replaying, and exposing all Randle AI trading lifecycles.
@@ -479,7 +479,7 @@ A duplicate parent transition SHALL NOT create duplicate children.
 The child SHALL inherit the exact frozen parent data required by its canonical specialized specification.
 The child SHALL NOT derive those values from later global state.
 Eligibility and child input preservation transfer approved facts as immutable lineage only; they do not transfer boundary ownership or identity.
-A Rejection Boundary SHALL NOT become a Continuation Boundary. No Continuation Boundary exists before its Continuation Lifecycle identity. This specification does not select whether Continuation Creation precedes initial boundary formation or occurs atomically with it, and it does not authorize a Continuation Lifecycle with an ABSENT boundary.
+A Rejection Boundary SHALL NOT become a Continuation Boundary. No Continuation Boundary exists before its Continuation Lifecycle identity. ADR-010 selects atomic Continuation Creation and initial Boundary formation, and it does not authorize a Continuation Lifecycle with an ABSENT boundary.
 
 25. Prevention of Lifecycle Overwrite
 One lifecycle SHALL NOT overwrite another lifecycle’s authoritative state.
@@ -884,7 +884,7 @@ lineage and authoritative history preservation;
 session-termination custody;
 prohibited cross-boundary effects.
 
-It SHALL NOT add a retired Rejection Step 2 predicate, import Step 4 participation or qualification into Step 2, transfer boundary identity through lineage, or choose a deferred Continuation Creation sequence.
+It SHALL NOT add a retired Rejection Step 2 predicate, import Step 4 participation or qualification into Step 2, transfer boundary identity through lineage, or contradict ADR-010's Creation sequence or ADR-011's Count Window and Participation rules.
 These requirements do not authorize implementation.
 A canonical specialized specification may strengthen this engine contract but SHALL NOT weaken it.
 

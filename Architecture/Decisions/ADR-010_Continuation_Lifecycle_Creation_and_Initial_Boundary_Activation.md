@@ -165,7 +165,7 @@ Creation, Boundary formation, and Evaluation Start are separate ordered facts in
 
 Evaluation Start evidence SHALL separately preserve its identity, causal Creation identity, Continuation Boundary identity, effective point after the formation candle, and governing-rule version.
 
-ADR-010 assigns no Continuation Count 0 to Creation, Boundary formation, or Evaluation Start. Whether a later Continuation Step 2 Confirmation becomes Count 0 remains deferred. Parent Rejection Count 0 is immutable lineage and is never reused as a child Count 0.
+ADR-010 assigns no Continuation Count 0 to Creation, Boundary formation, or Evaluation Start. ADR-011 governs the later Continuation Step 2 Confirmation as Continuation Count 0. Parent Rejection Count 0 is immutable lineage and is never reused as a child Count 0.
 
 ## 16. Formation-candle exclusion
 
@@ -250,7 +250,7 @@ A candle that consumes the governing Liquidity Level cannot also confirm or prog
 
 If Continuation Step 2 confirmed on an earlier candle, the Continuation Boundary is FROZEN. Later Liquidity Level consumption cannot alter it, undo Step 2, or return the Boundary to PROVISIONAL or ABSENT.
 
-The later Lifecycle status, Participation, Count Window, Step 4, and terminal consequence remain deferred.
+The exact final child Lifecycle status remains deferred. ADR-011 governs Continuation Count 0, Participation, the Count Window, and Step 4 after Continuation Step 2 Confirmation.
 
 ## 26. Session and contract constraints
 
@@ -280,7 +280,7 @@ Replay SHALL reproduce the same result after applying finalized one-minute order
 
 ADR-006 remains the authority for the Rejection Step 4 Count Window. ADR-007 remains the authority for the Participation Rule. ADR-008 remains the authority for accepted Step 4 handoff, Eligibility identity, uniqueness, cardinality, parent lineage, session isolation, handoff atomicity, idempotency, and terminal status model. ADR-009 remains the authority for Boundary value states, ownership, strict-wick formation, `P_in`, confirmation-first precedence, failed-close-only progression, freeze-at-`P_in`, post-freeze immutability, and historical custody.
 
-ADR-010 governs the limited cross-lifecycle rules expressly stated here. It does not supersede those ADRs in full.
+ADR-010 governs the limited cross-lifecycle rules expressly stated here. ADR-011 separately governs the child Continuation Count Window and Participation from Continuation Step 2 Confirmation through Step 4. Neither ADR supersedes the earlier ADRs in full.
 
 ## Narrow amendments to ADR-006 through ADR-009
 
@@ -303,7 +303,7 @@ Rejected alternatives include: a fourth liquidity or boundary price object; reti
 
 ## 32. Deferred decisions
 
-Outside ADR-010 are exact Liquidity Level calculations and family registry; level-map ordering and tied-stack tie-break; replacement dynamic stack routing; corrected-candle and out-of-order mechanics; contract rollover; final child terminal-status name after post-Creation consumption; whether later Step 2 becomes Count 0; Continuation Participation, Count Window, Step 4, entries, execution, risk, position management, exact session deadline, identity encoding, and generic candle routing beyond the expressly authorized Step-4-to-Creation reuse.
+Outside ADR-010 are exact Liquidity Level calculations and family registry; level-map ordering and tied-stack tie-break; replacement dynamic stack routing; corrected-candle and out-of-order mechanics; contract rollover; final child terminal-status name after post-Creation consumption; behavior after confirmed Continuation Step 4; entries, execution, risk, position management, exact session deadline, identity encoding, and generic candle routing beyond the expressly authorized Step-4-to-Creation reuse. ADR-011 governs Continuation Count 0, Participation, the Count Window, and Step 4.
 
 These deferred decisions do not reopen this ADR.
 
@@ -315,7 +315,7 @@ Costs and dependencies: canonical documents require one-minute terminology align
 
 ## 34. Non-goals
 
-This ADR does not define implementation, code, tests, persistence technology, schemas, APIs, migrations, deployment, Liquidity Level calculations, parent percentage thresholds, Continuation Count 0, Participation, Count Window, Step 4, entries, execution, risk, position management, or later Continuation lifecycle behavior.
+This ADR does not define implementation, code, tests, persistence technology, schemas, APIs, migrations, deployment, Liquidity Level calculations, parent percentage thresholds, entries, execution, risk, position management, or behavior after confirmed Continuation Step 4. ADR-011 separately governs Continuation Count 0, Participation, the Count Window, and Step 4.
 
 ## 35. Worked examples
 

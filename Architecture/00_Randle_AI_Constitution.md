@@ -14,6 +14,9 @@ ADR-009 does not generally override this Constitution. Later documentation align
 ADR-010 Amendment Record
 Effective 2026-07-13, ADR-010 is a narrow cross-lifecycle amendment. It establishes the canonical authoritative completed one-minute candle source for the Rejection-to-Continuation chain; governs next-Liquidity-Level consumption as an authority fact rather than a Liquidity Level value-state transition; supplies the stated pre-Creation Eligibility invalidation trigger; and defines Continuation Creation, initial Continuation Boundary formation, and Evaluation Start. All unaffected ADR-006 through ADR-009 and constitutional decisions remain governing.
 
+ADR-011 Amendment Record
+Effective 2026-07-13, ADR-011 governs the approved Continuation Step 2-to-Step 4 sequence: Count 0, the fixed Count 1 through Count 4 Participation Window, current-candle opposing-wick Participation, immediately previous-Count directional-close Participation, and the `CONFIRMED`, `EXPIRED`, and `INVALIDATED` outcomes. It independently adopts the completed 34% wick mathematics for Continuation. ADR-006 and ADR-007 remain the corresponding Rejection authorities.
+
 Randle AI is a deterministic market-structure system built around liquidity, volatility, confirmation, rejection, continuation, risk, and execution.
 Its purpose is not to guess what the market may do through unrestricted artificial intelligence.
 Its purpose is to:
@@ -270,10 +273,10 @@ its own boundary ownership.
 The rejection lifecycle remains preserved after continuation begins.
 Continuation does not rename, clear, or overwrite rejection.
 The Rejection Boundary and Continuation Boundary retain separate identities, values, owners, histories, and confirmations. One cannot create, progress, freeze, reset, replace, invalidate, transfer into, or transform into the other, and numerical equality does not merge them.
-Continuation Eligibility does not own, form, progress, or freeze a Continuation Boundary. No Continuation Boundary exists before its Continuation Lifecycle identity exists. The future Continuation Creation architecture must decide its creation sequence; this Constitution does not select that sequence or authorize a Continuation Lifecycle with an ABSENT boundary.
+Continuation Eligibility does not own, form, progress, or freeze a Continuation Boundary. No Continuation Boundary exists before its Continuation Lifecycle identity exists. ADR-010 governs atomic Continuation Creation, initial Boundary formation, and Evaluation Start; it does not authorize a Continuation Lifecycle with an `ABSENT` Boundary.
 
 Release v1.0 Scope Boundary
-All continuation references in this Constitution establish universal rejection/continuation separation and ownership invariants only. They are conditional concepts for any future approved canonical continuation specification. This Constitution does not define continuation trading rules, a post-eligibility continuation state machine, or continuation implementation. The current specialized lifecycle specification boundary ends at Continuation Eligibility Creation.
+All continuation references in this Constitution establish universal rejection/continuation separation and ownership invariants. ADR-010 and ADR-011 supply the approved child Continuation rules through Step 4. This Constitution does not define behavior after confirmed Continuation Step 4 or continuation implementation.
 
 11. Append-Only Event Doctrine
 Authoritative lifecycle changes should be represented as append-only events.

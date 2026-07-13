@@ -35,6 +35,10 @@ This directory contains the governing architecture for Randle AI. It keeps four 
 
 - [`ADR-010_Continuation_Lifecycle_Creation_and_Initial_Boundary_Activation.md`](Decisions/ADR-010_Continuation_Lifecycle_Creation_and_Initial_Boundary_Activation.md) — The approved narrow cross-lifecycle amendment for authoritative one-minute candle sourcing, governing-Liquidity-Level consumption authority, pre-Creation Eligibility invalidation, Continuation Creation, initial Continuation Boundary formation, and Continuation Evaluation Start.
 
+### ADR-011
+
+- [`ADR-011_Continuation_Step4_Count_Window_and_Participation_Rule.md`](Decisions/ADR-011_Continuation_Step4_Count_Window_and_Participation_Rule.md) — The approved Continuation Step 2-to-Step 4 rule: Continuation Count 0, the fixed Count 1 through Count 4 Participation Window, current-candle opposing-wick and previous-Count directional-close Participation, and Step 4 outcomes.
+
 ## 3. Authority Order
 
 Authority descends in the following order:
@@ -54,6 +58,8 @@ Only explicitly canonical lifecycle specifications occupy authority level 4. The
 
 ADR-010 is an explicitly owner-approved, narrow cross-lifecycle amendment. It narrows the candle source for the Rejection-to-Continuation chain to the canonical authoritative completed one-minute series; governs next-Liquidity-Level consumption authority and its stated temporal consequences; defines the specific AVAILABLE-to-INVALIDATED Eligibility trigger before Creation; and supplies Continuation Creation, initial Boundary formation, and Evaluation Start. All unaffected ADR-006 through ADR-009 decisions remain governing.
 
+ADR-011 is an explicitly owner-approved, separate Continuation lifecycle decision. It governs Continuation Count 0, the fixed Count 1 through Count 4 Participation Window, the adopted 34% opposing-wick formula, directional completed-close Participation, and Continuation Step 4 outcomes. ADR-006 and ADR-007 remain the Rejection Count Window and Rejection Participation authorities; ADR-011 independently adopts the stated structure and formula for Continuation.
+
 ADR-009 is an explicitly owner-approved, narrow amendment limited to the Rejection Step 2 pattern and boundary statements in its supersession ledger. Those statements ceased to govern on 2026-07-11. ADR-009 does not generally override the Constitution, and every unaffected constitutional and universal invariant remains higher authority. Stale terminology or specialized-specification language cannot silently nullify that approved amendment and must be aligned through separately authorized documentation work.
 
 ## 4. Current Project Status
@@ -66,6 +72,7 @@ ADR-009 is an explicitly owner-approved, narrow amendment limited to the Rejecti
 | Boundary Architecture | **APPROVED — ADR-009** |
 | Continuation Eligibility Handoff | **APPROVED — ADR-008** |
 | Continuation Creation Architecture | **APPROVED — ADR-010** |
+| Continuation Step 4 Architecture | **APPROVED — ADR-011** |
 | Implementation Modernization | **NOT STARTED** |
 
 `COMPLETE THROUGH STEP 4` records completed architecture discovery and approved Rejection Step 4 decisions. It does not make the Step 4 draft canonical or authorize implementation. ADR-006 alone governs the approved Rejection Step 4 Count Window, and ADR-007 alone governs the approved Rejection Step 4 Participation Rule.
@@ -84,7 +91,7 @@ Continuation Eligibility Creation
 STOP
 ```
 
-Continuation lifecycle Creation, initial Boundary formation, Evaluation Start, governing-Level lineage, consumption authority, and entry into ADR-009 Step 2 mechanics are governed by ADR-010. Later Continuation lifecycle behavior remains outside this scope.
+The parent Rejection lifecycle stops at Continuation Eligibility. The child Continuation lifecycle then proceeds under ADR-010 for Creation, initial Boundary formation, Evaluation Start, governing-Liquidity-Level lineage and consumption authority, and entry into ADR-009 Step 2 mechanics; ADR-011 governs the child from Continuation Step 2 Confirmation through Continuation Step 4. Later post-Step-4 behavior remains outside these ADRs.
 
 The current boundary architecture governs the session-scoped Liquidity Level and the conceptual ABSENT, PROVISIONAL, and FROZEN derived-boundary value model, together with boundary ownership, formation, progression, confirmation, freeze, session custody, and independence. ADR-010 creates no ownerless Continuation Boundary and authorizes no Continuation Lifecycle with an ABSENT Boundary.
 
@@ -99,7 +106,7 @@ The following items remain unresolved:
 - Corrected-candle policy
 - Out-of-order policy
 - Exact Rejection Candidate establishment sequencing before or with initial boundary formation
-- Continuation Count 0 after Creation, Participation, Count Window, and Step 4
+- Behavior after confirmed Continuation Step 4
 - Multi-owner candle routing
 - Precise Candidate or Lifecycle terminal-session deadlines
 - Session rollover policy
