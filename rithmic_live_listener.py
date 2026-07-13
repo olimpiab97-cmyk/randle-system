@@ -28,6 +28,9 @@ RITHMIC_RUNTIME_DIR = RITHMIC_CACHE_DIR / "runtime"
 RAPIPLUS_DLL_PATH = RITHMIC_RUNTIME_DIR / "rapiplus.dll"
 POWERSHELL_BRIDGE_PATH = RITHMIC_CACHE_DIR / "rithmic_phase_a_login.ps1"
 ENGINE_CREATION_TIMEOUT_SECONDS = 20
+RITHMIC_LOGIN_TIMEOUT_SECONDS = int(os.getenv("RITHMIC_LOGIN_TIMEOUT_SECONDS", "45") or "45")
+RITHMIC_DIAGNOSTIC_DURATION_SECONDS = int(os.getenv("RITHMIC_DIAGNOSTIC_DURATION_SECONDS", "0") or "0")
+RITHMIC_DIAGNOSTIC_ONESHOT = os.getenv("RITHMIC_DIAGNOSTIC_ONESHOT", "0").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_RITHMIC_SUBSCRIPTIONS = tuple(get_default_listener_subscriptions())
 RITHMIC_SUBSCRIPTIONS_ENV = "RITHMIC_LIVE_SUBSCRIPTIONS"
 RITHMIC_SECONDARY_DIAGNOSTIC_SUBSCRIPTION_ENV = "RITHMIC_RTY_DIAGNOSTIC_SUBSCRIPTION"
@@ -984,15 +987,20 @@ def build_powershell_bridge():
         r"""
         param(
             [string]$DllPath,
-            [string]$UserName,
-            [string]$Password,
             [string]$MdConnectionPoint,
             [string]$TsConnectionPoint,
             [string]$RepositoryConnectionPoint,
+            [int]$LoginTimeoutSeconds,
+            [int]$DiagnosticDurationSeconds,
             [string]$Subscriptions
         )
 
         $ErrorActionPreference = "Stop"
+        $UserName = [Environment]::GetEnvironmentVariable("RITHMIC_USER")
+        $Password = [Environment]::GetEnvironmentVariable("RITHMIC_PASSWORD")
+        if ([string]::IsNullOrWhiteSpace($UserName) -or [string]::IsNullOrWhiteSpace($Password)) {
+            throw "Missing required Rithmic credentials in inherited environment"
+        }
 
         Add-Type -Path $DllPath
 
@@ -1000,6 +1008,7 @@ def build_powershell_bridge():
         using System;
         using System.Collections.Concurrent;
         using System.Collections.Generic;
+        using System.Diagnostics;
         using System.Text;
         using System.Threading;
         using System.Threading.Tasks;
@@ -1011,7 +1020,10 @@ def build_powershell_bridge():
             NotLoggedIn,
             LoginInProgress,
             LoginFailed,
-            LoggedIn
+            LoggedIn,
+            ConnectionOpened,
+            ConnectionBroken,
+            ConnectionClosed
         }
 
         public class BridgeAdmCallbacks : AdmCallbacks
@@ -1034,6 +1046,8 @@ def build_powershell_bridge():
             }
 
             public BridgeLoginStatus RepositoryLoginStatus = BridgeLoginStatus.NotLoggedIn;
+            public BridgeLoginStatus MarketDataLoginStatus = BridgeLoginStatus.NotLoggedIn;
+            public BridgeLoginStatus TradingSystemLoginStatus = BridgeLoginStatus.NotLoggedIn;
             public bool ReceivedAgreementList = false;
             public int UnacceptedMandatoryAgreementCount = 0;
             public bool LoggedIntoMd = false;
@@ -1101,6 +1115,39 @@ def build_powershell_bridge():
             public void RequestShutdown()
             {
                 ShutdownRequested = true;
+            }
+
+            private BridgeLoginStatus GetStatus(ConnectionId connectionId)
+            {
+                if (connectionId == ConnectionId.Repository)
+                {
+                    return RepositoryLoginStatus;
+                }
+                if (connectionId == ConnectionId.MarketData)
+                {
+                    return MarketDataLoginStatus;
+                }
+                if (connectionId == ConnectionId.TradingSystem)
+                {
+                    return TradingSystemLoginStatus;
+                }
+                return BridgeLoginStatus.NotLoggedIn;
+            }
+
+            private void SetStatus(ConnectionId connectionId, BridgeLoginStatus status)
+            {
+                if (connectionId == ConnectionId.Repository)
+                {
+                    RepositoryLoginStatus = status;
+                }
+                else if (connectionId == ConnectionId.MarketData)
+                {
+                    MarketDataLoginStatus = status;
+                }
+                else if (connectionId == ConnectionId.TradingSystem)
+                {
+                    TradingSystemLoginStatus = status;
+                }
             }
 
             public void ResetHistoricalReplayState()
@@ -1190,52 +1237,104 @@ def build_powershell_bridge():
                 var sb = new StringBuilder();
                 info.Dump(sb);
                 string alertText = sb.ToString().Replace("\r", " ").Replace("\n", " ");
+                string connection = info.ConnectionId.ToString();
+                string alertType = info.AlertType.ToString();
+                BridgeLoginStatus stateBefore = GetStatus(info.ConnectionId);
+                BridgeLoginStatus stateAfter = stateBefore;
+
+                if (alertType == "LoginComplete")
+                {
+                    stateAfter = BridgeLoginStatus.LoggedIn;
+                }
+                else if (alertType == "LoginFailed")
+                {
+                    stateAfter = BridgeLoginStatus.LoginFailed;
+                }
+                else if (alertType == "ConnectionOpened")
+                {
+                    stateAfter = BridgeLoginStatus.ConnectionOpened;
+                }
+                else if (alertType == "ConnectionBroken")
+                {
+                    stateAfter = BridgeLoginStatus.ConnectionBroken;
+                }
+                else if (alertType == "ConnectionClosed")
+                {
+                    stateAfter = BridgeLoginStatus.ConnectionClosed;
+                }
+
+                SetStatus(info.ConnectionId, stateAfter);
                 Console.WriteLine("ALERT|" + alertText);
                 Console.WriteLine(
-                    "STATUS|alert_summary|connection=" + info.ConnectionId.ToString() +
-                    "|type=" + info.AlertType.ToString()
+                    "STATUS|connection_event|utc=" + DateTime.UtcNow.ToString("o") +
+                    "|process_id=" + Process.GetCurrentProcess().Id.ToString() +
+                    "|thread_id=" + Thread.CurrentThread.ManagedThreadId.ToString() +
+                    "|connection=" + connection +
+                    "|event=" + alertType +
+                    "|state_before=" + stateBefore.ToString() +
+                    "|state_after=" + stateAfter.ToString() +
+                    "|rp_code=" + info.RpCode.ToString() +
+                    "|request_id=unavailable_in_rapi_alert" +
+                    "|shutdown_requested=" + ShutdownRequested.ToString()
                 );
 
                 if (info.ConnectionId == ConnectionId.Repository)
                 {
-                    if (info.AlertType == AlertType.LoginComplete)
+                    if (alertType == "LoginComplete")
                     {
-                        RepositoryLoginStatus = BridgeLoginStatus.LoggedIn;
                         Console.WriteLine("STATUS|repository_login_complete");
                     }
-                    else if (info.AlertType == AlertType.LoginFailed)
+                    else if (alertType == "LoginFailed")
                     {
-                        RepositoryLoginStatus = BridgeLoginStatus.LoginFailed;
                         Console.WriteLine("STATUS|repository_login_failed");
                     }
                 }
 
-                if (info.ConnectionId == ConnectionId.MarketData &&
-                    info.AlertType == AlertType.LoginComplete)
+                if (info.ConnectionId == ConnectionId.MarketData && alertType == "LoginComplete")
                 {
                     LoggedIntoMd = true;
                     Console.WriteLine("STATUS|market_data_login_complete");
                     Console.WriteLine("STATUS|market_data_connected");
                 }
+                else if (info.ConnectionId == ConnectionId.MarketData && alertType == "LoginFailed")
+                {
+                    Console.WriteLine("STATUS|market_data_login_failed|rp_code=" + info.RpCode.ToString());
+                }
 
-                if (info.ConnectionId == ConnectionId.TradingSystem &&
-                    info.AlertType == AlertType.LoginComplete)
+                if (info.ConnectionId == ConnectionId.TradingSystem && alertType == "LoginComplete")
                 {
                     LoggedIntoTs = true;
                     Console.WriteLine("STATUS|trading_system_login_complete");
                     Console.WriteLine("STATUS|trading_system_connected");
                 }
+                else if (info.ConnectionId == ConnectionId.TradingSystem && alertType == "LoginFailed")
+                {
+                    Console.WriteLine("STATUS|trading_system_login_failed|rp_code=" + info.RpCode.ToString());
+                }
 
-                if (!ShutdownRequested && alertText.IndexOf("Market Data Connection Closed", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (alertType == "ForcedLogout")
+                {
+                    Console.WriteLine(
+                        "STATUS|forced_logout|connection=" + connection +
+                        "|rp_code=" + info.RpCode.ToString()
+                    );
+                }
+
+                if (!ShutdownRequested && info.ConnectionId == ConnectionId.MarketData && alertType == "ConnectionClosed")
                 {
                     MarketDataClosedUnexpectedly = true;
                     Console.WriteLine("STATUS|market_data_connection_closed_unexpected");
                 }
 
-                if (!ShutdownRequested && alertText.IndexOf("Trading System Connection Closed", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (!ShutdownRequested && info.ConnectionId == ConnectionId.TradingSystem && alertType == "ConnectionClosed")
                 {
                     TradingSystemClosedUnexpectedly = true;
                     Console.WriteLine("STATUS|trading_system_connection_closed_unexpected");
+                }
+
+                if (info.ConnectionId == ConnectionId.MarketData && alertType == "ConnectionBroken")
+                {
+                    Console.WriteLine("STATUS|market_data_connection_broken|sdk_recovery=owned_by_rapi");
                 }
             }
 
@@ -1282,6 +1381,8 @@ def build_powershell_bridge():
                 string mdConnectionPoint,
                 string tsConnectionPoint,
                 string repositoryConnectionPoint,
+                int loginTimeoutSeconds,
+                int diagnosticDurationSeconds,
                 string subscriptions)
             {
                 BridgeCallbacks callbacks = new BridgeCallbacks();
@@ -1366,6 +1467,7 @@ def build_powershell_bridge():
                     Console.WriteLine("STATUS|repository_login_call_returned");
 
                     DateTime repositoryLoginStartedUtc = DateTime.UtcNow;
+                    DateTime lastRepositoryLoginWaitUtc = DateTime.MinValue;
                     while (callbacks.RepositoryLoginStatus != BridgeLoginStatus.LoggedIn &&
                            callbacks.RepositoryLoginStatus != BridgeLoginStatus.LoginFailed)
                     {
@@ -1373,11 +1475,21 @@ def build_powershell_bridge():
                         {
                             return 0;
                         }
-                        Console.WriteLine(
-                            "STATUS|repository_login_wait|elapsed_seconds=" +
-                            ((int)DateTime.UtcNow.Subtract(repositoryLoginStartedUtc).TotalSeconds).ToString() +
-                            "|status=" + callbacks.RepositoryLoginStatus.ToString()
-                        );
+                        if (DateTime.UtcNow.Subtract(repositoryLoginStartedUtc).TotalSeconds >= loginTimeoutSeconds)
+                        {
+                            Console.WriteLine("ERROR|repository_login_timeout|status=" + callbacks.RepositoryLoginStatus.ToString());
+                            return 2;
+                        }
+                        if (lastRepositoryLoginWaitUtc == DateTime.MinValue ||
+                            DateTime.UtcNow.Subtract(lastRepositoryLoginWaitUtc).TotalSeconds >= 5)
+                        {
+                            lastRepositoryLoginWaitUtc = DateTime.UtcNow;
+                            Console.WriteLine(
+                                "STATUS|repository_login_wait|elapsed_seconds=" +
+                                ((int)DateTime.UtcNow.Subtract(repositoryLoginStartedUtc).TotalSeconds).ToString() +
+                                "|status=" + callbacks.RepositoryLoginStatus.ToString()
+                            );
+                        }
                         Thread.Sleep(1000);
                     }
                     Console.WriteLine("STATUS|repository_login_final_status|" + callbacks.RepositoryLoginStatus.ToString());
@@ -1413,6 +1525,8 @@ def build_powershell_bridge():
                     engine.logoutRepository();
 
                     Console.WriteLine("STATUS|market_data_login_start");
+                    callbacks.MarketDataLoginStatus = BridgeLoginStatus.LoginInProgress;
+                    callbacks.TradingSystemLoginStatus = BridgeLoginStatus.LoginInProgress;
                     engine.login(
                         callbacks,
                         String.Empty,
@@ -1430,11 +1544,43 @@ def build_powershell_bridge():
                         String.Empty
                     );
 
+                    DateTime connectionLoginStartedUtc = DateTime.UtcNow;
+                    DateTime lastConnectionLoginWaitUtc = DateTime.MinValue;
                     while (!callbacks.LoggedIntoMd || !callbacks.LoggedIntoTs)
                     {
                         if (callbacks.ShutdownRequested)
                         {
                             return 0;
+                        }
+                        if (callbacks.MarketDataLoginStatus == BridgeLoginStatus.LoginFailed ||
+                            callbacks.TradingSystemLoginStatus == BridgeLoginStatus.LoginFailed ||
+                            callbacks.MarketDataLoginStatus == BridgeLoginStatus.ConnectionClosed ||
+                            callbacks.TradingSystemLoginStatus == BridgeLoginStatus.ConnectionClosed)
+                        {
+                            Console.WriteLine(
+                                "ERROR|connection_login_failed|md_status=" + callbacks.MarketDataLoginStatus.ToString() +
+                                "|ts_status=" + callbacks.TradingSystemLoginStatus.ToString()
+                            );
+                            return 4;
+                        }
+                        if (DateTime.UtcNow.Subtract(connectionLoginStartedUtc).TotalSeconds >= loginTimeoutSeconds)
+                        {
+                            Console.WriteLine(
+                                "ERROR|connection_login_timeout|md_status=" + callbacks.MarketDataLoginStatus.ToString() +
+                                "|ts_status=" + callbacks.TradingSystemLoginStatus.ToString()
+                            );
+                            return 4;
+                        }
+                        if (lastConnectionLoginWaitUtc == DateTime.MinValue ||
+                            DateTime.UtcNow.Subtract(lastConnectionLoginWaitUtc).TotalSeconds >= 5)
+                        {
+                            lastConnectionLoginWaitUtc = DateTime.UtcNow;
+                            Console.WriteLine(
+                                "STATUS|connection_login_wait|elapsed_seconds=" +
+                                ((int)DateTime.UtcNow.Subtract(connectionLoginStartedUtc).TotalSeconds).ToString() +
+                                "|md_status=" + callbacks.MarketDataLoginStatus.ToString() +
+                                "|ts_status=" + callbacks.TradingSystemLoginStatus.ToString()
+                            );
                         }
                         Thread.Sleep(1000);
                     }
@@ -1525,12 +1671,22 @@ def build_powershell_bridge():
                         }
                     }
 
+                    Console.WriteLine("STATUS|subscription_generation|generation=1|count=" + subscriptionList.Count.ToString());
+
                     Console.WriteLine("STATUS|listener_service_running");
+                    DateTime listenerServiceStartedUtc = DateTime.UtcNow;
                     DateTime lastHeartbeatUtc = DateTime.MinValue;
                     while (!callbacks.ShutdownRequested &&
                            !callbacks.MarketDataClosedUnexpectedly &&
                            !callbacks.TradingSystemClosedUnexpectedly)
                     {
+                        if (diagnosticDurationSeconds > 0 &&
+                            DateTime.UtcNow.Subtract(listenerServiceStartedUtc).TotalSeconds >= diagnosticDurationSeconds)
+                        {
+                            callbacks.RequestShutdown();
+                            Console.WriteLine("STATUS|bounded_diagnostic_shutdown_requested|duration_seconds=" + diagnosticDurationSeconds.ToString());
+                            break;
+                        }
                         if (lastHeartbeatUtc == DateTime.MinValue ||
                             DateTime.UtcNow.Subtract(lastHeartbeatUtc).TotalSeconds >= 5)
                         {
@@ -1539,6 +1695,8 @@ def build_powershell_bridge():
                                 "STATUS|listener_heartbeat|" +
                                 "md_logged_in=" + callbacks.LoggedIntoMd.ToString() +
                                 "|ts_logged_in=" + callbacks.LoggedIntoTs.ToString() +
+                                "|md_state=" + callbacks.MarketDataLoginStatus.ToString() +
+                                "|ts_state=" + callbacks.TradingSystemLoginStatus.ToString() +
                                 "|shutdown_requested=" + callbacks.ShutdownRequested.ToString() +
                                 "|market_data_closed=" + callbacks.MarketDataClosedUnexpectedly.ToString() +
                                 "|trading_system_closed=" + callbacks.TradingSystemClosedUnexpectedly.ToString()
@@ -1599,6 +1757,8 @@ def build_powershell_bridge():
             $MdConnectionPoint,
             $TsConnectionPoint,
             $RepositoryConnectionPoint,
+            $LoginTimeoutSeconds,
+            $DiagnosticDurationSeconds,
             $Subscriptions
         )
 
@@ -1643,16 +1803,16 @@ def build_command():
         str(bridge_path),
         "-DllPath",
         str(dll_path),
-        "-UserName",
-        RITHMIC_USER,
-        "-Password",
-        RITHMIC_PASSWORD,
         "-MdConnectionPoint",
         RITHMIC_MD_CONNECTION_POINT,
         "-TsConnectionPoint",
         RITHMIC_TS_CONNECTION_POINT,
         "-RepositoryConnectionPoint",
         RITHMIC_REPOSITORY_CONNECTION_POINT,
+        "-LoginTimeoutSeconds",
+        str(RITHMIC_LOGIN_TIMEOUT_SECONDS),
+        "-DiagnosticDurationSeconds",
+        str(RITHMIC_DIAGNOSTIC_DURATION_SECONDS),
         "-Subscriptions",
         subscription_arg,
     ]
@@ -2341,9 +2501,16 @@ def main():
     reconnect_attempt = 0
 
     print("RITHMIC STATUS|startup_begin")
+    print(f"RITHMIC STATUS|listener_process_id|{os.getpid()}")
     print(f"RITHMIC STATUS|dll_path|{RAPIPLUS_DLL_PATH}")
     print(f"RITHMIC STATUS|md_connection_point|{RITHMIC_MD_CONNECTION_POINT}")
     print(f"RITHMIC STATUS|ts_connection_point|{RITHMIC_TS_CONNECTION_POINT}")
+    print(f"RITHMIC STATUS|repository_connection_point|{RITHMIC_REPOSITORY_CONNECTION_POINT}")
+    print(f"RITHMIC STATUS|login_timeout_seconds|{RITHMIC_LOGIN_TIMEOUT_SECONDS}")
+    if RITHMIC_DIAGNOSTIC_DURATION_SECONDS > 0:
+        print(f"RITHMIC STATUS|bounded_diagnostic_duration_seconds|{RITHMIC_DIAGNOSTIC_DURATION_SECONDS}")
+    if RITHMIC_DIAGNOSTIC_ONESHOT:
+        print("RITHMIC STATUS|diagnostic_oneshot_enabled")
     for exchange_code, symbol_code in subscriptions:
         print(f"RITHMIC STATUS|subscribed_symbol|{exchange_code}|{symbol_code}")
     print(f"RITHMIC STATUS|executor_price_bridge|{EXECUTOR_PRICE_URL}")
@@ -2364,6 +2531,10 @@ def main():
                 text=True,
                 bufsize=1,
                 cwd=str(RITHMIC_RUNTIME_DIR),
+            )
+            print(
+                "RITHMIC STATUS|bridge_started|"
+                f"process_id={process.pid}|reconnect_generation={reconnect_attempt}"
             )
 
             assert process.stdout is not None
@@ -2503,6 +2674,10 @@ def main():
             return_code = process.wait()
             if manual_shutdown_seen:
                 print("RITHMIC STATUS|manual_shutdown")
+                return
+
+            if RITHMIC_DIAGNOSTIC_ONESHOT:
+                print("RITHMIC STATUS|bounded_diagnostic_bridge_exit")
                 return
 
             if not service_running_seen:
