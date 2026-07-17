@@ -26,6 +26,7 @@ This directory contains the governing architecture for Randle AI. It keeps four 
   - [`ADR-007_Rejection_Step4_Participation_Rule.md`](Decisions/ADR-007_Rejection_Step4_Participation_Rule.md) — The approved authority for the Rejection Step 4 Participation Rule.
   - [`ADR-008_Rejection_Step4_Continuation_Eligibility_Handoff.md`](Decisions/ADR-008_Rejection_Step4_Continuation_Eligibility_Handoff.md) — The approved contract for the handoff from accepted Rejection Step 4 Confirmation to Continuation Eligibility, subject only to ADR-009's narrow supersession of the copied-and-immediately-frozen Continuation Boundary model.
   - [`ADR-009_Boundary_Architecture.md`](Decisions/ADR-009_Boundary_Architecture.md) — The approved authority for Liquidity Level, Rejection Boundary, and Continuation Boundary semantics. Effective 2026-07-11, it is a narrow constitutional and architectural amendment limited to the Rejection Step 2 pattern and boundary statements identified in its supersession ledger.
+  - [`ADR-014_Authoritative_Entry_Session_Rollover_Transaction.md`](Decisions/ADR-014_Authoritative_Entry_Session_Rollover_Transaction.md) — The approved authoritative Entry session rollover transaction, bound to approved content SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`. Approval establishes architecture authority only and grants no implementation, runtime verification, deployment, `READY_LOCKED`, or trading authorization.
 - [`Audits/`](Audits/) — Contains evidence-based assessments of current production behavior, architecture, and compliance. Audit findings inform decisions but do not redefine governing architecture.
   - [`00_Randle_AI_Rejection_Lifecycle_Compliance_Audit.md`](Audits/00_Randle_AI_Rejection_Lifecycle_Compliance_Audit.md) — Records the completed rejection-lifecycle compliance findings.
   - [`01_Randle_AI_Current_Production_Ground_Truth_Audit.md`](Audits/01_Randle_AI_Current_Production_Ground_Truth_Audit.md) — Preserves the completed production ground-truth findings used by the Gap Analysis.
@@ -73,6 +74,7 @@ ADR-009 is an explicitly owner-approved, narrow amendment limited to the Rejecti
 | Continuation Eligibility Handoff | **APPROVED — ADR-008** |
 | Continuation Creation Architecture | **APPROVED — ADR-010** |
 | Continuation Step 4 Architecture | **APPROVED — ADR-011** |
+| Entry Session Rollover Transaction | **APPROVED — ADR-014; DOCUMENTATION AUTHORITY ONLY** |
 | Implementation Modernization | **NOT STARTED** |
 
 `COMPLETE THROUGH STEP 4` records completed architecture discovery and approved Rejection Step 4 decisions. It does not make the Step 4 draft canonical or authorize implementation. ADR-006 alone governs the approved Rejection Step 4 Count Window, and ADR-007 alone governs the approved Rejection Step 4 Participation Rule.
@@ -109,7 +111,7 @@ The following items remain unresolved:
 - Behavior after confirmed Continuation Step 4
 - Multi-owner candle routing
 - Precise Candidate or Lifecycle terminal-session deadlines
-- Session rollover policy
+- Session rollover implementation and subordinate specification incorporation (ADR-014 approved; subordinate contract remains draft and noncanonical)
 - Contract rollover policy
 
 ## 7. Codex Usage
