@@ -45,6 +45,7 @@ The Entry Session Rollover Contract SHALL align its complete state set and place
 | 2026-07-17 | BLOCKING | BLOCKING (approval review) | Architecture Governance Owner | ADR-014 received an APPROVE recommendation, but the Entry contract, runtime verification specification, and canonical amendment ledger were rejected for blocking session-state/ordering/reconciliation gaps; no document was marked approved |
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 1 remediation drafted) | Architecture Governance Owner | Atomic activation/prior-retirement, sole writer, store failure states, verification, amendment, and conflict redlines drafted; pending coordinated approval review and all later gates |
 | 2026-07-17 | BLOCKING | BLOCKING (ADR-014 approved) | Architecture Governance Owner | Formal user approval applied to ADR-014 only, bound to SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`; supporting specifications, canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, and trading remain incomplete or unauthorized |
+| 2026-07-18 | BLOCKING | BLOCKING (Phase 3C1 normative remediation drafted) | Architecture Governance Owner | The support contract now enumerates exact destinations for all twelve states and exact degraded/corrupt recovery classifications while preserving Session-lock policy decision authority and the sole Entry Agent Session Commit Writer. Pending independent Phase 3C1 review; semantic traceability is deferred to Phase 3C2; no implementation, verification, deployment, or debt retirement occurred. |
 
 ## Traceability
 
@@ -52,6 +53,7 @@ The Entry Session Rollover Contract SHALL align its complete state set and place
 - Draft contract: `docs/lifecycle/entry_session_rollover_contract_DRAFT.md`
 - Matrix: `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`
 - Verification draft: `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`
+- Phase 3C1 redline: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md`
 
 ## Retirement evidence
 

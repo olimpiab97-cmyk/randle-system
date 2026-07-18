@@ -4,6 +4,8 @@ Document Type: Coordinated amendment proposal
 
 Status: **DRAFT - NOT APPLIED - NOT CANONICAL - NOT APPROVED**
 
+Phase 3C1 identity: **NORMATIVE ARCHITECTURE REMEDIATED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW**
+
 Implementation Authorization: None
 
 ## 1. Amendment rule
@@ -388,13 +390,44 @@ If separately approved for canonical promotion, the startup contract SHALL requi
 4. After authorized incorporation, re-run bidirectional traceability/debt review and record exact canonical versions.
 5. Only then consider a separate implementation authorization. Approval/incorporation never implies verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, or trading.
 
-## 18. Phase 3B clause traceability, storage, and diagnostic amendment
+## 18. Phase 3C1 normative architecture disposition
 
-If separately approved and later authorized for incorporation:
+This section supersedes the rejected Phase 3B storage and traceability incorporation proposal. It records draft reconciliation only. It does not propose canonical incorporation of ADR-015, ADR-016, the Runtime Authority Store Schema, the executable SQL, or the historical Phase 3B registry.
 
-1. `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` SHALL be incorporated as the clause/scenario/assertion forward/reverse traceability source for every mandatory ADR-015, ADR-016, Entry Session, Startup, Diagnostic Purity, and Runtime Authority Store obligation. Broad family mappings or generated counts SHALL NOT substitute for clause-specific preconditions, stimuli, evidence, result, assertion, negative case, and failure disposition.
-2. The physical runtime-authority store SHALL use Pattern A and the complete DDL-equivalent and typed-transaction contract in `docs/architecture/runtime_authority_store_schema_DRAFT.md`. The mechanical transaction coordinator SHALL NOT become a domain authority or writer. No duplicate authoritative identity copy, undefined parent, generic cross-writer transaction, or unenforceable cross-database foreign key is permitted.
-3. Every governed state machine SHALL include an explicit closed-transition rule. Every state or terminal outcome SHALL have one owner, transition authority, logical durable writer, durable record, restart rule, readiness effect, and verification mapping.
-4. `docs/architecture/listener_supervision_and_health_authority_DRAFT.md` SHALL remain withdrawn historical evidence and SHALL NOT be incorporated, implemented, or used as authority.
-5. Architecture approval, canonical incorporation, implementation conformance, runtime verification, deployment authorization, startup `READY_LOCKED`, post-startup `TRADING_PERMITTED`, Bucket 0 completion, Bucket 1 authorization, and trading authorization remain distinct decisions.
-6. Diagnostic-purity implementation and verification SHALL use the generated manifest for the implementation source commit. For the Phase 3B baseline, the exact source-bound inventory is the thirteen service/path entries identified against commit `869b3f08df5c5dbfa975246547455ad185288605`, tree `704fd715cad3aad281c534f8337840e3aab96234`; the count SHALL be regenerated for any later source tree and SHALL NOT be treated as a timeless exemption.
+### 18.1 Executable store contract
+
+- The explanatory contract is `docs/architecture/runtime_authority_store_schema_DRAFT.md`; its executable expansion is `docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql`.
+- Proposed store identity is SQLite `user_version=2`, thirty-seven `STRICT` tables, SQLite-native declared types, explicit same-database foreign keys/actions, exact checks, indexes, and triggers.
+- Writer authorization is registry-version 2 and is exclusive per active `(table_name, operation)` scope. The registry binds writer identity, writer build/contract identity, activation sequence, retirement sequence, and registry version. The Runtime Authority Store Transaction Coordinator remains mechanical only.
+- `listener_current` and `listener_state_transitions` belong to Listener State Writer; restart incident and `listener_restart_outcomes` rows belong to Listener Incident Writer; acknowledgements belong to Listener Acknowledgement Writer; `bridge_generations` belongs only to Bridge Generation Writer; `subscription_verifications` belongs to Health Durable Writer.
+- `TX-LSN-STOP-COMPLETE` performs the exact `STOPPING -> STOPPED` listener transition. `TX-LSN-EXECUTION-START` includes Listener Incident Writer. `TX-LSN-RATE-EXHAUSTED` deterministically produces `LISTENER_FAILED`, an incident terminal-outcome reference, and a durable `RECOVERY_RATE_LIMITED_FAILED` row in `listener_restart_outcomes`.
+- Store validation is read-only. Quarantine uses the external Runtime Authority Recovery Evidence Writer and never writes to the corrupt store. Restore/reinitialization, version-conflict rejection, initial bootstrap, and any future predecessor-bound migration use their separate closed envelopes.
+- No approved predecessor schema artifact/hash was established. Version 2 is the initial governed bootstrap proposal. Unidentified legacy stores are quarantined; positive authority import is prohibited until a separate predecessor-bound import/migration contract is governed.
+
+### 18.2 Exact Entry Session destinations
+
+ADR-014 remains unchanged: Session-lock policy is the sole eligibility and rollover-decision authority, and Entry Agent Session Commit Writer is the sole durable writer and executor. The supporting draft permits only these destinations:
+
+| Source | Exact permitted destinations |
+|---|---|
+| `NO_CURRENT_SESSION_CONTEXT` | `CANDIDATE_PENDING`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `STALE_PRIOR_SESSION_BLOCKED` | `CANDIDATE_PENDING`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `CANDIDATE_PENDING` | `CANDIDATE_VALIDATED`, `CANDIDATE_REJECTED`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `CANDIDATE_VALIDATED` | `COMMITTING`, `CANDIDATE_REJECTED`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `CANDIDATE_REJECTED` | `CANDIDATE_PENDING`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `COMMITTING` | `CURRENT_CONTEXT_READY`, `COMMIT_FAILED`, `COMMITTED_FAIL_CLOSED`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `COMMIT_FAILED` | `COMMITTING`, `CANDIDATE_REJECTED`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `COMMITTED_FAIL_CLOSED` | `CURRENT_CONTEXT_READY`, `SESSION_PROJECTION_DIVERGED`, `STALE_PRIOR_SESSION_BLOCKED`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `CURRENT_CONTEXT_READY` | `CANDIDATE_PENDING`, `STALE_PRIOR_SESSION_BLOCKED`, `SESSION_PROJECTION_DIVERGED`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `SESSION_PROJECTION_DIVERGED` | `COMMITTED_FAIL_CLOSED`, `CURRENT_CONTEXT_READY`, `STALE_PRIOR_SESSION_BLOCKED`, `SESSION_STORE_DEGRADED`, `SESSION_STORE_CORRUPT` |
+| `SESSION_STORE_DEGRADED` | `NO_CURRENT_SESSION_CONTEXT`, `STALE_PRIOR_SESSION_BLOCKED`, `COMMITTED_FAIL_CLOSED`, `CURRENT_CONTEXT_READY`, `SESSION_STORE_CORRUPT` |
+| `SESSION_STORE_CORRUPT` | `NO_CURRENT_SESSION_CONTEXT`, `STALE_PRIOR_SESSION_BLOCKED`, `COMMITTED_FAIL_CLOSED`, `CURRENT_CONTEXT_READY` |
+
+Every unlisted transition is prohibited. Recovery classification and evidence do not transfer eligibility or rollover-decision authority away from Session-lock policy.
+
+### 18.3 Startup, diagnostic, and traceability boundary
+
+- `CONTROL_STORES_VERIFIED` and `SUPERVISOR_AUTHORITY_READY` consume exact schema/registry hashes, writer exclusivity, current-state/version/cursor relationships, terminal incident outcomes, acknowledgement/generation checks, health/subscription ownership, and the verified external recovery-evidence chain.
+- The source-bound diagnostic inventory remains frozen at 31 registered GET service/path entries, 13 mutating entries, and 13 unique mutating URL patterns for source tree `704fd715cad3aad281c534f8337840e3aab96234`.
+- The Phase 3B clause registry is historical rejected evidence. Full semantic forward/reverse traceability is intentionally deferred to Phase 3C2 and may be rebuilt only against independently accepted Phase 3C1 hashes.
+- Coordinated package approval is not possible in Phase 3C1. ADR-015 and ADR-016 remain unapproved; every supporting specification and schema remains draft and noncanonical; canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, `TRADING_PERMITTED`, Bucket 0 completion, Bucket 1 work, and trading remain unauthorized.

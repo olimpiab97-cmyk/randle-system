@@ -1,0 +1,67 @@
+# Approval Remediation Phase 3C1 — Normative Architecture and Schema Redline Record
+
+Status: **DRAFT EVIDENCE — NONCANONICAL — NOT APPROVED — PENDING INDEPENDENT PHASE 3C1 REVIEW**
+
+Purpose: remediate only the normative architecture and schema defects rejected by the Independent Phase 3B Approval Report. This is not an approval review and does not regenerate semantic clause traceability.
+
+## 1. Exact baseline and fixed governance
+
+| Identity | Verified value |
+|---|---|
+| Phase 3B commit | `b9ab95b66c30d2745bf6573d8e1efb079685a55b` |
+| Parent | `869b3f08df5c5dbfa975246547455ad185288605` |
+| Tree | `846497f146c26a08b9ad0948688eae9946b30986` |
+| Subject | `docs(architecture): close phase 3b authority and traceability defects` |
+| Diagnostic source tree | `704fd715cad3aad281c534f8337840e3aab96234` |
+| ADR-014 metadata-applied SHA-256 | `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321` |
+
+ADR-014 is the approved governing dependency and was not amended. ADR-015 and ADR-016 remain unapproved. The explanatory Store Schema, executable SQL, and all supporting specifications remain draft and noncanonical. No canonical incorporation, implementation, runtime verification, deployment, production `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, or trading authorization is created.
+
+## 2. Phase 3B rejection findings and exact Phase 3C1 corrections
+
+| ID | Rejected normative defect | Exact correction | Corrected surfaces | Disposition |
+|---|---|---|---|---|
+| `P3C1-01` | Custom declared types were invalid in SQLite `STRICT` tables and placeholder checks did not name real columns | All 468 columns use SQLite `INTEGER` or `TEXT`; every UUID/hash/UTC/date/boolean/sequence/JSON rule is a closed built-in expression naming its actual column; no registered custom function is required | Store Schema sections 2-5; executable v2 SQL | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-02` | Markdown did not supply complete mechanically executable DDL | Added one executable SQL artifact containing all 37 `STRICT` tables, 468 columns, 37 primary keys, unique/check constraints, 115 FK declarations, 13 partial unique indexes, and 11 triggers | Store Schema; `runtime_authority_store_schema_v2_DRAFT.sql` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-03` | FK count, parents, actions, nullability, deferrability, and insertion-cycle behavior were not proven | Independently recounted 115 declarations/117 child columns. Every relationship names an exact full primary/unique parent key. Actions are 114 `ON UPDATE RESTRICT`, one `ON UPDATE CASCADE`, 102 `ON DELETE RESTRICT`, and 13 `ON DELETE CASCADE`; 50 are initially deferred and 65 immediate. No partial index is a parent key | Store Schema section 7; executable v2 SQL | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-04` | `(table_name, writer_id)` did not prevent two active writers for one operation | Registry version 2 uses closed `INSERT`/`UPDATE`/`DELETE`, exact writer/build/contract identity, effective and retired sequence, activation flag, and one partial unique index on active `(table_name, operation)`. Fifty-nine active routes cover eleven writer identities; no active `DELETE` route exists | Store Schema sections 6-8; executable v2 SQL | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-05` | Schema and writer-registry hashes were not reproducible | Defined exact marker-bounded UTF-8 schema serialization, CR/LF/trailing-whitespace treatment, preserved case/order, included/excluded objects, one terminal LF, and SHA-256. Defined exact version-2 active-row query, field order, tab/LF serialization, NULL sentinel, ordering, encoding, and SHA-256 for the registry | Store Schema section 3 | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-06` | `RASTORE-MIG-002` asserted an undefined approved v1 predecessor | Repository search established no exact approved predecessor SQL artifact/hash. The migration claim is removed. `RASTORE-BOOTSTRAP-V2` / `TX-STORE-BOOTSTRAP-V2` is the initial governed bootstrap. Unidentified/legacy stores are quarantined and cannot import positive authority without a separately governed predecessor-bound contract | Store Schema sections 4 and 9-12; ADR-016; Startup | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-07` | One universal envelope forced writes on validation/quarantine and conflated file recovery with healthy mutations | Defined separate closed envelopes for healthy mutating transactions, read-only validation, external corrupt-store quarantine, restore/reinitialization, healthy-store versus returned version-conflict rejection, initial bootstrap, and future predecessor-bound migration | Store Schema sections 9-12; ADR-016; Startup | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-08` | Runtime Authority Recovery Evidence Writer was undefined | Defined the Runtime Ops Recovery Controller-owned writer, authorization sources, exact `%LOCALAPPDATA%\RandleRuntimeData\control\evidence\runtime_authority_recovery_evidence_v1.jsonl` path, canonical sorted JSONL hash chain, monotonic sequence, same-directory temporary file/flush/atomic replace/directory flush/readback method, permitted record vocabulary, restart/startup verification, and prohibited authority effects | Store Schema section 10; ADR-016; Entry Session; Startup; Verification; ledger/matrix | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-09` | The 37-operation catalog omitted listener stop completion and left writer/result/envelope gaps | Preserved 37 exact IDs by replacing the invalid v1-to-v2 migration with initial bootstrap. Added `TX-LSN-STOP-COMPLETE`; included Listener Incident Writer in `TX-LSN-EXECUTION-START`; made rate exhaustion deterministically produce `LISTENER_FAILED`; made validation read-only and quarantine external; closed version-conflict, restore, reinitialize, and bootstrap behavior | Store Schema sections 9-12; ADR-015; ADR-016 | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-10` | ADR-015 omitted `STOPPING -> STOPPED` and misassigned listener/incident/acknowledgement writers | Added exact `TX-LSN-STOP-COMPLETE` and `STOPPING -> STOPPED`. Listener State Writer owns `listener_current` and `listener_state_transitions`; Listener Incident Writer owns restart incident/outcome rows; Listener Acknowledgement Writer owns acknowledgement rows | ADR-015; Store Schema tables/registry/triggers | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-11` | `RECOVERY_RATE_LIMITED_FAILED` was described as incident-only and policy-discretionary | A terminal `listener_restart_outcomes` row carries `RECOVERY_RATE_LIMITED_FAILED`, `LISTENER_FAILED`, no-retry, and rate evidence; the terminal incident references that exact outcome. The result is deterministic | ADR-015; Store Schema transaction/trigger contract | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-12` | ADR-016 collapsed subscription proof/result into health rows, permitted the wrong bridge writer, and conflicted on schema version | The producer emits `SUBSCRIPTION_PROOF_OBSERVED`, ingress stores SQL `SUBSCRIPTION_PROOF`, the evaluator decides, and Health Durable Writer writes `SUBSCRIPTION_VERIFIED` only to `subscription_verifications`; health changes use a separate transaction. Only Bridge Generation Writer writes `bridge_generations`. All proposed store requirements use version 2 | ADR-016; Store Schema; Startup; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-13` | Entry Session destinations and degraded/corrupt recovery used open categories | All twelve declared states list every exact destination token. Five exact recovery classifications map to one of four verified destinations or `SESSION_STORE_CORRUPT`; quarantine alone clears nothing. Session-lock policy remains sole eligibility/rollover-decision authority and Entry Agent Session Commit Writer remains sole durable writer/executor | Entry Session Contract section 3; ledger section 18.2 | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-14` | Startup store/supervisor gates relied on generic readiness statements | `CONTROL_STORES_VERIFIED` and `SUPERVISOR_AUTHORITY_READY` now require exact v2 schema/registry hashes and PRAGMAs, one route owner, current listener/version/transition cursor, exact incident/outcome, acknowledgements/current generation, Bridge Generation Writer row, five health records/aggregate, subscription rows, and no unresolved recovery/quarantine evidence | Startup sections 5-6; Store Schema | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-15` | Diagnostic and traceability metadata overstated completion | Preserved the independently confirmed source-bound inventory exactly: 31 registered GET service/path entries, 13 mutating entries, 13 unique mutating URL patterns. Only schema/verification references and completion claims changed | Diagnostic Purity; Verification; package matrix | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| `P3C1-16` | Phase 3B generated rows/counts were treated as substantive approval-ready traceability | The Phase 3B registry is headed `NOT APPROVAL READY — SEMANTIC TRACEABILITY REBUILD DEFERRED TO PHASE 3C2` and retained as historical rejected evidence. No Phase 3C1 line registry was generated. Phase 3C2 may use only independently accepted Phase 3C1 hashes | Clause Registry; Verification; ledger; matrix; README; manifest | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+| `P3C1-17` | Verification and supporting governance artifacts repeated rejected schema/ownership/completeness claims | Verification now specifies isolated executable DDL/FK/index/trigger/hash/envelope/stop/ownership/session tests while retaining the thirteen-route suite. Ledger, matrix, external index, README, manifest, and four blocking debt records carry the Phase 3C1 draft status and traceability deferral | Verification; ledger; matrix; external matrix; README; manifest; debts | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+
+## 3. Executable artifact identity and isolated proof
+
+| Item | Phase 3C1 value/result |
+|---|---|
+| Executable SQL | `docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql` |
+| Artifact SHA-256 | `40847f9d57a6880db3762e73f40c36a560bd3ad312b4791578651ee0d48a5e09` |
+| Canonical schema hash | `2873b192df50e3623e405a9b1846a179153c4ac5b96cabcbadc271373b8ce5bb` |
+| Canonical writer-registry hash | `73a7e8b0af810468a31985da446d826f54ebd8d590e51f9ac669e0cb78834f93` |
+| SQLite engine used/minimum supported | `3.43.1` / `3.43.1` |
+| PRAGMAs observed | `foreign_keys=1`; `trusted_schema=0`; `recursive_triggers=1`; `busy_timeout=5000`; `journal_mode=wal`; `synchronous=2 (FULL)`; `application_id=1380469844`; `user_version=2`; `encoding=UTF-8` |
+| Tables / columns / PK tables | 37 / 468 / 37 |
+| Declared types | `INTEGER`, `TEXT` only |
+| Foreign keys | 115 declarations / 117 child columns; all parent keys valid; `foreign_key_check` empty |
+| Partial unique indexes / triggers | 13 / 11 |
+| Writer registry | 59 active table/operation routes; 11 writer identities; zero duplicate active scopes |
+| Typed operation IDs | 37 total: 34 database-commit types plus read-only validate, external-only quarantine, and no-commit version-conflict rejection |
+
+The isolated temporary-database exercise executed the entire SQL and confirmed table/column/nullability/PK introspection, every FK action and parent key, all partial indexes, trigger compilation, and `PRAGMA integrity_check='ok'`. Representative tests proved conflicting active writers fail; exact retirement/replacement succeeds; all eleven triggers execute in their positive or negative path; valid listener transitions and `STOPPING -> STOPPED` succeed; an unlisted transition fails; current-state/version mismatch fails; terminal incident/outcome matching is enforced; positive acknowledgement uniqueness and wrong-generation rejection are enforced; the bridge writer is enforced; subscription proof/result separation is enforced; transaction idempotency mutation fails; a missing parent fails; pre-COMMIT work rolls back; post-COMMIT readback succeeds; read-only validation creates no transaction/metadata record; and two independent schema/registry computations match.
+
+The quarantine exercise used only a temporary invalid file. It moved the byte-identical file to an isolated quarantine path and atomically created a separate chained `QUARANTINE_COMPLETED` evidence record; it never opened or wrote the corrupt file as a database. These are schema/document validation exercises, not production implementation or runtime verification.
+
+## 4. Historical and remaining disposition
+
+`Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3B_Redlines.md` is preserved and marked `SUPERSEDED FOR NORMATIVE ARCHITECTURE READINESS BY PHASE 3C1 REMEDIATION RECORD`.
+
+All normative defects named above are corrected only in draft and require an independent Phase 3C1 review. Semantic forward/reverse traceability is deliberately unresolved until Phase 3C2. ADR-015 and ADR-016 remain unapproved. The schema and SQL remain noncanonical and cannot be installed. All four named debt records remain `BLOCKING`. Bucket 0 remains incomplete; Bucket 1 — Step 2 Rejection remains blocked and unauthorized.

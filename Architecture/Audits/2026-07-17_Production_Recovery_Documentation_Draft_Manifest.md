@@ -1,8 +1,33 @@
 # 2026-07-17 Production Recovery - Documentation Draft Manifest
 
-Status: **REVIEW ARTIFACT IDENTITIES - NONCANONICAL - NOT APPROVED**
+Status: **PHASE 3C1 DRAFT PACKAGE INDEX - NONCANONICAL - NOT APPROVED**
 
-Approval-Readiness Disposition: **SUPERSEDED BY PHASE 3B REPOSITORY COMMIT IDENTITIES**
+Approval-Readiness Disposition: **NORMATIVE ARCHITECTURE REMEDIATED IN DRAFT - PENDING INDEPENDENT PHASE 3C1 REVIEW; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2**
+
+## Phase 3C1 active package
+
+The Phase 3C1 provenance commit is the exact byte-level identity for the active draft package. The following files are its authorized architecture/schema surfaces:
+
+- `Architecture/Decisions/ADR-015_Listener_Lifecycle_Supervision_Epoch_Fencing_and_Restart_Cancellation.md` - unapproved;
+- `Architecture/Decisions/ADR-016_Feed_Health_Authority_Durable_Publication_and_Bridge_Recycle_Control.md` - unapproved;
+- `docs/architecture/runtime_authority_store_schema_DRAFT.md` - explanatory draft/noncanonical contract;
+- `docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql` - executable draft implementation reference, not production code;
+- `docs/lifecycle/entry_session_rollover_contract_DRAFT.md` - draft support for approved ADR-014;
+- `docs/architecture/production_startup_and_recovery_DRAFT.md` - draft/noncanonical;
+- `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md` - draft/noncanonical and not executed against production;
+- `docs/architecture/diagnostic_endpoint_purity_contract_DRAFT.md` - draft/noncanonical; source-bound thirteen-route inventory unchanged;
+- `Architecture/Audits/2026-07-17_ADR014_016_Canonical_Amendments_Draft.md` - proposal only, not applied;
+- `Architecture/Audits/2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md` - Phase 3C1 draft disposition;
+- `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md` - package-level index only;
+- `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md` - remediation record, not approval;
+- `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` - historical rejected Phase 3B evidence; not approval-ready;
+- this manifest, `Architecture/README.md`, and the directly affected blocking-debt records.
+
+ADR-014 remains approved and unchanged. Its metadata-applied SHA-256 is `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321`. The Runtime Authority Store proposal uses schema version 2 and an initial governed bootstrap; no approved predecessor artifact/hash was established. The provenance commit does not authorize approval, canonical incorporation, implementation, runtime verification, deployment, production `READY_LOCKED`, Bucket 0 completion, Bucket 1, or trading.
+
+Semantic traceability is intentionally deferred. The historical Phase 3B registry does not prove substantive or structural completeness. Phase 3C2 may operate only on independently accepted Phase 3C1 hashes.
+
+## Historical pre-remediation identities
 
 Historical Identity Notice: The hashes below identify the pre-remediation documentation draft set only. They SHALL NOT identify the Phase 3B package, establish a competing current version, or be used for approval. The Phase 3B remediation report and its document-only Git commit supply the next review identities. The listed combined listener-support draft is `WITHDRAWN — SUPERSEDED DRAFT`. The new Runtime Authority Store Schema and semantic clause/scenario/assertion registry are absent from this historical table and are identified only by the Phase 3B commit.
 

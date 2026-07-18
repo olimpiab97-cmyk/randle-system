@@ -8,9 +8,9 @@ Implementation scope: **NONE - documentation only**
 
 Canonical authority status: ADR-014 is **APPROVED / GOVERNING**. Governance records approved-content SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`; the metadata-applied committed file is `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321`, and the corresponding pre-metadata blob is not independently reconstructable from current repository history. ADR-015, ADR-016, and supporting specification drafts are **NOT APPROVED / NONCANONICAL**.
 
-Traceability coverage result: **PHASE 3A DRAFT INDEX COMPLETE; CLAUSE-LEVEL MAPPING PENDING INDEPENDENT APPROVAL; IMPLEMENTATION/VERIFICATION NOT AUTHORIZED**
+Traceability coverage result: **PHASE 3C1 NORMATIVE REMEDIATION DRAFTED; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2 — NOT APPROVAL READY**
 
-Clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. This matrix is a package-level evidence/debt index and SHALL NOT substitute for the registry's individual mandatory-clause mappings.
+Historical clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It is rejected Phase 3B evidence, not a current semantic mapping source. This matrix remains only a package-level evidence/debt index. Phase 3C2 will rebuild semantic forward/reverse traceability only after independent acceptance of the Phase 3C1 hashes.
 
 Implementation conformance result: **FAIL / NOT STARTED**
 
@@ -80,9 +80,11 @@ No production file was modified in this phase. The rows below preserve the backt
 | Runtime Recovery Verification Specification sections 3-10 | all corrected production and integration units | named deterministic/fault/integration artifacts | **DRAFT / NOT EXECUTED** | DEBT-012 through 014 |
 | Exact Canonical Amendment Draft sections 2-14 | Constitution alignment, Vocabulary, Engine, ADR-012, Runtime Authority, contracts, safety/ops docs | approval diff review plus later conformance suites | **DRAFT / NOT APPLIED** | DEBT-012 through 014 |
 
-## 4. Existing canonical authority amendment coverage
+## 4. Existing canonical authority amendment-target index
 
-| Existing authority | Exact draft amendment location | Forward mapping complete? | Status/debt |
+This is a document-target index only. A `Yes` value means the draft names an amendment location; it does not assert clause-level, forward/reverse, semantic, scenario, assertion, implementation, or verification completeness.
+
+| Existing authority | Exact draft amendment location | Draft target identified? | Status/debt |
 |---|---|---:|---|
 | Constitution sections 3, 6, 12-17, 20, 22 | Amendment Draft section 2 | Yes | Pending approval; DEBT-012 through 014 |
 | Lifecycle Vocabulary sections 2.1, 16, 18 | Amendment Draft section 3 | Yes | Pending approval; DEBT-012 through 014 |
@@ -190,7 +192,7 @@ This section preserves Phase 3A history. Its current-schema, nineteen-route, and
 | Every unlisted Entry Session transition prohibited | Entry Session Contract 3.1 | `RRV-SR-001/002` | Draft support for approved ADR-014; pending independent approval |
 | Startup terminal result precedes post-startup `TRADING_PERMITTED` decision | Startup 6.2, 11 | `RRV-ST-001`, `RRV-GOV-001` | Draft; pending independent approval |
 | Nineteen identified diagnostic GET migration obligations remain unimplemented | Diagnostic Purity 5.1-7 | `RRV-DP-001/002` | Draft architecture; source nonconformance unchanged |
-| Clause-level bidirectional traceability | Phase 3A Clause Registry | All `RRV-*` families | Draft registry completed; pending independent approval |
+| Clause-level bidirectional traceability | Phase 3A Clause Registry | All `RRV-*` families | Historical structural claim rejected; semantic traceability not approval-ready |
 | Combined listener support draft | Withdrawn support document header | None | `WITHDRAWN — SUPERSEDED DRAFT` |
 
 ADR-014 remains approved. ADR-015 and ADR-016 remain unapproved. No row is canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, or trading authorization.
@@ -207,7 +209,7 @@ Source evidence below is bound to commit `869b3f08df5c5dbfa975246547455ad1852886
 | Session policy versus writer separation | Entry Session Contract 2-3 | `RRV-SR-001/002`; `ESR-REQ-*` scenario/assertion rows | Draft support for approved ADR-014; pending independent approval |
 | Store-bound startup evidence | Startup 6 and 6.3 | `RRV-ST-001`, `RRV-STORE-001` | Draft; pending independent approval |
 | Source-bound diagnostic purity inventory | Diagnostic Purity 5; Verification 9 | `RRV-DP-001/002`; thirteen route-specific `SCN-DEP-*` scenarios | Draft architecture; current source nonconforming |
-| Clause-specific semantic traceability | Phase 3B Clause Registry | Every requirement -> scenario -> assertion and reverse family mapping | Draft; pending independent approval; no runtime test executed |
+| Clause-specific semantic traceability | Phase 3B Clause Registry | Historical generated requirement/scenario/assertion rows only | Rejected as substantive traceability; deferred to Phase 3C2; no runtime test executed |
 
 ### 11.1 Exact diagnostic source-bound findings
 
@@ -222,3 +224,24 @@ Absent Phase 3A route/symbol claims are not current-source facts: Executor `/deb
 ADR-014 remains approved and unchanged. ADR-015, ADR-016, the Store Schema, and all supporting drafts remain noncanonical and unapproved. This matrix supplies no implementation, runtime verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1, or trading authority.
 
 This update records draft remediation only. The historical rejection decisions in section 8 remain the last approval decisions until a new coordinated review. No debt is retired, no gate result is promoted, and no implementation/deployment authority exists.
+
+## 12. Phase 3C1 package-level remediation index
+
+This section is intentionally not a one-row-per-clause registry. It maps the normative defect families corrected in Phase 3C1 to their current draft sources and future verification families. Detailed semantic clause-to-scenario traceability is Phase 3C2 work.
+
+| Normative defect family | Corrected draft source | Future proof family | Phase 3C1 status |
+|---|---|---|---|
+| Executable SQLite `STRICT` schema, exact types/checks/tables/keys/indexes/triggers | Store Schema; executable v2 SQL | `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Exact FK parents/actions/deferral and insertion order | Store Schema section 4; executable v2 SQL | `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Active writer exclusivity and registry version/hash | Store Schema sections 5-7; executable v2 SQL | `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Reproducible schema hash | Store Schema section 3; executable v2 SQL marker block | `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Initial bootstrap and unidentified-store quarantine | Store Schema sections 9-12; ADR-016; Startup | `RRV-STORE-001`, `RRV-ST-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Operation-specific transaction envelopes and external recovery evidence | Store Schema sections 10-12; ADR-016; Startup | `RRV-STORE-001`, `RRV-FH-*` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Listener stop completion, rate exhaustion, and corrected writer ownership | ADR-015; Store Schema transaction catalog | `RRV-LS-*`, `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Subscription and bridge-generation ownership/version | ADR-016; Store Schema writer/trigger catalog | `RRV-FH-*`, `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Twelve-state exact Entry Session transitions and recovery classifications | Entry Session Contract section 3; ledger section 18.2 | `RRV-SR-*` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Exact startup store/supervisor evidence | Startup sections 5-6; Store Schema | `RRV-ST-001`, `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
+| Frozen diagnostic inventory | Diagnostic Purity Contract; Verification section 9 | `RRV-DP-*` | Preserved exactly: 31 registered GET entries, 13 mutating entries, 13 unique patterns |
+| Semantic clause traceability | Future Phase 3C2 registry against accepted Phase 3C1 hashes | Future exact semantic mappings | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+
+ADR-014 remains approved and unchanged. ADR-015 and ADR-016 remain unapproved. The Store Schema, executable SQL, and supporting documents are draft/noncanonical. No approval review, canonical incorporation, implementation, production/runtime verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, or trading authorization occurs here.

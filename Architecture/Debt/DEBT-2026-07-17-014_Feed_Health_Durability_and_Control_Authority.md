@@ -54,13 +54,16 @@ Before approval, ADR-016 SHALL separate or deterministically prioritize terminal
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 1 remediation drafted) | Architecture Governance Owner | Five-field termination model, unexpected-only BDP-01, absolute projection isolation, SQLite/control ownership mirrors, current readiness facts, and recovery verification drafted; pending approval review and implementation/verification |
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 3A remediation drafted) | Architecture Governance Owner | Complete orthogonal health-state machines, one physical runtime-authority database with separated logical writers, producer/evaluator/writer roles, and clause-level traceability drafted; pending independent approval and all later gates |
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 3A approval rejected; Phase 3B remediation pending review) | Architecture Governance Owner | Phase 3A's database description did not define all tables, keys, acknowledgement/current-state records, typed cross-writer transactions, crash/reconstruction behavior, or semantic verification mappings. Phase 3B proposes those contracts in a new draft store schema; no implementation or conformance is claimed. |
+| 2026-07-18 | BLOCKING | BLOCKING (Phase 3C1 normative remediation drafted) | Architecture Governance Owner | The v2 executable schema, recovery-evidence writer, initial-bootstrap/quarantine contract, separate operation envelopes, subscription-only durable record, Bridge Generation Writer ownership, and exact startup evidence were corrected in draft. Pending independent Phase 3C1 review; semantic traceability is deferred to Phase 3C2; no runtime verification or production change occurred. |
 
 ## Traceability
 
 - Draft ADR: `Architecture/Decisions/ADR-016_Feed_Health_Authority_Durable_Publication_and_Bridge_Recycle_Control.md`
 - Active draft runtime contracts: `docs/architecture/production_startup_and_recovery_DRAFT.md` and `docs/architecture/diagnostic_endpoint_purity_contract_DRAFT.md`
 - Withdrawn historical draft, not authority or implementation input: `docs/architecture/listener_supervision_and_health_authority_DRAFT.md`
-- Clause registry: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`
+- Historical rejected Phase 3B clause registry: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`
+- Phase 3C1 Store Schema and executable reference: `docs/architecture/runtime_authority_store_schema_DRAFT.md`, `docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql`
+- Phase 3C1 redline: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md`
 - Matrix: `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`
 - Verification draft: `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`
 

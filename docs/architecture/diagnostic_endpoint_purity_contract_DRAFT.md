@@ -1,6 +1,6 @@
 # Diagnostic Endpoint Purity Contract
 
-Version: Draft 0.4 — Phase 3B remediation
+Version: Draft 0.5 — Phase 3C1 schema-reference remediation
 
 Status: **DRAFT - NOT CANONICAL - NOT APPROVED**
 
@@ -182,10 +182,10 @@ If no pure endpoint exists for a required authority proof, startup SHALL fail wi
 
 ## 9. Governance boundary
 
-Architecture-document approval would approve this contract's required future behavior only. It would not assert that the thirteen source-bound paths are conforming, authorize source changes, satisfy runtime purity verification, or authorize deployment. Approved ADR-014 remains the fixed governing dependency; ADR-015, ADR-016, and this contract remain unapproved drafts in this Phase 3B record.
+Architecture-document approval would approve this contract's required future behavior only. It would not assert that the thirteen source-bound paths are conforming, authorize source changes, satisfy runtime purity verification, or authorize deployment. Approved ADR-014 remains the fixed governing dependency; ADR-015, ADR-016, and this contract remain unapproved drafts in this Phase 3C1 record. The Phase 3B source-bound result remains frozen: 31 registered GET service/path entries, 13 mutating entries, and 13 unique mutating URL patterns against source tree `704fd715cad3aad281c534f8337840e3aab96234`.
 
-This draft does not approve any endpoint, command, source modification, migration, implementation conformance, runtime verification, deployment, restart, `READY_LOCKED`, or trading authorization. This draft is eligible for a separate canonical-incorporation decision only after ADR-015/ADR-016 and this contract independently pass approval review and the clause-level obligation traceability is complete. Canonical incorporation SHALL precede and govern any later implementation authorization. Implementation conformance SHALL require all thirteen source-bound migration obligations, plus any path discovered by the regenerated manifest for the implementation commit, to be corrected at explicit startup/command boundaries. Runtime purity verification SHALL then prove the corrected source; deployment authorization remains a later separate gate. Neither implementation nor test evidence SHALL retroactively create or substitute for canonical authority.
+This draft does not approve any endpoint, command, source modification, migration, implementation conformance, runtime verification, deployment, restart, `READY_LOCKED`, or trading authorization. A coordinated approval decision is impossible until Phase 3C2 completes substantive traceability against independently accepted Phase 3C1 hashes. Canonical incorporation SHALL precede and govern any later implementation authorization. Implementation conformance SHALL require all thirteen source-bound migration obligations, plus any path discovered by the regenerated manifest for the implementation commit, to be corrected at explicit startup/command boundaries. Runtime purity verification SHALL then prove the corrected source; deployment authorization remains a later separate gate. Neither implementation nor test evidence SHALL retroactively create or substitute for canonical authority.
 
 Traceability: `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`.
 
-Clause-level traceability: every normative clause in this draft is assigned a stable `DEP-REQ-###` identity with forward and reverse verification mapping in `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. The external recovery matrix is a package-level index only and SHALL NOT substitute for the clause-level registry.
+Clause-level traceability: the Phase 3B registry is historical rejected evidence, not an approval-ready mapping. Semantic forward/reverse traceability is intentionally deferred to Phase 3C2. The package-level recovery matrix remains a noncanonical index and cannot substitute for that rebuild.

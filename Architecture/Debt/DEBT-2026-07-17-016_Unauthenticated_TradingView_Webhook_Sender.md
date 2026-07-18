@@ -64,6 +64,7 @@ ADR-014 is approved for internal session transaction atomicity without selecting
 | 2026-07-17 | - | BLOCKING | Architecture Governance Owner | Production trust-boundary review confirmed public route and payload validation but no authenticated sender identity or sender-bound replay proof |
 | 2026-07-17 | BLOCKING | BLOCKING (approval review) | Architecture Governance Owner | ADR-014's route/content/sender separation received an APPROVE recommendation without inventing a mechanism; startup, verification, and amendment drafts remain rejected/incomplete and production commitment/READY/deployment/trading remain prohibited |
 | 2026-07-17 | BLOCKING | BLOCKING (ADR-014 approved) | Architecture Governance Owner | Formal ADR-014 approval was applied at the approved content hash; no sender-authentication mechanism was approved and this debt continues to block production candidate commitment, deployment, `READY_LOCKED`, and trading |
+| 2026-07-18 | BLOCKING | BLOCKING (Phase 3C1 supporting drafts reconciled) | Architecture Governance Owner | Phase 3C1 preserved ADR-014 ownership and the startup fail-closed sender-authority gate while remediating only runtime-authority schema/specification defects. No authentication mechanism was selected; semantic traceability is deferred to Phase 3C2; this debt remains fully blocking. |
 
 ## Traceability
 
@@ -72,6 +73,7 @@ ADR-014 is approved for internal session transaction atomicity without selecting
 - Draft startup contract: `docs/architecture/production_startup_and_recovery_DRAFT.md`
 - Conflict matrix: `Architecture/Audits/2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md`
 - Traceability matrix: `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`
+- Phase 3C1 redline: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md`
 - Production ingress units: `Engines/trade_manager.py`, `EntryAgent/tv_context_server.py`
 
 ## Approval

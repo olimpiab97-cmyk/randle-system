@@ -51,13 +51,16 @@ Before approval, ADR-015 SHALL prohibit the attempt that would exceed the bridge
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 1 remediation drafted) | Architecture Governance Owner | Pre-execution maximum enforcement, acyclic SFF-02 evidence, named market-expectation authority, closed ATR matrix, and mirror reconciliations drafted; pending approval review and implementation/verification |
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 3A remediation drafted) | Architecture Governance Owner | Closed listener/incident vocabulary, distinct full-listener rate-limit outcome, policy-validation disposition, implementable one-database identity design, and clause-level traceability drafted; pending independent approval and all later gates |
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 3A approval rejected; Phase 3B remediation pending review) | Architecture Governance Owner | Phase 3A did not contain an implementable complete Runtime Authority Store schema or semantic clause/scenario/assertion traceability. Phase 3B adds a draft exact schema, writer routing, typed listener transactions, store-bound startup proofs, and semantic mappings; none is approved, canonical, implemented, or verified. |
+| 2026-07-18 | BLOCKING | BLOCKING (Phase 3C1 normative remediation drafted) | Architecture Governance Owner | Executable v2 `STRICT` DDL, exclusive writer routing, exact listener state/incident/acknowledgement ownership, `TX-LSN-STOP-COMPLETE`, deterministic rate exhaustion, separate operation envelopes, and startup proofs were corrected in draft. Pending independent Phase 3C1 review; semantic traceability is deferred to Phase 3C2; no authority, implementation, verification, or deployment was granted. |
 
 ## Traceability
 
 - Draft ADR: `Architecture/Decisions/ADR-015_Listener_Lifecycle_Supervision_Epoch_Fencing_and_Restart_Cancellation.md`
 - Active draft startup/purity contracts: `docs/architecture/production_startup_and_recovery_DRAFT.md` and `docs/architecture/diagnostic_endpoint_purity_contract_DRAFT.md`
 - Withdrawn historical draft, not authority or implementation input: `docs/architecture/listener_supervision_and_health_authority_DRAFT.md`
-- Clause registry: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`
+- Historical rejected Phase 3B clause registry: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`
+- Phase 3C1 Store Schema and executable reference: `docs/architecture/runtime_authority_store_schema_DRAFT.md`, `docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql`
+- Phase 3C1 redline: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md`
 - Matrix: `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`
 - Verification draft: `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`
 

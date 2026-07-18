@@ -1,6 +1,6 @@
 # Randle AI Runtime Recovery Verification Specification
 
-Version: Draft 0.4 - Phase 3B remediation
+Version: Draft 0.5 - Phase 3C1 normative remediation
 
 Document Type: Proposed Canonical Verification and Test Specification
 
@@ -37,7 +37,7 @@ Every record SHALL include source/artifact hashes, code/build identity, rule/ADR
 
 Every normative obligation exercised by this specification SHALL have a stable verification requirement ID. Every test case, fixture, fault point, report row, and evidence artifact SHALL cite at least one exact authority section and one ID below. Conversely, every ID SHALL resolve to one or more named tests and produced evidence rows; an untested ID or a test without an authority/ID mapping fails the Traceability gate.
 
-The clause-level source of truth for this draft package is `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It assigns `ADR015-REQ-###`, `ADR016-REQ-###`, `ESR-REQ-###`, `STARTUP-REQ-###`, `DEP-REQ-###`, `STORE-REQ-###`, and `RRVSPEC-REQ-###` to every mandatory clause in the six normative architecture/store documents and this verification specification, and supplies both forward and reverse mappings to the verification families below. A section-family row below does not replace a clause row in that registry.
+The Phase 3B clause registry is historical rejected evidence and is headed `NOT APPROVAL READY — SEMANTIC TRACEABILITY REBUILD DEFERRED TO PHASE 3C2`. It is not a source of substantive completion. The verification IDs below remain stable family names for Phase 3C1 schema/specification work, but no claim is made that every amended normative clause has a current scenario/assertion mapping. Phase 3C2 will rebuild semantic forward/reverse traceability only from hashes independently accepted in Phase 3C1.
 
 | Verification requirement ID | Exact normative obligation | Required verification sections/artifacts |
 |---|---|---|
@@ -56,7 +56,7 @@ The clause-level source of truth for this draft package is `Architecture/Audits/
 | `RRV-STORE-001` | Runtime Authority Store Schema sections 2-9 | Sections 5.8-5.9; schema, writer-routing, typed-transaction, crash/replay, reconstruction, and startup-proof suite |
 | `RRV-GOV-001` | Verification sections 10-12 and canonical governance/traceability specifications | Sections 10-12; noninterference, evidence report, debt, and gate audit |
 
-Before any verification run is accepted, the evidence manifest SHALL include both forward (`authority section -> clause requirement ID -> verification ID -> tests/evidence`) and reverse (`test/evidence -> verification ID -> clause requirement ID -> authority section`) views. Grouping is legal only when every individual mandatory clause is enumerated with a substantive scenario and assertion in the Phase 3B registry. Missing, duplicate-conflicting, boilerplate, or document-level-only citations fail verification and traceability. The registry is a present document obligation; it is not deferred to a future generated manifest.
+Phase 3C1 accepts only isolated schema/document validation evidence and does not complete the Traceability gate. Before any future implementation verification run can be accepted, Phase 3C2 must provide both forward (`authority clause -> requirement -> verification ID -> test/evidence`) and reverse (`test/evidence -> verification ID -> requirement -> authority clause`) substantive views. Boilerplate, line-count equivalence, duplicate generic scenarios, or document-level-only citations fail traceability.
 
 ## 3. ADR-014 session rollover verification
 
@@ -294,17 +294,21 @@ Recovery tests SHALL require exactly the five-sample/at-least-five-second monoto
 
 For every authoritative health state in ADR-016 section 3.9.1, tests SHALL exercise every permitted edge, reject at least one unlisted edge, verify the exact evaluator, transition authority, Health Durable Writer record, restart restoration, readiness effect, escalation behavior, and required recovery evidence. Evidence facts and failure reasons SHALL be rejected as state-machine members.
 
-The control-store suite SHALL prove the exact database contract in `docs/architecture/runtime_authority_store_schema_DRAFT.md`: schema identity `RANDLE_RUNTIME_AUTHORITY_V2`, every named table and column, each primary/unique/check/foreign-key constraint, `PRAGMA foreign_keys=ON`, zero `foreign_key_check` rows, WAL/FULL durability, writer-registry allowlists, optimistic versions, typed transaction coverage, crash-before/after-COMMIT reconstruction, corrupt-database quarantine, and rejection of every unauthorized write plan. It SHALL prove that the Runtime Authority Store Transaction Coordinator performs only connection, serialization, constraint, idempotency, commit/rollback, and mechanical recovery functions and cannot originate, evaluate, or own a domain identity or transition. No external database identity copy or unenforceable cross-database foreign key is permitted.
+The control-store suite SHALL execute `docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql` against a temporary database and prove the explanatory contract in `docs/architecture/runtime_authority_store_schema_DRAFT.md`: SQLite `>=3.43.1`; schema `RANDLE_RUNTIME_AUTHORITY_SCHEMA_V2`; `user_version=2`; valid STRICT declared types; 37 tables; 468 columns; every primary/unique/check; 115 FK declarations/117 mappings with explicit update/delete action and deferrability; `foreign_keys=ON`; zero `foreign_key_check` rows; 13 partial unique indexes; 11 compiled/exercised triggers; WAL/FULL durability; 59 active exclusive writer routes; reproducible schema/registry hashes; and all 37 operation IDs. It SHALL prove that only 34 are allowed in `transaction_commits` and that validate, quarantine, and version-conflict rejection cannot create a commit row. It SHALL prove that the Coordinator is mechanical only. No external database identity copy or cross-database FK is permitted.
 
-The role suite SHALL prove that the Rithmic listener emits authenticated `SUBSCRIPTION_PROOF_OBSERVED`, the State Evaluator alone decides the transition, and the Health Durable Writer alone commits `SUBSCRIPTION_VERIFIED`. Equivalent producer/evaluator/writer separation SHALL be proved for proof of life, bridge acknowledgement/generation grant, termination evidence, market-data expectation, ATR continuity, and Command Center parity.
+The role suite SHALL prove that the Rithmic listener emits authenticated `SUBSCRIPTION_PROOF_OBSERVED`/SQL `SUBSCRIPTION_PROOF`, the State Evaluator alone decides the result, and Health Durable Writer writes `SUBSCRIPTION_VERIFIED` only to `subscription_verifications`; any health transition is a separate transaction. It SHALL prove Bridge Generation Writer alone writes `bridge_generations`. Equivalent producer/evaluator/writer separation applies to proof of life, termination evidence, expectation, ATR continuity, and Command Center parity.
 
 ### 5.9 Runtime Authority Store typed-transaction and reconstruction coverage
 
 Verification ID: `RRV-STORE-001`.
 
-Schema validation SHALL enumerate the complete table catalog from the Store Schema, parse every declared foreign key, and prove that its referenced table and column exist in the same database, are uniquely addressable, and have compatible representations. It SHALL prove every table has an explicit primary key, every column has explicit nullability, every current-row uniqueness scope is enforceable, and every logical writer has an allowlisted operation set with a required authority decision or command, idempotency key, optimistic version, audit record, and fail-closed rejection.
+Schema validation SHALL introspect the complete table/column/key/index/trigger catalog, parse every FK, and prove that its parent exists in the same database and is an unconditional primary/unique key. It SHALL recount FK declarations and column mappings independently, verify all update/delete actions and deferred/immediate behavior, reject missing parents, and prove every column's exact nullability/STRICT type/check. It SHALL compute each canonical hash twice through independent implementations and require equality.
 
-Positive, negative, crash, retry, version-conflict, missing-parent, corrupt-record, and unauthorized-writer scenarios SHALL cover every closed typed transaction: all `TX-LSN-*`, `TX-STORE-*`, `TX-BRG-*`, and `TX-HEALTH-*` transactions. The suite SHALL specifically prove atomic listener cancellation, fencing, execution start, rehydration start, each authoritative-domain acknowledgement, completion, ordinary failure, rate exhaustion, planned stop, each bridge generation/recycle/fence/execution/rehydration/ready/failure/exhaustion/shutdown/epoch-transition transaction, and independent-dimension health update with atomic aggregate recomputation.
+Positive, negative, crash, retry, version-conflict, missing-parent, corrupt-record, and unauthorized-writer scenarios SHALL cover all 37 closed operation IDs. The suite SHALL specifically prove `TX-LSN-EXECUTION-START` includes Listener Incident Writer; `TX-LSN-STOP-COMPLETE` commits exact `STOPPING -> STOPPED`; every unlisted listener transition fails; `RECOVERY_RATE_LIMITED_FAILED` has a terminal outcome row/pointer and deterministic `LISTENER_FAILED`; positive acknowledgement uniqueness/wrong-generation rejection; Bridge Generation Writer exclusivity; subscription record separation; health aggregate derivation; and every bridge/health operation.
+
+Envelope tests SHALL prove: healthy mutations use the atomic write/commit/readback envelope; `TX-STORE-VALIDATE` changes no metadata/transaction/idempotency row; quarantine changes no byte in the corrupt database and writes only external evidence; restore/reinitialize/bootstrap construct a new candidate and require prepared/completed external evidence plus atomic replacement; healthy-store version conflict changes no domain row; unidentified-store conflict changes nothing; and no predecessor migration/import exists. The external writer test SHALL verify exact path contract, record vocabulary, canonical JSON, sequence/hash chain, atomic replacement, restart behavior, startup consumption, and its prohibited authority effects.
+
+Entry Session tests SHALL traverse every exact destination listed for all twelve states, reject every sampled unlisted edge, and exercise each `SESSION_STORE_DEGRADED`/`SESSION_STORE_CORRUPT` classification-to-destination mapping, including reinitialization yielding only `NO_CURRENT_SESSION_CONTEXT`, restored-current exposure gates, pre/post-commit crash, idempotent retry, and no legacy/projection authority import.
 
 For pre-COMMIT crash, the suite SHALL prove that none of the typed transaction's rows or current-state versions becomes visible. For post-COMMIT/pre-response crash, it SHALL replay the same idempotency key and prove byte-equivalent committed identities and versions with no duplicate state or action. Constraint, version, writer-routing, missing-parent, and corrupt-record failures SHALL create no partial domain state and SHALL return the exact Store Schema disposition. Startup reconstruction SHALL prove the last committed transaction cursor, current listener/epoch/bridge/health/incident/acknowledgement identities, and fail closed on any ambiguity without consulting process existence or projection JSON.
 
@@ -439,7 +443,7 @@ Completion requires:
 3. independent A/B/C suites pass;
 4. full isolated integration passes;
 5. broad regression disposition;
-6. bidirectional traceability complete;
+6. Phase 3C2 substantive bidirectional traceability complete against independently accepted Phase 3C1 hashes;
 7. every debt applicable to production readiness retired/resolved and the startup zero-blocking-debt proof passes;
 8. Architecture, Specification, Implementation, Verification, and Traceability gates PASS;
 9. exact deployment artifact/config identity; and
@@ -470,4 +474,4 @@ Expected verification artifacts:
 - isolated cold/manual integration report; and
 - approved evidence manifests and traceability matrix.
 
-Traceability: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` is the draft package's Phase 3B semantic clause/scenario/assertion forward/reverse registry. Section 2.1 defines verification families. `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md` is a noncanonical package-level evidence index and explicitly defers clause mapping to the registry. No traceability record creates authority, implementation conformance, verification completion, deployment permission, `READY_LOCKED`, or trading authorization.
+Traceability: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` is preserved only as historical rejected Phase 3B evidence. Semantic clause/scenario/assertion traceability is deferred to Phase 3C2 and is not approval-ready. Section 2.1 defines provisional verification families; the package-level matrix is a noncanonical evidence index. No traceability record creates authority, implementation conformance, verification completion, deployment permission, `READY_LOCKED`, or trading authorization.

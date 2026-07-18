@@ -4,6 +4,10 @@ Status: **DRAFT EVIDENCE — NONCANONICAL — NOT APPROVED**
 
 Baseline: document provenance commit `869b3f08df5c5dbfa975246547455ad185288605`, parent `c76adfb3e6a568d2480883e2653188fd682e86fc`, source tree `704fd715cad3aad281c534f8337840e3aab96234`.
 
+**SUPERSEDED FOR NORMATIVE ARCHITECTURE READINESS BY PHASE 3C1 REMEDIATION RECORD**
+
+This file remains historical Phase 3B evidence. Its schema-readiness and semantic-traceability completion dispositions were rejected by the independent Phase 3B approval report and are not current approval evidence.
+
 ADR-014 is the approved governing dependency and is unchanged. Its metadata-applied committed SHA-256 is `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321`. Governance records earlier approved-content SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`, but the corresponding pre-metadata Git blob is not independently reconstructable from current repository history. This limitation is recorded, not repaired or concealed.
 
 `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3A_Redlines.md` is retained as historical evidence and is **SUPERSEDED FOR APPROVAL READINESS BY PHASE 3B REMEDIATION RECORD**.
