@@ -2,7 +2,7 @@
 
 ## ADR-015/ADR-016 Historical Phase 3B Clause, Scenario, and Assertion Registry
 
-Version: Historical Draft 0.2 — Phase 3B evidence preserved by Phase 3C1
+Version: Historical Draft 0.2 — Phase 3B evidence preserved by Phase 3C1-R1
 
 Document Type: Historical rejected Phase 3B structural registry; not current semantic traceability
 
@@ -14,9 +14,9 @@ Runtime Verification Status: Not authorized and not performed
 
 ## 1. Scope and enumeration rule
 
-This file preserves the Phase 3B generated rows as historical evidence. Phase 3C1 changed the normative architecture and executable schema, so these source locations, obligations, owner/writer mappings, scenarios, assertions, and reverse mappings are stale. They SHALL NOT be used to claim current semantic coverage, approval readiness, verification completeness, or coordinated package approval. ADR-014 remains approved, governing, and unchanged.
+This file preserves the Phase 3B generated rows as historical evidence. Phase 3C1 and Phase 3C1-R1 changed the normative architecture and executable schema, so these source locations, obligations, owner/writer mappings, scenarios, assertions, and reverse mappings are stale. They SHALL NOT be used to claim current semantic coverage, approval readiness, verification completeness, or coordinated package approval. ADR-014 remains approved, governing, and unchanged.
 
-The rows below retain their exact historical Phase 3B content and identifiers only so the rejected work remains auditable. Phase 3C2 will rebuild substantive traceability only after an independent review accepts exact Phase 3C1 document and SQL hashes. No test is claimed implemented or executed.
+The rows below retain their exact historical Phase 3B content and identifiers only so the rejected work remains auditable. Phase 3C2 will rebuild substantive traceability only after an independent review accepts exact Phase 3C1-R1 document and SQL hashes. No test is claimed implemented or executed.
 
 ## 2. Forward requirement-to-scenario-to-assertion mapping
 

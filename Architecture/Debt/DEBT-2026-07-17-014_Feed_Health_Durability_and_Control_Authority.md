@@ -26,7 +26,7 @@ The failed atomic replacement operation is proven. The identity of the Windows p
 
 Approve ADR-016; establish direct current-epoch health authority, one local durable writer, explicit success/failure, pending retention, bounded retry, asynchronous OneDrive projection, and direct-evidence bridge recycle with epoch/generation fencing.
 
-The architecture must preserve raw documented RAPI callbacks and exact process/intent evidence, classify every unsupported or ambiguous dimension as field-specific `UNKNOWN`, prohibit process-disappearance inference, and define verified quarantine, approved restoration sources, no-source fail-closed recovery, epoch/generation preservation, versioned staged migration, rollback boundary, and recovery audit.
+The architecture must preserve raw documented RAPI callbacks and exact process/intent evidence, classify every unsupported or ambiguous dimension as field-specific `UNKNOWN`, prohibit process-disappearance inference, and define verified quarantine, approved restoration sources, no-source fail-closed recovery, epoch/generation preservation, rollback boundary, and recovery audit. No predecessor exists, so staged migration is not a current obligation; it may be defined only by a future separately governed predecessor-bound specification.
 
 Before approval, ADR-016 SHALL separate or deterministically prioritize terminal initiator/action/execution/cause dimensions and SHALL exclude matching planned shutdown/transition intent from BDP-01. Supporting specifications SHALL prohibit projection participation in control even as supplemental evidence, use the exact SQLite transaction contract/fact names, and verify the full governed restoration/migration matrix.
 
@@ -39,7 +39,7 @@ Before approval, ADR-016 SHALL separate or deterministically prioritize terminal
 5. Bridge recycle and full listener epoch transition have distinct ATR/readiness effects.
 6. Sharing-violation cause is deterministically reproduced/bounded in nonproduction.
 7. Every five-field RAPI termination value and field-specific `UNKNOWN` conservative action passes evidence-correlation tests.
-8. Corruption/quarantine/restore/reinitialize/migrate/rollback/audit startup cases pass without projection fallback.
+8. Corruption/quarantine/restore/reinitialize/bootstrap/rollback/audit startup cases pass without projection fallback; any migration case is future-only under a separately governed predecessor-bound specification.
 9. Cold/manual integration, traceability, and all five gates pass.
 10. Explicit deployment authorization is recorded.
 
@@ -55,6 +55,7 @@ Before approval, ADR-016 SHALL separate or deterministically prioritize terminal
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 3A remediation drafted) | Architecture Governance Owner | Complete orthogonal health-state machines, one physical runtime-authority database with separated logical writers, producer/evaluator/writer roles, and clause-level traceability drafted; pending independent approval and all later gates |
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 3A approval rejected; Phase 3B remediation pending review) | Architecture Governance Owner | Phase 3A's database description did not define all tables, keys, acknowledgement/current-state records, typed cross-writer transactions, crash/reconstruction behavior, or semantic verification mappings. Phase 3B proposes those contracts in a new draft store schema; no implementation or conformance is claimed. |
 | 2026-07-18 | BLOCKING | BLOCKING (Phase 3C1 normative remediation drafted) | Architecture Governance Owner | The v2 executable schema, recovery-evidence writer, initial-bootstrap/quarantine contract, separate operation envelopes, subscription-only durable record, Bridge Generation Writer ownership, and exact startup evidence were corrected in draft. Pending independent Phase 3C1 review; semantic traceability is deferred to Phase 3C2; no runtime verification or production change occurred. |
+| 2026-07-18 | BLOCKING | BLOCKING (Phase 3C1-R1 targeted remediation drafted) | Architecture Governance Owner | F1/F2/F4/F6-F8 gaps were corrected in draft: exact date/UTC and writer succession, closed producer/session/bridge operations, complete subscription and termination evidence schema, `RANDLE-RECOVERY-JCS-1`/Win32/bounds, and complete candidate/post-replacement state. Current migration testing was removed. Pending independent Phase 3C1-R1 review; no runtime verification or production change occurred. |
 
 ## Traceability
 
@@ -62,8 +63,9 @@ Before approval, ADR-016 SHALL separate or deterministically prioritize terminal
 - Active draft runtime contracts: `docs/architecture/production_startup_and_recovery_DRAFT.md` and `docs/architecture/diagnostic_endpoint_purity_contract_DRAFT.md`
 - Withdrawn historical draft, not authority or implementation input: `docs/architecture/listener_supervision_and_health_authority_DRAFT.md`
 - Historical rejected Phase 3B clause registry: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`
-- Phase 3C1 Store Schema and executable reference: `docs/architecture/runtime_authority_store_schema_DRAFT.md`, `docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql`
-- Phase 3C1 redline: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md`
+- Phase 3C1-R1 Store Schema and executable reference: `docs/architecture/runtime_authority_store_schema_DRAFT.md`, `docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql`
+- Active Phase 3C1-R1 redline: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_R1_Redlines.md`
+- Superseded historical Phase 3C1 redline: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md`
 - Matrix: `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`
 - Verification draft: `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`
 

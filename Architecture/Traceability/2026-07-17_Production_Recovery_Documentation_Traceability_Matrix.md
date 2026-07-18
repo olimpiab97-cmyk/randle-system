@@ -10,7 +10,7 @@ Canonical authority status: ADR-014 is **APPROVED / GOVERNING**. Governance reco
 
 Traceability coverage result: **PHASE 3C1 NORMATIVE REMEDIATION DRAFTED; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2 — NOT APPROVAL READY**
 
-Historical clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It is rejected Phase 3B evidence, not a current semantic mapping source. This matrix remains only a package-level evidence/debt index. Phase 3C2 will rebuild semantic forward/reverse traceability only after independent acceptance of the Phase 3C1 hashes.
+Historical clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It is rejected Phase 3B evidence, not a current semantic mapping source. This matrix remains only a package-level evidence/debt index. Phase 3C2 will rebuild semantic forward/reverse traceability only after independent acceptance of the Phase 3C1-R1 hashes.
 
 Implementation conformance result: **FAIL / NOT STARTED**
 
@@ -225,9 +225,9 @@ ADR-014 remains approved and unchanged. ADR-015, ADR-016, the Store Schema, and 
 
 This update records draft remediation only. The historical rejection decisions in section 8 remain the last approval decisions until a new coordinated review. No debt is retired, no gate result is promoted, and no implementation/deployment authority exists.
 
-## 12. Phase 3C1 package-level remediation index
+## 12. Historical Phase 3C1 package-level remediation index
 
-This section is intentionally not a one-row-per-clause registry. It maps the normative defect families corrected in Phase 3C1 to their current draft sources and future verification families. Detailed semantic clause-to-scenario traceability is Phase 3C2 work.
+This section is preserved as superseded Phase 3C1 package evidence and is intentionally not a one-row-per-clause registry. Section 13 is the active Phase 3C1-R1 package index. Detailed semantic clause-to-scenario traceability remains Phase 3C2 work.
 
 | Normative defect family | Corrected draft source | Future proof family | Phase 3C1 status |
 |---|---|---|---|
@@ -242,6 +242,22 @@ This section is intentionally not a one-row-per-clause registry. It maps the nor
 | Twelve-state exact Entry Session transitions and recovery classifications | Entry Session Contract section 3; ledger section 18.2 | `RRV-SR-*` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
 | Exact startup store/supervisor evidence | Startup sections 5-6; Store Schema | `RRV-ST-001`, `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW` |
 | Frozen diagnostic inventory | Diagnostic Purity Contract; Verification section 9 | `RRV-DP-*` | Preserved exactly: 31 registered GET entries, 13 mutating entries, 13 unique patterns |
-| Semantic clause traceability | Future Phase 3C2 registry against accepted Phase 3C1 hashes | Future exact semantic mappings | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+| Semantic clause traceability | Future Phase 3C2 registry against accepted Phase 3C1-R1 hashes | Future exact semantic mappings | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
 
 ADR-014 remains approved and unchanged. ADR-015 and ADR-016 remain unapproved. The Store Schema, executable SQL, and supporting documents are draft/noncanonical. No approval review, canonical incorporation, implementation, production/runtime verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, or trading authorization occurs here.
+
+## 13. Phase 3C1-R1 package-level F1-F8 index
+
+This is not semantic clause traceability. It only indexes the targeted defect families for a later independent review.
+
+| Finding | Normative sources | Isolated schema/specification proof family | Status |
+|---|---|---|---|
+| F1 calendar-valid date/UTC | Store Schema 14.1; SQL | `RRV-STORE-001` calendar vectors | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F2 writer succession/serialization | Store Schema 3.2/7/14.2; SQL | `RRV-STORE-001` route/succession/hash | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F3 cancellation consistency | ADR-015 3.4; Store Schema 14.4; SQL | `RRV-LS-001`, `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F4 operation closure | ADR-015/016; Store Schema 11/14.3 | `RRV-LS-*`, `RRV-FH-*`, `RRV-STORE-001` mutation coverage | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F5 terminal incident/outcome | ADR-015 3.9; Store Schema 14.4; SQL | `RRV-LS-002`, `RRV-STORE-001` terminal cases | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F6 subscription/termination | ADR-016 3.3/3.9; Store Schema 14.5; SQL | `RRV-FH-001/002`, `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F7 recovery evidence profile | Store Schema 14.6; ADR-016; Startup | `RRV-STORE-001`, `RRV-FH-003` canonical/atomic/bounds | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F8 candidate/replacement state | Store Schema 14.7; Entry Session 3.2; Startup | `RRV-STORE-001`, `RRV-SR-*`, `RRV-ST-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| Semantic clause traceability | Future Phase 3C2 registry against independently accepted Phase 3C1-R1 hashes | Not built in this task | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |

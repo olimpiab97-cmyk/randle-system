@@ -2,7 +2,7 @@
 
 Document Type: Pre-approval authority reconciliation
 
-Status: **PHASE 3C1 NORMATIVE ARCHITECTURE REMEDIATED IN DRAFT - PENDING INDEPENDENT PHASE 3C1 REVIEW - NONCANONICAL - NOT APPROVED**
+Status: **PHASE 3C1-R1 F1-F8 REMEDIATED IN DRAFT - PENDING INDEPENDENT PHASE 3C1-R1 REVIEW - NONCANONICAL - NOT APPROVED**
 
 Production/Implementation Authorization: None
 
@@ -310,9 +310,9 @@ Every row below is `CORRECTED IN DRAFT` and `PENDING INDEPENDENT APPROVAL` unles
 
 The only active statuses are the concepts listed above. A draft correction is not approval. This matrix does not authorize implementation, verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1, or trading.
 
-## 15. Phase 3C1 active normative conflict disposition
+## 15. Historical Phase 3C1 normative conflict disposition
 
-Sections 13 and 14 are retained as historical Phase 3A/3B evidence. The following rows are the active Phase 3C1 disposition. A corrected row has only the status `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW`; it is not approved, canonical, implemented, or runtime verified.
+Sections 13 and 14 are retained as historical Phase 3A/3B evidence. The following rows preserve the superseded Phase 3C1 disposition and are not active package truth. Their historical status did not approve, canonically incorporate, implement, or runtime-verify any artifact; section 16 is the active Phase 3C1-R1 disposition.
 
 | Conflict reopened by independent Phase 3B review | Exact Phase 3C1 correction | Governing draft surfaces | Status |
 |---|---|---|---|
@@ -345,6 +345,24 @@ Sections 13 and 14 are retained as historical Phase 3A/3B evidence. The followin
 | Runtime Authority Store explanatory schema and executable SQL | `DRAFT / NONCANONICAL / NOT PRODUCTION CODE` |
 | Supporting specifications, ledger, matrix, and Phase 3C1 redline | `DRAFT / NONCANONICAL` |
 | Semantic traceability | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+
+## 16. Phase 3C1-R1 active F1-F8 disposition
+
+Section 15 is historical Phase 3C1 evidence. These eight rows are the active normative-readiness disposition; none is an approval claim.
+
+| Finding | Exact R1 correction | Governing draft surfaces | Status |
+|---|---|---|---|
+| F1 permissive date/UTC checks | Exact ASCII Gregorian date and six-fraction UTC constraints, leap arithmetic, second 60 prohibition, and full built-in round-trip equality on every concrete column | Store Schema 14.1; executable SQL; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F2 successor and serializer closure | Executable retirement-before-install trigger with strictly later sequence; current version/contract identity; empty/TAB/LF/CR/sentinel exclusion; republished registry hash | Store Schema 3.2, 7, 14.2; executable SQL | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F3 cancellation mixed model | Exact `TX-LSN-CANCEL`-only `SUSPECT -> SUSPECT` versioned reevaluation plus normal `SUSPECT -> HEALTHY`; every other self-edge fails | ADR-015 3.4; Store Schema 14.4; SQL trigger | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F4 uncovered mutations | Catalog expanded to 55 operations/52 commit types with exact supervisor/lease, epoch/start/pending, registry/producer/session reference, recovery complete, and bridge initialize operations; epoch fencing uses Epoch Writer | Store Schema 11/14.3; ADR-015/016; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F5 terminal outcome identity | Direct terminal insert aborts; terminal update requires own outcome, same completion/recovery transactions, permitted predecessor, and exact incident transition/version | Store Schema 14.4; executable triggers; ADR-015 | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F6 subscription/termination alignment | Composite symbol/session and generation/epoch keys, complete subscription identities, closed five-field vocabularies, and five exact evidence contribution rows with deterministic basis | ADR-016 3.3/3.9; Store Schema 14.5; SQL | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F7 recovery evidence canonicalization | `RANDLE-RECOVERY-JCS-1`, exact hash bytes, Unicode/duplicate/surrogate rules, Win32 write-through primitives/readback/residual risk, and 64KiB/16MiB/4096 bounds | Store Schema 14.6; ADR-016; Startup; Entry Session | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F8 incomplete candidate/replacement state | Exact bootstrap/restore/reinitialize rows and insertion order, with mandatory external prepared-evidence sequence/hash on each store recovery row; explicit Runtime and Entry post-replacement initialization; current migration test removed/future-only | Store Schema 14.7; Entry Session 3.2; Startup; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| Semantic clause traceability | Historical Phase 3B registry remains rejected; no Phase 3C2 build occurred | Clause Registry; package matrix; Verification | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+
+ADR-014 remains approved and unchanged. ADR-015/016, schema/SQL, ledger, specifications, this matrix, and R1 redline remain draft/noncanonical. Canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, trading, Bucket 0 completion, and Bucket 1 remain unauthorized.
 | Canonical incorporation, implementation, runtime verification, deployment, production `READY_LOCKED`, and trading | `UNAUTHORIZED` |
 
 Bucket 0 remains incomplete, Bucket 1 — Step 2 Rejection remains blocked and unauthorized, and `DEBT-2026-07-17-012`, `-013`, `-014`, and `-016` remain `BLOCKING`.

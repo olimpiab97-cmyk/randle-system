@@ -4,7 +4,7 @@ Document Type: Coordinated amendment proposal
 
 Status: **DRAFT - NOT APPLIED - NOT CANONICAL - NOT APPROVED**
 
-Phase 3C1 identity: **NORMATIVE ARCHITECTURE REMEDIATED IN DRAFT — PENDING INDEPENDENT PHASE 3C1 REVIEW**
+Phase 3C1-R1 identity: **F1-F8 TARGETED NORMATIVE REMEDIATION IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW**
 
 Implementation Authorization: None
 
@@ -429,5 +429,21 @@ Every unlisted transition is prohibited. Recovery classification and evidence do
 
 - `CONTROL_STORES_VERIFIED` and `SUPERVISOR_AUTHORITY_READY` consume exact schema/registry hashes, writer exclusivity, current-state/version/cursor relationships, terminal incident outcomes, acknowledgement/generation checks, health/subscription ownership, and the verified external recovery-evidence chain.
 - The source-bound diagnostic inventory remains frozen at 31 registered GET service/path entries, 13 mutating entries, and 13 unique mutating URL patterns for source tree `704fd715cad3aad281c534f8337840e3aab96234`.
-- The Phase 3B clause registry is historical rejected evidence. Full semantic forward/reverse traceability is intentionally deferred to Phase 3C2 and may be rebuilt only against independently accepted Phase 3C1 hashes.
+- The Phase 3B clause registry is historical rejected evidence. Full semantic forward/reverse traceability is intentionally deferred to Phase 3C2 and may be rebuilt only against independently accepted Phase 3C1-R1 hashes.
 - Coordinated package approval is not possible in Phase 3C1. ADR-015 and ADR-016 remain unapproved; every supporting specification and schema remains draft and noncanonical; canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, `TRADING_PERMITTED`, Bucket 0 completion, Bucket 1 work, and trading remain unauthorized.
+
+## 19. Phase 3C1-R1 superseding proposed amendment set
+
+This proposal supersedes section 18 only for F1-F8 readiness. Future canonical incorporation would additionally:
+
+- adopt schema-v2's exact Gregorian `YYYY-MM-DD` and six-fraction UTC constraints, 38-table/500-column/124-FK/60-route/14-trigger inventory, external prepared-evidence binding for store recovery rows, and reproducible republished hashes;
+- adopt registry retirement-before-successor enforcement and delimiter-safe nine-field serialization;
+- make cancellation's only listener self-edge an exact `TX-LSN-CANCEL` `SUSPECT -> SUSPECT`, and prohibit direct terminal incident insertion;
+- adopt the 55-operation catalog, including supervisor/lease, listener epoch/start/pending, registry/producer/session-reference, store-recovery-completion, and bridge-initialization operations; `TX-LSN-FENCE` includes Listener Epoch Writer;
+- bind subscription proof to exact producer sequence, symbol/contract session, request/provider/evaluator/freshness, current epoch/bridge generation, proof/integrity, and commit identities;
+- add the five-row termination evidence relationship, exact SQL vocabularies, and deterministic concrete/absence/uncertainty basis;
+- adopt `RANDLE-RECOVERY-JCS-1`, bounded JSONL, exact Windows write-through replacement/readback semantics, no false directory-flush claim, and evidence-only authority;
+- adopt complete bootstrap/restore/reinitialization candidate rows/insertion order and explicit post-replacement Entry/Runtime initialization; and
+- remove current migration testing. Migration would exist only under a future separately governed predecessor-bound specification.
+
+These are proposals only. ADR-014 remains approved and unchanged; ADR-015/016 remain unapproved. Phase 3C2 semantic traceability remains deferred until independent acceptance of exact Phase 3C1-R1 hashes.

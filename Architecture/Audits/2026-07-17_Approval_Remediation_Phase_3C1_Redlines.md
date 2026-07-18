@@ -1,5 +1,9 @@
 # Approval Remediation Phase 3C1 — Normative Architecture and Schema Redline Record
 
+> **SUPERSEDED FOR NORMATIVE APPROVAL READINESS BY PHASE 3C1-R1 REMEDIATION RECORD**
+>
+> Retained as historical Phase 3C1 evidence. Findings F1-F8 are corrected only by `2026-07-17_Approval_Remediation_Phase_3C1_R1_Redlines.md`; this record makes no current completion or approval claim.
+
 Status: **DRAFT EVIDENCE — NONCANONICAL — NOT APPROVED — PENDING INDEPENDENT PHASE 3C1 REVIEW**
 
 Purpose: remediate only the normative architecture and schema defects rejected by the Independent Phase 3B Approval Report. This is not an approval review and does not regenerate semantic clause traceability.

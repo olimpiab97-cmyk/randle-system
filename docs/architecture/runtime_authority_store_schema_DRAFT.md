@@ -1,6 +1,6 @@
 # Runtime Authority Store Schema and Typed Transaction Contract
 
-Version: Draft 0.3 — Phase 3C1 normative remediation
+Version: Draft 0.4 — Phase 3C1-R1 targeted normative remediation
 
 Status: **DRAFT — NONCANONICAL — NOT APPROVED**
 
@@ -43,7 +43,7 @@ One physical database does not merge logical ownership. The Runtime Authority St
 | Read-only validation | URI `mode=ro`, then `query_only=ON`; no transaction/idempotency/metadata write |
 | Mutating transaction start | `BEGIN IMMEDIATE` only for the healthy-store mutating envelope |
 
-Every one of the 37 tables is `STRICT`. Every declared type is one of `INTEGER`, `REAL`, `TEXT`, `BLOB`, or `ANY`; this schema currently needs only `INTEGER` and `TEXT`. There are no declared aliases such as `UUID`, `SHA256`, `UTC`, `SEQ`, or `VERSION`.
+Every one of the 38 tables is `STRICT`. Every declared type is one of `INTEGER`, `REAL`, `TEXT`, `BLOB`, or `ANY`; this schema currently needs only `INTEGER` and `TEXT`. There are no declared aliases such as `UUID`, `SHA256`, `UTC`, `SEQ`, or `VERSION`.
 
 Semantic normalization is column-specific SQL:
 
@@ -63,6 +63,8 @@ No check uses a placeholder parameter or an unregistered function.
 
 `store_metadata.schema_hash` is SHA-256 of the schema block in the committed SQL artifact.
 
+Phase 3C1-R1 published value: `10dab0b154fa34cabcbbf79ef3ef1966f6418e7e45a19543da2d6825aa260423`.
+
 Canonicalization is exact:
 
 1. Read the committed SQL file as UTF-8 without BOM.
@@ -73,11 +75,13 @@ Canonicalization is exact:
 6. Remove zero or more terminal LF characters and append exactly one LF.
 7. Hash those UTF-8 bytes with SHA-256 and render 64 lowercase hexadecimal characters.
 
-The block includes, in file order, all 37 `CREATE TABLE` definitions, inline primary/unique/check/foreign-key constraints, all 13 named partial unique indexes, and all 11 triggers. It excludes PRAGMAs, the surrounding DDL transaction, writer-registry data rows, and comments outside the block.
+The block includes, in file order, all 38 `CREATE TABLE` definitions, inline primary/unique/check/foreign-key constraints, all 13 named partial unique indexes, and all 14 triggers. It excludes PRAGMAs, the surrounding DDL transaction, writer-registry data rows, and comments outside the block.
 
 ### 3.2 Writer-registry hash
 
 `store_metadata.writer_registry_hash` covers exactly the active version-2 rows installed between `-- WRITER-REGISTRY-HASH-BEGIN` and `-- WRITER-REGISTRY-HASH-END`.
+
+Phase 3C1-R1 published value: `899bf56cbbae55068b136990c6baa1a01e4422da784119541089de9ecf3a3e28`.
 
 Query and serialization are exact:
 
@@ -94,7 +98,7 @@ ORDER BY registry_version, table_name, operation, writer_id,
 
 Serialize each value as its SQLite text rendering, with no quoting, join the nine fields with one U+0009 tab, append one LF per row, concatenate without a header or terminal blank row, encode UTF-8, and SHA-256 hash to lowercase hexadecimal. Closed values prohibit tabs, LF, or CR. `NULL` build/retirement values serialize as `-`. Every active table/operation scope is included; no inactive, other-version, metadata, rowid, insertion-order, timestamp, or file-path value is included.
 
-The SQL artifact byte hash is a separate provenance identity and is not substituted for either canonical hash.
+The committed SQL-artifact byte hash is a separate provenance identity and is not substituted for either canonical hash. Phase 3C1-R1 committed SQL SHA-256: `fbc64af7bf9dc064e6a2e46172a253ea81d0d891ae2763c9cc65a74917fa8cc5`.
 
 ## 4. Initial bootstrap; no predecessor migration
 
@@ -102,13 +106,13 @@ Repository-wide search found no exact approved version-1 SQL artifact and no app
 
 Phase 3C1 therefore defines the initial governed v2 bootstrap `RASTORE-BOOTSTRAP-V2` and typed operation `TX-STORE-BOOTSTRAP-V2`. Bootstrap requires a separately authenticated Recovery Authorization, Architecture Governance approval, Deployment Authorization, the exact committed SQL artifact hash, the exact schema hash, and the exact writer-registry hash. Those approvals do not currently exist.
 
-An authorized bootstrap would construct a new candidate file in the target directory, execute the complete SQL, install one `store_metadata` row with a new store UUID and the computed hashes, run the complete read-only validation envelope, flush candidate and directory, append external `BOOTSTRAP_PREPARED` evidence, atomically replace an absent target, reopen read-only, repeat validation, then append `BOOTSTRAP_COMPLETED`. Failure before activation deletes no source; failure after activation preserves the candidate as failed evidence and leaves startup failed.
+An authorized bootstrap first verifies the external chain and appends `BOOTSTRAP_PREPARED`, whose `output_artifacts` is empty and whose validation result is `PREPARED`; that yields the immutable external sequence/hash referenced by the candidate recovery row and avoids a self-hash cycle. It then constructs a new candidate file in the target directory, executes the complete SQL, installs `store_metadata` with a new store UUID and the computed hashes, runs the complete read-only validation envelope, and flushes the candidate file with `FlushFileBuffers`. It performs the section 14.6 same-volume write-through move, reopens read-only, repeats validation, then appends `BOOTSTRAP_COMPLETED` with the activated artifact length/hash. It makes no directory-flush claim. Failure before activation appends `BOOTSTRAP_FAILED` and deletes no source; failure after activation preserves the candidate as failed evidence and leaves startup failed.
 
 Any legacy, `user_version=1`, unknown-version, missing-hash, unidentified, or projection-derived store is quarantined. No positive listener, bridge, health, readiness, session, deployment, or trading authority may be imported from it. A future import or migration requires a separately governed artifact with exact predecessor file, commit, SHA-256, transformation, preservation rules, rollback boundary, and authorization. No migration transaction is present in this catalog.
 
 ## 5. Closed table inventory
 
-The executable contract has 37 tables and 468 columns. The primary key, exact nullability, all column checks, uniques, foreign keys, actions, and deferrability are expressed in the SQL, not inferred from this summary.
+The executable contract has 38 tables and 500 columns: 440 are `NOT NULL` and 60 are nullable. It has 38 primary keys covering 46 primary-key columns. The two added nullable columns bind store bootstrap/restore/reinitialization recovery rows to the prepared external evidence sequence and record hash; their table-level check makes both fields mandatory for those three recovery types and prohibited for listener/bridge/cold-start recoveries. The primary key, exact nullability, all column checks, uniques, foreign keys, actions, and deferrability are expressed in the SQL, not inferred from this summary.
 
 | Group | Table | Primary key | Logical writer and permitted operation |
 |---|---|---|---|
@@ -146,6 +150,7 @@ The executable contract has 37 tables and 468 columns. The primary key, exact nu
 | Subscription | `subscription_verifications` | `subscription_verification_id` | Health Durable Writer `INSERT` |
 | Termination | `termination_evidence` | `termination_evidence_id` | Health Durable Writer `INSERT` |
 | Termination | `termination_results` | `termination_result_id` | Health Durable Writer `INSERT` |
+| Termination | `termination_result_evidence` | `(termination_result_id,dimension)` | Health Durable Writer `INSERT` |
 | Expectation | `market_data_expectations` | `expectation_id` | Listener Incident Writer `INSERT`, `UPDATE` |
 | Projection | `projection_cursors` | `(projection_name,scope_key)` | Projection Writer `INSERT`, `UPDATE`; no control authority |
 | Store incident | `store_incidents` | `store_incident_id` | Store Incident Writer `INSERT`, `UPDATE` |
@@ -154,24 +159,24 @@ No `DELETE` route is active. Deletion is prohibited by the typed-plan authorizer
 
 ## 6. Foreign-key contract
 
-The SQL contains 115 explicit foreign-key declarations and 117 child-column mappings because two composite declarations each map two columns. Every declaration names exact child column(s), parent table and column(s), `ON UPDATE`, `ON DELETE`, and any deferrability. Child nullability is declared on the child column. Every parent is a primary key or inline unconditional `UNIQUE` key; no FK targets a partial index, undefined column, or nonunique identity.
+The SQL contains 124 explicit foreign-key declarations and 132 child-column mappings. Every declaration names exact child column(s), parent table and column(s), `ON UPDATE`, `ON DELETE`, and any deferrability. Child nullability is declared on the child column. Every parent is a primary key or inline unconditional `UNIQUE` key; no FK targets a partial index, undefined column, or nonunique identity.
 
 Action totals are:
 
 | Action | Declaration count | Lifecycle reason |
 |---|---:|---|
-| `ON UPDATE RESTRICT` | 114 | Durable identity keys never change |
+| `ON UPDATE RESTRICT` | 123 | Durable identity keys never change |
 | `ON UPDATE CASCADE` | 1 | Composite health dimension/scope key remains internally coupled if a separately governed candidate transform renames the pair |
-| `ON DELETE RESTRICT` | 102 | Identity/evidence parents cannot disappear while authoritative children exist |
-| `ON DELETE CASCADE` | 13 | Incident/recovery aggregate children cannot be orphaned during pre-activation candidate rollback; runtime deletion remains unauthorized |
+| `ON DELETE RESTRICT` | 110 | Identity/evidence parents cannot disappear while authoritative children exist |
+| `ON DELETE CASCADE` | 14 | Incident/recovery aggregate children cannot be orphaned during pre-activation candidate rollback; runtime deletion remains unauthorized |
 
-Fifty declarations are `DEFERRABLE INITIALLY DEFERRED` where transaction-commit/current-pointer or mutually linked history rows must be inserted atomically. Sixty-five are immediate where the parent must already exist. Representative insertion order is: transaction identity as required by the typed envelope; supervisor generation; policy/session references; listener epoch; bridge generation; incident/recovery parent; event/history/outcome child; current-pointer update; transaction completion/readback. Deferred cycles exist only inside one atomic aggregate and do not require an impossible committed intermediate state.
+Fifty-five declarations are `DEFERRABLE INITIALLY DEFERRED` where transaction-commit/current-pointer or mutually linked history rows must be inserted atomically. Sixty-nine are immediate where the parent must already exist. Representative insertion order is: transaction identity as required by the typed envelope; supervisor generation; policy/session references; listener epoch; bridge generation; incident/recovery parent; event/history/outcome child; current-pointer update; transaction completion/readback. Deferred cycles exist only inside one atomic aggregate and do not require an impossible committed intermediate state.
 
-The executable SQL is the per-FK inventory: each `FOREIGN KEY ... REFERENCES ... ON UPDATE ... ON DELETE ...` clause is normative. `PRAGMA foreign_key_list(table)` must reproduce all 117 mappings; `PRAGMA foreign_key_check` must return zero rows.
+The executable SQL is the per-FK inventory: each `FOREIGN KEY ... REFERENCES ... ON UPDATE ... ON DELETE ...` clause is normative. `PRAGMA foreign_key_list(table)` must reproduce all 132 mappings; `PRAGMA foreign_key_check` must return zero rows.
 
 ## 7. Writer routing and exclusivity
 
-The closed operation vocabulary is `INSERT`, `UPDATE`, `DELETE`. The v2 registry installs 59 active table/operation rows and 11 writer identities. Each row binds registry version, table, operation, writer identity, writer contract identity, optional deployment build hash, effective transaction sequence, retirement sequence, and active flag.
+The closed operation vocabulary is `INSERT`, `UPDATE`, `DELETE`. The v2 registry installs 60 active table/operation rows and 11 writer identities. Each row binds registry version, table, operation, writer identity, writer contract identity, optional deployment build hash, effective transaction sequence, retirement sequence, and active flag.
 
 `uq_writer_registry_active_scope` is exactly:
 
@@ -181,7 +186,7 @@ ON writer_registry(table_name,operation)
 WHERE active=1;
 ```
 
-It is impossible for two writer identities to own the same active table/operation scope. The old active row must be retired in a healthy `BEGIN IMMEDIATE` registry-change transaction by changing only `active:1->0` and setting `retired_transaction_sequence>=effective_transaction_sequence`; `trg_writer_registry_update_guard` rejects every other update and `trg_writer_registry_delete_guard` rejects deletion. Only after retirement may one successor row activate at a later effective sequence. Registry hash and `store_metadata.writer_registry_hash` change atomically. Any scope or build change requires governance and deployment authorization; neither exists now.
+It is impossible for two writer identities to own the same active table/operation scope. The old active row must be retired by `TX-STORE-WRITER-RETIRE` in a healthy `BEGIN IMMEDIATE` transaction by changing only `active:1->0` and setting its exact retirement sequence; `trg_writer_registry_update_guard` rejects every other update and `trg_writer_registry_delete_guard` rejects deletion. `TX-STORE-WRITER-INSTALL` may insert the successor only after retirement, and `trg_writer_registry_successor_guard` requires `new.effective_transaction_sequence > predecessor.retired_transaction_sequence`; the current version-2 check and serialization-field checks also apply. Registry hash and `store_metadata.writer_registry_hash` change atomically. Any scope or build change requires governance and deployment authorization; neither exists now.
 
 Before a domain mutation, the Coordinator's exact typed-plan precondition is:
 
@@ -198,19 +203,22 @@ Failure returns `WRITER_ROUTING_REJECTED`, changes no domain row, and cannot be 
 
 The 13 partial unique indexes are the exact SQL definitions for: writer table/operation ownership; one current supervisor generation; one held lease per generation and globally; one active valid policy; one current contract session per symbol; one current listener epoch; one open listener recovery per epoch; one open bridge recovery per generation; one positive acknowledgement per recovery/domain; one current bridge generation per listener epoch; one positive subscription verification per symbol/session/bridge generation; and one current market-data expectation per symbol/epoch.
 
-The 11 constraint-only triggers are:
+The 14 constraint-only triggers are:
 
 | Trigger | Exact effect |
 |---|---|
 | `trg_writer_registry_update_guard` | permits only the exact active-to-retired update |
+| `trg_writer_registry_successor_guard` | rejects active succession until the predecessor is retired and the successor effective sequence is strictly later |
 | `trg_writer_registry_delete_guard` | prohibits registry deletion |
 | `trg_idempotency_records_immutable` | rejects changed-input/result updates as `IDEMPOTENCY_CONFLICT` |
 | `trg_listener_state_transitions_legal` | enforces the closed listener transition relation, including `STOPPING -> STOPPED` |
 | `trg_listener_current_insert_match` | requires initial current row to match its exact transition/version/transaction |
 | `trg_listener_current_update_match` | requires `old.version+1` and exact prior/result/current transition match |
 | `trg_listener_restart_incidents_terminal_match` | requires a terminal incident to point to its own same-transaction outcome row |
+| `trg_listener_restart_incidents_no_terminal_insert` | prohibits direct insertion of a terminal restart incident |
 | `trg_domain_acknowledgements_required_match` | requires required-domain, supervisor-generation, listener-epoch, and expected-identity equality |
 | `trg_subscription_verifications_proof` | permits positive subscription proof only from authenticated current identities and a `RITHMIC_LISTENER` `SUBSCRIPTION_PROOF` event |
+| `trg_termination_results_evidence` | requires one authenticated evidence link for each closed termination dimension and exact `NONE`/`UNKNOWN`/concrete basis |
 | `trg_health_aggregate_exact_state` | enforces exact five-row aggregate derivation on insert |
 | `trg_health_aggregate_update_state` | enforces exact five-row aggregate derivation on update |
 
@@ -230,13 +238,13 @@ The Coordinator verifies schema/registry, writer routes, authority decision, par
 
 ### 9.3 Corrupt-store quarantine
 
-`TX-STORE-QUARANTINE` never opens the corrupt database read-write and never depends on a write to it. After all handles close, the Recovery Controller moves the database and existing WAL/SHM as one identity set into the exact quarantine directory, hashes and flushes them, and the external evidence writer records `QUARANTINE_PREPARED` then `QUARANTINE_COMPLETED`. Failure preserves source/partial evidence and startup remains failed.
+`TX-STORE-QUARANTINE` never opens the corrupt database read-write and never depends on a write to it. After all handles close, the Recovery Controller reads the database and existing WAL/SHM files only to obtain exact lengths/SHA-256, and the external writer appends `QUARANTINE_PREPARED` naming that immutable source set. The Controller then moves each named file to the exact incident quarantine directory, flushes each destination file, and verifies destination length/hash; only then does the external writer append `QUARANTINE_COMPLETED`. Because a three-file move is not one filesystem primitive, any partial move is preserved and described by `QUARANTINE_FAILED`; neither source nor partial destination may be reopened as authority, and startup remains failed.
 
 ### 9.4 Restore and reinitialization
 
-`TX-STORE-RESTORE` requires the exact authorized backup/store UUID/schema/hash/cursor and external authorization. It copies to a new candidate, validates source and candidate read-only, writes `RESTORE_PREPARED`, flushes, atomically replaces the quarantined/absent target, reopens read-only, then writes `RESTORE_COMPLETED`. Until completion, startup is failed. A pre-replacement failure leaves the target untouched; a post-replacement failure restores the preactivation target only when no v2 commit occurred, otherwise quarantines the candidate and fails closed.
+`TX-STORE-RESTORE` requires the exact authorized backup/store UUID/schema/hash/cursor and external authorization. After read-only source validation it appends `RESTORE_PREPARED` with empty `output_artifacts`/`PREPARED`, constructs the section 14.7 candidate carrying that external sequence/hash, validates and flushes it, atomically replaces the quarantined/absent target, reopens read-only, then appends `RESTORE_COMPLETED` with the activated artifact length/hash. Until completion, startup is failed. A pre-replacement failure appends `RESTORE_FAILED` and leaves the target untouched; a post-replacement failure restores the preactivation target only when no v2 commit occurred, otherwise quarantines the candidate and fails closed.
 
-`TX-STORE-REINITIALIZE` requires explicit acknowledgement that authority/history is unavailable. It constructs a new UUID store, creates no positive imported authority, initializes only `SUPERVISOR_STORE_FAILED`, the five nonpositive health rows, `HEALTH_CORRUPT`, and one open `RECOVERY_REQUIRED` incident after independently reconciling process state. It records prepared/completed external evidence. It cannot create an epoch, bridge, positive subscription, readiness, deployment, or trading fact.
+`TX-STORE-REINITIALIZE` requires explicit acknowledgement that authority/history is unavailable. After independent process reconciliation it appends `REINITIALIZE_PREPARED` with empty `output_artifacts`/`PREPARED`, then constructs the complete section 14.7 candidate carrying that sequence/hash: transaction/idempotency and metadata records, open store recovery/incident, fail-closed listener transition/current, five nonpositive health rows, and the aggregate. It creates no positive imported authority. Activation/readback is followed by `REINITIALIZE_COMPLETED` with the activated artifact length/hash; any failure appends `REINITIALIZE_FAILED` where writable and remains fail-closed. It cannot create an epoch, bridge, positive subscription, readiness, deployment, or trading fact.
 
 ### 9.5 Version-conflict rejection
 
@@ -258,22 +266,22 @@ Exact artifact path:
 %LOCALAPPDATA%\RandleRuntimeData\control\evidence\runtime_authority_recovery_evidence_v1.jsonl
 ```
 
-It is a logical append-only UTF-8 JSON Lines hash chain. Each canonical JSON object has sorted Unicode code-point keys, no insignificant whitespace, LF termination, integers in shortest decimal form, and no floating-point values. Required fields are `record_version=1`, `sequence` starting at 1 and increasing by 1, `record_type`, `record_id`, `incident_id`, `startup_attempt_id`, `authorization_id`, `actor_id`, `occurred_at_utc`, `store_path`, `store_uuid` or `UNKNOWN`, `schema_identity` or `UNKNOWN`, `schema_hash` or `UNKNOWN`, `input_artifacts` ordered by normalized absolute path with length/SHA-256, `output_artifacts` in the same form, `validation_result`, `previous_record_sha256`, and `record_sha256`.
+It is a logical append-only UTF-8 JSON Lines hash chain serialized only by the complete `RANDLE-RECOVERY-JCS-1` profile in section 14.6, including recursive unsigned-UTF-16-unit key ordering, NFC rejection, exact escaping, no insignificant whitespace, and signed-64-bit integer-only number semantics. Required fields are `record_version=1`, `sequence` starting at 1 and increasing by 1, `record_type`, `record_id`, `incident_id`, `startup_attempt_id`, `authorization_id`, `actor_id`, `occurred_at_utc`, `store_path`, `store_uuid` or `UNKNOWN`, `schema_identity` or `UNKNOWN`, `schema_hash` or `UNKNOWN`, `input_artifacts` ordered by section 14.6 normalized absolute path with length/SHA-256, `output_artifacts` in the same form, `validation_result`, `previous_record_sha256`, and `record_sha256`.
 
-`record_sha256` is SHA-256 of the canonical object with `record_sha256` omitted. Sequence 1 uses 64 zeroes for `previous_record_sha256`; later rows use the preceding record hash. Closed record types are `BOOTSTRAP_PREPARED`, `BOOTSTRAP_COMPLETED`, `BOOTSTRAP_FAILED`, `QUARANTINE_PREPARED`, `QUARANTINE_COMPLETED`, `QUARANTINE_FAILED`, `RESTORE_PREPARED`, `RESTORE_COMPLETED`, `RESTORE_FAILED`, `REINITIALIZE_PREPARED`, `REINITIALIZE_COMPLETED`, `REINITIALIZE_FAILED`, `MIGRATION_PREPARED`, `MIGRATION_COMPLETED`, `MIGRATION_FAILED`, and `VERSION_CONFLICT_OBSERVED`.
+`record_sha256` is SHA-256 of the canonical object with `record_sha256` omitted. Sequence 1 uses 64 zeroes for `previous_record_sha256`; later rows use the preceding record hash. Closed current record types are `BOOTSTRAP_PREPARED`, `BOOTSTRAP_COMPLETED`, `BOOTSTRAP_FAILED`, `QUARANTINE_PREPARED`, `QUARANTINE_COMPLETED`, `QUARANTINE_FAILED`, `RESTORE_PREPARED`, `RESTORE_COMPLETED`, `RESTORE_FAILED`, `REINITIALIZE_PREPARED`, `REINITIALIZE_COMPLETED`, `REINITIALIZE_FAILED`, and `VERSION_CONFLICT_OBSERVED`. Migration record types are prohibited unless introduced by a future `FUTURE SEPARATELY GOVERNED PREDECESSOR-BOUND MIGRATION SPECIFICATION`.
 
-There is one writer process under an exclusive evidence-file lock. It reads and verifies the complete existing chain, creates a same-directory `.<record_id>.tmp` with the verified prior bytes plus exactly one line, flushes the file, atomically replaces the log with write-through semantics, flushes the containing directory, reopens read-only, and verifies length and final hash. Interrupted temp files are nonauthoritative and are retained as evidence; restart resumes only from the last verified log and never skips a sequence. An unwritable or invalid chain fails recovery before activation.
+There is one writer process under an exclusive evidence-file lock. It reads and verifies the complete existing chain, creates the same-directory `.<record_id>.tmp` with the verified prior bytes plus exactly one line, flushes that file with `FlushFileBuffers`, performs the section 14.6 same-volume `MoveFileExW` operation, reopens read-only, and verifies exact length, bytes, chain, and final hash. It makes no directory-flush claim. Interrupted temp files are nonauthoritative and are retained as evidence; restart resumes only from the last verified log and never skips a sequence. An unwritable or invalid chain fails recovery before activation.
 
 At startup the Store Integrity Classifier consumes the verified chain to detect prepared-without-completed operations, unresolved quarantine, failed activation, and target/hash mismatch. Any unresolved item blocks `CONTROL_STORES_VERIFIED` and `SUPERVISOR_AUTHORITY_READY`. The evidence writer may record recovery facts; it may not decide listener lifecycle, session rollover, bridge lifecycle, health, readiness, deployment, or trading, and its records never create positive authority.
 
 ## 11. Closed typed-transaction catalog
 
-There are exactly 37 operation IDs. Thirty-four are permitted `transaction_commits.transaction_type` values. `TX-STORE-VALIDATE` is read-only, `TX-STORE-QUARANTINE` is external-only, and `TX-STORE-VERSION-CONFLICT-REJECT` writes at most a rejected idempotency row with NULL `transaction_id`; the SQL deliberately excludes those three from `transaction_commits`. Every mutating request supplies authority-decision ID, writer set, exact record identities, source/destination state, parent identities, expected versions, idempotency key, canonical request hash, evidence-set hash, and deployment-bound writer identities. The common success/failure/crash/retry/reconstruction rules are section 9; the row below closes transaction-specific authority, writers, records, transition, and result.
+There are exactly 55 operation IDs. Fifty-two are permitted `transaction_commits.transaction_type` values. `TX-STORE-VALIDATE` is read-only, `TX-STORE-QUARANTINE` is external-only, and `TX-STORE-VERSION-CONFLICT-REJECT` writes at most a rejected idempotency row with NULL `transaction_id`; the SQL deliberately excludes those three from `transaction_commits`. Every mutating request supplies authority-decision ID, writer set, exact record identities, source/destination state, parent identities, expected versions, idempotency key, canonical request hash, evidence-set hash, and deployment-bound writer identities. The common success/failure/crash/retry/reconstruction rules are section 9; the row below closes transaction-specific authority, writers, records, transition, and result.
 
 | ID | Exact authority; writer set | Exact records and transition; success result |
 |---|---|---|
 | `TX-LSN-CANCEL` | Listener Supervisor State Evaluator; Listener Incident + Listener State Writers | Pending incident -> terminal `RESTART_CANCELED`; outcome row; listener `SUSPECT -> HEALTHY` or `SUSPECT -> SUSPECT` only from enumerated reevaluation; current/history/version rows; `RESTART_CANCELED` |
-| `TX-LSN-FENCE` | Listener Supervisor State Evaluator; Listener Incident + Listener State Writers | incident `RESTART_PENDING -> RESTART_FENCED`; one fence; listener `SUSPECT -> FENCED`; `RESTART_FENCED` |
+| `TX-LSN-FENCE` | Listener Supervisor State Evaluator; Listener Incident + Listener State + **Listener Epoch Writers** | incident `RESTART_PENDING -> RESTART_FENCED`; one fence; current epoch `CURRENT -> FENCED`; listener `SUSPECT -> FENCED`; `RESTART_FENCED` |
 | `TX-LSN-EXECUTION-START` | Listener Supervisor State Evaluator; **Listener Incident Writer** | one `listener_execution_attempts` row and incident `RESTART_FENCED -> RESTART_EXECUTING`; no state-writer row; `EXECUTION_STARTED` |
 | `TX-LSN-REHYDRATION-START` | Listener Supervisor State Evaluator; Listener Incident + Recovery Transaction + Listener Acknowledgement + Listener State Writers | incident/execution -> `RESTART_REHYDRATING`; listener -> `REHYDRATING`; open recovery/rehydration and exact five required-domain rows; `REHYDRATION_STARTED` |
 | `TX-LSN-ACK` | Listener Supervisor State Evaluator after Health Ingress validation; Listener Acknowledgement + Listener Incident Writers | one accepted/rejected acknowledgement; accepted identity/generation match; monotonic rehydration progress; `ACK_RECORDED` |
@@ -324,7 +332,7 @@ A positive acknowledgement requires one `recovery_required_domains` parent, the 
 
 Startup first performs the read-only validation envelope and external recovery-chain verification. Reconstruction then requires, in order:
 
-1. exact schema v2, schema hash, registry version 2/hash, PRAGMAs, 37 tables, 468 columns, 115 FK declarations/117 mappings, 13 partial unique indexes, and 11 triggers;
+1. exact schema v2, schema hash, registry version 2/hash, PRAGMAs, 38 tables, 500 columns, 124 FK declarations/132 mappings, 13 partial unique indexes, and 14 triggers;
 2. exactly one valid current supervisor generation/lease and contiguous transaction cursor;
 3. exactly one `listener_current`, its exact last transition/version, current epoch ancestry when non-NULL, and no prohibited transition;
 4. exact current/open listener incident, terminal outcome relationship, execution, recovery, and acknowledgement set;
@@ -335,8 +343,142 @@ Startup first performs the read-only validation envelope and external recovery-c
 
 Any mismatch yields `RECOVERY_REQUIRED` or `FAILED`, blocks listener/bridge start and readiness, and creates no positive authority.
 
-## 14. Verification and governance boundary
+## 14. Phase 3C1-R1 exact invariant closure
+
+This section supersedes any inconsistent Phase 3C1 statement above. It does not alter schema version 2, approve this draft, or authorize installation.
+
+### 14.1 Calendar-valid `DATE` and UTC text
+
+`DATE` is exactly ten ASCII characters `YYYY-MM-DD`, year `0001` through `9999`. The concrete column check requires ASCII digits at positions 1–4, 6–7, and 9–10; hyphens at 5 and 8; month 01–12; day 01 through the exact Gregorian month length; and leap day only when `year % 400 = 0` or `year % 4 = 0 AND year % 100 <> 0`. It also requires `strftime('%Y-%m-%d',column||'T00:00:00Z')=column`. The only `DATE` column is `active_contract_sessions.session_date`.
+
+UTC is exactly 27 ASCII characters `YYYY-MM-DDTHH:MM:SS.ffffffZ`. Each concrete UTC column repeats the same year/month/day test, exact separators, six ASCII fractional digits, uppercase `Z`, hour 00–23, minute 00–59, and second 00–59. Leap second 60 is prohibited. Full canonical equality is `strftime('%Y-%m-%dT%H:%M:%S',substr(column,1,19)||'Z')||substr(column,20,8)=column`. No registered function, locale, platform clock, or permissive `julianday()` result is involved.
+
+### 14.2 Registry serialization and succession
+
+The nine writer-hash fields use TAB as separator and `-` as the NULL sentinel. Every serialized identity text is either a closed SQL token (`table_name`, `operation`, `writer_id`) or `writer_contract_identity`, which must be nonempty, must not equal `-`, and must contain no TAB, LF, or CR. `writer_build_hash` is NULL or lowercase hexadecimal and therefore cannot contain a separator/sentinel. Integer fields use SQLite base-10 rendering.
+
+The predecessor is the row for the same version/table/operation with the greatest non-NULL retirement sequence. `TX-STORE-WRITER-RETIRE` first durably changes the sole active predecessor to inactive at sequence `R`. `TX-STORE-WRITER-INSTALL` then inserts exactly one current-version successor with `effective_transaction_sequence > R`, a governed contract identity, and no active predecessor. The active-scope unique index and `trg_writer_registry_successor_guard` independently reject active conflict, same/lower sequence, version mismatch, and invalid contract identity.
+
+### 14.3 Closed new commit operations
+
+The following 18 operations extend, and do not replace, the 37-row catalog above. For each row the request is canonical JSON containing operation ID, authority-decision ID, every named row identity, source state/version, proposed result state/version, exact active writer identities/build hashes, and evidence SHA-256; its SHA-256 is `request_hash`. The idempotency key is `(operation ID, authority-decision ID)`. The coordinator inserts the transaction/idempotency identity before trigger-governed domain rows inside the same transaction, applies only the listed rows, updates metadata cursor/hash where listed, commits, then verifies on a separate read-only connection. Missing parent, stale expected version, route mismatch, or SQL constraint returns respectively `MISSING_PARENT`, `VERSION_CONFLICT`, `WRITER_ROUTING_REJECTED`, or `CONSTRAINT_REJECTED` with rollback. A precommit crash leaves no row; a postcommit/readback crash reconstructs by transaction/idempotency ID and exact result versions. Retry must reuse identical request bytes and returns the prior result; changed bytes are `IDEMPOTENCY_CONFLICT`.
+
+| ID | Initiating authority; exact writers | Exact read/source -> writes/result |
+|---|---|---|
+| `TX-SUP-GENERATION-CREATE` | authenticated Startup/Recovery Authorization; Supervisor Generation Writer | require no `CURRENT` generation and expected metadata cursor; insert one `CURRENT` `supervisor_generations` row at prior max sequence+1; `GENERATION_CREATED` |
+| `TX-SUP-LEASE-ACQUIRE` | Supervisor Lease Evaluator; Supervisor Generation Writer | current generation plus no held lease -> insert one version-1 `HELD` lease; `LEASE_ACQUIRED` |
+| `TX-SUP-LEASE-RENEW` | Supervisor Lease Evaluator; Supervisor Generation Writer | exact held lease version/token/generation -> update expiry, last-renew transaction, version+1; `LEASE_RENEWED` |
+| `TX-SUP-LEASE-RELEASE` | owning Supervisor or Recovery Authorization; Supervisor Generation Writer | exact held lease -> `RELEASED`, version+1; `LEASE_RELEASED` |
+| `TX-SUP-GENERATION-RETIRE` | owning Supervisor or Recovery Authorization; Supervisor Generation Writer | generation `FENCED`, no held lease/current epoch/current bridge -> `RETIRED`; `GENERATION_RETIRED` |
+| `TX-LSN-EPOCH-GRANT` | Listener Supervisor State Evaluator after current generation/held lease and authenticated process identity; Listener Epoch Writer | no current epoch -> insert next-sequence `CURRENT` epoch; `EPOCH_GRANTED` |
+| `TX-LSN-EPOCH-FENCE` | Listener Supervisor State Evaluator; Listener Epoch Writer | exact current epoch -> `FENCED`, fence time/reason; `EPOCH_FENCED` |
+| `TX-LSN-EPOCH-RETIRE` | Listener Supervisor State Evaluator after fence and absence of current child bridge/recovery; Listener Epoch Writer | exact `FENCED` epoch -> `RETIRED`; `EPOCH_RETIRED` |
+| `TX-LSN-START` | Listener Supervisor State Evaluator with current generation/held lease and no open incident; Listener State Writer | `STOPPED` or fully closed `LISTENER_FAILED` -> `STARTING`, current/history version+1; `LISTENER_STARTING` |
+| `TX-LSN-RESTART-PENDING` | Listener Supervisor State Evaluator satisfying one SFF predicate; Listener Incident + Listener State Writers | `HEALTHY` with current epoch and no incident -> insert nonterminal version-1 `RESTART_PENDING`, then `HEALTHY -> SUSPECT` current/history; `RESTART_PENDING` |
+| `TX-STORE-WRITER-RETIRE` | Architecture Governance plus Deployment Authorization; Coordinator | sole active route at expected registry hash -> inactive with retirement sequence equal proposed transaction sequence; update registry hash and metadata; `WRITER_RETIRED` |
+| `TX-STORE-WRITER-INSTALL` | same authorizations; Coordinator | retired predecessor and expected post-retirement hash -> insert one successor effective strictly after retirement; update registry hash and metadata; `WRITER_INSTALLED` |
+| `TX-PRODUCER-REGISTER` | Health Ingress Registration Authority; Health Durable Writer | current generation/epoch and unique process/role -> insert version-1 `ACTIVE` producer; `PRODUCER_REGISTERED` |
+| `TX-PRODUCER-RETIRE` | Health Ingress Registration Authority; Health Durable Writer | exact active producer and final sequence -> `RETIRED`; `PRODUCER_RETIRED` |
+| `TX-CONTRACT-SESSION-IMPORT` | ADR-014 Reference Validator; Health Durable Writer | authenticated ADR-014 commit/hash for symbol/contract/session and no conflicting current symbol row -> insert `active_contract_sessions`; no session decision; `CONTRACT_SESSION_IMPORTED` |
+| `TX-CONTRACT-SESSION-RETIRE` | ADR-014 Reference Validator; Health Durable Writer | exact current external reference plus a later authenticated ADR-014 commit or explicit invalidation -> set `valid_to_sequence`; `CONTRACT_SESSION_RETIRED` |
+| `TX-STORE-RECOVERY-COMPLETE` | Store Integrity Classifier after authenticated Recovery Authorization; Recovery Transaction + Store Incident + Listener State Writers | candidate baseline `SUPERVISOR_STORE_FAILED`, open store recovery/incident, and current new supervisor generation -> close recovery/incident and transition `SUPERVISOR_STORE_FAILED -> STOPPED` version+1; `STORE_RECOVERY_COMPLETED` |
+| `TX-BRG-INITIALIZE` | Listener Supervisor State Evaluator after `TX-BRG-GRANT`; Health Durable Writer | current granted generation and no `bridge_current` -> insert initial transition/current `NONE -> BRIDGE_STARTUP_UNPROVEN` version 1; `BRIDGE_INITIALIZED` |
+
+`TX-BRG-GRANT` is the exact bridge-generation creation operation and permits no predecessor only for the first generation of a current listener epoch; otherwise it requires the prior generation fenced or retired. `TX-LSN-FENCE` includes Listener Epoch Writer and fences the current epoch in the same commit; no incident/state writer may modify an epoch.
+
+#### 14.3.1 Complete active mutation-route coverage
+
+The operation names below are exhaustive for all 60 active routes. `COMMON` means every one of the 52 commit operations inserts its transaction/idempotency rows and updates the metadata cursor; it does not authorize a domain row. Candidate construction uses the named bootstrap/restore/reinitialize operation only.
+
+| Table | Active operation -> exact typed operation(s) |
+|---|---|
+| `store_metadata` | INSERT -> `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE` candidate; UPDATE -> `COMMON` |
+| `writer_registry` | INSERT -> `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE`, `TX-STORE-WRITER-INSTALL`; UPDATE -> `TX-STORE-WRITER-RETIRE` |
+| `transaction_commits` | INSERT -> `COMMON` |
+| `idempotency_records` | INSERT -> `COMMON`, `TX-STORE-VERSION-CONFLICT-REJECT` |
+| `supervisor_generations` | INSERT -> `TX-SUP-GENERATION-CREATE`; UPDATE -> `TX-SUP-GENERATION-RETIRE`, `TX-STORE-STALE-LEASE-FENCE` |
+| `supervisor_leases` | INSERT -> `TX-SUP-LEASE-ACQUIRE`; UPDATE -> `TX-SUP-LEASE-RENEW`, `TX-SUP-LEASE-RELEASE`, `TX-STORE-STALE-LEASE-FENCE` |
+| `shared_feed_policies` | INSERT/UPDATE -> `TX-POLICY-VALIDATE` |
+| `active_contract_sessions` | INSERT -> `TX-CONTRACT-SESSION-IMPORT`; UPDATE -> `TX-CONTRACT-SESSION-RETIRE` |
+| `listener_epochs` | INSERT -> `TX-LSN-EPOCH-GRANT`; UPDATE -> `TX-LSN-EPOCH-FENCE`, `TX-LSN-EPOCH-RETIRE`, `TX-LSN-FENCE` |
+| `recovery_transactions` | INSERT -> `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE`, `TX-LSN-REHYDRATION-START`, `TX-BRG-REHYDRATE`; UPDATE -> `TX-LSN-COMPLETE`, `TX-LSN-FAIL`, `TX-LSN-RATE-EXHAUSTED`, `TX-BRG-READY`, `TX-BRG-FAIL`, `TX-BRG-EXHAUSTED`, `TX-STORE-RECOVERY-COMPLETE` |
+| `listener_current` | INSERT -> `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE`; UPDATE -> `TX-LSN-START`, `TX-LSN-RESTART-PENDING`, `TX-LSN-CANCEL`, `TX-LSN-FENCE`, `TX-LSN-REHYDRATION-START`, `TX-LSN-COMPLETE`, `TX-LSN-FAIL`, `TX-LSN-RATE-EXHAUSTED`, `TX-LSN-PLANNED-STOP`, `TX-LSN-STOP-COMPLETE`, `TX-STORE-RECOVERY-COMPLETE` |
+| `listener_state_transitions` | INSERT -> `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE`, `TX-LSN-START`, `TX-LSN-RESTART-PENDING`, `TX-LSN-CANCEL`, `TX-LSN-FENCE`, `TX-LSN-REHYDRATION-START`, `TX-LSN-COMPLETE`, `TX-LSN-FAIL`, `TX-LSN-RATE-EXHAUSTED`, `TX-LSN-PLANNED-STOP`, `TX-LSN-STOP-COMPLETE`, `TX-STORE-RECOVERY-COMPLETE` |
+| `listener_restart_incidents` | INSERT -> `TX-LSN-RESTART-PENDING`; UPDATE -> `TX-LSN-CANCEL`, `TX-LSN-FENCE`, `TX-LSN-EXECUTION-START`, `TX-LSN-REHYDRATION-START`, `TX-LSN-ACK`, `TX-LSN-COMPLETE`, `TX-LSN-FAIL`, `TX-LSN-RATE-EXHAUSTED` |
+| `listener_restart_incident_transitions` | INSERT -> `TX-LSN-CANCEL`, `TX-LSN-FENCE`, `TX-LSN-EXECUTION-START`, `TX-LSN-REHYDRATION-START`, `TX-LSN-COMPLETE`, `TX-LSN-FAIL`, `TX-LSN-RATE-EXHAUSTED` |
+| `listener_restart_outcomes` | INSERT -> `TX-LSN-CANCEL`, `TX-LSN-COMPLETE`, `TX-LSN-FAIL`, `TX-LSN-RATE-EXHAUSTED` |
+| `listener_fences` | INSERT -> `TX-LSN-FENCE` |
+| `listener_execution_attempts` | INSERT -> `TX-LSN-EXECUTION-START`; UPDATE -> `TX-LSN-REHYDRATION-START`, `TX-LSN-COMPLETE`, `TX-LSN-FAIL` |
+| `listener_rehydrations` | INSERT -> `TX-LSN-REHYDRATION-START`; UPDATE -> `TX-LSN-ACK`, `TX-LSN-COMPLETE`, `TX-LSN-FAIL` |
+| `recovery_required_domains` | INSERT -> `TX-LSN-REHYDRATION-START` |
+| `domain_acknowledgements` | INSERT -> `TX-LSN-ACK` |
+| `bridge_generations` | INSERT -> `TX-BRG-GRANT`; UPDATE -> `TX-BRG-GRANT`, `TX-BRG-EPOCH-TRANSITION` |
+| `bridge_current` | INSERT -> `TX-BRG-INITIALIZE`; UPDATE -> `TX-BRG-RECYCLE-PENDING`, `TX-BRG-CANCEL`, `TX-BRG-FENCE`, `TX-BRG-EXECUTE`, `TX-BRG-REHYDRATE`, `TX-BRG-READY`, `TX-BRG-FAIL`, `TX-BRG-EXHAUSTED`, `TX-BRG-PLANNED-SHUTDOWN`, `TX-BRG-EPOCH-TRANSITION` |
+| `bridge_transitions` | INSERT -> `TX-BRG-INITIALIZE`, `TX-BRG-RECYCLE-PENDING`, `TX-BRG-CANCEL`, `TX-BRG-FENCE`, `TX-BRG-EXECUTE`, `TX-BRG-REHYDRATE`, `TX-BRG-READY`, `TX-BRG-FAIL`, `TX-BRG-EXHAUSTED`, `TX-BRG-PLANNED-SHUTDOWN`, `TX-BRG-EPOCH-TRANSITION` |
+| `bridge_incidents` | INSERT -> `TX-BRG-RECYCLE-PENDING`; UPDATE -> `TX-BRG-CANCEL`, `TX-BRG-FENCE`, `TX-BRG-EXECUTE`, `TX-BRG-REHYDRATE`, `TX-BRG-READY`, `TX-BRG-FAIL`, `TX-BRG-EXHAUSTED` |
+| `bridge_recycle_attempts` | INSERT -> `TX-BRG-EXECUTE`; UPDATE -> `TX-BRG-REHYDRATE`, `TX-BRG-READY`, `TX-BRG-FAIL`, `TX-BRG-EXHAUSTED` |
+| `bridge_outcomes` | INSERT -> `TX-BRG-CANCEL`, `TX-BRG-READY`, `TX-BRG-FAIL`, `TX-BRG-EXHAUSTED`, `TX-BRG-PLANNED-SHUTDOWN` |
+| `producer_registrations` | INSERT -> `TX-PRODUCER-REGISTER`; UPDATE -> `TX-PRODUCER-RETIRE` |
+| `health_events` | INSERT -> `TX-HEALTH-EVENT` |
+| `health_current` | INSERT -> `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE`; UPDATE -> `TX-HEALTH-DIMENSION-UPDATE` |
+| `health_transitions` | INSERT -> `TX-HEALTH-DIMENSION-UPDATE` |
+| `health_aggregate` | INSERT -> `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE`; UPDATE -> `TX-HEALTH-DIMENSION-UPDATE` |
+| `subscription_verifications` | INSERT -> `TX-SUBSCRIPTION-VERIFY` |
+| `termination_evidence` | INSERT -> `TX-TERMINATION-EVIDENCE` |
+| `termination_result_evidence` | INSERT -> `TX-TERMINATION-CLASSIFY` |
+| `termination_results` | INSERT -> `TX-TERMINATION-CLASSIFY` |
+| `market_data_expectations` | INSERT/UPDATE -> `TX-EXPECTATION-EVALUATE` |
+| `projection_cursors` | INSERT/UPDATE -> `TX-PROJECTION-CURSOR` |
+| `store_incidents` | INSERT/UPDATE -> `TX-STORE-INCIDENT`, `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE`, `TX-STORE-RECOVERY-COMPLETE` |
+
+No normative mutation path remains uncovered; no DELETE route exists.
+
+### 14.4 Cancellation and terminal listener incidents
+
+`TX-LSN-CANCEL` creates `RESTART_CANCELED`, updates the pending incident to terminal, and reevaluates `SUSPECT` to exactly `HEALTHY` or `SUSPECT`. The latter commits `SUSPECT -> SUSPECT`, increments state version, and uses reason `CANCELLATION_REEVALUATION_REMAINS_SUSPECT`. The trigger permits that self-edge only when the transaction type is `TX-LSN-CANCEL`; `writer_set_json` is an exact two-element string set containing `LISTENER_INCIDENT_WRITER` and `LISTENER_STATE_WRITER`; the current incident/outcome/transaction match; the outcome result is `SUSPECT`; the current row has the expected prior version; and supervisor generation/listener epoch and row writer constraints match. No other listener self-edge is legal.
+
+An incident insert must be nonterminal. To become terminal, the Incident Writer inserts its outcome and incident-transition rows, then updates the incident. The terminal update trigger requires a permitted nonterminal predecessor, version+1, the incident's transition ID, same completion transaction, same incident ID, and identical optional recovery-transaction identity. Direct terminal insertion, another incident's outcome, transaction mismatch, recovery mismatch, or invalid outcome/predecessor mapping aborts.
+
+### 14.5 Subscription and five-field termination identity
+
+A subscription verification includes source producer and sequence, symbol, contract identity, unconditional composite contract-session reference, request identity, provider acknowledgement identity, evaluator decision/version, freshness observation identity, current listener epoch, current bridge generation, proof identity/hash, record integrity hash, and committing transaction. The composite foreign keys require `(contract_session_ref_id,symbol,contract_id)` and `(bridge_generation_id,listener_epoch_id,supervisor_generation_id)` coherence. The positive-proof trigger additionally requires a current epoch/generation, active Rithmic listener producer, exact producer sequence, authenticated `SUBSCRIPTION_PROOF`, current external session reference, and `TX-SUBSCRIPTION-VERIFY`. Its authenticated event object must contain exact text members `contract_id`, `contract_session_ref_id`, `request_identity`, `provider_acknowledgement_identity`, `freshness_observation_identity`, and `proof_evidence_identity`, each equal to the committed row. Cross-symbol, stale-epoch, wrong-generation, missing or mismatched provider/request/proof/freshness identity, and duplicate positive-current rows fail.
+
+The five SQL vocabularies exactly match ADR-016: initiator `NONE|LISTENER|LISTENER_SUPERVISOR|AUTHENTICATED_OPERATOR|RAPI_PROVIDER|UNKNOWN`; requested action `NONE|BRIDGE_RECYCLE|BRIDGE_SHUTDOWN|LISTENER_SHUTDOWN|FULL_LISTENER_RESTART|UNKNOWN`; execution method `NONE|GRACEFUL_RAPI_LOGOUT|GRACEFUL_PROCESS_EXIT|SUPERVISOR_TERMINATE|SUPERVISOR_KILL|PROCESS_SELF_EXIT|PROVIDER_FORCED_LOGOUT|PROVIDER_SHUTDOWN_SIGNAL|UNKNOWN`; observed cause `NONE|PLANNED_SHUTDOWN|BRIDGE_CRASH|AUTHENTICATION_FAILURE|CONNECTION_LOSS|SUBSCRIPTION_FAILURE|LISTENER_EXIT|RAPI_ENGINE_INERT|UNKNOWN`; result `NONE|COMPLETED_EXPECTED|RECOVERED|FAILED|TIMED_OUT|CANCELED|PROCESS_EXITED|ENGINE_INERT|UNKNOWN`.
+
+Each result includes process/observation/request/operator/classification identities, observation sequence, evaluator version, generation/epoch, evidence-set hash, and transaction. Before result insertion, exactly five `termination_result_evidence` rows—one per dimension—must point to authenticated evidence from the same bridge generation and transaction. `NONE` requires `COMPLETE_ABSENCE_PROOF`, `UNKNOWN` requires `UNCERTAINTY`, and every concrete token requires `CONCRETE`; `BRIDGE_CRASH` additionally requires `PROCESS_EXCEPTION` or authoritative `OS_HANDLE` crash evidence. The trigger fails arbitrary text, missing dimension evidence, and concrete crash without crash evidence.
+
+### 14.6 `RANDLE-RECOVERY-JCS-1` canonical evidence profile
+
+`RANDLE-RECOVERY-JCS-1` is a complete project profile and does not incorporate RFC 8785: its signed 64-bit integer domain is intentionally not the RFC 8785/IEEE-754 number domain. Input is decoded as strict UTF-8 without BOM. Malformed UTF-8, a decoded duplicate key at any object depth (including two differently escaped spellings of the same key), a lone/invalid surrogate code point, and every string or key not already Unicode NFC are rejected; the writer never silently normalizes accepted input. Objects are recursively ordered by decoded key using unsigned UTF-16 code-unit lexicographic order, with an exhausted shorter key sorting first; arrays preserve input order. Keys and string values emit non-ASCII scalar values literally as UTF-8 and never as surrogate escapes. Quotation mark emits `\"`, reverse solidus emits `\\`, U+0008/U+0009/U+000A/U+000C/U+000D emit `\b|\t|\n|\f|\r`, and the remaining U+0000–U+001F values emit lowercase `\u00xx`; solidus is never escaped. No other escape or insignificant whitespace is emitted. The only values are objects, arrays, strings, Boolean `true|false`, `null`, and signed 64-bit integers. Integers emit the shortest base-10 digits, with `-` only for a negative nonzero value and no leading zero; floating point, exponent syntax, negative zero, NaN, and infinity are rejected.
+
+Paths are first resolved by `GetFullPathNameW`; relative, device, alternate-data-stream, reparse-point, dot-segment, and root-target paths are rejected. The drive letter is uppercased, separators are reverse solidus, no trailing separator is retained except a drive root, and the already-NFC result is serialized literally. Input literal `é` and input `\u00e9` parse to one scalar and therefore produce the same single literal UTF-8 canonical form; only that emitted literal-UTF-8 form is accepted as a canonical stored line.
+
+`record_sha256` hashes the canonical object bytes with the `record_sha256` member omitted and no newline. The stored line is the canonical object including that lowercase hash plus one LF. Whole-file verification hashes and parses the exact concatenation of canonical lines including every LF; CRLF, BOM, missing final LF, blank line, or noncanonical line fails. Sequence and previous-record hash rules remain section 10.
+
+The one writer holds the named system mutex `Global\\RandleRuntimeAuthorityRecoveryEvidenceWriterV1`, whose DACL permits only `SYSTEM`, `Administrators`, and the configured Runtime Operations Recovery Controller SID, and an exclusive target handle; inability to create/acquire either fails `RECOVERY_EVIDENCE_WRITER_EXCLUSIVE`. It opens the exact same-directory `.<record_id>.tmp` with `CreateFileW(CREATE_NEW, GENERIC_WRITE, share mode 0, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_WRITE_THROUGH)`; an existing temp name returns `RECOVERY_EVIDENCE_TEMP_COLLISION` and is never overwritten. It writes verified prior bytes plus one line with `WriteFile`, verifies every reported byte count, calls `FlushFileBuffers`, and closes. It then calls same-volume `MoveFileExW(temp,target,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)` for an existing target or `MoveFileExW(temp,target,MOVEFILE_WRITE_THROUGH)` for first creation. Cross-volume fallback and copy/delete behavior are prohibited. It reopens the target with `CreateFileW(GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING)`, verifies exact length, bytes, whole chain, and last hash, and reports success only after that readback. Windows exposes no portable directory-handle fsync guarantee for this contract; none is claimed. Same-volume NTFS replacement is atomic to readers, but sudden-power-loss durability of the directory entry remains a residual platform risk; prepared-without-verified-completion evidence therefore keeps startup failed. On restart every `.<record_id>.tmp` is opened read-only, hashed, and compared with the verified target and its named prepared record. It is never adopted. If the target chain is valid, the writer appends that operation's closed `*_FAILED` type naming the orphan hash, verifies the new chain, and only then calls `DeleteFileW` on the temp; deletion failure retains the temp and keeps startup failed. If the target chain is invalid or the prepared identity cannot be proven, the temp is retained and startup fails. No retry overwrites or reuses an orphan name.
+
+One canonical record including LF is at most 65,536 bytes. The file is at most 16,777,216 bytes and 4,096 records, whichever is reached first. Whole-file replacement is permitted only within those bounds. No compaction, truncation, rollover, sequence reset, or deletion is permitted by this contract. If the next append exceeds any bound, the writer returns `RECOVERY_EVIDENCE_CAPACITY_EXHAUSTED`, leaves the verified file unchanged, and recovery/startup remains failed pending a separately governed archival/rollover contract.
+
+Current record types exclude migration: `BOOTSTRAP_PREPARED|COMPLETED|FAILED`, `QUARANTINE_PREPARED|COMPLETED|FAILED`, `RESTORE_PREPARED|COMPLETED|FAILED`, `REINITIALIZE_PREPARED|COMPLETED|FAILED`, and `VERSION_CONFLICT_OBSERVED`. A future migration record type exists only under a `FUTURE SEPARATELY GOVERNED PREDECESSOR-BOUND MIGRATION SPECIFICATION`.
+
+### 14.7 Candidate-store construction and post-replacement initialization
+
+All candidate construction uses `foreign_keys=ON` and one transaction whose declared deferred relationships are checked at COMMIT. SQL objects and the 60-row registry are installed first. Bootstrap and reinitialization then use this exact order: (1) the one candidate `transaction_commits` row; (2) its `idempotency_records` row; (3) `store_metadata`; (4) the store recovery row with external prepared-evidence sequence/hash; (5) the reinitialization-only `store_incidents` row, with bootstrap inserting none; (6) the initialization listener transition; (7) `listener_current`; (8) five `health_current` rows in dimension order `PERSISTENCE,TRANSPORT,AUTHENTICATION,AUTHORITY_COHERENCE,TIME_AUTHORITY`; (9) `health_aggregate`; and (10) metadata cursor/readback verification. Generation, lease, policy, contract-session, producer, epoch, bridge, subscription, termination, expectation, and projection tables are empty in both candidates; reinitialization alone has the named open recovery/incident.
+
+Restore never inserts the bootstrap/reinitialization listener or health baseline. It authenticates a complete schema-v2 backup; requires its 60 active registry rows to equal the SQL-installed rows byte-for-byte; installs any authenticated retired registry history through the same successor constraints; and inserts the preserved domain rows plus one new restore operation in this exact order: (1) all preserved `transaction_commits` in sequence order followed by `TX-STORE-RESTORE`; (2) matching preserved idempotency rows followed by restore idempotency; (3) `store_metadata` with preserved UUID/creation identity and next cursor; (4) `supervisor_generations`, then `supervisor_leases`, `shared_feed_policies`, and `active_contract_sessions`; (5) `producer_registrations`; (6) `listener_epochs` and `bridge_generations`; (7) preserved nonterminal listener/bridge incidents and the nonterminal predecessor images of every terminal incident, then recovery transactions, outcomes, incident transitions, fences, execution attempts, rehydrations, required domains, and acknowledgements, using declared deferral for their incident/recovery cycles; each terminal listener incident is then updated from the exact predecessor state/version through its preserved terminal transition and own outcome under its preserved completion transaction, so the direct-terminal-insert prohibition and terminal-match trigger both execute; (8) listener/bridge state transitions followed by their exact current rows; (9) `health_events`, then `health_transitions`, five exact `health_current` rows, and `health_aggregate`; (10) `subscription_verifications`; (11) `termination_evidence`, then `termination_result_evidence`, then `termination_results`, using the declared deferred result link so the result trigger can read all five contributors; (12) `market_data_expectations`, `projection_cursors`, and preserved `store_incidents`; (13) the completed `STORE_RESTORE` recovery row carrying the new external `RESTORE_PREPARED` sequence/hash; and (14) metadata readback. Any predecessor image required for trigger-valid reconstruction must be uniquely derivable from preserved transition history or restore fails `RESTORE_HISTORY_INCOMPLETE`; triggers are never disabled. Any table absent from the authenticated backup is absent only if its SQL nullability/cardinality permits that exact state. `PRAGMA integrity_check='ok'`, zero `foreign_key_check` rows, all startup proof queries, and exact row-count/hash comparison to the backup plus the enumerated restore additions are mandatory before activation.
+
+Clean bootstrap inserts exactly the registry plus: one sequence-1 `TX-STORE-BOOTSTRAP-V2` commit/idempotency row; metadata cursor 1; one completed `STORE_BOOTSTRAP` recovery row carrying the external `BOOTSTRAP_PREPARED` sequence and record hash; one initialization transition `NONE -> STOPPED` version 1 with NULL generation/epoch; one matching `listener_current`; five `HEALTH_STARTUP_UNPROVEN` rows with NULL generation/epoch/bridge; and aggregate `HEALTH_STARTUP_UNPROVEN`. It requires zero-owned-process evidence. It inserts zero generation, lease, producer, contract session, epoch, bridge, subscription, termination, expectation, projection, or open incident rows.
+
+Restore copies every authenticated row and exact cursor/hash from a verified schema-v2 backup, preserves store UUID and all versions, appends one `TX-STORE-RESTORE` commit/idempotency row and completed `STORE_RESTORE` recovery row carrying the external `RESTORE_PREPARED` sequence and record hash at the next sequence, recomputes metadata readback hash, then validates. It imports no row from an unknown or mismatched store. The first post-replacement database operation is either read-only validation or a normal CAS against the preserved exact current state/version.
+
+Reinitialization inserts the registry plus: one sequence-1 `TX-STORE-REINITIALIZE` commit/idempotency row; metadata cursor 1 with a new UUID and `RECOVERY_REQUIRED`; one open `STORE_REINITIALIZE` recovery row carrying the external `REINITIALIZE_PREPARED` sequence and record hash; one open `RECOVERY_REQUIRED` store incident carrying that same record hash; initialization transition `NONE -> SUPERVISOR_STORE_FAILED` version 1 with NULL generation/epoch; matching `listener_current`; PERSISTENCE=`HEALTH_STORE_CORRUPT` and the other four dimensions=`HEALTH_STARTUP_UNPROVEN`, all with NULL generation/epoch/bridge; and aggregate `HEALTH_CORRUPT`. It inserts zero positive authority rows and zero projection cursors. The first post-replacement mutation is `TX-SUP-GENERATION-CREATE` against metadata cursor 1, not a CAS against a nonexistent generation. After the new lease/process/zero-authority reconciliation, `TX-STORE-RECOVERY-COMPLETE` closes recovery/incident and moves the explicit version-1 listener baseline to `STOPPED` version 2. Any failure rolls back that transaction and leaves the baseline fail-closed.
+
+Entry Session recovery is cross-store and cannot use a Runtime Authority Store FK. A newly initialized Entry Session store receives `TX-ENTRY-STORE-RECOVERY-INITIALIZE`: authenticated external evidence identifies the unavailable prior store/hash; Session-lock policy classifies fail-closed and selects `NO_CURRENT_SESSION_CONTEXT`; Entry Agent Session Commit Writer, as sole writer/executor, inserts version 1 from source token `NONE`. Restore instead preserves the authenticated prior state/version and its first policy-authorized CAS uses that exact version. A failed initialization leaves no current Entry Session row and opening entry remains prohibited.
+
+No current staged migration verification exists. Any migration transform, evidence type, or test is future-only under `FUTURE SEPARATELY GOVERNED PREDECESSOR-BOUND MIGRATION SPECIFICATION` and is not a Phase 3C1-R1 executable obligation.
+
+## 15. Verification and governance boundary
 
 Phase 3C1 isolated validation must execute the SQL only against a temporary database; introspect every table/column/key/FK/action/index/trigger; run `quick_check` and `foreign_key_check`; exercise every trigger, writer conflict, valid/invalid transition, `STOPPING -> STOPPED`, acknowledgement uniqueness/generation, subscription ownership, bridge writer, idempotency conflict, rollback/readback, missing parent, both canonical hashes, and corrupt-store external quarantine without a corrupt-store write.
 
-Those are document/schema validation exercises only. They are not production implementation, runtime verification, deployment, readiness, or trading authorization. Full semantic clause-to-scenario traceability is intentionally deferred to Phase 3C2 and is not approval-ready. Phase 3C2 may use only hashes accepted by an independent Phase 3C1 review.
+Those are document/schema validation exercises only. They are not production implementation, runtime verification, deployment, readiness, or trading authorization. Full semantic clause-to-scenario traceability is intentionally deferred to Phase 3C2 and is not approval-ready. Phase 3C2 may use only hashes accepted by an independent Phase 3C1-R1 review.

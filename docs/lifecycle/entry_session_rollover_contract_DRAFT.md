@@ -1,6 +1,6 @@
 # Entry Session Rollover Lifecycle Contract
 
-Version: Draft 0.5 - Phase 3C1 normative remediation
+Version: Draft 0.6 - Phase 3C1-R1 targeted normative remediation
 
 Status: **DRAFT - NOT CANONICAL - NOT APPROVED**
 
@@ -76,7 +76,7 @@ SESSION_STORE_CORRUPT
 
 ### 3.2 Exact degraded/corrupt recovery transitions
 
-The Entry Session Store Integrity Validator is the recovery-evidence producer for read-only integrity, schema, cursor, commit, active-pointer, retirement, authorization-binding, and exposure checks. The Recovery Controller produces file-operation evidence. The Runtime Authority Recovery Evidence Writer defined by the Runtime Authority Store Schema is the sole writer of the external canonical recovery JSONL chain when the Entry Session store is unavailable or corrupt. It writes evidence only and cannot decide a session transition.
+The Entry Session Store Integrity Validator is the recovery-evidence producer for read-only integrity, schema, cursor, commit, active-pointer, retirement, authorization-binding, and exposure checks. The Recovery Controller produces file-operation evidence. The Runtime Authority Recovery Evidence Writer defined by Runtime Authority Store Schema sections 10 and 14.6 is the sole writer of the external `RANDLE-RECOVERY-JCS-1` recovery chain when the Entry Session store is unavailable or corrupt. Its sequence, Windows write-through replacement, readback, restart, tamper, and size-limit rules apply. It writes evidence only and cannot decide a session transition.
 
 The Entry Session Store Integrity Classifier is the sole authority for one of these closed storage classifications:
 
@@ -88,9 +88,9 @@ The Entry Session Store Integrity Classifier is the sole authority for one of th
 | `CURRENT_COMMIT_AND_EXPOSURE_VERIFIED` | the prior classification plus exact canonical/runtime/projection identity equality | `CURRENT_CONTEXT_READY` |
 | `CORRUPTION_CONFIRMED` | any failed integrity/schema/cursor/identity/commit-chain check | `SESSION_STORE_CORRUPT` |
 
-For `SESSION_STORE_DEGRADED`, a fresh read-only recovery validation must produce exactly one classification. Session-lock policy consumes that classification and is the sole authority deciding its eligibility effect and authorizing the corresponding table destination; it cannot alter the classification. Entry Agent Session Commit Writer alone compare-and-swaps the current state/version and writes the transition under the exact classification/evidence identity. `CORRUPTION_CONFIRMED` moves to `SESSION_STORE_CORRUPT`; the four verified classifications move to their one mapped destination.
+For `SESSION_STORE_DEGRADED`, a fresh read-only recovery validation of the same store must produce exactly one classification. Session-lock policy consumes that classification and is the sole authority deciding its eligibility effect and authorizing the corresponding table destination; it cannot alter the classification. When the validated store retains its current row, Entry Agent Session Commit Writer alone compare-and-swaps that exact state/version and writes the transition under the classification/evidence identity. `CORRUPTION_CONFIRMED` moves to `SESSION_STORE_CORRUPT`; the four verified classifications move to their one mapped destination.
 
-For `SESSION_STORE_CORRUPT`, quarantine alone has no clearing effect. A completed authorized restore or reinitialization must be present in the verified external chain, its activated store hash must match the file, and the new store must pass read-only validation. Reinitialization may yield only `EMPTY_VERIFIED -> NO_CURRENT_SESSION_CONTEXT`; it cannot import current/prior authority. A restore may yield any of the four verified classifications only when its exact governed backup preserved the Entry Session store identity and commit chain. Unidentified legacy/projected data never yields a verified classification. Session-lock policy then authorizes only the mapped destination, and Entry Agent Session Commit Writer performs the sole state transition.
+For `SESSION_STORE_CORRUPT`, quarantine alone has no clearing effect. A completed authorized restore or reinitialization must be present in the verified external chain, its activated store hash must match the file, and the new store must pass read-only validation. Restore preserves the authenticated prior state/version; Session-lock policy authorizes one mapped destination and Entry Agent Session Commit Writer performs the first CAS against that exact preserved version. Reinitialization has no prior current row and therefore SHALL NOT attempt a normal CAS. Session-lock policy may authorize only `TX-ENTRY-STORE-RECOVERY-INITIALIZE`, whose evidence binds the unavailable prior store/hash, new store identity, completed recovery record, `EMPTY_VERIFIED` classification, and decision `NO_CURRENT_SESSION_CONTEXT`; Entry Agent Session Commit Writer, as sole writer and transaction executor, inserts source token `NONE`, destination `NO_CURRENT_SESSION_CONTEXT`, and version 1 atomically. Failure rolls back to no current row, restart retries only the same request/evidence identity, and opening entry remains prohibited. Reinitialization cannot import current/prior authority. Unidentified legacy/projected data never yields a verified classification.
 
 Every recovery request has an idempotency key and evidence hash. Same key/same evidence returns the committed classification/transition; changed evidence conflicts. A crash before the Entry Agent Session Commit Writer commit leaves the failure state. A crash after commit reconstructs the mapped destination from state version/transition/evidence and never repeats a file action. Failed/unavailable validation leaves the current failure state; restart re-verifies the external chain and store before any retry. No recovery record itself authorizes rollover, readiness, opening entry, deployment, or trading.
 
@@ -260,4 +260,4 @@ Expected verification areas:
 
 Traceability: `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`.
 
-Clause-level traceability is not complete. `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` is preserved only as historical rejected Phase 3B evidence. Semantic forward/reverse mappings for this amended draft are intentionally deferred to Phase 3C2 and may be rebuilt only from independently accepted Phase 3C1 hashes. The external recovery matrix remains a package-level index and is not a substitute.
+Clause-level traceability is not complete. `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` is preserved only as historical rejected Phase 3B evidence. Semantic forward/reverse mappings for this amended draft are intentionally deferred to Phase 3C2 and may be rebuilt only from independently accepted Phase 3C1-R1 hashes. The external recovery matrix remains a package-level index and is not a substitute.
