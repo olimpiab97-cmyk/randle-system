@@ -114,6 +114,27 @@ The following items remain unresolved:
 - Session rollover implementation and subordinate specification incorporation (ADR-014 approved; subordinate contract remains draft and noncanonical)
 - Contract rollover policy
 
+### Production recovery decision and Phase 3A drafts
+
+ADR-014 is the approved governing Entry session decision. All other files listed below remain review drafts only. Their existence and repository provenance authorize no implementation, runtime verification, deployment, production `READY_LOCKED`, Bucket 0 completion, Bucket 1 work, entry-lock release, or trading:
+
+- [`ADR-014_Authoritative_Entry_Session_Rollover_Transaction.md`](Decisions/ADR-014_Authoritative_Entry_Session_Rollover_Transaction.md) - approved indivisible per-symbol session transaction; approval is bound to SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`.
+- [`ADR-015_Listener_Lifecycle_Supervision_Epoch_Fencing_and_Restart_Cancellation.md`](Decisions/ADR-015_Listener_Lifecycle_Supervision_Epoch_Fencing_and_Restart_Cancellation.md) - proposed listener-lifecycle authority; unapproved and noncanonical.
+- [`ADR-016_Feed_Health_Authority_Durable_Publication_and_Bridge_Recycle_Control.md`](Decisions/ADR-016_Feed_Health_Authority_Durable_Publication_and_Bridge_Recycle_Control.md) - proposed health/bridge authority; unapproved and noncanonical.
+- [`14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`](14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md) - proposed recovery verification contract; draft and noncanonical.
+- [`entry_session_rollover_contract_DRAFT.md`](../docs/lifecycle/entry_session_rollover_contract_DRAFT.md) - proposed executable support contract for approved ADR-014; draft and noncanonical.
+- [`listener_supervision_and_health_authority_DRAFT.md`](../docs/architecture/listener_supervision_and_health_authority_DRAFT.md) - **WITHDRAWN — SUPERSEDED DRAFT**; noncanonical historical evidence only, not an authority source or implementation input.
+- [`production_startup_and_recovery_DRAFT.md`](../docs/architecture/production_startup_and_recovery_DRAFT.md) - proposed startup/recovery contract; draft and noncanonical.
+- [`diagnostic_endpoint_purity_contract_DRAFT.md`](../docs/architecture/diagnostic_endpoint_purity_contract_DRAFT.md) - proposed diagnostic-purity contract; draft and noncanonical.
+- [`2026-07-17_ADR014_016_Canonical_Amendments_Draft.md`](Audits/2026-07-17_ADR014_016_Canonical_Amendments_Draft.md) - proposed canonical amendments; not applied.
+- [`2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md`](Audits/2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md) - Phase 3A conflict reconciliation; draft evidence.
+- [`2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`](Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md) - completed clause-level forward/reverse draft registry.
+- [`2026-07-17_Approval_Remediation_Phase_3A_Redlines.md`](Audits/2026-07-17_Approval_Remediation_Phase_3A_Redlines.md) - Phase 3A remediation evidence; not approval evidence.
+- [`2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`](Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md) - package-level evidence index; clause mapping is owned by the Phase 3A registry.
+- [`2026-07-17_Production_Recovery_Documentation_Draft_Manifest.md`](Audits/2026-07-17_Production_Recovery_Documentation_Draft_Manifest.md) - superseded pre-Phase-3A identities retained as historical evidence.
+
+`DEBT-2026-07-17-012` and `DEBT-2026-07-17-016` remain `BLOCKING`. `DEBT-2026-07-17-015` remains separately governed and outside this package absent an approved direct-dependency assessment.
+
 ## 7. Codex Usage
 
 Future implementation work shall:

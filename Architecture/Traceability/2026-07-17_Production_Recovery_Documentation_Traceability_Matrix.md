@@ -8,7 +8,9 @@ Implementation scope: **NONE - documentation only**
 
 Canonical authority status: ADR-014 is **APPROVED / GOVERNING** at approved content SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`; ADR-015, ADR-016, and supporting specification drafts are **NOT APPROVED / NONCANONICAL**
 
-Traceability coverage result: **PASS for approval-review finding/debt mapping; PARTIAL for full recovery delivery**
+Traceability coverage result: **PHASE 3A DRAFT INDEX COMPLETE; CLAUSE-LEVEL MAPPING PENDING INDEPENDENT APPROVAL; IMPLEMENTATION/VERIFICATION NOT AUTHORIZED**
+
+Clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. This matrix is a package-level evidence/debt index and SHALL NOT substitute for the registry's individual mandatory-clause mappings.
 
 Implementation conformance result: **FAIL / NOT STARTED**
 
@@ -38,7 +40,7 @@ No production file was modified in this phase. The rows below preserve the backt
 | `executor.py` | `ExecutorTickPipeline.accept`, `apply_executor_tick_record`, `record_valid_watchdog_tick` | Accepted recovery event is evaluated against prior watchdog timestamp before liveness commit | Constitution sections 12-17, 22; ADR-012 sections 3.3, 3.6 | ADR-015 sections 3.6-3.8 | **FAIL - unchanged** | DEBT-013 |
 | `executor.py` | `build_watchdog_state`, `execute_listener_restart`, `reject_if_watchdog_blocks_action` | Executor owns direct process restart; restart is level-triggered/in-memory | Constitution section 6; Engine sections 15, 26-29, 35; Runtime Authority section 1 | ADR-015 sections 3.1-3.11 | **FAIL - unchanged** | DEBT-013 |
 | `executor.py` | `/debug/watchdog`, `/debug/watchdog_alert` and other GET/read paths | GET can create/execute restart effects | Constitution section 16; Engine section 32; ADR-012 section 3.6 | ADR-015 section 3.13; Diagnostic Purity Contract | **FAIL - unchanged** | DEBT-013 |
-| `rithmic_live_listener.py` | `atomic_write_text`, `write_feed_health`, `TickWorker.flush_feed_health` | Write failure can be swallowed; pending clears before verified durable success; multiple producers replace shared target | Constitution sections 12, 17, 22; ADR-012 sections 3.1-3.2; Runtime Authority sections 1-2 | ADR-016 sections 3.3-3.7; supervision/health contract sections 9-12 | **FAIL - unchanged** | DEBT-014 |
+| `rithmic_live_listener.py` | `atomic_write_text`, `write_feed_health`, `TickWorker.flush_feed_health` | Write failure can be swallowed; pending clears before verified durable success; multiple producers replace shared target | Constitution sections 12, 17, 22; ADR-012 sections 3.1-3.2; Runtime Authority sections 1-2 | ADR-016 sections 3.3-3.7; Phase 3A clause registry `ADR016-REQ-*` | **FAIL - unchanged** | DEBT-014 |
 | `rithmic_live_listener.py` | feed-health refresh/dead-restart/bridge termination path | Stale shared projection can declare death and terminate a live bridge without current-generation durable fence | Constitution sections 3, 6, 12, 16-17, 22; Runtime Authority section 1 | ADR-016 sections 3.8-3.13 | **FAIL - unchanged** | DEBT-014 |
 | `Engines/trade_manager.py` | `get_tradingview_atr_route` -> `get_tradingview_atr` cold-cache path | Diagnostic GET populates `TRADINGVIEW_ATR_CACHE`; diagnostic draft incorrectly classified it nonmutating | Constitution section 16; Engine section 32; ADR-012 section 3.6 | Diagnostic Purity Contract sections 2, 5, 7 after correction | **FAIL - unchanged; audit rejected** | DEBT-017 |
 | `data_paths.py` | feed-health path selection | Same shared path serves durable-looking control and projection roles | Runtime Authority section 1 projection boundary | ADR-016 sections 3.2-3.7 | **FAIL - unchanged** | DEBT-014 |
@@ -64,7 +66,7 @@ No production file was modified in this phase. The rows below preserve the backt
 | ADR-016 sections 3.5-3.7 | Pending survives failed durable write; cursor/ack only after verification; shared projection async | health writer/store, data paths, publisher | Verification sections 5.1-5.3 | **PARTIAL - draft only** | DEBT-014 |
 | ADR-016 sections 3.8-3.10 | Bridge recycle requires current-generation durable fence; store failure blocks automatic fences/entries | Bridge Controller, health decision store, readiness consumers | Verification sections 5.4-5.5 | **PARTIAL - draft only** | DEBT-014 |
 | ADR-016 sections 3.6.5-3.6.7 | Corruption detection/quarantine, approved sources, no-source fail-closed recovery, preserved identities, staged migration/rollback/audit | Health Durable Writer recovery tool/store; startup owner disposition | corruption/quarantine/restore/reinitialize/migration/rollback/audit matrix | **PARTIAL - exact draft only** | DEBT-014 |
-| ADR-016 sections 3.9.1-3.10 | Raw documented RAPI alerts plus process/intent evidence produce closed reasons; ambiguity is `UNKNOWN_TERMINATION`; only BDP-01..04 recycle | listener raw alert producer; Supervisor classifier; Bridge Controller | callback/`RpCode`/intent/exit matrix, recovery cancellation, disappearance/unknown cases | **PARTIAL - exact draft only** | DEBT-014 |
+| ADR-016 sections 3.9.2-3.10 | Raw documented RAPI alerts plus process/intent evidence produce five independent fields; ambiguity is field-specific `UNKNOWN`; only BDP-01..04 recycle | listener raw evidence producer; State Evaluator; Health Durable Writer; Bridge Controller executor | callback/`RpCode`/intent/exit matrix, recovery cancellation, disappearance/unknown cases | **PARTIAL - exact draft only** | DEBT-014 |
 | ADR-016 sections 3.11-3.16 | Corruption/recycle/degradation behavior isolates health from ATR/session and keeps reads pure | health recovery, listener ATR boundary, endpoints | Verification sections 5.6, 6, 9 | **PARTIAL - draft only** | DEBT-014 |
 
 ## 3. Specification draft to enforcement and proof
@@ -72,7 +74,7 @@ No production file was modified in this phase. The rows below preserve the backt
 | Draft specification/amendment | Expected enforcement areas | Expected proof | Status | Debt |
 |---|---|---|---|---|
 | Entry Session Rollover Lifecycle Contract sections 2-13 | Entry receiver/session store, observation, projections, startup probes | ADR-014 suite/replay/crash/divergence | **DRAFT / MISSING IMPLEMENTATION** | DEBT-012 |
-| Listener Supervision and Feed-Health Authority Contract sections 2-16 | supervisor, Executor, listener/bridge, health store, launchers, consumers | ADR-015/016 unit/fault/integration suites | **DRAFT / MISSING IMPLEMENTATION** | DEBT-013, DEBT-014 |
+| Withdrawn Listener Supervision and Feed-Health Authority Contract | None; retained only as historical evidence | None; removed from active implementation dependencies | **WITHDRAWN — SUPERSEDED DRAFT** | DEBT-013, DEBT-014 remain governed by ADR-015/016 proposal |
 | Production Startup, Recovery, and Readiness Contract sections 3-12 | supervisor bootstrap, store recovery, split public-route/sender proof, startup/manual/shutdown, every component readiness | isolated cold/manual/shutdown integration plus trust-boundary and restore matrix | **DRAFT / MISSING IMPLEMENTATION** | DEBT-012 through 014; DEBT-016 |
 | Diagnostic Endpoint Purity Contract sections 1-6 | all GET/HEAD/health/status/debug/watchdog/audit/Command Center routes | static reachability plus byte/in-memory/process nonmutation | **DRAFT / MISSING IMPLEMENTATION** | DEBT-013, DEBT-014 |
 | Runtime Recovery Verification Specification sections 3-10 | all corrected production and integration units | named deterministic/fault/integration artifacts | **DRAFT / NOT EXECUTED** | DEBT-012 through 014 |
@@ -173,5 +175,24 @@ Full findings: `Architecture/Audits/2026-07-17_Coordinated_Authority_Package_App
 | Complete diagnostic GET audit | Diagnostic Purity 5-7 | Verification 9 both ATR cold-cache routes plus Executor tick debug and Trade Manager tick debug/health lazy-initialization cold/warm cases | DEBT-017 remains BLOCKING |
 
 Phase 1 evidence record: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_1_Redlines.md`.
+
+## 10. Phase 3A package-level reconciliation
+
+The Phase 3A clause registry is the only current clause-level forward/reverse mapping. This section records package ownership and governance stage, not approval or verification completion.
+
+| Phase 3A obligation | Normative source | Verification family | Package status |
+|---|---|---|---|
+| Closed listener and restart-incident vocabulary, including `RECOVERY_RATE_LIMITED_FAILED` | ADR-015 3.4.2, 3.11.7 | `RRV-LS-001/002/003` | Draft; pending independent approval |
+| `SHARED_FEED_POLICY_INVALID` validation disposition | ADR-015 3.11.2.1; Startup | `RRV-LS-003`, `RRV-ST-001` | Draft; pending independent approval |
+| Complete health-control transition tables | ADR-016 3.9.1 | `RRV-FH-001/002/003` | Draft; pending independent approval |
+| One physical runtime-authority database with ownership-separated writers | ADR-015 3.3; ADR-016 3.6 | `RRV-LS-001`, `RRV-FH-001/003` | Draft; pending independent approval |
+| Producer, evaluator, and writer separation for subscription and major facts | ADR-016 3.3.4; Startup | `RRV-FH-001`, `RRV-ST-001` | Draft; pending independent approval |
+| Every unlisted Entry Session transition prohibited | Entry Session Contract 3.1 | `RRV-SR-001/002` | Draft support for approved ADR-014; pending independent approval |
+| Startup terminal result precedes post-startup `TRADING_PERMITTED` decision | Startup 6.2, 11 | `RRV-ST-001`, `RRV-GOV-001` | Draft; pending independent approval |
+| Nineteen identified diagnostic GET migration obligations remain unimplemented | Diagnostic Purity 5.1-7 | `RRV-DP-001/002` | Draft architecture; source nonconformance unchanged |
+| Clause-level bidirectional traceability | Phase 3A Clause Registry | All `RRV-*` families | Draft registry completed; pending independent approval |
+| Combined listener support draft | Withdrawn support document header | None | `WITHDRAWN — SUPERSEDED DRAFT` |
+
+ADR-014 remains approved. ADR-015 and ADR-016 remain unapproved. No row is canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, or trading authorization.
 
 This update records draft remediation only. The historical rejection decisions in section 8 remain the last approval decisions until a new coordinated review. No debt is retired, no gate result is promoted, and no implementation/deployment authority exists.
