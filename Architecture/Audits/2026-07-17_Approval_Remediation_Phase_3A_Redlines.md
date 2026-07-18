@@ -1,5 +1,7 @@
 # Approval Remediation Phase 3A — Exact Redline Record
 
+> **SUPERSEDED FOR APPROVAL READINESS BY PHASE 3B REMEDIATION RECORD.** This file remains immutable historical evidence of Phase 3A work. Its P3A-05 storage-completeness, P3A-08 source-audit, and P3A-09 semantic-traceability completion claims were disproved by the independent Phase 3A review and are corrected only in the Phase 3B draft package.
+
 Document Type: Documentation-only remediation evidence
 
 Status: **DRAFT EVIDENCE — NONCANONICAL — NOT AN APPROVAL**

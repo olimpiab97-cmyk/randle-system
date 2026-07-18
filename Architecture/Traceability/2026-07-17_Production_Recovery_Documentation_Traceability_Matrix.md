@@ -6,7 +6,7 @@ Effective date: ADR-014 approved 2026-07-17; ADR-015, ADR-016, and supporting dr
 
 Implementation scope: **NONE - documentation only**
 
-Canonical authority status: ADR-014 is **APPROVED / GOVERNING** at approved content SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`; ADR-015, ADR-016, and supporting specification drafts are **NOT APPROVED / NONCANONICAL**
+Canonical authority status: ADR-014 is **APPROVED / GOVERNING**. Governance records approved-content SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`; the metadata-applied committed file is `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321`, and the corresponding pre-metadata blob is not independently reconstructable from current repository history. ADR-015, ADR-016, and supporting specification drafts are **NOT APPROVED / NONCANONICAL**.
 
 Traceability coverage result: **PHASE 3A DRAFT INDEX COMPLETE; CLAUSE-LEVEL MAPPING PENDING INDEPENDENT APPROVAL; IMPLEMENTATION/VERIFICATION NOT AUTHORIZED**
 
@@ -40,7 +40,7 @@ No production file was modified in this phase. The rows below preserve the backt
 | `executor.py` | `ExecutorTickPipeline.accept`, `apply_executor_tick_record`, `record_valid_watchdog_tick` | Accepted recovery event is evaluated against prior watchdog timestamp before liveness commit | Constitution sections 12-17, 22; ADR-012 sections 3.3, 3.6 | ADR-015 sections 3.6-3.8 | **FAIL - unchanged** | DEBT-013 |
 | `executor.py` | `build_watchdog_state`, `execute_listener_restart`, `reject_if_watchdog_blocks_action` | Executor owns direct process restart; restart is level-triggered/in-memory | Constitution section 6; Engine sections 15, 26-29, 35; Runtime Authority section 1 | ADR-015 sections 3.1-3.11 | **FAIL - unchanged** | DEBT-013 |
 | `executor.py` | `/debug/watchdog`, `/debug/watchdog_alert` and other GET/read paths | GET can create/execute restart effects | Constitution section 16; Engine section 32; ADR-012 section 3.6 | ADR-015 section 3.13; Diagnostic Purity Contract | **FAIL - unchanged** | DEBT-013 |
-| `rithmic_live_listener.py` | `atomic_write_text`, `write_feed_health`, `TickWorker.flush_feed_health` | Write failure can be swallowed; pending clears before verified durable success; multiple producers replace shared target | Constitution sections 12, 17, 22; ADR-012 sections 3.1-3.2; Runtime Authority sections 1-2 | ADR-016 sections 3.3-3.7; Phase 3A clause registry `ADR016-REQ-*` | **FAIL - unchanged** | DEBT-014 |
+| `rithmic_live_listener.py` | `atomic_write_text`, `write_feed_health`, `TickWorker.flush_feed_health` | Write failure can be swallowed; pending clears before verified durable success; multiple producers replace shared target | Constitution sections 12, 17, 22; ADR-012 sections 3.1-3.2; Runtime Authority sections 1-2 | ADR-016 sections 3.3-3.7; Phase 3B clause/scenario/assertion registry `ADR016-REQ-*`; Store Schema `STORE-REQ-*` | **FAIL - unchanged** | DEBT-014 |
 | `rithmic_live_listener.py` | feed-health refresh/dead-restart/bridge termination path | Stale shared projection can declare death and terminate a live bridge without current-generation durable fence | Constitution sections 3, 6, 12, 16-17, 22; Runtime Authority section 1 | ADR-016 sections 3.8-3.13 | **FAIL - unchanged** | DEBT-014 |
 | `Engines/trade_manager.py` | `get_tradingview_atr_route` -> `get_tradingview_atr` cold-cache path | Diagnostic GET populates `TRADINGVIEW_ATR_CACHE`; diagnostic draft incorrectly classified it nonmutating | Constitution section 16; Engine section 32; ADR-012 section 3.6 | Diagnostic Purity Contract sections 2, 5, 7 after correction | **FAIL - unchanged; audit rejected** | DEBT-017 |
 | `data_paths.py` | feed-health path selection | Same shared path serves durable-looking control and projection roles | Runtime Authority section 1 projection boundary | ADR-016 sections 3.2-3.7 | **FAIL - unchanged** | DEBT-014 |
@@ -176,9 +176,9 @@ Full findings: `Architecture/Audits/2026-07-17_Coordinated_Authority_Package_App
 
 Phase 1 evidence record: `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_1_Redlines.md`.
 
-## 10. Phase 3A package-level reconciliation
+## 10. Superseded Phase 3A package-level reconciliation
 
-The Phase 3A clause registry is the only current clause-level forward/reverse mapping. This section records package ownership and governance stage, not approval or verification completion.
+This section preserves Phase 3A history. Its current-schema, nineteen-route, and semantic-traceability completion claims are superseded by section 11 and the Phase 3B remediation record.
 
 | Phase 3A obligation | Normative source | Verification family | Package status |
 |---|---|---|---|
@@ -194,5 +194,31 @@ The Phase 3A clause registry is the only current clause-level forward/reverse ma
 | Combined listener support draft | Withdrawn support document header | None | `WITHDRAWN — SUPERSEDED DRAFT` |
 
 ADR-014 remains approved. ADR-015 and ADR-016 remain unapproved. No row is canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, or trading authorization.
+
+## 11. Phase 3B package-level reconciliation
+
+Source evidence below is bound to commit `869b3f08df5c5dbfa975246547455ad185288605`, tree `704fd715cad3aad281c534f8337840e3aab96234`. It is not runtime verification and is regenerated for a later source commit.
+
+| Obligation | Normative source | Evidence/verification mapping | Status |
+|---|---|---|---|
+| Complete implementable Runtime Authority Store | Store Schema sections 2-10; ADR-015 3.3; ADR-016 3.6 | `RRV-STORE-001`; `STORE-REQ-*` scenario/assertion rows | Draft; pending independent approval; not implemented |
+| Closed writer routing and mechanical-only Coordinator | Store Schema 6-8 | `RRV-STORE-001`; writer-denial/version/idempotency/crash scenarios | Draft; pending independent approval |
+| Listener and bridge typed transactions | Store Schema 7; ADR-015/016 exact references | `RRV-LS-*`, `RRV-FH-*`, `RRV-STORE-001` | Draft; pending independent approval |
+| Session policy versus writer separation | Entry Session Contract 2-3 | `RRV-SR-001/002`; `ESR-REQ-*` scenario/assertion rows | Draft support for approved ADR-014; pending independent approval |
+| Store-bound startup evidence | Startup 6 and 6.3 | `RRV-ST-001`, `RRV-STORE-001` | Draft; pending independent approval |
+| Source-bound diagnostic purity inventory | Diagnostic Purity 5; Verification 9 | `RRV-DP-001/002`; thirteen route-specific `SCN-DEP-*` scenarios | Draft architecture; current source nonconforming |
+| Clause-specific semantic traceability | Phase 3B Clause Registry | Every requirement -> scenario -> assertion and reverse family mapping | Draft; pending independent approval; no runtime test executed |
+
+### 11.1 Exact diagnostic source-bound findings
+
+| Service | Current mutating GET routes in `869b3f...` | Demonstrated mutation family |
+|---|---|---|
+| Executor | `/debug/watchdog`; `/debug/watchdog_alert`; `/sync_snapshot` | restart/process control; working-order clear and state write |
+| Entry Agent | `/debug/entry-liquidity`; `/entry/status` | `build_entry_status` -> `run_once(..., persist=True)`, pipeline-state persistence, and decision/reasoning log append |
+| Trade Manager | `/debug/risk_state`; `/trades`; `/replay/<trade_id>`; `/debug/tradingview/atr/<symbol>`; `/debug/tradingview/atr_status`; `/debug/noon_runner_flatten`; `/events`; `/debug/atr_trade/<trade_id>` | reconciliation/noon/state writes; ATR cache writes; persistence load/normalization and corruption backup path |
+
+Absent Phase 3A route/symbol claims are not current-source facts: Executor `/debug/tick_pipeline`; Entry Agent `/entry/executor_status`; Trade Manager `/debug/tick_pipeline`, `/health`, `/debug/nonclosed_trades`, `/paper_account_snapshot`, and `/config/trade_manager_mode`; `PERSISTENCE_STATE_CACHE`; `PERSISTENCE_STATE_CACHE_LOADED`; active-index mutation; lazy tick-pipeline initialization. Executor `/account_snapshot` is a local JSON snapshot read in this tree, not a Trade Manager proxy.
+
+ADR-014 remains approved and unchanged. ADR-015, ADR-016, the Store Schema, and all supporting drafts remain noncanonical and unapproved. This matrix supplies no implementation, runtime verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1, or trading authority.
 
 This update records draft remediation only. The historical rejection decisions in section 8 remain the last approval decisions until a new coordinated review. No debt is retired, no gate result is promoted, and no implementation/deployment authority exists.

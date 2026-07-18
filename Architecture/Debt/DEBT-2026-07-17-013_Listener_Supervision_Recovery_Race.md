@@ -50,6 +50,7 @@ Before approval, ADR-015 SHALL prohibit the attempt that would exceed the bridge
 | 2026-07-17 | BLOCKING | BLOCKING (approval review rejected) | Architecture Governance Owner | ADR-015 and its supporting listener/verification/amendment drafts were rejected for rate-limit, SFF corroboration, market-data-expected authority, deterministic ATR, and schema/ownership reconciliation defects |
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 1 remediation drafted) | Architecture Governance Owner | Pre-execution maximum enforcement, acyclic SFF-02 evidence, named market-expectation authority, closed ATR matrix, and mirror reconciliations drafted; pending approval review and implementation/verification |
 | 2026-07-17 | BLOCKING | BLOCKING (Phase 3A remediation drafted) | Architecture Governance Owner | Closed listener/incident vocabulary, distinct full-listener rate-limit outcome, policy-validation disposition, implementable one-database identity design, and clause-level traceability drafted; pending independent approval and all later gates |
+| 2026-07-17 | BLOCKING | BLOCKING (Phase 3A approval rejected; Phase 3B remediation pending review) | Architecture Governance Owner | Phase 3A did not contain an implementable complete Runtime Authority Store schema or semantic clause/scenario/assertion traceability. Phase 3B adds a draft exact schema, writer routing, typed listener transactions, store-bound startup proofs, and semantic mappings; none is approved, canonical, implemented, or verified. |
 
 ## Traceability
 

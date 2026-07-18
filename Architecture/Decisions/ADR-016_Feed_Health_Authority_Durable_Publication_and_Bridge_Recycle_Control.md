@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-**DRAFT 0.2 - COMPLETE REDESIGN - NOT APPROVED**
+**DRAFT 0.3 - PHASE 3B REMEDIATION - NOT APPROVED**
 
 **Rewrite date:** 2026-07-17
 
@@ -134,8 +134,8 @@ The same producer/evaluator/writer separation is mandatory for major facts:
 | listener proof of life | Supervisor OS Authority Adapter for owned process/lease plus Rithmic listener for lease heartbeat/publication | Listener Supervisor State Evaluator | Listener Supervisor Epoch/Incident Writer for epoch/lifecycle; Health Durable Writer for committed health facts | snapshots display only; no projection can refresh proof |
 | `SUBSCRIPTION_VERIFIED` | Rithmic listener `SUBSCRIPTION_PROOF_OBSERVED` | Listener Supervisor State Evaluator | Health Durable Writer | consumers require committed current identity; projection is nonauthoritative |
 | bridge generation acknowledgement/grant | Bridge Controller produces acknowledgement/execution result | Listener Supervisor State Evaluator alone grants/adopts/fences generation | Health Durable Writer writes `bridge_generations` | acknowledgement is not a grant; Command Center cannot grant |
-| five-field termination observation | listener/Bridge Controller raw frames and Supervisor OS Authority Adapter exact process/intent facts | Listener Supervisor State Evaluator classifies each independent field | Health Durable Writer writes `termination_observations` | logs/projections cannot classify or confirm |
-| market-data expectation | Market Session Calendar Policy Owner produces approved artifact; Supervisor subscription-intent/lifecycle/clock adapters produce current inputs | ADR-015 Market Data Expectation Evaluator | Listener Supervisor Incident Writer writes `market_data_expectation` | consumers block/display only; silence/projection cannot evaluate |
+| five-field termination observation | listener/Bridge Controller raw frames and Supervisor OS Authority Adapter exact process/intent facts | Listener Supervisor State Evaluator classifies each independent field | Health Durable Writer writes raw `termination_evidence` and derived `termination_results` | logs/projections cannot classify or confirm |
+| market-data expectation | Market Session Calendar Policy Owner produces approved artifact; Supervisor subscription-intent/lifecycle/clock adapters produce current inputs | ADR-015 Market Data Expectation Evaluator | Listener Incident Writer writes `market_data_expectations` | consumers block/display only; silence/projection cannot evaluate |
 | ATR continuity/readiness | listener/tick journal and finalized-bar owner produce exact bar/history evidence | canonical bars/ATR authority evaluates ADR-015 disposition | canonical bars/ATR writer, never Health Durable Writer | health/Command Center consume identity only and cannot reset/rebuild |
 | `COMMAND_CENTER_ALIGNED` | canonical owners publish immutable snapshots; Command Center produces display snapshot | startup observational parity evaluator only | startup evidence writer records parity result, not domain state | never health/lifecycle/session/recovery authority |
 
@@ -201,7 +201,7 @@ Projection publication never transfers control authority. No lower-ranked source
 
 #### 3.6.1 Location and ownership
 
-The production runtime-authority control store SHALL be the one physical SQLite database selected as Pattern A and defined jointly with ADR-015 at the absolute path resolved once at startup from:
+The production runtime-authority control store SHALL be the one physical SQLite database selected as Pattern A and defined jointly with ADR-015 and the normative draft `docs/architecture/runtime_authority_store_schema_DRAFT.md` at the absolute path resolved once at startup from:
 
 ```text
 %LOCALAPPDATA%\RandleRuntimeData\control\runtime_authority_v1.sqlite3
@@ -209,11 +209,11 @@ The production runtime-authority control store SHALL be the one physical SQLite 
 
 The resolved path SHALL be recorded in startup evidence and SHALL NOT be within the configured shared/synchronized projection root. Supervisor/listener and bridge/health identities live in ownership-separated tables in this same database so every declared foreign key is physically enforceable. A shared file does not create shared domain authority.
 
-The in-process `Runtime Authority Store Transaction Coordinator` SHALL own the only read-write connection and mechanically serialize typed transaction plans. It owns no state transition, classification, identity, or recovery decision. The logical table writers are closed: `Listener Supervisor Generation Writer` writes `supervisor_generations` and `supervisor_leases`; `Listener Supervisor Epoch Writer` writes `listener_epochs`; `Listener Supervisor Incident Writer` writes listener incidents/executions/acknowledgements and policy-validation results; and `Health Durable Writer` writes producer, health, bridge, termination, projection-cursor, and health-store-incident tables. The transaction coordinator SHALL enforce this routing with SQLite authorizer rules and the versioned table-writer registry; it SHALL reject cross-owner or unregistered plans and SHALL NOT reinterpret their content.
+The in-process `Runtime Authority Store Transaction Coordinator` SHALL own the only read-write connection and mechanically serialize typed transaction plans. It owns no state transition, classification, identity, or recovery decision. The exact writer IDs, table allowlists, operations, required decision inputs, idempotency, optimistic-version rules, audit evidence, and prohibitions are Runtime Authority Store Schema section 6. The transaction coordinator SHALL enforce this routing with SQLite authorizer rules and the versioned `writer_registry`; it SHALL reject cross-owner or unregistered plans and SHALL NOT reinterpret their content.
 
 No producer, projection publisher, launcher, endpoint, or downstream consumer SHALL open a write connection. The Listener Supervisor State Evaluator SHALL consume immutable committed snapshots supplied by the Health Durable Writer and authorize health/bridge transitions, not issue independent database writes. Diagnostic readers SHALL use the read-only snapshot transport in section 3.12 and SHALL NOT open the control database. No second database, copied identity row, local witness, cache, or projection may become an authority for a supervisor generation, listener epoch, bridge generation, incident, or health state.
 
-#### 3.6.2 SQLite configuration and schema
+#### 3.6.2 SQLite configuration and closed schema
 
 Before accepting ingress, the writer SHALL set and verify:
 
@@ -227,31 +227,30 @@ application_id = 0x52484C54
 user_version = 1
 ```
 
-The schema SHALL contain all of the following tables in the same physical database:
+The complete database-level contract is Runtime Authority Store Schema section 2. The exact table inventory, every column/type/nullability rule, primary key, uniqueness scope, same-database foreign key and referenced column, check constraint, immutability rule, owner, writer, creation/retirement condition, and restart reconstruction rule are sections 3 through 5 of that specification. The schema SHALL match `RANDLE_RUNTIME_AUTHORITY_SCHEMA_V2`, `user_version=2`, migration `RASTORE-MIG-002`, and the canonical schema hash; “appropriate to scope” or an undefined parent relationship is not a valid constraint.
 
-- `store_metadata`: schema/policy versions, created time, store UUID, last verified transaction/cursors, table-writer registry digest, integrity state; sole logical writer `Runtime Authority Store Transaction Coordinator` only for mechanical metadata committed with an authorized plan;
-- `supervisor_generations`: monotonic generation, lease, owner/build, start/fence identity; sole logical writer `Listener Supervisor Generation Writer`;
-- `supervisor_leases`: one current lease per generation and lease transition evidence; sole logical writer `Listener Supervisor Generation Writer`;
-- `listener_epochs`: monotonic epoch, supervisor generation foreign key, process/contract/grant/fence identity; sole logical writer `Listener Supervisor Epoch Writer`;
-- `listener_restart_incidents`: incident version/state/outcome, SFF predicate, policy/rate evidence, fence and completion references; sole logical writer `Listener Supervisor Incident Writer`;
-- `listener_restart_executions`: one execution/child token/process outcome per fenced listener incident; sole logical writer `Listener Supervisor Incident Writer`;
-- `policy_validation_results`: shared-feed/calendar input identity, disposition, reasons, approvals, digest; sole logical writer `Listener Supervisor Incident Writer`;
-- `market_data_expectation`: expectation state/input identity/expiration and transition evidence; sole logical writer `Listener Supervisor Incident Writer` from the Market Data Expectation Evaluator decision;
-- `producer_registrations`: capability identity without secret key, producer instance/PID/start/build, scope, issued/revoked sequence;
-- `health_events`: canonical event bytes, SHA-256, producer sequence, epoch/generation, ingress/observed times, fact type, commit ID/sequence;
-- `health_current`: one committed current record per health domain/scope, including every positive/degraded state and recovery identity;
-- `health_state_transitions`: prior/new health state, evidence, evaluator decision, writer commit, recovery/escalation identity;
-- `bridge_generations`: bridge generation, listener-epoch foreign key, Supervisor grant, Controller acknowledgement, fence/readiness identity;
-- `bridge_incidents`: incident version, predicate, evidence, pending/canceled/fenced/executing/rehydrating/completed/`BRIDGE_FAILED`/`FAILED_RECOVERY_EXHAUSTED` state, bridge fence, execution identity;
-- `termination_observations`: five independent termination fields, exact evidence references, identity/freshness/integrity state;
-- `projection_cursor`: last committed source cursor and last published projection cursor; and
-- `store_incidents`: bounded persistence/authentication/corruption incident metadata without secrets.
+ADR-016 bridge and health authority SHALL use only these exact records:
 
-`health_event_id`, `(producer_instance_id, producer_sequence)`, `health_sequence`, `health_commit_id`, `restart_incident_id`, `restart_execution_id`, `bridge_restart_incident_id`, bridge execution ID, epoch/generation sequence, child token, and fencing token SHALL have uniqueness constraints appropriate to their scope. Same-database foreign keys SHALL bind listener epochs to supervisor generations, bridge generations to listener epochs, listener incidents/executions to supervisor generations/listener epochs, and every health/bridge/termination record to its physically present supervisor-generation/listener-epoch/bridge-generation parent. Deferred foreign keys are legal only inside one `BEGIN IMMEDIATE` transaction that creates the parent before the child and verifies all constraints before COMMIT.
+| Domain fact | Sole durable record |
+|---|---|
+| Bridge Generation grant/ancestry | `bridge_generations` |
+| current bridge state/version/incident | `bridge_current` |
+| bridge transition history | `bridge_transitions` |
+| bridge incident/version/predicate/count | `bridge_incidents` |
+| recycle attempt | `bridge_recycle_attempts` |
+| bridge terminal outcome | `bridge_outcomes` |
+| authenticated producer registration/event | `producer_registrations`, `health_events` |
+| independent current health dimension | `health_current` |
+| health transition history | `health_transitions` |
+| deterministic aggregate health | `health_aggregate` |
+| committed subscription decision | `subscription_verifications` |
+| raw termination evidence | `termination_evidence` |
+| five-field termination classification | `termination_results` |
+| market-data expectation | `market_data_expectations` |
 
-No cross-database SQLite foreign key is permitted. No table may duplicate an external identity as a new authority. A denormalized identity value in evidence remains a comparison field only and SHALL match its same-database authoritative parent through the enforced foreign key and integrity check.
+The closed bridge transaction catalog is `TX-BRG-GRANT`, `TX-BRG-RECYCLE-PENDING`, `TX-BRG-CANCEL`, `TX-BRG-FENCE`, `TX-BRG-EXECUTE`, `TX-BRG-REHYDRATE`, `TX-BRG-READY`, `TX-BRG-FAIL`, `TX-BRG-EXHAUSTED`, `TX-BRG-PLANNED-SHUTDOWN`, and `TX-BRG-EPOCH-TRANSITION`. The closed health/evidence catalog is `TX-HEALTH-EVENT`, `TX-HEALTH-DIMENSION-UPDATE`, `TX-SUBSCRIPTION-VERIFY`, `TX-TERMINATION-EVIDENCE`, `TX-TERMINATION-CLASSIFY`, `TX-EXPECTATION-EVALUATE`, `TX-POLICY-VALIDATE`, and `TX-PROJECTION-CURSOR`. Runtime Authority Store Schema sections 7.3, 7.4, and 8 define their exact rows, writer sets, preconditions, idempotency, expected versions, commit/readback, crash, replay, and rollback. No other bridge/health cross-writer transaction is legal.
 
-The transaction boundary is one typed domain plan executed under `BEGIN IMMEDIATE`, with every same-owner row/state/cursor change committed or rolled back together. A transaction spanning tables owned by different logical writers is prohibited unless the ADR explicitly defines one joint atomic transition and both typed plans are present; no such joint transition is implied by shared storage. Crash or partial write before COMMIT leaves no authority change; COMMIT/readback establishes the complete change. Restart reconstruction begins from the highest fully verified transaction/cursor after WAL recovery. Any foreign-key, writer-routing, duplicate-authority, partial-state, or current-parent failure enters `HEALTH_STORE_CORRUPT` or ADR-015 `SUPERVISOR_STORE_FAILED` according to the affected domain and blocks startup/new fences.
+No cross-database SQLite foreign key is permitted. `active_contract_sessions` is a hash-validated external ADR-014 reference and SHALL NOT become a second session authority. Crash or partial write before COMMIT leaves no authority change; COMMIT/readback establishes the complete change. Any foreign-key, writer-routing, duplicate-current-row, partial-state, transaction-cursor, or parent-chain failure enters `HEALTH_STORE_CORRUPT` or ADR-015 `SUPERVISOR_STORE_FAILED` according to the affected domain and blocks startup/new fences.
 
 #### 3.6.3 Serialized commit protocol
 
@@ -420,7 +419,7 @@ HEALTH_AUTHORITY_COHERENT <-> HEALTH_AUTHORITY_DIVERGED -> HEALTH_STORE_CORRUPT
 HEALTH_TIME_AUTHORITY_READY <-> HEALTH_TIME_AUTHORITY_DEGRADED
 ```
 
-The Listener Supervisor State Evaluator is the sole health-state transition authority. The Health Durable Writer is the sole writer of `health_current` and `health_state_transitions` when the database is trustworthy. When the database cannot durably represent its own persistence/corruption failure, the `Runtime Authority Recovery Evidence Writer` is the sole writer of the append-only flushed/hash-verified external recovery incident and quarantine manifest; that evidence does not become a substitute health store or identity authority.
+The Listener Supervisor State Evaluator is the sole health-state transition authority. The Health Durable Writer is the sole writer of `health_current`, `health_transitions`, and `health_aggregate` when the database is trustworthy. When the database cannot durably represent its own persistence/corruption failure, the `Runtime Authority Recovery Evidence Writer` is the sole writer of the append-only flushed/hash-verified external recovery incident and quarantine manifest; that evidence does not become a substitute health store or identity authority.
 
 | Health state | Exact meaning and entry condition | Source evidence and evaluator | Durable representation / writer | Permitted exits and recovery | Prohibited exits/actions | Restart and readiness effect | Escalation / verification |
 |---|---|---|---|---|---|---|---|

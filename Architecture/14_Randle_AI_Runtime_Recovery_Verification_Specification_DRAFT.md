@@ -1,6 +1,6 @@
 # Randle AI Runtime Recovery Verification Specification
 
-Version: Draft 0.3 - Phase 3A remediation
+Version: Draft 0.4 - Phase 3B remediation
 
 Document Type: Proposed Canonical Verification and Test Specification
 
@@ -10,7 +10,7 @@ Decision Sources: ADR-014 is approved and governing. ADR-015, ADR-016, and this 
 
 Implementation Authorization: None
 
-Scope: Entry session rollover, listener supervision/epochs, restart recovery, feed-health durability, bridge generation/recycle, ATR continuity, startup/readiness, diagnostic purity, and NQ/YM integration
+Scope: Entry session rollover, listener supervision/epochs, restart recovery, Runtime Authority Store conformance, feed-health durability, bridge generation/recycle, ATR continuity, startup/readiness, diagnostic purity, and NQ/YM integration
 
 ## 1. Verification principle
 
@@ -37,7 +37,7 @@ Every record SHALL include source/artifact hashes, code/build identity, rule/ADR
 
 Every normative obligation exercised by this specification SHALL have a stable verification requirement ID. Every test case, fixture, fault point, report row, and evidence artifact SHALL cite at least one exact authority section and one ID below. Conversely, every ID SHALL resolve to one or more named tests and produced evidence rows; an untested ID or a test without an authority/ID mapping fails the Traceability gate.
 
-The clause-level source of truth for this draft package is `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It assigns `ADR015-REQ-###`, `ADR016-REQ-###`, `ESR-REQ-###`, `STARTUP-REQ-###`, and `DEP-REQ-###` to every mandatory clause in the five source documents and supplies both forward and reverse mappings to the verification families below. A section-family row below does not replace a clause row in that registry.
+The clause-level source of truth for this draft package is `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It assigns `ADR015-REQ-###`, `ADR016-REQ-###`, `ESR-REQ-###`, `STARTUP-REQ-###`, `DEP-REQ-###`, `STORE-REQ-###`, and `RRVSPEC-REQ-###` to every mandatory clause in the six normative architecture/store documents and this verification specification, and supplies both forward and reverse mappings to the verification families below. A section-family row below does not replace a clause row in that registry.
 
 | Verification requirement ID | Exact normative obligation | Required verification sections/artifacts |
 |---|---|---|
@@ -52,10 +52,11 @@ The clause-level source of truth for this draft package is `Architecture/Audits/
 | `RRV-FH-003` | ADR-016 sections 3.3.6, 3.9.1, 3.13-3.16 | Sections 5.5-5.8 and 8; complete health-state/time/recovery/startup suite |
 | `RRV-ST-001` | Production Startup sections 3-14 | Section 8; bounded cold/manual start, READY/FAILED, and shutdown suite |
 | `RRV-DP-001` | Diagnostic Purity sections 1-8 | Section 9; generated manifest/call-graph/nonmutation/idempotency suite |
-| `RRV-DP-002` | Diagnostic Purity sections 5.1-7 route-specific migrations and primitive-unreachability obligations | Section 9; nineteen-route cold/error/proxy/concurrency and replacement-boundary suite |
+| `RRV-DP-002` | Diagnostic Purity sections 5.1-7 route-specific migrations and primitive-unreachability obligations | Section 9; commit-bound thirteen-route cold/error/concurrency and replacement-boundary suite |
+| `RRV-STORE-001` | Runtime Authority Store Schema sections 2-9 | Sections 5.8-5.9; schema, writer-routing, typed-transaction, crash/replay, reconstruction, and startup-proof suite |
 | `RRV-GOV-001` | Verification sections 10-12 and canonical governance/traceability specifications | Sections 10-12; noninterference, evidence report, debt, and gate audit |
 
-Before any verification run is accepted, the evidence manifest SHALL include both forward (`authority section -> clause requirement ID -> verification ID -> tests/evidence`) and reverse (`test/evidence -> verification ID -> clause requirement ID -> authority section`) views. Grouping is legal only when every individual mandatory clause is enumerated in the completed clause registry. Missing, duplicate-conflicting, or document-level-only citations fail verification and traceability. The registry is a present document obligation; it is not deferred to a future generated manifest.
+Before any verification run is accepted, the evidence manifest SHALL include both forward (`authority section -> clause requirement ID -> verification ID -> tests/evidence`) and reverse (`test/evidence -> verification ID -> clause requirement ID -> authority section`) views. Grouping is legal only when every individual mandatory clause is enumerated with a substantive scenario and assertion in the Phase 3B registry. Missing, duplicate-conflicting, boilerplate, or document-level-only citations fail verification and traceability. The registry is a present document obligation; it is not deferred to a future generated manifest.
 
 ## 3. ADR-014 session rollover verification
 
@@ -293,9 +294,19 @@ Recovery tests SHALL require exactly the five-sample/at-least-five-second monoto
 
 For every authoritative health state in ADR-016 section 3.9.1, tests SHALL exercise every permitted edge, reject at least one unlisted edge, verify the exact evaluator, transition authority, Health Durable Writer record, restart restoration, readiness effect, escalation behavior, and required recovery evidence. Evidence facts and failure reasons SHALL be rejected as state-machine members.
 
-The control-store suite SHALL prove one physical SQLite database, same-database foreign-key enforcement, table-level writer authorization, uniqueness of supervisor/epoch/bridge/incident identities, atomic cross-table transactions, WAL/fsync/readback, crash-before/after-COMMIT reconstruction, corrupt-database quarantine, and rejection of every unauthorized table write plan. It SHALL prove that the Runtime Authority Store Transaction Coordinator performs only mechanical serialization and cannot originate, evaluate, or own a domain identity or transition. No external database identity copy or unenforceable cross-database foreign key is permitted.
+The control-store suite SHALL prove the exact database contract in `docs/architecture/runtime_authority_store_schema_DRAFT.md`: schema identity `RANDLE_RUNTIME_AUTHORITY_V2`, every named table and column, each primary/unique/check/foreign-key constraint, `PRAGMA foreign_keys=ON`, zero `foreign_key_check` rows, WAL/FULL durability, writer-registry allowlists, optimistic versions, typed transaction coverage, crash-before/after-COMMIT reconstruction, corrupt-database quarantine, and rejection of every unauthorized write plan. It SHALL prove that the Runtime Authority Store Transaction Coordinator performs only connection, serialization, constraint, idempotency, commit/rollback, and mechanical recovery functions and cannot originate, evaluate, or own a domain identity or transition. No external database identity copy or unenforceable cross-database foreign key is permitted.
 
 The role suite SHALL prove that the Rithmic listener emits authenticated `SUBSCRIPTION_PROOF_OBSERVED`, the State Evaluator alone decides the transition, and the Health Durable Writer alone commits `SUBSCRIPTION_VERIFIED`. Equivalent producer/evaluator/writer separation SHALL be proved for proof of life, bridge acknowledgement/generation grant, termination evidence, market-data expectation, ATR continuity, and Command Center parity.
+
+### 5.9 Runtime Authority Store typed-transaction and reconstruction coverage
+
+Verification ID: `RRV-STORE-001`.
+
+Schema validation SHALL enumerate the complete table catalog from the Store Schema, parse every declared foreign key, and prove that its referenced table and column exist in the same database, are uniquely addressable, and have compatible representations. It SHALL prove every table has an explicit primary key, every column has explicit nullability, every current-row uniqueness scope is enforceable, and every logical writer has an allowlisted operation set with a required authority decision or command, idempotency key, optimistic version, audit record, and fail-closed rejection.
+
+Positive, negative, crash, retry, version-conflict, missing-parent, corrupt-record, and unauthorized-writer scenarios SHALL cover every closed typed transaction: all `TX-LSN-*`, `TX-STORE-*`, `TX-BRG-*`, and `TX-HEALTH-*` transactions. The suite SHALL specifically prove atomic listener cancellation, fencing, execution start, rehydration start, each authoritative-domain acknowledgement, completion, ordinary failure, rate exhaustion, planned stop, each bridge generation/recycle/fence/execution/rehydration/ready/failure/exhaustion/shutdown/epoch-transition transaction, and independent-dimension health update with atomic aggregate recomputation.
+
+For pre-COMMIT crash, the suite SHALL prove that none of the typed transaction's rows or current-state versions becomes visible. For post-COMMIT/pre-response crash, it SHALL replay the same idempotency key and prove byte-equivalent committed identities and versions with no duplicate state or action. Constraint, version, writer-routing, missing-parent, and corrupt-record failures SHALL create no partial domain state and SHALL return the exact Store Schema disposition. Startup reconstruction SHALL prove the last committed transaction cursor, current listener/epoch/bridge/health/incident/acknowledgement identities, and fail closed on any ambiguity without consulting process existence or projection JSON.
 
 ## 6. ATR continuity and rehydration
 
@@ -370,9 +381,29 @@ Enumerate every GET/HEAD/status/health/debug/audit/Command Center route, includi
 
 Endpoints named watchdog or alert remain subject to this rule.
 
-The inventory SHALL include all nineteen confirmed paths in Diagnostic Purity section 5.1, including Trade Manager `/debug/tradingview/atr/<symbol>`, `/debug/tradingview/atr_status`, `/debug/nonclosed_trades`, `/debug/noon_runner_flatten`, `/paper_account_snapshot`, `/events`, `/config/trade_manager_mode`, `/debug/atr_trade/<trade_id>`, `/debug/tick_pipeline`, and `/health`; Executor `/debug/watchdog`, `/debug/watchdog_alert`, `/sync_snapshot`, `/debug/tick_pipeline`, and `/account_snapshot`; Entry Agent `/entry/executor_status`; Trade Manager `/debug/risk_state`, `/trades`, and `/replay/<trade_id>`. The generated route/call-graph manifest SHALL remain authoritative only for discovering additional runtime read routes and mutation reachability; it SHALL fail on an unclassified route and SHALL NOT replace the completed clause-level traceability registry.
+The source-bound inventory SHALL use commit `869b3f08df5c5dbfa975246547455ad185288605`, tree `704fd715cad3aad281c534f8337840e3aab96234`, and the thirteen service/path entries in Diagnostic Purity section 5.2: Executor `/debug/watchdog`, `/debug/watchdog_alert`, and `/sync_snapshot`; Entry Agent `/debug/entry-liquidity` and `/entry/status`; Trade Manager `/debug/risk_state`, `/trades`, `/replay/<trade_id>`, `/debug/tradingview/atr/<symbol>`, `/debug/tradingview/atr_status`, `/debug/noon_runner_flatten`, `/events`, and `/debug/atr_trade/<trade_id>`. A later implementation commit SHALL regenerate the inventory and fail on every unclassified or newly reachable mutating read path; it SHALL NOT inherit this count as an exemption.
 
-Cold-cache/uninitialized, warm, missing, corrupt, unavailable, changed-configuration, stale/wrong-generation snapshot, no-snapshot, and error paths SHALL prove no cache fill, persistence/configuration hydration, normalization/repair, backup-file creation, active-index construction/replacement, singleton construction, thread/client/journal/directory creation, persistence change, lifecycle action, or authorization change. Direct and transitive proxy calls SHALL be covered sequentially and concurrently. Instrumented tests SHALL prove `load_state`, `_load_state_cached_unlocked`, `_set_state_cache_unlocked`, `PERSISTENCE_STATE_CACHE`, `PERSISTENCE_STATE_CACHE_LOADED`, `backup_bad_persistence_file`, `load_trade_manager_config`, `TRADINGVIEW_ATR_CACHE` and every TradingView ATR cache writer, active-index builders, `get_executor_tick_pipeline`, `get_trade_manager_tick_pipeline`, and every equivalent tick-pipeline initializer are unreachable from GET/HEAD/OPTIONS. Each impure route's replacement POST/event/startup command SHALL pass duplicate/concurrent/restart idempotency tests.
+| Scenario target | Exact registration and transitive source path | Current mutation to exclude after implementation |
+|---|---|---|
+| `GET-EXEC-001` `/debug/watchdog` | `executor.py:1945-1947` -> `build_watchdog_state:618-664` -> restart path | restart state/throttle and listener process action |
+| `GET-EXEC-002` `/debug/watchdog_alert` | `executor.py:1950-1963` -> same builder/restart path | same restart mutation |
+| `GET-EXEC-003` `/sync_snapshot` | `executor.py:1966-1986` -> flat-symbol clear -> `save_executor_state` | order clear and durable Executor state write |
+| `GET-EA-001` `/debug/entry-liquidity` | `tv_context_server.py:589-623` -> `build_entry_status:4668-4682` -> `run_once:3976-4052` -> `append_entry_agent_audit_row`/`persist_state` | audit append and pipeline-state persistence |
+| `GET-EA-002` `/entry/status` | `tv_context_server.py:672-706` -> same status/run-once persistence; `697-699` -> decision/reasoning append helpers | audit/pipeline persistence and receiver log appends |
+| `GET-TM-001` `/debug/risk_state` | `trade_manager.py:3979-3995` -> `load_state`, Executor snapshot, orphan event/save, noon status | persistence/reconciliation/event/noon mutation |
+| `GET-TM-002` `/trades` | `trade_manager.py:5782-5799` -> `refresh_trades_from_executor_activity:3893-3936` | synchronization/noon/reconciliation/save |
+| `GET-TM-003` `/replay/<trade_id>` | `trade_manager.py:5892-5905` -> same refresh path | same synchronization/persistence mutation |
+| `GET-TM-004` `/debug/tradingview/atr/<symbol>` | `trade_manager.py:5554-5572` -> `get_tradingview_atr:4854-4863` | cold cache write and reachable corrupt-persistence handling |
+| `GET-TM-005` `/debug/tradingview/atr_status` | `trade_manager.py:5575-5577` -> `find_tradingview_atr_record:2439-2464` | cold `TRADINGVIEW_ATR_CACHE` write |
+| `GET-TM-006` `/debug/noon_runner_flatten` | `trade_manager.py:5636-5638` -> status builder `3807-3820` -> `load_state` | state load/normalization and corrupt backup path |
+| `GET-TM-007` `/events` | `trade_manager.py:5864-5874` -> `load_state` | state load/normalization and corrupt backup path |
+| `GET-TM-008` `/debug/atr_trade/<trade_id>` | `trade_manager.py:5936-5961` -> `load_state` | state load/normalization and corrupt backup path |
+
+For every listed route, the scenario catalog SHALL identify the exact source registration, transitive call path, current mutation, intended immutable snapshot, and command/event/startup boundary. Each route SHALL have positive read-only, cold-state, 100 sequential, 20 concurrent, unavailable-snapshot, wrong-identity, and applicable corruption-path assertions. The assertions SHALL prove no cache fill, persistence hydration or normalization, backup creation, state/log append, order reconciliation, pipeline-state persistence, lifecycle action, or authorization change.
+
+Instrumentation SHALL prove the exact committed-source primitives `build_watchdog_state`, listener restart execution, flat-symbol working-order clearing, `save_executor_state`, `build_entry_status`, `run_once(..., persist=True)`, `append_entry_agent_audit_row`, `persist_state`, receiver decision/reasoning log append helpers, `refresh_trades_from_executor_activity`, noon-runner processing, `load_state`, corrupt-persistence backup creation, and `TRADINGVIEW_ATR_CACHE` writers are unreachable from every remediated GET/HEAD/OPTIONS call graph. It SHALL specifically prove that Entry Agent `/debug/entry-liquidity` and `/entry/status` cannot append the Entry Agent audit or persist pipeline state, and that `/entry/status` cannot invoke either receiver log append helper; `/debug/entry-liquidity` is not falsely attributed a direct receiver-log append in the baseline. Both TradingView ATR routes SHALL be unable to create/replace cache records, and watchdog reads SHALL be unable to request or execute restart actions.
+
+Tests SHALL NOT represent the following absent routes or symbols as current-source findings: Executor `/debug/tick_pipeline`; Entry Agent `/entry/executor_status`; Trade Manager `/debug/tick_pipeline`, `/health`, `/debug/nonclosed_trades`, `/paper_account_snapshot`, or `/config/trade_manager_mode`; `get_executor_tick_pipeline`; `get_trade_manager_tick_pipeline`; `PERSISTENCE_STATE_CACHE`; `PERSISTENCE_STATE_CACHE_LOADED`; active-trade-index mutation; or configuration-cache hydration. Executor `/account_snapshot` SHALL be tested as the local JSON snapshot route actually present in the tree, not as a Trade Manager proxy. Each future replacement POST/event/startup command SHALL pass sequential-duplicate, concurrent-duplicate, crash-after-commit, and restart idempotency tests.
 
 ## 10. Negative and noninterference cases
 
@@ -439,4 +470,4 @@ Expected verification artifacts:
 - isolated cold/manual integration report; and
 - approved evidence manifests and traceability matrix.
 
-Traceability: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` is the draft package's completed clause-level forward/reverse registry. Section 2.1 defines verification families. `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md` is a noncanonical package-level evidence index and explicitly defers clause mapping to the registry. No traceability record creates authority, implementation conformance, verification completion, deployment permission, `READY_LOCKED`, or trading authorization.
+Traceability: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` is the draft package's Phase 3B semantic clause/scenario/assertion forward/reverse registry. Section 2.1 defines verification families. `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md` is a noncanonical package-level evidence index and explicitly defers clause mapping to the registry. No traceability record creates authority, implementation conformance, verification completion, deployment permission, `READY_LOCKED`, or trading authorization.

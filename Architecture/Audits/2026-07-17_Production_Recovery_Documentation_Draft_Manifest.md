@@ -2,9 +2,9 @@
 
 Status: **REVIEW ARTIFACT IDENTITIES - NONCANONICAL - NOT APPROVED**
 
-Approval-Readiness Disposition: **SUPERSEDED BY PHASE 3A REPOSITORY COMMIT IDENTITIES**
+Approval-Readiness Disposition: **SUPERSEDED BY PHASE 3B REPOSITORY COMMIT IDENTITIES**
 
-Historical Identity Notice: The hashes below identify the pre-remediation documentation draft set only. They SHALL NOT identify the Phase 3A package, establish a competing current version, or be used for approval. The Phase 3A remediation report and its document-only Git commit supply the current review identities. The listed combined listener-support draft is now `WITHDRAWN — SUPERSEDED DRAFT`.
+Historical Identity Notice: The hashes below identify the pre-remediation documentation draft set only. They SHALL NOT identify the Phase 3B package, establish a competing current version, or be used for approval. The Phase 3B remediation report and its document-only Git commit supply the next review identities. The listed combined listener-support draft is `WITHDRAWN — SUPERSEDED DRAFT`. The new Runtime Authority Store Schema and semantic clause/scenario/assertion registry are absent from this historical table and are identified only by the Phase 3B commit.
 
 No listed artifact authorizes implementation, production restart, deployment, entry-lock clearing, or trading.
 

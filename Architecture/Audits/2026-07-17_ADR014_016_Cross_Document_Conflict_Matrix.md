@@ -58,7 +58,7 @@ Production/Implementation Authorization: None
 | ADR-011 | Unchanged. Continuation Step 4 is outside recovery scope |
 | ADR-012 | Requires the exact continuity/read-side amendment in the amendment ledger; its durable-before-exposure invariant remains governing |
 | ADR-013 | Unchanged. Candidate routing/anchors are outside recovery scope |
-| ADR-014 | **APPROVED governing dependency.** Every revised session clause preserves its indivisible validate-build-commit-expose transaction, its sole `Entry Agent Session Commit Writer`, and both `trade_authorization_context_binding` and `authorized_session_rollover_commit_id`. ADR-015/ADR-016 and supporting drafts neither reopen nor redefine ADR-014 |
+| ADR-014 | **APPROVED governing dependency.** Every revised session clause preserves its indivisible validate-build-commit-expose transaction, Session-lock policy as sole eligibility/rollover-decision authority, `Entry Agent Session Commit Writer` as sole durable writer/transaction executor, and both `trade_authorization_context_binding` and `authorized_session_rollover_commit_id`. ADR-015/ADR-016 and supporting drafts neither reopen nor redefine ADR-014 |
 
 No approved ADR currently assigns Listener Supervisor authority or defines durable health control. ADR-015 and ADR-016 are new decisions, not reinterpretations of ADR-013 or the stack contracts.
 
@@ -178,7 +178,7 @@ This table records what Phase 2 claimed and is superseded for approval-readiness
 
 ## 12. Superseded Phase 2 vocabulary and ownership registry
 
-The following registry is retained as Phase 2 history. It is not the active vocabulary mapping and is superseded by section 13 and the Phase 3A clause registry.
+The following registry is retained as Phase 2 history. It is not the active vocabulary mapping and is superseded by section 14 and the Phase 3B clause/scenario/assertion registry.
 
 Where `RESTART_PENDING`, `FENCED`, `REHYDRATING`, or `FAILED` appears in both the restart-incident and current full-listener domains, the incident value identifies the durable decision/execution record and the current full-listener value identifies operational eligibility. They SHALL carry the same incident/recovery identity while that incident controls the listener, but neither record is a substitute writer for the other. `RESTART_CANCELED` and `COMPLETED` are incident outcomes only; `HEALTHY` and `SUSPECT` are current full-listener states only.
 
@@ -209,9 +209,9 @@ Where `RESTART_PENDING`, `FENCED`, `REHYDRATING`, or `FAILED` appears in both th
 
 The Phase 2 completion statement was disproved by the subsequent independent review and is superseded. Canonical incorporation, implementation, verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, and trading remain unauthorized. `DEBT-2026-07-17-012` and `DEBT-2026-07-17-016` remain `BLOCKING`; DEBT-015 remains separately governed.
 
-## 13. Phase 3A active conflict disposition
+## 13. Superseded Phase 3A conflict disposition
 
-The rows below are the active draft reconciliation. A correction is not approval. Each corrected proposal remains pending a new independent approval review.
+The rows below preserve the Phase 3A reconciliation as historical evidence. The independent Phase 3A review disproved its storage-schema, session-authority, diagnostic-inventory, and semantic-traceability completion claims. Section 14 supersedes these rows for approval-readiness purposes.
 
 | Conflict | Final normative reconciliation | Surfaces | Status |
 |---|---|---|---|
@@ -266,3 +266,46 @@ Every transition not explicitly permitted by its governing state table is prohib
 | Deployment | `IDENTIFIED` as a future separately authorized stage |
 
 This matrix itself remains draft evidence. It does not approve, incorporate, implement, verify, or deploy any proposal.
+
+## 14. Phase 3B active conflict disposition
+
+Every row below is `CORRECTED IN DRAFT` and `PENDING INDEPENDENT APPROVAL` unless ADR-014 or the withdrawn artifact is expressly stated. No row is canonically incorporated, implemented, verified, or deployed.
+
+| Conflict | Phase 3B normative correction | Exact surfaces | Status |
+|---|---|---|---|
+| ADR-014 baseline | Approved ADR-014 remains unchanged; the metadata-applied hash is `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321`; the earlier recorded content hash is not reconstructable from current history | ADR-014; Entry Session Contract; README; Phase 3B redline | `APPROVED` for ADR-014 only |
+| Competing listener draft | Combined support draft is historical, noncanonical, not an authority or implementation input | Withdrawn draft; README; ledger; traceability | `WITHDRAWN — SUPERSEDED DRAFT` |
+| Runtime store prose was not implementable | New Runtime Authority Store Schema defines database identity, every table/column/nullability/key/check/FK, writer allowlists, typed transactions, crash/replay and reconstruction | Store Schema; ADR-015 3.3; ADR-016 3.6; Startup 6/6.3; Verification 5.8-5.9 | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+| Acknowledgement/current-listener storage undefined | Exact `listener_current`, transition, rehydration, required-domain, and domain-acknowledgement tables bind current generation/epoch/recovery identities; Command Center is excluded | Store Schema 4.3/7.1; ADR-015 3.3 | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+| Cross-writer atomicity generic | Closed `TX-LSN-*`, `TX-BRG-*`, `TX-HEALTH-*`, and `TX-STORE-*` catalogs define preconditions, writer sets, writes, result, idempotency, crash and rollback | Store Schema 7-10; ADR-015; ADR-016; Verification 5.9 | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+| Entry policy decision conflated with persistence | Session-lock policy solely decides eligibility/rollover; Entry Agent Session Commit Writer solely writes and executes the atomic transaction; mechanical rejection transfers no policy authority | Entry Session Contract 2-3; ledger 5; traceability | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+| Startup store gates relied on prose readiness | Gates now query schema identity/FKs/writer registry/current generation/listener/incident/ack/bridge/six health dimensions/aggregate/cursors with 19 fixed failure results | Startup 6/6.3; Store Schema 10 | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+| Diagnostic inventory was not source-bound and was inaccurate | Current inventory is exactly thirteen service/path entries proven against commit `869b3f...`, tree `704fd715...`; absent paths/symbols are removed; Entry Agent persistence/logging paths are added; future commits regenerate the manifest | Diagnostic Purity 5; Verification 9; ledger 18; external traceability | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+| Traceability was count-complete boilerplate | Registry is regenerated after Phase 3B and gives each requirement a clause-specific scenario, assertion, preconditions, stimulus, evidence, result, negative/failure and applicable restart/corruption case | Clause Registry; Verification 2.1; external traceability | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+| Writer/owner mappings drifted | Registry and store contract distinguish evidence producer, ingress validator, evaluator/decision authority, transition authority, logical durable writer, and mechanical transaction coordinator | Store Schema 6; ADR-015/016; Entry Session; Startup; Clause Registry | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+| Phase 3A completion claims remained active | Phase 3A record is retained and marked superseded; Phase 3B record documents each overstatement and final draft correction | Phase 3A and Phase 3B redlines | `CORRECTED IN DRAFT`; `PENDING INDEPENDENT APPROVAL` |
+
+### 14.1 Phase 3B ownership and evidence closure
+
+| Domain/fact | Decision or transition authority | Durable writer | Evidence producer | Readiness/restart effect |
+|---|---|---|---|---|
+| Entry candidate eligibility and rollover | Session-lock policy | Entry Agent Session Commit Writer | receiver/validator/integrity producer | fail closed on rejection/failure; writer cannot decide eligibility |
+| Listener lifecycle and incidents | Listener Supervisor State Evaluator | Listener State/Incident/Epoch/Acknowledgement Writers per typed transaction | listener, Health Ingress, OS, authoritative domains | only exact committed state; no projection closure |
+| Bridge grant/lifecycle | Supervisor State Evaluator | Bridge Generation Writer for grant; Health Durable Writer for lifecycle | Bridge Controller acknowledgement/execution evidence | current generation only; exhaustion distinct from listener rate exhaustion |
+| Health dimensions/aggregate | State Evaluator | Health Durable Writer | authenticated listener/bridge/RAPI/OS sources through Health Ingress | six dimensions recompute one aggregate; degradation blocks named gates |
+| Store mechanics | domain authorities named above | logical writers named above | transaction plans and source evidence | Coordinator only serializes/enforces/commits; supplies no domain authority |
+| Diagnostic projection | authoritative owner publishes immutable snapshot | no GET writer | snapshot owner | observational; source commit inventory regenerated for later trees |
+| Command Center parity | Startup parity evaluator | projection writer only | canonical owners | observational gate only; cannot close rehydration or grant readiness authority |
+
+### 14.2 Phase 3B governance stages
+
+| Stage | Status |
+|---|---|
+| ADR-014 | `APPROVED` |
+| ADR-015, ADR-016, Store Schema, supporting drafts, ledger, matrix, registry | `PENDING INDEPENDENT APPROVAL` |
+| Canonical incorporation | `IDENTIFIED` future authorization only |
+| Implementation | `IDENTIFIED` future authorization only |
+| Runtime verification | `IDENTIFIED` future authorization only |
+| Deployment | `IDENTIFIED` future authorization only |
+
+The only active statuses are the concepts listed above. A draft correction is not approval. This matrix does not authorize implementation, verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1, or trading.
