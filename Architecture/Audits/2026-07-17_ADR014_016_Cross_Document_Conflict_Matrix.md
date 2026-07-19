@@ -2,7 +2,7 @@
 
 Document Type: Pre-approval authority reconciliation
 
-Status: **PHASE 3C1-R2 F6 CORRECTED IN DRAFT - PENDING INDEPENDENT PHASE 3C1-R2 REVIEW - NONCANONICAL - NOT APPROVED**
+Status: **PHASE 3C1-R3 F6 EVIDENCE SEMANTICS CORRECTED IN DRAFT - PENDING INDEPENDENT PHASE 3C1-R3 REVIEW - NONCANONICAL - NOT APPROVED**
 
 Production/Implementation Authorization: None
 
@@ -367,14 +367,27 @@ ADR-014 remains approved and unchanged. ADR-015/016, schema/SQL, ledger, specifi
 
 Bucket 0 remains incomplete, Bucket 1 — Step 2 Rejection remains blocked and unauthorized, and `DEBT-2026-07-17-012`, `-013`, `-014`, and `-016` remain `BLOCKING`.
 
-## 17. Phase 3C1-R2 active F6 disposition
+## 17. Historical Phase 3C1-R2 F6 disposition
 
-Sections 15–16 remain historical package evidence. F1–F5/F7/F8 are not reopened. This is the sole active F6 normative-readiness row and is not an approval claim.
+Sections 15–17 remain historical package evidence. F1–F5/F7/F8 are not reopened. The broad R2 row is superseded only for the five residual enforcement gaps listed in section 18 and is not an approval claim.
 
 | Finding | Exact R2 correction | Governing draft surfaces | Status |
 |---|---|---|---|
-| F6 termination-result identity/evidence completeness/currentity/conflict/startup proof | Mandatory cutoff/record time/schema/hash; exact result-bound set; six complete producer windows; five unique direct roles; current generation/epoch/bridge/process/observation; contiguous authenticated sequences; direct optional membership; deterministic conflict/UNKNOWN; content-based NONE; positive concrete evidence; exact SHA-256 serializations; fail-closed startup proof | ADR-016 3.3/3.6/3.9.2; Store Schema 2/5–8/14.5; executable SQL; Startup; Verification; Ledger section 20; R2 redline | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW` |
+| F6 termination-result identity/evidence completeness/currentity/conflict/startup proof | Mandatory cutoff/record time/schema/hash; exact result-bound set; six complete producer windows; five unique direct roles; current generation/epoch/bridge/process/observation; contiguous authenticated sequences; direct optional membership; deterministic conflict/UNKNOWN; content-based NONE; positive concrete evidence; exact SHA-256 serializations; fail-closed startup proof | ADR-016 3.3/3.6/3.9.2; Store Schema 2/5–8/14.5; executable SQL; Startup; Verification; Ledger section 20; R2 redline | `SUPERSEDED FOR F6-R2-01 THROUGH F6-R2-05 NORMATIVE APPROVAL READINESS BY PHASE 3C1-R3 REMEDIATION RECORD` |
 | Subscription identity and symbol/session coherence | Accepted R1 constraints retained without substantive change | ADR-016 3.3; Store Schema 14.5; executable SQL | `ACCEPTED PHASE 3C1-R1 AREA — NOT REOPENED` |
 | Semantic clause traceability | Historical Phase 3B registry remains rejected; no Phase 3C2 build occurred; Phase 3C2 remains blocked until R2 hashes are independently accepted | Clause Registry; package matrix; Verification | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+
+## 18. Phase 3C1-R3 active F6 enforcement dispositions
+
+Section 17 is preserved as historical Phase 3C1-R2 evidence and is superseded only for the five remaining F6 enforcement gaps below. F1–F5, subscription identity, F7, and F8 are not reopened. No row is an approval or implementation claim.
+
+| Finding | Exact draft correction | Governing artifacts | Status |
+|---|---|---|---|
+| F6-R2-01 supporting `UNKNOWN` omitted | All authenticated current in-window role assertions, including `UNKNOWN`, `INDETERMINATE`, unavailable, and uncertainty-positive assertions, participate in the role-local result predicate; unresolved uncertainty rejects `NONE` and concrete values and blocks termination readiness | ADR-016 3.9.2; Store Schema 14.5.1; SQL uncertainty trigger; Startup; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| F6-R2-02 semantic-role identity membership | Every optional result identity has one closed direct-role/producer/payload mapping; `request_identity` is exactly the `REQUESTED_ACTION_EVIDENCE` contributor; cross-role, cross-set, cross-result, stale, cross-process, and cross-observation identities abort | ADR-016 3.9.2; Store Schema 14.5.1; SQL membership trigger; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| F6-R2-03 self-declared domain labels | Six normalized authenticated payload tables bind commands, OS/process facts, provider/RAPI callbacks, bridge facts, listener/supervisor facts, and derivation proofs; concrete and absence predicates consume normalized content, and all three hash levels include canonical payload bytes | ADR-016 3.9.2; Store Schema 14.5.1; SQL payload tables/triggers; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| F6-R2-04 arrival order not durable | `termination_producer_cursors` plus `TX-TERMINATION-EVIDENCE-INGEST` atomically enforce first sequence 1, exact +1 producer/ingress sequence, cursor CAS, idempotency, stale-instance fence, and evidence-only-through-cursor admission | ADR-016 3.9.2; Store Schema 14.5.1; SQL cursor triggers; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| F6-R2-05 deterministic flag not proven | Schema-owned SHA-256 expression index rejects nondeterministic registration; `trusted_schema=OFF` rejects non-innocuous registration; output preflight rejects missing/wrong implementation; only deterministic, innocuous, correct registration creates and evaluates the schema | ADR-016 3.9.2; Store Schema 14.5.1; SQL preflight/index; Startup; Verification | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| Semantic clause traceability | Historical registry remains rejected; no Phase 3C2 work occurred; Phase 3C2 may use only exact independently accepted R3 hashes | Clause Registry; package matrix; Verification | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
 
 ADR-014 remains approved and unchanged. ADR-015 remains unapproved and its previously accepted R1 review substance is unchanged. ADR-016, schema/SQL, startup, verification, ledger, matrix, and R2 redline remain draft/noncanonical. Canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, trading, Bucket 0 completion, and Bucket 1 remain unauthorized.

@@ -4,7 +4,7 @@ Document Type: Coordinated amendment proposal
 
 Status: **DRAFT - NOT APPLIED - NOT CANONICAL - NOT APPROVED**
 
-Phase 3C1-R2 identity: **F6 TERMINATION-EVIDENCE TARGETED NORMATIVE REMEDIATION IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW**
+Phase 3C1-R3 identity: **F6 EVIDENCE-SEMANTICS TARGETED NORMATIVE REMEDIATION IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW**
 
 Implementation Authorization: None
 
@@ -461,3 +461,17 @@ Section 19 remains the accepted R1 proposal for F1–F5/F7/F8, but its F6 termin
 - startup rejection of an incomplete, stale, conflicting, UNKNOWN, cross-identity, or integrity-invalid current termination result without repair or reinterpretation.
 
 These are proposals only. ADR-014 remains approved and unchanged; ADR-015/016 remain unapproved. The F6 status is `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW`. Phase 3C2 semantic traceability remains deferred until independent acceptance of exact Phase 3C1-R2 hashes.
+
+## 21. Phase 3C1-R3 superseding F6 enforcement proposal
+
+Section 20 remains historical Phase 3C1-R2 evidence and is superseded for F6 normative approval readiness only. Future canonical incorporation would additionally adopt all of the following as one indivisible proposal:
+
+- every authenticated, current, in-window assertion participates in field classification, including `UNKNOWN`, `INDETERMINATE`, unavailable, and uncertainty-positive assertions; unresolved uncertainty is role-local and rejects `NONE` or a concrete value for that role, while independently proven roles remain independently classified;
+- each result-level optional identity is bound to the exact direct contributor role, producer/domain, normalized payload kind, evidence set, result, generation, epoch, process, and observation specified by ADR-016; `request_identity` is bound only to `REQUESTED_ACTION_EVIDENCE`, and the other optional identities have similarly closed mappings;
+- normalized command, OS/process, provider/RAPI, bridge, listener/supervisor, and evaluator-derivation payload tables carry authenticated domain facts; derived evidence labels cannot prove a concrete value or absence without a matching normalized payload and complete producer windows;
+- `termination_producer_cursors` and `TX-TERMINATION-EVIDENCE-INGEST` make per-instance producer and ingress arrival order durable with compare-and-swap cursor versioning, exact sequence increments, committed idempotency, stale-instance fencing, and atomic evidence/cursor completion;
+- `randle_sha256_hex_utf8(TEXT)` is required before schema creation and every schema-owned evaluation, and a schema-owned expression index mechanically requires `SQLITE_DETERMINISTIC` while `trusted_schema=OFF` mechanically requires `SQLITE_INNOCUOUS`; the output preflight independently verifies exact SHA-256 behavior;
+- `SUPERVISOR_AUTHORITY_READY` remains read-only and fails closed for unresolved supporting uncertainty, wrong-role identities, missing or mismatched normalized payload, evidence outside the accepted producer cursor, or failed UDF preflight;
+- the executable draft contains 47 `STRICT` tables, 670 columns, 152 foreign-key declarations, 203 child-column mappings, 70 active writer routes, 27 triggers, and 55 governed operations, including the narrowed `TX-TERMINATION-EVIDENCE-INGEST` operation.
+
+These are proposals only and perform no canonical incorporation. ADR-014 remains approved and unchanged; ADR-015 and ADR-016 remain unapproved. Each F6-R2-01 through F6-R2-05 disposition is `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW`. Phase 3C2 semantic traceability remains deferred until an independent review accepts the exact Phase 3C1-R3 hashes.

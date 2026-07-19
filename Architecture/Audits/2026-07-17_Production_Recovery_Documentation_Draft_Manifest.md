@@ -1,12 +1,12 @@
 # 2026-07-17 Production Recovery - Documentation Draft Manifest
 
-Status: **PHASE 3C1-R2 F6 DRAFT PACKAGE INDEX - NONCANONICAL - NOT APPROVED**
+Status: **PHASE 3C1-R3 F6 EVIDENCE-SEMANTICS DRAFT PACKAGE INDEX - NONCANONICAL - NOT APPROVED**
 
-Approval-Readiness Disposition: **F6 CORRECTED IN DRAFT - PENDING INDEPENDENT PHASE 3C1-R2 REVIEW; F1-F5/F7/F8 NOT REOPENED; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2**
+Approval-Readiness Disposition: **F6-R2-01 THROUGH F6-R2-05 CORRECTED IN DRAFT - PENDING INDEPENDENT PHASE 3C1-R3 REVIEW; ACCEPTED BASELINES NOT REOPENED; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2**
 
-## Phase 3C1-R2 active package
+## Phase 3C1-R3 active package
 
-The Phase 3C1-R2 provenance commit is the exact byte-level identity for the active F6 draft package. The following files are its authorized architecture/schema surfaces; accepted R1 documents listed for context are unchanged unless expressly named by the R2 commit:
+The Phase 3C1-R3 provenance commit is the exact byte-level identity for the active five-finding F6 draft package. The following files are its authorized architecture/schema surfaces; accepted documents listed for context are unchanged unless expressly named by the R3 commit:
 
 - `Architecture/Decisions/ADR-015_Listener_Lifecycle_Supervision_Epoch_Fencing_and_Restart_Cancellation.md` - unapproved;
 - `Architecture/Decisions/ADR-016_Feed_Health_Authority_Durable_Publication_and_Bridge_Recycle_Control.md` - unapproved;
@@ -17,9 +17,10 @@ The Phase 3C1-R2 provenance commit is the exact byte-level identity for the acti
 - `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md` - draft/noncanonical and not executed against production;
 - `docs/architecture/diagnostic_endpoint_purity_contract_DRAFT.md` - draft/noncanonical; source-bound thirteen-route inventory unchanged;
 - `Architecture/Audits/2026-07-17_ADR014_016_Canonical_Amendments_Draft.md` - proposal only, not applied;
-- `Architecture/Audits/2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md` - Phase 3C1-R2 active F6 draft disposition;
+- `Architecture/Audits/2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md` - Phase 3C1-R3 active F6 draft disposition;
 - `Architecture/Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md` - package-level index only;
-- `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_R2_Redlines.md` - active F6 targeted remediation record, not approval;
+- `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_R3_Redlines.md` - active five-finding F6 targeted remediation record, not approval;
+- `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_R2_Redlines.md` - historical R2 record, superseded for the five residual F6 enforcement gaps only;
 - `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_R1_Redlines.md` - historical R1 record, superseded for F6 approval readiness only;
 - `Architecture/Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md` - superseded historical remediation record, not approval;
 - `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md` - historical rejected Phase 3B evidence; not approval-ready;
@@ -27,17 +28,17 @@ The Phase 3C1-R2 provenance commit is the exact byte-level identity for the acti
 
 ADR-014 remains approved and unchanged. Its metadata-applied SHA-256 is `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321`. The Runtime Authority Store proposal uses schema version 2 and an initial governed bootstrap; no approved predecessor artifact/hash was established. The provenance commit does not authorize approval, canonical incorporation, implementation, runtime verification, deployment, production `READY_LOCKED`, Bucket 0 completion, Bucket 1, or trading.
 
-Semantic traceability is intentionally deferred. The historical Phase 3B registry does not prove substantive or structural completeness. Phase 3C2 may operate only on independently accepted Phase 3C1-R2 hashes.
+Semantic traceability is intentionally deferred. The historical Phase 3B registry does not prove substantive or structural completeness. Phase 3C2 may operate only on independently accepted Phase 3C1-R3 hashes.
 
-### Phase 3C1-R2 executable identities
+### Phase 3C1-R3 executable identities
 
 | Identity | Value |
 |---|---|
 | Runtime Authority Store schema version | `2` |
-| SQL artifact SHA-256 | `8b7bc314163b2fef65cb61221026ba6b962ff20797aa6be57f944c0dcd7ae4fc` |
-| Canonical schema hash | `c3d60c3c943958a588ff744467c4eca56063851bfe0288054dba6f08ca5bfc2a` |
-| Canonical writer-registry hash | `906286388a8a8c95ee1ae09b6537e969b998f9008e37ed9aae734a85361d0f20` |
-| Executable inventory | 40 STRICT tables; 552 columns; 133 FK declarations/173 mappings; one SHA-256 preflight view; 13 partial unique indexes; 21 triggers; 62 active routes; 55 operations/52 commit types |
+| SQL artifact SHA-256 | `bed772dfcfaffed0a5ad19176e560cebd139f19fce555482cbce6f7320e43636` |
+| Canonical schema hash | `304dce825d2542b8c7a69f56b0322376daa8fe2670848e0bbfbef528b12a4180` |
+| Canonical writer-registry hash | `7ab99f5802bb6d9e20f73b2ecbf9372ce5cf8fbd093e0d9cf1bd571bf1c31c28` |
+| Executable inventory | 47 `STRICT` tables; 670 columns; 152 FK declarations/203 mappings; one SHA-256 preflight view and one deterministic-flag expression index; 14 partial unique indexes; 27 triggers; 70 active routes; 55 operations/52 commit types |
 
 These hashes identify an unapproved draft only. The provenance commit hash is recorded after commit creation; it creates no approval or implementation authority.
 

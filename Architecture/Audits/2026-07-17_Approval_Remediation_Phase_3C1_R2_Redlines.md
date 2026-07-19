@@ -2,7 +2,7 @@
 
 Status: **DRAFT — NONCANONICAL — NOT APPROVED**
 
-Active disposition: **F6 CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW**
+Historical disposition: **SUPERSEDED FOR F6-R2-01 THROUGH F6-R2-05 NORMATIVE APPROVAL READINESS BY PHASE 3C1-R3 REMEDIATION RECORD**
 
 Baseline: commit `67c09049f14b37eb9753f9fd37de0c25115568c7`, parent `174cb5001da13eff53d42dde40f35154fb7d1c22`, tree `ffeba5739554f3140f5b2dfb2e736bc257634177`, subject `docs(architecture): close phase 3c1-r1 invariant gaps`.
 
@@ -56,3 +56,9 @@ These are isolated document/schema validation exercises only. They are not produ
 ## 6. Governance status
 
 ADR-014 remains approved and unchanged. ADR-015 and ADR-016 remain unapproved. The schema/SQL and every amended supporting artifact remain draft and noncanonical. Canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, trading, Bucket 0 completion, and Bucket 1 remain unauthorized. DEBT-012, DEBT-013, DEBT-014, and DEBT-016 remain `BLOCKING`.
+
+## 7. Phase 3C1-R3 supersession for five residual enforcement gaps
+
+The independent Phase 3C1-R2 review found that the broad F6 design above remained incomplete in exactly five enforcement surfaces: supporting `UNKNOWN`, semantic-role binding for optional identities, authenticated normalized domain payload, durable producer arrival order, and mechanical proof of deterministic SHA-256 registration. The R2 corrections and validation claims remain historical evidence; they do not establish approval readiness for those five surfaces.
+
+Each residual finding is reopened and superseded for normative approval readiness by `2026-07-17_Approval_Remediation_Phase_3C1_R3_Redlines.md`. Its active disposition is `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW`. Phase 3C2 remains deferred and may operate only on exact independently accepted R3 hashes.

@@ -8,9 +8,9 @@ Implementation scope: **NONE - documentation only**
 
 Canonical authority status: ADR-014 is **APPROVED / GOVERNING**. Governance records approved-content SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`; the metadata-applied committed file is `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321`, and the corresponding pre-metadata blob is not independently reconstructable from current repository history. ADR-015, ADR-016, and supporting specification drafts are **NOT APPROVED / NONCANONICAL**.
 
-Traceability coverage result: **PHASE 3C1-R2 F6 NORMATIVE REMEDIATION DRAFTED; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2 — NOT APPROVAL READY**
+Traceability coverage result: **PHASE 3C1-R3 F6 EVIDENCE-SEMANTICS REMEDIATION DRAFTED; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2 — NOT APPROVAL READY**
 
-Historical clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It is rejected Phase 3B evidence, not a current semantic mapping source. This matrix remains only a package-level evidence/debt index. Phase 3C2 will rebuild semantic forward/reverse traceability only after independent acceptance of the Phase 3C1-R2 hashes.
+Historical clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It is rejected Phase 3B evidence, not a current semantic mapping source. This matrix remains only a package-level evidence/debt index. Phase 3C2 will rebuild semantic forward/reverse traceability only after independent acceptance of the Phase 3C1-R3 hashes.
 
 Implementation conformance result: **FAIL / NOT STARTED**
 
@@ -227,7 +227,7 @@ This update records draft remediation only. The historical rejection decisions i
 
 ## 12. Historical Phase 3C1 package-level remediation index
 
-This section is preserved as superseded Phase 3C1 package evidence and is intentionally not a one-row-per-clause registry. Section 13 is the historical R1 package index; section 14 is the active Phase 3C1-R2 F6 package index. Detailed semantic clause-to-scenario traceability remains Phase 3C2 work.
+This section is preserved as superseded Phase 3C1 package evidence and is intentionally not a one-row-per-clause registry. Sections 13 and 14 are historical R1/R2 package indexes; section 15 is the active Phase 3C1-R3 five-finding F6 index. Detailed semantic clause-to-scenario traceability remains Phase 3C2 work.
 
 | Normative defect family | Corrected draft source | Future proof family | Phase 3C1 status |
 |---|---|---|---|
@@ -273,3 +273,18 @@ This is a package-level index, not semantic clause traceability. F1–F5/F7/F8 a
 | F6 sequence/conflict/NONE/UNKNOWN/concrete | ADR-016 3.9.2; Store Schema 14.5; SQL triggers | gap/cutoff/conflict/absence/uncertainty/positive-evidence cases | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW` |
 | F6 startup proof | Startup `CONTROL_STORES_VERIFIED`/`SUPERVISOR_AUTHORITY_READY`; Verification | read-only recomputation and fail-closed invalid-result matrix | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW` |
 | Semantic clause traceability | Future Phase 3C2 registry against independently accepted Phase 3C1-R2 hashes | Not built in this task | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+
+## 15. Phase 3C1-R3 package-level five-finding F6 index
+
+This section is a package-level defect index, not semantic clause traceability. Section 14 remains historical Phase 3C1-R2 evidence. F1–F5, subscription symbol/session identity, F7, F8, ADR-015, Entry Session, and Diagnostic Purity are not reopened.
+
+| Finding | Normative sources | Isolated proof family | Status |
+|---|---|---|---|
+| F6-R2-01 supporting uncertainty | ADR-016 3.9.2; Store Schema 14.5.1; SQL; Startup | complete absence/concrete plus supporting `UNKNOWN`; role-local propagation; startup rejection | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| F6-R2-02 semantic-role membership | ADR-016 3.9.2; Store Schema 14.5.1; SQL | every optional identity from correct/wrong roles and cross-set/result/process/generation/observation | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| F6-R2-03 authenticated normalized payload | ADR-016 3.9.2; Store Schema 14.5.1; six SQL payload tables | concrete predicate matrix; label without payload; false absence; payload mismatch/tamper/correlation | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| F6-R2-04 durable arrival order | Store Schema 14.5.1; SQL cursor/transaction triggers | 1→2, 2-before-1, duplicate, replay, concurrent CAS, restart, stale producer, late evidence | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| F6-R2-05 deterministic SHA-256 registration | Store Schema 14.5.1; SQL expression index/preflight; Startup | missing, wrong, deterministic/non-innocuous, innocuous/nondeterministic, correct flags/output | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R3 REVIEW` |
+| Semantic clause traceability | Future Phase 3C2 registry against independently accepted Phase 3C1-R3 hashes | Not built in this task | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+
+ADR-014 remains approved and unchanged. ADR-015 and ADR-016 remain unapproved. This index performs no approval review, semantic traceability build, canonical incorporation, implementation, runtime verification, deployment, readiness authorization, Bucket 0 completion, Bucket 1 authorization, or trading authorization.

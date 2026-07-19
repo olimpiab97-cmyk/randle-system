@@ -114,7 +114,7 @@ The following items remain unresolved:
 - Session rollover implementation and subordinate specification incorporation (ADR-014 approved; subordinate contract remains draft and noncanonical)
 - Contract rollover policy
 
-### Production recovery decision and Phase 3C1-R2 F6 drafts
+### Production recovery decision and Phase 3C1-R3 F6 drafts
 
 ADR-014 is the approved governing Entry session decision. All other files listed below remain review drafts only. Their existence and repository provenance authorize no implementation, runtime verification, deployment, production `READY_LOCKED`, Bucket 0 completion, Bucket 1 work, entry-lock release, or trading:
 
@@ -124,22 +124,23 @@ ADR-014 is the approved governing Entry session decision. All other files listed
 - [`14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`](14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md) - proposed recovery verification contract; draft and noncanonical.
 - [`entry_session_rollover_contract_DRAFT.md`](../docs/lifecycle/entry_session_rollover_contract_DRAFT.md) - proposed executable support contract for approved ADR-014; draft and noncanonical.
 - [`listener_supervision_and_health_authority_DRAFT.md`](../docs/architecture/listener_supervision_and_health_authority_DRAFT.md) - **WITHDRAWN — SUPERSEDED DRAFT**; noncanonical historical evidence only, not an authority source or implementation input.
-- [`runtime_authority_store_schema_DRAFT.md`](../docs/architecture/runtime_authority_store_schema_DRAFT.md) - explanatory proposed Runtime Authority Store and typed-operation contract; Phase 3C1-R2 F6 draft and noncanonical, pending independent review.
+- [`runtime_authority_store_schema_DRAFT.md`](../docs/architecture/runtime_authority_store_schema_DRAFT.md) - explanatory proposed Runtime Authority Store and typed-operation contract; Phase 3C1-R3 F6 draft and noncanonical, pending independent review.
 - [`runtime_authority_store_schema_v2_DRAFT.sql`](../docs/architecture/runtime_authority_store_schema_v2_DRAFT.sql) - executable proposed v2 SQLite `STRICT` schema; draft architecture implementation reference only, not production code and not authorized for runtime installation.
 - [`production_startup_and_recovery_DRAFT.md`](../docs/architecture/production_startup_and_recovery_DRAFT.md) - proposed startup/recovery contract; draft and noncanonical.
 - [`diagnostic_endpoint_purity_contract_DRAFT.md`](../docs/architecture/diagnostic_endpoint_purity_contract_DRAFT.md) - proposed diagnostic-purity contract; draft and noncanonical.
 - [`2026-07-17_ADR014_016_Canonical_Amendments_Draft.md`](Audits/2026-07-17_ADR014_016_Canonical_Amendments_Draft.md) - proposed canonical amendments; not applied.
-- [`2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md`](Audits/2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md) - Phase 3C1-R2 active F6 disposition with retained historical rows; draft evidence.
+- [`2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md`](Audits/2026-07-17_ADR014_016_Cross_Document_Conflict_Matrix.md) - Phase 3C1-R3 active F6 disposition with retained historical rows; draft evidence.
 - [`2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`](Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md) - historical rejected Phase 3B registry; preserved evidence only, not approval-ready or a substantive traceability source.
 - [`2026-07-17_Approval_Remediation_Phase_3A_Redlines.md`](Audits/2026-07-17_Approval_Remediation_Phase_3A_Redlines.md) - preserved Phase 3A remediation evidence, superseded for approval readiness.
 - [`2026-07-17_Approval_Remediation_Phase_3B_Redlines.md`](Audits/2026-07-17_Approval_Remediation_Phase_3B_Redlines.md) - Phase 3B remediation evidence; not approval evidence.
-- [`2026-07-17_Approval_Remediation_Phase_3C1_R2_Redlines.md`](Audits/2026-07-17_Approval_Remediation_Phase_3C1_R2_Redlines.md) - active F6 targeted remediation record; draft evidence, not approval.
+- [`2026-07-17_Approval_Remediation_Phase_3C1_R3_Redlines.md`](Audits/2026-07-17_Approval_Remediation_Phase_3C1_R3_Redlines.md) - active five-finding F6 targeted remediation record; draft evidence, not approval.
+- [`2026-07-17_Approval_Remediation_Phase_3C1_R2_Redlines.md`](Audits/2026-07-17_Approval_Remediation_Phase_3C1_R2_Redlines.md) - historical R2 record, superseded for the five residual F6 enforcement gaps only.
 - [`2026-07-17_Approval_Remediation_Phase_3C1_R1_Redlines.md`](Audits/2026-07-17_Approval_Remediation_Phase_3C1_R1_Redlines.md) - historical F1-F8 record, superseded for F6 approval readiness only; draft evidence, not approval.
 - [`2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md`](Audits/2026-07-17_Approval_Remediation_Phase_3C1_Redlines.md) - superseded historical Phase 3C1 remediation record; not approval.
 - [`2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md`](Traceability/2026-07-17_Production_Recovery_Documentation_Traceability_Matrix.md) - package-level evidence index only; semantic forward/reverse mapping is deferred to Phase 3C2.
-- [`2026-07-17_Production_Recovery_Documentation_Draft_Manifest.md`](Audits/2026-07-17_Production_Recovery_Documentation_Draft_Manifest.md) - Phase 3C1-R2 F6 draft package index with historical identities retained separately.
+- [`2026-07-17_Production_Recovery_Documentation_Draft_Manifest.md`](Audits/2026-07-17_Production_Recovery_Documentation_Draft_Manifest.md) - Phase 3C1-R3 F6 draft package index with historical identities retained separately.
 
-Phase 3C1-R2 corrects only the remaining F6 termination-result identity/evidence/currentity/conflict/startup defect in draft; F1–F5/F7/F8 and accepted subscription constraints are not reopened. It does not conduct the independent review. Phase 3C2 will rebuild semantic clause/scenario/assertion traceability only against independently accepted Phase 3C1-R2 hashes. ADR-015 and ADR-016 remain unapproved; the Store Schema, executable SQL, and all supporting documents remain draft/noncanonical. Canonical incorporation, implementation, runtime verification, deployment, production `READY_LOCKED`, Bucket 0 completion, Bucket 1 work, and trading remain unauthorized.
+Phase 3C1-R3 corrects only five residual F6 enforcement gaps: supporting uncertainty, semantic-role identity membership, authenticated normalized domain payload, durable producer arrival order, and deterministic SHA-256 registration. Accepted F1–F5/F7/F8, subscription, ADR-015, Entry Session, and Diagnostic Purity substance are not reopened. It does not conduct the independent review. Phase 3C2 will rebuild semantic clause/scenario/assertion traceability only against independently accepted Phase 3C1-R3 hashes. ADR-015 and ADR-016 remain unapproved; the Store Schema, executable SQL, and all supporting documents remain draft/noncanonical. Canonical incorporation, implementation, runtime verification, deployment, production `READY_LOCKED`, Bucket 0 completion, Bucket 1 work, and trading remain unauthorized.
 
 `DEBT-2026-07-17-012`, `DEBT-2026-07-17-013`, `DEBT-2026-07-17-014`, and `DEBT-2026-07-17-016` remain `BLOCKING`. `DEBT-2026-07-17-015` remains separately governed and outside this package absent an approved direct-dependency assessment.
 
