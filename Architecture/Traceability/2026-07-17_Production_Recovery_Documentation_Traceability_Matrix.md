@@ -8,9 +8,9 @@ Implementation scope: **NONE - documentation only**
 
 Canonical authority status: ADR-014 is **APPROVED / GOVERNING**. Governance records approved-content SHA-256 `BD76D1B398515EA00E230B9C8A00A540344E061A36B228BF112F784F6AC34F25`; the metadata-applied committed file is `528B3C7099D63DB41C6B85E381EAD37AD1E479867C07934FD077EBBD8B5EC321`, and the corresponding pre-metadata blob is not independently reconstructable from current repository history. ADR-015, ADR-016, and supporting specification drafts are **NOT APPROVED / NONCANONICAL**.
 
-Traceability coverage result: **PHASE 3C1 NORMATIVE REMEDIATION DRAFTED; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2 — NOT APPROVAL READY**
+Traceability coverage result: **PHASE 3C1-R2 F6 NORMATIVE REMEDIATION DRAFTED; SEMANTIC TRACEABILITY DEFERRED TO PHASE 3C2 — NOT APPROVAL READY**
 
-Historical clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It is rejected Phase 3B evidence, not a current semantic mapping source. This matrix remains only a package-level evidence/debt index. Phase 3C2 will rebuild semantic forward/reverse traceability only after independent acceptance of the Phase 3C1-R1 hashes.
+Historical clause-level source: `Architecture/Audits/2026-07-17_ADR015_016_Clause_Traceability_Registry_DRAFT.md`. It is rejected Phase 3B evidence, not a current semantic mapping source. This matrix remains only a package-level evidence/debt index. Phase 3C2 will rebuild semantic forward/reverse traceability only after independent acceptance of the Phase 3C1-R2 hashes.
 
 Implementation conformance result: **FAIL / NOT STARTED**
 
@@ -227,7 +227,7 @@ This update records draft remediation only. The historical rejection decisions i
 
 ## 12. Historical Phase 3C1 package-level remediation index
 
-This section is preserved as superseded Phase 3C1 package evidence and is intentionally not a one-row-per-clause registry. Section 13 is the active Phase 3C1-R1 package index. Detailed semantic clause-to-scenario traceability remains Phase 3C2 work.
+This section is preserved as superseded Phase 3C1 package evidence and is intentionally not a one-row-per-clause registry. Section 13 is the historical R1 package index; section 14 is the active Phase 3C1-R2 F6 package index. Detailed semantic clause-to-scenario traceability remains Phase 3C2 work.
 
 | Normative defect family | Corrected draft source | Future proof family | Phase 3C1 status |
 |---|---|---|---|
@@ -246,7 +246,7 @@ This section is preserved as superseded Phase 3C1 package evidence and is intent
 
 ADR-014 remains approved and unchanged. ADR-015 and ADR-016 remain unapproved. The Store Schema, executable SQL, and supporting documents are draft/noncanonical. No approval review, canonical incorporation, implementation, production/runtime verification, deployment, `READY_LOCKED`, Bucket 0 completion, Bucket 1 authorization, or trading authorization occurs here.
 
-## 13. Phase 3C1-R1 package-level F1-F8 index
+## 13. Historical Phase 3C1-R1 package-level F1-F8 index
 
 This is not semantic clause traceability. It only indexes the targeted defect families for a later independent review.
 
@@ -257,7 +257,19 @@ This is not semantic clause traceability. It only indexes the targeted defect fa
 | F3 cancellation consistency | ADR-015 3.4; Store Schema 14.4; SQL | `RRV-LS-001`, `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
 | F4 operation closure | ADR-015/016; Store Schema 11/14.3 | `RRV-LS-*`, `RRV-FH-*`, `RRV-STORE-001` mutation coverage | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
 | F5 terminal incident/outcome | ADR-015 3.9; Store Schema 14.4; SQL | `RRV-LS-002`, `RRV-STORE-001` terminal cases | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
-| F6 subscription/termination | ADR-016 3.3/3.9; Store Schema 14.5; SQL | `RRV-FH-001/002`, `RRV-STORE-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F6 subscription/termination | ADR-016 3.3/3.9; Store Schema 14.5; SQL | `RRV-FH-001/002`, `RRV-STORE-001` | `SUPERSEDED FOR F6 NORMATIVE APPROVAL READINESS BY PHASE 3C1-R2 REMEDIATION RECORD` |
 | F7 recovery evidence profile | Store Schema 14.6; ADR-016; Startup | `RRV-STORE-001`, `RRV-FH-003` canonical/atomic/bounds | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
 | F8 candidate/replacement state | Store Schema 14.7; Entry Session 3.2; Startup | `RRV-STORE-001`, `RRV-SR-*`, `RRV-ST-001` | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
 | Semantic clause traceability | Future Phase 3C2 registry against independently accepted Phase 3C1-R1 hashes | Not built in this task | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |
+
+## 14. Phase 3C1-R2 package-level F6 index
+
+This is a package-level index, not semantic clause traceability. F1–F5/F7/F8 and accepted subscription identity/coherence are not reopened.
+
+| Finding | Normative sources | Isolated proof family | Status |
+|---|---|---|---|
+| F6 result identity/time/schema/integrity | ADR-016 3.9.2; Store Schema 14.5; SQL | `RRV-FH-002`, `RRV-STORE-001` mandatory-field/time/version/hash cases | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW` |
+| F6 exact set/membership/currentity | Store Schema 5–8/14.5; SQL | six producer windows, five roles, direct optionals, current generation/epoch/bridge/process/observation | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW` |
+| F6 sequence/conflict/NONE/UNKNOWN/concrete | ADR-016 3.9.2; Store Schema 14.5; SQL triggers | gap/cutoff/conflict/absence/uncertainty/positive-evidence cases | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW` |
+| F6 startup proof | Startup `CONTROL_STORES_VERIFIED`/`SUPERVISOR_AUTHORITY_READY`; Verification | read-only recomputation and fail-closed invalid-result matrix | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW` |
+| Semantic clause traceability | Future Phase 3C2 registry against independently accepted Phase 3C1-R2 hashes | Not built in this task | `DEFERRED TO PHASE 3C2 — NOT APPROVAL READY` |

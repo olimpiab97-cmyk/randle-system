@@ -1,6 +1,6 @@
 # Runtime Authority Store Schema and Typed Transaction Contract
 
-Version: Draft 0.4 — Phase 3C1-R1 targeted normative remediation
+Version: Draft 0.5 — Phase 3C1-R2 F6 targeted normative remediation
 
 Status: **DRAFT — NONCANONICAL — NOT APPROVED**
 
@@ -43,19 +43,19 @@ One physical database does not merge logical ownership. The Runtime Authority St
 | Read-only validation | URI `mode=ro`, then `query_only=ON`; no transaction/idempotency/metadata write |
 | Mutating transaction start | `BEGIN IMMEDIATE` only for the healthy-store mutating envelope |
 
-Every one of the 38 tables is `STRICT`. Every declared type is one of `INTEGER`, `REAL`, `TEXT`, `BLOB`, or `ANY`; this schema currently needs only `INTEGER` and `TEXT`. There are no declared aliases such as `UUID`, `SHA256`, `UTC`, `SEQ`, or `VERSION`.
+Every one of the 40 tables is `STRICT`. Every declared type is one of `INTEGER`, `REAL`, `TEXT`, `BLOB`, or `ANY`; this schema currently needs only `INTEGER` and `TEXT`. There are no declared aliases such as `UUID`, `SHA256`, `UTC`, `SEQ`, or `VERSION`.
 
 Semantic normalization is column-specific SQL:
 
 - UUID columns use a lowercase 36-character RFC-4122 layout, exact hyphen positions, hexadecimal-only payload, version nibble `1` through `5`, and variant nibble `8`, `9`, `a`, or `b`.
 - SHA-256 columns use exactly 64 lowercase hexadecimal characters.
-- UTC columns use exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ`, fixed separators, terminal `Z`, and a non-NULL built-in `julianday(column)` result.
-- Date columns use exactly `YYYY-MM-DD` and require `date(column)=column`.
+- UTC columns use exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ`, ASCII digits and separators, Gregorian year 0001 through 9999, calendar-valid month/day with the exact Gregorian leap rule, hour 00–23, minute/second 00–59 (leap second 60 is prohibited), and exact built-in `strftime` round-trip equality.
+- Date columns use exactly `YYYY-MM-DD`, ASCII digits and separators, Gregorian year 0001 through 9999, calendar-valid month/day with the exact Gregorian leap rule, and exact built-in `strftime` round-trip equality.
 - Boolean columns are `INTEGER` constrained to `0` or `1`.
 - Sequence/version columns are `INTEGER` with the exact lower bound named on that column.
 - JSON-bearing columns are `TEXT` and use built-in `json_valid(actual_column)` plus the exact required top-level type.
 
-No check uses a placeholder parameter or an unregistered function.
+All normalization checks are closed built-in SQLite expressions. The F6 result/evidence integrity triggers additionally call `randle_sha256_hex_utf8(TEXT)`. The Coordinator SHALL register that one-argument function on every schema-creation, mutating, validation, startup-proof, restore, reinitialization, and bootstrap connection before executing schema SQL: input is a non-NULL SQLite `TEXT` value; the function hashes the exact UTF-8 bytes of that value with SHA-256; output is 64 lowercase hexadecimal ASCII characters. Registration SHALL use `SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS`; it performs no I/O, reads no connection or locale state, and has no side effects. With `trusted_schema=OFF`, absence, NULL input, or a wrong result fails the preliminary empty-string call; the permanent schema-owned `randle_sha256_preflight_v` query fails a non-innocuous registration. Schema construction queries that view before COMMIT, and every read-only startup/validation connection SHALL query it again; any failure is closed.
 
 ## 3. Reproducible identities
 
@@ -63,7 +63,7 @@ No check uses a placeholder parameter or an unregistered function.
 
 `store_metadata.schema_hash` is SHA-256 of the schema block in the committed SQL artifact.
 
-Phase 3C1-R1 published value: `10dab0b154fa34cabcbbf79ef3ef1966f6418e7e45a19543da2d6825aa260423`.
+Phase 3C1-R2 published value: `c3d60c3c943958a588ff744467c4eca56063851bfe0288054dba6f08ca5bfc2a`.
 
 Canonicalization is exact:
 
@@ -75,13 +75,13 @@ Canonicalization is exact:
 6. Remove zero or more terminal LF characters and append exactly one LF.
 7. Hash those UTF-8 bytes with SHA-256 and render 64 lowercase hexadecimal characters.
 
-The block includes, in file order, all 38 `CREATE TABLE` definitions, inline primary/unique/check/foreign-key constraints, all 13 named partial unique indexes, and all 14 triggers. It excludes PRAGMAs, the surrounding DDL transaction, writer-registry data rows, and comments outside the block.
+The block includes, in file order, all 40 `CREATE TABLE` definitions, the one schema-owned `randle_sha256_preflight_v` view, inline primary/unique/check/foreign-key constraints, all 13 named partial unique indexes, and all 21 triggers. It excludes PRAGMAs, the preliminary temporary-table UDF call, the surrounding DDL transaction, writer-registry data rows, and comments outside the block.
 
 ### 3.2 Writer-registry hash
 
 `store_metadata.writer_registry_hash` covers exactly the active version-2 rows installed between `-- WRITER-REGISTRY-HASH-BEGIN` and `-- WRITER-REGISTRY-HASH-END`.
 
-Phase 3C1-R1 published value: `899bf56cbbae55068b136990c6baa1a01e4422da784119541089de9ecf3a3e28`.
+Phase 3C1-R2 published value: `906286388a8a8c95ee1ae09b6537e969b998f9008e37ed9aae734a85361d0f20`.
 
 Query and serialization are exact:
 
@@ -98,7 +98,7 @@ ORDER BY registry_version, table_name, operation, writer_id,
 
 Serialize each value as its SQLite text rendering, with no quoting, join the nine fields with one U+0009 tab, append one LF per row, concatenate without a header or terminal blank row, encode UTF-8, and SHA-256 hash to lowercase hexadecimal. Closed values prohibit tabs, LF, or CR. `NULL` build/retirement values serialize as `-`. Every active table/operation scope is included; no inactive, other-version, metadata, rowid, insertion-order, timestamp, or file-path value is included.
 
-The committed SQL-artifact byte hash is a separate provenance identity and is not substituted for either canonical hash. Phase 3C1-R1 committed SQL SHA-256: `fbc64af7bf9dc064e6a2e46172a253ea81d0d891ae2763c9cc65a74917fa8cc5`.
+The committed SQL-artifact byte hash is a separate provenance identity and is not substituted for either canonical hash. Phase 3C1-R2 committed SQL SHA-256: `8b7bc314163b2fef65cb61221026ba6b962ff20797aa6be57f944c0dcd7ae4fc`.
 
 ## 4. Initial bootstrap; no predecessor migration
 
@@ -112,7 +112,7 @@ Any legacy, `user_version=1`, unknown-version, missing-hash, unidentified, or pr
 
 ## 5. Closed table inventory
 
-The executable contract has 38 tables and 500 columns: 440 are `NOT NULL` and 60 are nullable. It has 38 primary keys covering 46 primary-key columns. The two added nullable columns bind store bootstrap/restore/reinitialization recovery rows to the prepared external evidence sequence and record hash; their table-level check makes both fields mandatory for those three recovery types and prohibited for listener/bridge/cold-start recoveries. The primary key, exact nullability, all column checks, uniques, foreign keys, actions, and deferrability are expressed in the SQL, not inferred from this summary.
+The executable contract has 40 tables and 552 columns: 485 are `NOT NULL` and 67 are nullable. It has 40 primary keys covering 49 primary-key columns. The R2 tables are `termination_evidence_sets` and `termination_evidence_set_producers`; the existing termination evidence/result/link tables gain the exact F6 identities and constraints. The recovery-binding columns from R1 remain mandatory together only for bootstrap/restore/reinitialization and prohibited for listener/bridge/cold-start recoveries. The primary key, exact nullability, all column checks, uniques, foreign keys, actions, and deferrability are expressed in the SQL, not inferred from this summary.
 
 | Group | Table | Primary key | Logical writer and permitted operation |
 |---|---|---|---|
@@ -149,8 +149,10 @@ The executable contract has 38 tables and 500 columns: 440 are `NOT NULL` and 60
 | Health | `health_aggregate` | `singleton_id` | Health Durable Writer `INSERT`, `UPDATE` |
 | Subscription | `subscription_verifications` | `subscription_verification_id` | Health Durable Writer `INSERT` |
 | Termination | `termination_evidence` | `termination_evidence_id` | Health Durable Writer `INSERT` |
+| Termination | `termination_evidence_sets` | `termination_evidence_set_id` | Health Durable Writer `INSERT` |
+| Termination | `termination_evidence_set_producers` | `(termination_evidence_set_id,producer_role)` | Health Durable Writer `INSERT` |
 | Termination | `termination_results` | `termination_result_id` | Health Durable Writer `INSERT` |
-| Termination | `termination_result_evidence` | `(termination_result_id,dimension)` | Health Durable Writer `INSERT` |
+| Termination | `termination_result_evidence` | `(termination_evidence_set_id,contributor_role)` | Health Durable Writer `INSERT` |
 | Expectation | `market_data_expectations` | `expectation_id` | Listener Incident Writer `INSERT`, `UPDATE` |
 | Projection | `projection_cursors` | `(projection_name,scope_key)` | Projection Writer `INSERT`, `UPDATE`; no control authority |
 | Store incident | `store_incidents` | `store_incident_id` | Store Incident Writer `INSERT`, `UPDATE` |
@@ -159,24 +161,24 @@ No `DELETE` route is active. Deletion is prohibited by the typed-plan authorizer
 
 ## 6. Foreign-key contract
 
-The SQL contains 124 explicit foreign-key declarations and 132 child-column mappings. Every declaration names exact child column(s), parent table and column(s), `ON UPDATE`, `ON DELETE`, and any deferrability. Child nullability is declared on the child column. Every parent is a primary key or inline unconditional `UNIQUE` key; no FK targets a partial index, undefined column, or nonunique identity.
+The SQL contains 133 explicit foreign-key declarations and 173 child-column mappings. Every declaration names exact child column(s), parent table and column(s), `ON UPDATE`, `ON DELETE`, and any deferrability. Child nullability is declared on the child column. Every parent is a primary key or inline unconditional `UNIQUE` key; no FK targets a partial index, undefined column, or nonunique identity.
 
 Action totals are:
 
 | Action | Declaration count | Lifecycle reason |
 |---|---:|---|
-| `ON UPDATE RESTRICT` | 123 | Durable identity keys never change |
+| `ON UPDATE RESTRICT` | 132 | Durable identity keys never change |
 | `ON UPDATE CASCADE` | 1 | Composite health dimension/scope key remains internally coupled if a separately governed candidate transform renames the pair |
-| `ON DELETE RESTRICT` | 110 | Identity/evidence parents cannot disappear while authoritative children exist |
-| `ON DELETE CASCADE` | 14 | Incident/recovery aggregate children cannot be orphaned during pre-activation candidate rollback; runtime deletion remains unauthorized |
+| `ON DELETE RESTRICT` | 116 | Identity/evidence parents cannot disappear while authoritative children exist |
+| `ON DELETE CASCADE` | 17 | Incident/recovery aggregate children cannot be orphaned during pre-activation candidate rollback; runtime deletion remains unauthorized |
 
-Fifty-five declarations are `DEFERRABLE INITIALLY DEFERRED` where transaction-commit/current-pointer or mutually linked history rows must be inserted atomically. Sixty-nine are immediate where the parent must already exist. Representative insertion order is: transaction identity as required by the typed envelope; supervisor generation; policy/session references; listener epoch; bridge generation; incident/recovery parent; event/history/outcome child; current-pointer update; transaction completion/readback. Deferred cycles exist only inside one atomic aggregate and do not require an impossible committed intermediate state.
+Sixty-one declarations are `DEFERRABLE INITIALLY DEFERRED` where transaction-commit/current-pointer or mutually linked history rows must be inserted atomically. Seventy-two are immediate where the parent must already exist. Representative insertion order is: transaction identity as required by the typed envelope; supervisor generation; policy/session references; listener epoch; bridge generation; incident/recovery parent; event/history/outcome child; current-pointer update; transaction completion/readback. Deferred cycles exist only inside one atomic aggregate and do not require an impossible committed intermediate state.
 
-The executable SQL is the per-FK inventory: each `FOREIGN KEY ... REFERENCES ... ON UPDATE ... ON DELETE ...` clause is normative. `PRAGMA foreign_key_list(table)` must reproduce all 132 mappings; `PRAGMA foreign_key_check` must return zero rows.
+The executable SQL is the per-FK inventory: each `FOREIGN KEY ... REFERENCES ... ON UPDATE ... ON DELETE ...` clause is normative. `PRAGMA foreign_key_list(table)` must reproduce all 173 mappings; `PRAGMA foreign_key_check` must return zero rows.
 
 ## 7. Writer routing and exclusivity
 
-The closed operation vocabulary is `INSERT`, `UPDATE`, `DELETE`. The v2 registry installs 60 active table/operation rows and 11 writer identities. Each row binds registry version, table, operation, writer identity, writer contract identity, optional deployment build hash, effective transaction sequence, retirement sequence, and active flag.
+The closed operation vocabulary is `INSERT`, `UPDATE`, `DELETE`. The v2 registry installs 62 active table/operation rows and 11 writer identities. Each row binds registry version, table, operation, writer identity, writer contract identity, optional deployment build hash, effective transaction sequence, retirement sequence, and active flag.
 
 `uq_writer_registry_active_scope` is exactly:
 
@@ -203,7 +205,7 @@ Failure returns `WRITER_ROUTING_REJECTED`, changes no domain row, and cannot be 
 
 The 13 partial unique indexes are the exact SQL definitions for: writer table/operation ownership; one current supervisor generation; one held lease per generation and globally; one active valid policy; one current contract session per symbol; one current listener epoch; one open listener recovery per epoch; one open bridge recovery per generation; one positive acknowledgement per recovery/domain; one current bridge generation per listener epoch; one positive subscription verification per symbol/session/bridge generation; and one current market-data expectation per symbol/epoch.
 
-The 14 constraint-only triggers are:
+The 21 constraint-only triggers are:
 
 | Trigger | Exact effect |
 |---|---|
@@ -218,7 +220,14 @@ The 14 constraint-only triggers are:
 | `trg_listener_restart_incidents_no_terminal_insert` | prohibits direct insertion of a terminal restart incident |
 | `trg_domain_acknowledgements_required_match` | requires required-domain, supervisor-generation, listener-epoch, and expected-identity equality |
 | `trg_subscription_verifications_proof` | permits positive subscription proof only from authenticated current identities and a `RITHMIC_LISTENER` `SUBSCRIPTION_PROOF` event |
-| `trg_termination_results_evidence` | requires one authenticated evidence link for each closed termination dimension and exact `NONE`/`UNKNOWN`/concrete basis |
+| `trg_termination_evidence_integrity` | verifies authenticated evidence transaction/current identities, exact canonical evidence JSON, and its SHA-256 |
+| `trg_termination_evidence_observation_sealed` | makes evidence immutable after a result commits for its observation identity |
+| `trg_termination_results_structure` | requires current generation/epoch/bridge/process/observation, six complete producer streams, five direct contributors, cutoff/freshness, and transaction equality |
+| `trg_termination_results_semantics` | requires each optional identity to be NULL only when inapplicable or to identify the exact direct contributor with the governed producer/type |
+| `trg_termination_results_none_completeness` | requires all six governed producer streams to assert the exact role-specific authenticated absence before a field may be `NONE` |
+| `trg_termination_results_known_conflict` | rejects `NONE` or concrete field classification when current authenticated producer evidence asserts incompatible values |
+| `trg_termination_results_unknown_conflict` | requires `UNKNOWN/CONFLICT` exactly for a conflicting field and `UNKNOWN/INDETERMINATE` only for a nonconflicting unavailable field |
+| `trg_termination_results_integrity` | recomputes the exact evidence-set and result serializations and rejects either hash mismatch |
 | `trg_health_aggregate_exact_state` | enforces exact five-row aggregate derivation on insert |
 | `trg_health_aggregate_update_state` | enforces exact five-row aggregate derivation on update |
 
@@ -332,7 +341,7 @@ A positive acknowledgement requires one `recovery_required_domains` parent, the 
 
 Startup first performs the read-only validation envelope and external recovery-chain verification. Reconstruction then requires, in order:
 
-1. exact schema v2, schema hash, registry version 2/hash, PRAGMAs, 38 tables, 500 columns, 124 FK declarations/132 mappings, 13 partial unique indexes, and 14 triggers;
+1. exact schema v2, schema hash, registry version 2/hash, PRAGMAs, governed SHA-256 function preflight, 40 tables, 552 columns, 133 FK declarations/173 mappings, 13 partial unique indexes, and 21 triggers;
 2. exactly one valid current supervisor generation/lease and contiguous transaction cursor;
 3. exactly one `listener_current`, its exact last transition/version, current epoch ancestry when non-NULL, and no prohibited transition;
 4. exact current/open listener incident, terminal outcome relationship, execution, recovery, and acknowledgement set;
@@ -343,7 +352,7 @@ Startup first performs the read-only validation envelope and external recovery-c
 
 Any mismatch yields `RECOVERY_REQUIRED` or `FAILED`, blocks listener/bridge start and readiness, and creates no positive authority.
 
-## 14. Phase 3C1-R1 exact invariant closure
+## 14. Phase 3C1-R2 exact invariant closure
 
 This section supersedes any inconsistent Phase 3C1 statement above. It does not alter schema version 2, approve this draft, or authorize installation.
 
@@ -388,7 +397,7 @@ The following 18 operations extend, and do not replace, the 37-row catalog above
 
 #### 14.3.1 Complete active mutation-route coverage
 
-The operation names below are exhaustive for all 60 active routes. `COMMON` means every one of the 52 commit operations inserts its transaction/idempotency rows and updates the metadata cursor; it does not authorize a domain row. Candidate construction uses the named bootstrap/restore/reinitialize operation only.
+The operation names below are exhaustive for all 62 active routes. `COMMON` means every one of the 52 commit operations inserts its transaction/idempotency rows and updates the metadata cursor; it does not authorize a domain row. Candidate construction uses the named bootstrap/restore/reinitialize operation only.
 
 | Table | Active operation -> exact typed operation(s) |
 |---|---|
@@ -425,6 +434,8 @@ The operation names below are exhaustive for all 60 active routes. `COMMON` mean
 | `health_aggregate` | INSERT -> `TX-STORE-BOOTSTRAP-V2`, `TX-STORE-RESTORE`, `TX-STORE-REINITIALIZE`; UPDATE -> `TX-HEALTH-DIMENSION-UPDATE` |
 | `subscription_verifications` | INSERT -> `TX-SUBSCRIPTION-VERIFY` |
 | `termination_evidence` | INSERT -> `TX-TERMINATION-EVIDENCE` |
+| `termination_evidence_sets` | INSERT -> `TX-TERMINATION-CLASSIFY` |
+| `termination_evidence_set_producers` | INSERT -> `TX-TERMINATION-CLASSIFY` |
 | `termination_result_evidence` | INSERT -> `TX-TERMINATION-CLASSIFY` |
 | `termination_results` | INSERT -> `TX-TERMINATION-CLASSIFY` |
 | `market_data_expectations` | INSERT/UPDATE -> `TX-EXPECTATION-EVALUATE` |
@@ -445,7 +456,23 @@ A subscription verification includes source producer and sequence, symbol, contr
 
 The five SQL vocabularies exactly match ADR-016: initiator `NONE|LISTENER|LISTENER_SUPERVISOR|AUTHENTICATED_OPERATOR|RAPI_PROVIDER|UNKNOWN`; requested action `NONE|BRIDGE_RECYCLE|BRIDGE_SHUTDOWN|LISTENER_SHUTDOWN|FULL_LISTENER_RESTART|UNKNOWN`; execution method `NONE|GRACEFUL_RAPI_LOGOUT|GRACEFUL_PROCESS_EXIT|SUPERVISOR_TERMINATE|SUPERVISOR_KILL|PROCESS_SELF_EXIT|PROVIDER_FORCED_LOGOUT|PROVIDER_SHUTDOWN_SIGNAL|UNKNOWN`; observed cause `NONE|PLANNED_SHUTDOWN|BRIDGE_CRASH|AUTHENTICATION_FAILURE|CONNECTION_LOSS|SUBSCRIPTION_FAILURE|LISTENER_EXIT|RAPI_ENGINE_INERT|UNKNOWN`; result `NONE|COMPLETED_EXPECTED|RECOVERED|FAILED|TIMED_OUT|CANCELED|PROCESS_EXITED|ENGINE_INERT|UNKNOWN`.
 
-Each result includes process/observation/request/operator/classification identities, observation sequence, evaluator version, generation/epoch, evidence-set hash, and transaction. Before result insertion, exactly five `termination_result_evidence` rows—one per dimension—must point to authenticated evidence from the same bridge generation and transaction. `NONE` requires `COMPLETE_ABSENCE_PROOF`, `UNKNOWN` requires `UNCERTAINTY`, and every concrete token requires `CONCRETE`; `BRIDGE_CRASH` additionally requires `PROCESS_EXCEPTION` or authoritative `OS_HANDLE` crash evidence. The trigger fails arbitrary text, missing dimension evidence, and concrete crash without crash evidence.
+The active termination contract is `termination_schema_version=2`. One immutable `termination_evidence_sets` row names one result, the current supervisor generation, listener epoch, bridge generation, listener process, observation identity/sequence/cutoff, classification decision/evaluator version, set hash, and committing transaction. The cutoff is the result `observed_at_utc`. All contributing evidence is at or before the cutoff and no older than five seconds at cutoff. `termination_results.recorded_at_utc` equals or follows the cutoff by at most 30 seconds and equals the transaction commit time. Missing, prior, future, or mixed schema versions fail.
+
+Each set contains exactly six producer-window rows, one each for `RITHMIC_LISTENER`, `BRIDGE_CONTROLLER`, `OS_ADAPTER`, `RAPI_ADAPTER`, `SUPERVISOR_ADAPTER`, and `OPERATOR_ADAPTER`. A producer instance’s first termination window starts at sequence 1; every later window for that producer and bridge starts at the prior window’s end plus one. `producer_sequence=ingress_sequence`; `(producer_instance_id,producer_sequence)` and `(producer_instance_id,ingress_sequence)` are unconditional unique keys. `last_accepted_sequence=expected_end_sequence`, and every integer in the closed start/end interval must have one authenticated evidence row matching the set generation, epoch, bridge, process, observation, schema version, and cutoff. A missing, duplicate, skipped, out-of-order, unauthenticated, unmatched-producer, or after-cutoff row aborts classification. Producer restart creates a newly registered producer instance whose first window starts at 1; a set cannot splice two instances for one role. Current-generation reset likewise uses new generation/epoch/bridge/producer/observation identities, never a sequence reset inside an existing instance.
+
+Exactly five `termination_result_evidence` rows must exist before result insertion, one for each role `INITIATOR_EVIDENCE`, `REQUESTED_ACTION_EVIDENCE`, `EXECUTION_METHOD_EVIDENCE`, `OBSERVED_CAUSE_EVIDENCE`, and `RESULT_EVIDENCE`. The composite keys bind every link to the exact result/set and repeat the evidence producer, sequence, type, time, schema, hash, generation, epoch, bridge, process, observation, authentication disposition, role, assertion kind, and asserted value. One evidence ID may be a contributor to only one set and one role. An unrelated sixth contributor necessarily duplicates a closed role or evidence identity and fails. Supporting observations remain inside the six complete producer windows but are not contributors.
+
+Every optional result identity is either NULL because its field makes that identity inapplicable, or is the exact identity carried by a direct contributor: operator command -> operator initiator; provider evidence -> provider initiator/method; OS evidence -> OS execution/cause/result; bridge evidence -> bridge request/cause; listener evidence -> listener initiator/shutdown/exit; request -> requested-action contributor. The result process and observation identities are mandatory and are composite-FK equal to all contributors. Cross-result, cross-set, stale generation/epoch/bridge, cross-process, cross-observation, or outside-the-five identity fails. Symbol/contract identities are intentionally inapplicable to this shared bridge/process termination classification; the exact evidence JSON has no symbol/contract member and extra JSON members fail equality.
+
+`NONE` is field-specific positive absence evidence, not a relationship label. All six producer windows must contain a `STARTUP_TRANSITION` row for the field with the exact role-specific absence scope; the selected contributor is one of those six authenticated, current, sequence-complete assertions. The scopes are respectively `NO_INITIATOR_THROUGH_CUTOFF`, `NO_REQUEST_THROUGH_CUTOFF`, `NO_EXECUTION_THROUGH_CUTOFF`, `NO_CAUSE_THROUGH_CUTOFF`, and `NO_RESULT_THROUGH_CUTOFF`; every current supporting observation for that role must assert the same absence and none may assert another fact. Thus Initiator NONE proves no listener/supervisor/operator/provider actor; Requested Action NONE proves no recycle/shutdown/restart/logout/termination request; Execution Method NONE proves no method and no unobserved process termination; Observed Cause NONE proves no observed applicable cause; Result NONE proves no termination/recovery action or event. `PROCESS_EXCEPTION` can never be an absence proof.
+
+Any stale, missing, incomplete, sequence-gapped, conflicting, corrupt, unauthenticated, wrong-generation/epoch/bridge/process/observation/result/set/schema/integrity identity aborts the result insert, so no current result exists and startup remains unproven. Within an otherwise current, complete set, uncertainty is field-specific: two or more distinct non-UNKNOWN assertions for a role require that field’s contributor to be `UNKNOWN` with `CONFLICT`; a role with no conflict but unavailable positive/absence fact requires `UNKNOWN` with `INDETERMINATE`. A conflict or indeterminacy does not automatically erase another independently complete field. A known/NONE token for a conflicting field fails, as does `CONFLICT` without a conflict or `INDETERMINATE` with one.
+
+Minimum concrete proof is closed by role and evidence type exactly as the executable checks state. `LISTENER`, `LISTENER_SUPERVISOR`, `AUTHENTICATED_OPERATOR`, and `RAPI_PROVIDER` initiators require respectively `LISTENER_SHUTDOWN`, `SUPERVISOR_COMMAND`, `OPERATOR_COMMAND`, and `RAPI_CALLBACK`. Every concrete requested action requires a request identity and one of `SUPERVISOR_COMMAND|OPERATOR_COMMAND|LISTENER_SHUTDOWN`. `GRACEFUL_RAPI_LOGOUT` requires `RAPI_CALLBACK|SUPERVISOR_COMMAND`; `GRACEFUL_PROCESS_EXIT` requires `PROCESS_EXIT|OS_HANDLE`; `SUPERVISOR_TERMINATE|SUPERVISOR_KILL` require `SUPERVISOR_COMMAND|OS_HANDLE`; `PROCESS_SELF_EXIT` requires `PROCESS_EXIT|OS_HANDLE`; provider-forced methods require `RAPI_CALLBACK`. `BRIDGE_CRASH` requires `PROCESS_EXCEPTION|OS_HANDLE`; authentication/connection/subscription/engine causes require `RAPI_CALLBACK`; `LISTENER_EXIT` requires `PROCESS_EXIT|OS_HANDLE|LISTENER_SHUTDOWN`; `PLANNED_SHUTDOWN` requires `SUPERVISOR_COMMAND|OPERATOR_COMMAND|LISTENER_SHUTDOWN`. `COMPLETED_EXPECTED|RECOVERED|FAILED|TIMED_OUT|CANCELED` require `SUPERVISOR_COMMAND|RAPI_CALLBACK|OS_HANDLE|PROCESS_EXIT`; `PROCESS_EXITED` requires `PROCESS_EXIT|OS_HANDLE`; `ENGINE_INERT` requires current `RAPI_CALLBACK`. Nonzero exit alone supplies no classified cause. `PLANNED_SHUTDOWN` additionally requires an authenticated current command contributor and expected execution/result evidence; `AUTHENTICATED_OPERATOR` requires its direct `operator_command_identity`; `FULL_LISTENER_RESTART` requires its direct governed request; provider-forced values require direct provider evidence; process-exit values require the matched process observation.
+
+The Health State Evaluator owns conflict detection and the decision; the Health Durable Writer records only its authorized decision. The database validates but never originates the classification. Reclassification uses a new observation identity, the next gapless `observation_sequence` for the same bridge generation, complete producer windows, decision ID, evidence set, result, and transaction; prior rows remain immutable. The current result is deterministically the unique maximum sequence for that bridge generation. A committed field-specific `UNKNOWN` blocks the termination-related startup proof until a later current nonconflicting classification satisfies it.
+
+Evidence integrity is `SHA-256(UTF-8(canonical_evidence_json))`, where the SQL `json_object` expression in `trg_termination_evidence_integrity` supplies the exact ordered field list, represents inapplicable NULL identity as JSON string `"-"`, uses compact SQLite JSON output, and rejects any different byte representation. The set hash is SHA-256 of `RANDLE-TERMINATION-EVIDENCE-SET-2\n`, one tab-separated header line, producer-window lines ordered by producer role, all in-window evidence lines ordered by producer role/sequence, and the five contributor lines ordered by contributor role, each block LF-terminated exactly as the trigger constructs it. The result hash is SHA-256 of `RANDLE-TERMINATION-RESULT-2\n`, the exact tab-separated result line with NULL optionals as `-`, then five contributor lines ordered by role, with one final LF. Tabs/LF/CR/sentinel ambiguity is prohibited by the source column checks. `randle_sha256_hex_utf8` recomputes both before insert; a changed byte or hash fails.
 
 ### 14.6 `RANDLE-RECOVERY-JCS-1` canonical evidence profile
 
@@ -463,9 +490,9 @@ Current record types exclude migration: `BOOTSTRAP_PREPARED|COMPLETED|FAILED`, `
 
 ### 14.7 Candidate-store construction and post-replacement initialization
 
-All candidate construction uses `foreign_keys=ON` and one transaction whose declared deferred relationships are checked at COMMIT. SQL objects and the 60-row registry are installed first. Bootstrap and reinitialization then use this exact order: (1) the one candidate `transaction_commits` row; (2) its `idempotency_records` row; (3) `store_metadata`; (4) the store recovery row with external prepared-evidence sequence/hash; (5) the reinitialization-only `store_incidents` row, with bootstrap inserting none; (6) the initialization listener transition; (7) `listener_current`; (8) five `health_current` rows in dimension order `PERSISTENCE,TRANSPORT,AUTHENTICATION,AUTHORITY_COHERENCE,TIME_AUTHORITY`; (9) `health_aggregate`; and (10) metadata cursor/readback verification. Generation, lease, policy, contract-session, producer, epoch, bridge, subscription, termination, expectation, and projection tables are empty in both candidates; reinitialization alone has the named open recovery/incident.
+All candidate construction uses `foreign_keys=ON` and one transaction whose declared deferred relationships are checked at COMMIT. SQL objects and the 62-row registry are installed first. Bootstrap and reinitialization then use this exact order: (1) the one candidate `transaction_commits` row; (2) its `idempotency_records` row; (3) `store_metadata`; (4) the store recovery row with external prepared-evidence sequence/hash; (5) the reinitialization-only `store_incidents` row, with bootstrap inserting none; (6) the initialization listener transition; (7) `listener_current`; (8) five `health_current` rows in dimension order `PERSISTENCE,TRANSPORT,AUTHENTICATION,AUTHORITY_COHERENCE,TIME_AUTHORITY`; (9) `health_aggregate`; and (10) metadata cursor/readback verification. Generation, lease, policy, contract-session, producer, epoch, bridge, subscription, termination, expectation, and projection tables are empty in both candidates; reinitialization alone has the named open recovery/incident.
 
-Restore never inserts the bootstrap/reinitialization listener or health baseline. It authenticates a complete schema-v2 backup; requires its 60 active registry rows to equal the SQL-installed rows byte-for-byte; installs any authenticated retired registry history through the same successor constraints; and inserts the preserved domain rows plus one new restore operation in this exact order: (1) all preserved `transaction_commits` in sequence order followed by `TX-STORE-RESTORE`; (2) matching preserved idempotency rows followed by restore idempotency; (3) `store_metadata` with preserved UUID/creation identity and next cursor; (4) `supervisor_generations`, then `supervisor_leases`, `shared_feed_policies`, and `active_contract_sessions`; (5) `producer_registrations`; (6) `listener_epochs` and `bridge_generations`; (7) preserved nonterminal listener/bridge incidents and the nonterminal predecessor images of every terminal incident, then recovery transactions, outcomes, incident transitions, fences, execution attempts, rehydrations, required domains, and acknowledgements, using declared deferral for their incident/recovery cycles; each terminal listener incident is then updated from the exact predecessor state/version through its preserved terminal transition and own outcome under its preserved completion transaction, so the direct-terminal-insert prohibition and terminal-match trigger both execute; (8) listener/bridge state transitions followed by their exact current rows; (9) `health_events`, then `health_transitions`, five exact `health_current` rows, and `health_aggregate`; (10) `subscription_verifications`; (11) `termination_evidence`, then `termination_result_evidence`, then `termination_results`, using the declared deferred result link so the result trigger can read all five contributors; (12) `market_data_expectations`, `projection_cursors`, and preserved `store_incidents`; (13) the completed `STORE_RESTORE` recovery row carrying the new external `RESTORE_PREPARED` sequence/hash; and (14) metadata readback. Any predecessor image required for trigger-valid reconstruction must be uniquely derivable from preserved transition history or restore fails `RESTORE_HISTORY_INCOMPLETE`; triggers are never disabled. Any table absent from the authenticated backup is absent only if its SQL nullability/cardinality permits that exact state. `PRAGMA integrity_check='ok'`, zero `foreign_key_check` rows, all startup proof queries, and exact row-count/hash comparison to the backup plus the enumerated restore additions are mandatory before activation.
+Restore never inserts the bootstrap/reinitialization listener or health baseline. It authenticates a complete schema-v2 backup; requires its 62 active registry rows to equal the SQL-installed rows byte-for-byte; installs any authenticated retired registry history through the same successor constraints; and inserts the preserved domain rows plus one new restore operation in this exact order: (1) all preserved `transaction_commits` in sequence order followed by `TX-STORE-RESTORE`; (2) matching preserved idempotency rows followed by restore idempotency; (3) `store_metadata` with preserved UUID/creation identity and next cursor; (4) `supervisor_generations`, then `supervisor_leases`, `shared_feed_policies`, and `active_contract_sessions`; (5) `producer_registrations`; (6) `listener_epochs` and `bridge_generations`; (7) preserved nonterminal listener/bridge incidents and the nonterminal predecessor images of every terminal incident, then recovery transactions, outcomes, incident transitions, fences, execution attempts, rehydrations, required domains, and acknowledgements, using declared deferral for their incident/recovery cycles; each terminal listener incident is then updated from the exact predecessor state/version through its preserved terminal transition and own outcome under its preserved completion transaction, so the direct-terminal-insert prohibition and terminal-match trigger both execute; (8) listener/bridge state transitions followed by their exact current rows; (9) `health_events`, then `health_transitions`, five exact `health_current` rows, and `health_aggregate`; (10) `subscription_verifications`; (11) `termination_evidence`, then `termination_evidence_sets`, their six `termination_evidence_set_producers` windows, the five `termination_result_evidence` contributors, and finally `termination_results`, using the declared deferred result/set links while every trigger remains active; (12) `market_data_expectations`, `projection_cursors`, and preserved `store_incidents`; (13) the completed `STORE_RESTORE` recovery row carrying the new external `RESTORE_PREPARED` sequence/hash; and (14) metadata readback. Any predecessor image required for trigger-valid reconstruction must be uniquely derivable from preserved transition history or restore fails `RESTORE_HISTORY_INCOMPLETE`; triggers are never disabled. Any table absent from the authenticated backup is absent only if its SQL nullability/cardinality permits that exact state. `PRAGMA integrity_check='ok'`, zero `foreign_key_check` rows, all startup proof queries, and exact row-count/hash comparison to the backup plus the enumerated restore additions are mandatory before activation.
 
 Clean bootstrap inserts exactly the registry plus: one sequence-1 `TX-STORE-BOOTSTRAP-V2` commit/idempotency row; metadata cursor 1; one completed `STORE_BOOTSTRAP` recovery row carrying the external `BOOTSTRAP_PREPARED` sequence and record hash; one initialization transition `NONE -> STOPPED` version 1 with NULL generation/epoch; one matching `listener_current`; five `HEALTH_STARTUP_UNPROVEN` rows with NULL generation/epoch/bridge; and aggregate `HEALTH_STARTUP_UNPROVEN`. It requires zero-owned-process evidence. It inserts zero generation, lease, producer, contract session, epoch, bridge, subscription, termination, expectation, projection, or open incident rows.
 
@@ -475,10 +502,10 @@ Reinitialization inserts the registry plus: one sequence-1 `TX-STORE-REINITIALIZ
 
 Entry Session recovery is cross-store and cannot use a Runtime Authority Store FK. A newly initialized Entry Session store receives `TX-ENTRY-STORE-RECOVERY-INITIALIZE`: authenticated external evidence identifies the unavailable prior store/hash; Session-lock policy classifies fail-closed and selects `NO_CURRENT_SESSION_CONTEXT`; Entry Agent Session Commit Writer, as sole writer/executor, inserts version 1 from source token `NONE`. Restore instead preserves the authenticated prior state/version and its first policy-authorized CAS uses that exact version. A failed initialization leaves no current Entry Session row and opening entry remains prohibited.
 
-No current staged migration verification exists. Any migration transform, evidence type, or test is future-only under `FUTURE SEPARATELY GOVERNED PREDECESSOR-BOUND MIGRATION SPECIFICATION` and is not a Phase 3C1-R1 executable obligation.
+No current staged migration verification exists. Any migration transform, evidence type, or test is future-only under `FUTURE SEPARATELY GOVERNED PREDECESSOR-BOUND MIGRATION SPECIFICATION` and is not a Phase 3C1-R2 executable obligation.
 
 ## 15. Verification and governance boundary
 
-Phase 3C1 isolated validation must execute the SQL only against a temporary database; introspect every table/column/key/FK/action/index/trigger; run `quick_check` and `foreign_key_check`; exercise every trigger, writer conflict, valid/invalid transition, `STOPPING -> STOPPED`, acknowledgement uniqueness/generation, subscription ownership, bridge writer, idempotency conflict, rollback/readback, missing parent, both canonical hashes, and corrupt-store external quarantine without a corrupt-store write.
+Phase 3C1-R2 isolated validation must execute the SQL only against temporary databases; introspect every table/column/key/FK/action/index/trigger; run `integrity_check` and `foreign_key_check`; exercise every F6 trigger and its missing/duplicate/cross-identity/stale/gap/conflict/NONE/UNKNOWN/concrete/integrity cases; and rerun the accepted F1–F5/F7/F8 schema regressions without reopening their contracts.
 
-Those are document/schema validation exercises only. They are not production implementation, runtime verification, deployment, readiness, or trading authorization. Full semantic clause-to-scenario traceability is intentionally deferred to Phase 3C2 and is not approval-ready. Phase 3C2 may use only hashes accepted by an independent Phase 3C1-R1 review.
+Those are document/schema validation exercises only. They are not production implementation, runtime verification, deployment, readiness, or trading authorization. Full semantic clause-to-scenario traceability is intentionally deferred to Phase 3C2 and is not approval-ready. Phase 3C2 may use only hashes accepted by an independent Phase 3C1-R2 review.

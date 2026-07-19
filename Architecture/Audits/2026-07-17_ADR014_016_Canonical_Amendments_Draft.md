@@ -4,7 +4,7 @@ Document Type: Coordinated amendment proposal
 
 Status: **DRAFT - NOT APPLIED - NOT CANONICAL - NOT APPROVED**
 
-Phase 3C1-R1 identity: **F1-F8 TARGETED NORMATIVE REMEDIATION IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW**
+Phase 3C1-R2 identity: **F6 TERMINATION-EVIDENCE TARGETED NORMATIVE REMEDIATION IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW**
 
 Implementation Authorization: None
 
@@ -429,7 +429,7 @@ Every unlisted transition is prohibited. Recovery classification and evidence do
 
 - `CONTROL_STORES_VERIFIED` and `SUPERVISOR_AUTHORITY_READY` consume exact schema/registry hashes, writer exclusivity, current-state/version/cursor relationships, terminal incident outcomes, acknowledgement/generation checks, health/subscription ownership, and the verified external recovery-evidence chain.
 - The source-bound diagnostic inventory remains frozen at 31 registered GET service/path entries, 13 mutating entries, and 13 unique mutating URL patterns for source tree `704fd715cad3aad281c534f8337840e3aab96234`.
-- The Phase 3B clause registry is historical rejected evidence. Full semantic forward/reverse traceability is intentionally deferred to Phase 3C2 and may be rebuilt only against independently accepted Phase 3C1-R1 hashes.
+- The Phase 3B clause registry is historical rejected evidence. Full semantic forward/reverse traceability is intentionally deferred to Phase 3C2 and may be rebuilt only against independently accepted Phase 3C1-R2 hashes.
 - Coordinated package approval is not possible in Phase 3C1. ADR-015 and ADR-016 remain unapproved; every supporting specification and schema remains draft and noncanonical; canonical incorporation, implementation, runtime verification, deployment, `READY_LOCKED`, `TRADING_PERMITTED`, Bucket 0 completion, Bucket 1 work, and trading remain unauthorized.
 
 ## 19. Phase 3C1-R1 superseding proposed amendment set
@@ -447,3 +447,17 @@ This proposal supersedes section 18 only for F1-F8 readiness. Future canonical i
 - remove current migration testing. Migration would exist only under a future separately governed predecessor-bound specification.
 
 These are proposals only. ADR-014 remains approved and unchanged; ADR-015/016 remain unapproved. Phase 3C2 semantic traceability remains deferred until independent acceptance of exact Phase 3C1-R1 hashes.
+
+## 20. Phase 3C1-R2 superseding F6 proposed amendment set
+
+Section 19 remains the accepted R1 proposal for F1–F5/F7/F8, but its F6 termination bullet is superseded for normative approval readiness. Future canonical incorporation would additionally adopt:
+
+- schema-v2’s 40-table/552-column/133-FK/62-route/21-trigger inventory and the two exact evidence-set tables;
+- mandatory result cutoff/record time, active schema version 2, and whole-result integrity hash;
+- one result-bound evidence set, six exact complete producer windows, and exactly five direct contributor roles;
+- generation/epoch/bridge/process/observation currentity, direct optional-identity membership, contiguous source sequences through cutoff, and immutable authenticated evidence content;
+- deterministic field-specific conflict/UNKNOWN behavior; exact content-based NONE scopes; and positive evidence requirements for every concrete value;
+- the governed deterministic/innocuous SHA-256 function and exact evidence, set, and result serializations; and
+- startup rejection of an incomplete, stale, conflicting, UNKNOWN, cross-identity, or integrity-invalid current termination result without repair or reinterpretation.
+
+These are proposals only. ADR-014 remains approved and unchanged; ADR-015/016 remain unapproved. The F6 status is `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R2 REVIEW`. Phase 3C2 semantic traceability remains deferred until independent acceptance of exact Phase 3C1-R2 hashes.

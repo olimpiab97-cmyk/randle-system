@@ -1,6 +1,8 @@
 # Approval Remediation Phase 3C1-R1 — F1-F8 Targeted Normative Redline Record
 
-Status: **DRAFT EVIDENCE — NONCANONICAL — NOT APPROVED — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW**
+Status: **HISTORICAL DRAFT EVIDENCE — NONCANONICAL — R1 PACKAGE NOT APPROVED**
+
+F6 status: **SUPERSEDED FOR F6 NORMATIVE APPROVAL READINESS BY PHASE 3C1-R2 REMEDIATION RECORD**. F1–F5/F7/F8 remain preserved R1 evidence and are not reopened.
 
 Purpose: correct only findings F1 through F8 from the independent review of commit `174cb5001da13eff53d42dde40f35154fb7d1c22`. This is remediation, not an approval review, implementation, production verification, deployment, or Phase 3C2 traceability.
 
@@ -26,7 +28,7 @@ ADR-014 and the frozen thirteen-route diagnostic inventory were not reopened. Th
 | F3 | Cancellation described a versioned unchanged branch that SQL prohibited | Authorized `TX-LSN-CANCEL` may commit only `SUSPECT -> HEALTHY` or exact reason-bound/versioned `SUSPECT -> SUSPECT`; the self-edge trigger requires the exact two-writer set; every other self-edge fails | both positive branches, wrong-writer-set, and unauthorized self-edge exercised | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
 | F4 | Required supervisor/epoch/start/registry/producer/session/bridge mutations lacked operation IDs | Added 18 exact commit operations, yielding 55 total/52 commit types; `TX-LSN-FENCE` includes Epoch Writer | transaction allowlist, writer sets, route coverage, pre/post-crash and retry rules validated | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
 | F5 | Incident could be inserted terminal and terminal link checked too little | Direct terminal insert trigger; terminal update requires own outcome, same completion/recovery transaction, exact incident transition/version, and closed predecessor/outcome mapping | direct, cross-incident, mismatched transaction/recovery negatives; valid terminal update positive | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
-| F6 | Subscription/termination rows omitted required identities and closed vocab/evidence relationship | Composite symbol/session and generation/epoch FKs; authenticated event equality for contract/session/request/provider/freshness/proof identities; closed five-field checks; new `termination_result_evidence` table and basis trigger | matching/cross-symbol/stale/wrong/missing/mismatched-provider/duplicate subscription and vocabulary/NONE/UNKNOWN/crash-evidence cases | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
+| F6 | Subscription/termination rows omitted required identities and closed vocab/evidence relationship | R1 established subscription identity/coherence and the closed termination vocabularies, but its termination evidence basis did not prove result identity, complete/current producer streams, direct optional membership, or conflict/content semantics | independent R1 review accepted subscription and rejected the remaining termination-result defect | `SUPERSEDED FOR F6 NORMATIVE APPROVAL READINESS BY PHASE 3C1-R2 REMEDIATION RECORD` |
 | F7 | JSON profile, Windows durability, and scaling bounds were incomplete | complete bespoke `RANDLE-RECOVERY-JCS-1`; exact Unicode/key/integer/hash/file bytes; `CreateFileW`/`FlushFileBuffers`/same-volume `MoveFileExW`/readback/restart-cleanup contract without directory-flush claim; 64KiB/16MiB/4096 bounds | independent Python/Node serializers, Unicode/duplicate/NFC/surrogate/order/control/boundary and actual temporary-file replacement/readback simulation | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
 | F8 | Candidate row sets and first replacement CAS were incomplete; current migration test remained | Exact bootstrap/restore/reinitialize rows and order; mandatory external prepared-evidence sequence/hash on each store recovery row; explicit Runtime baseline and Entry initialization; current migration test removed/future-only | three candidate stores pass integrity/FK/startup/evidence-binding proof; first post-replacement operations and rollback exercised | `CORRECTED IN DRAFT — PENDING INDEPENDENT PHASE 3C1-R1 REVIEW` |
 
@@ -35,6 +37,8 @@ ADR-014 and the frozen thirteen-route diagnostic inventory were not reopened. Th
 Schema version remains 2. Inventory after R1 is 38 STRICT tables, 500 columns (440 nonnull/60 nullable), 38 primary keys/46 PK columns, 124 FK declarations/132 mappings, 13 partial unique indexes, 14 triggers, 60 active routes, and 11 writer identities. The added table is `termination_result_evidence`; no table was removed. The two added nullable recovery columns are mandatory together only for store bootstrap/restore/reinitialization and bind those rows to the external prepared-evidence sequence/hash.
 
 Canonical schema hash is `10dab0b154fa34cabcbbf79ef3ef1966f6418e7e45a19543da2d6825aa260423`; writer-registry hash is `899bf56cbbae55068b136990c6baa1a01e4422da784119541089de9ecf3a3e28`; committed SQL-artifact SHA-256 is `fbc64af7bf9dc064e6a2e46172a253ea81d0d891ae2763c9cc65a74917fa8cc5`. The SQL remains a draft architecture implementation reference and is not authorized production code.
+
+The preceding inventory and hashes are retained as historical R1 identities. Phase 3C1-R2 changes only the remaining F6 termination-result contract; its replacement inventory, hashes, validation evidence, and pending-review status are recorded in `2026-07-17_Approval_Remediation_Phase_3C1_R2_Redlines.md`. F1–F5/F7/F8 are not reopened.
 
 ## 4. Governance boundary
 

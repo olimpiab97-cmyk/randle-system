@@ -1,6 +1,7 @@
--- Runtime Authority Store schema v2 -- Phase 3C1-R1 draft implementation reference.
+-- Runtime Authority Store schema v2 -- Phase 3C1-R2 draft implementation reference.
 -- DRAFT / NONCANONICAL / NOT APPROVED / NOT AUTHORIZED FOR RUNTIME INSTALLATION.
--- Minimum SQLite: 3.43.1.  This artifact uses only built-in SQLite expressions.
+-- Minimum SQLite: 3.43.1.  All F1 normalization uses built-ins; F6 integrity uses
+-- the precisely governed randle_sha256_hex_utf8 function preflighted below.
 
 PRAGMA foreign_keys = ON;
 PRAGMA trusted_schema = OFF;
@@ -10,6 +11,17 @@ PRAGMA journal_mode = WAL;
 PRAGMA synchronous = FULL;
 PRAGMA application_id = 0x52484C54;
 PRAGMA user_version = 2;
+
+-- Before this artifact or any connection-level validation runs, register
+-- randle_sha256_hex_utf8(TEXT) with SQLITE_UTF8, SQLITE_DETERMINISTIC, and
+-- SQLITE_INNOCUOUS. It hashes the exact UTF-8 bytes of its sole non-NULL TEXT
+-- argument and returns 64 lowercase hexadecimal SHA-256 characters. This
+-- preliminary direct call rejects a missing or incorrect function. The
+-- schema-owned view and final SELECT below additionally reject a registration
+-- that is not SQLITE_INNOCUOUS while trusted_schema remains OFF.
+CREATE TEMP TABLE randle_sha256_preflight(value TEXT NOT NULL CHECK (value='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')) STRICT;
+INSERT INTO randle_sha256_preflight(value) VALUES (randle_sha256_hex_utf8(''));
+DROP TABLE randle_sha256_preflight;
 
 BEGIN IMMEDIATE;
 
@@ -32,7 +44,7 @@ CREATE TABLE store_metadata (
 
 CREATE TABLE writer_registry (
     registry_version INTEGER NOT NULL CHECK (registry_version=2),
-    table_name TEXT NOT NULL CHECK (table_name IN ('store_metadata','writer_registry','transaction_commits','idempotency_records','supervisor_generations','supervisor_leases','shared_feed_policies','active_contract_sessions','listener_epochs','recovery_transactions','listener_current','listener_state_transitions','listener_restart_incidents','listener_restart_incident_transitions','listener_restart_outcomes','listener_fences','listener_execution_attempts','listener_rehydrations','recovery_required_domains','domain_acknowledgements','bridge_generations','bridge_current','bridge_transitions','bridge_incidents','bridge_recycle_attempts','bridge_outcomes','producer_registrations','health_events','health_current','health_transitions','health_aggregate','subscription_verifications','termination_evidence','termination_results','termination_result_evidence','market_data_expectations','projection_cursors','store_incidents')),
+    table_name TEXT NOT NULL CHECK (table_name IN ('store_metadata','writer_registry','transaction_commits','idempotency_records','supervisor_generations','supervisor_leases','shared_feed_policies','active_contract_sessions','listener_epochs','recovery_transactions','listener_current','listener_state_transitions','listener_restart_incidents','listener_restart_incident_transitions','listener_restart_outcomes','listener_fences','listener_execution_attempts','listener_rehydrations','recovery_required_domains','domain_acknowledgements','bridge_generations','bridge_current','bridge_transitions','bridge_incidents','bridge_recycle_attempts','bridge_outcomes','producer_registrations','health_events','health_current','health_transitions','health_aggregate','subscription_verifications','termination_evidence','termination_evidence_sets','termination_evidence_set_producers','termination_results','termination_result_evidence','market_data_expectations','projection_cursors','store_incidents')),
     operation TEXT NOT NULL CHECK (operation IN ('INSERT','UPDATE','DELETE')),
     writer_id TEXT NOT NULL CHECK (writer_id IN ('RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','SUPERVISOR_GENERATION_WRITER','LISTENER_EPOCH_WRITER','LISTENER_STATE_WRITER','LISTENER_INCIDENT_WRITER','LISTENER_ACKNOWLEDGEMENT_WRITER','RECOVERY_TRANSACTION_WRITER','BRIDGE_GENERATION_WRITER','HEALTH_DURABLE_WRITER','PROJECTION_WRITER','STORE_INCIDENT_WRITER')),
     writer_contract_identity TEXT NOT NULL CHECK (length(writer_contract_identity)>0 AND writer_contract_identity<>'-' AND instr(writer_contract_identity,char(9))=0 AND instr(writer_contract_identity,char(10))=0 AND instr(writer_contract_identity,char(13))=0),
@@ -538,7 +550,7 @@ CREATE TABLE bridge_outcomes (
 
 CREATE TABLE producer_registrations (
     producer_instance_id TEXT NOT NULL PRIMARY KEY CHECK (length(producer_instance_id)=36 AND producer_instance_id=lower(producer_instance_id) AND substr(producer_instance_id,9,1)='-' AND substr(producer_instance_id,14,1)='-' AND substr(producer_instance_id,19,1)='-' AND substr(producer_instance_id,24,1)='-' AND replace(producer_instance_id,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(producer_instance_id,15,1) IN ('1','2','3','4','5') AND substr(producer_instance_id,20,1) IN ('8','9','a','b')),
-    producer_role TEXT NOT NULL CHECK (producer_role IN ('RITHMIC_LISTENER','BRIDGE_CONTROLLER','EXECUTOR','TRADE_MANAGER','ENTRY_AGENT','OS_ADAPTER','RAPI_ADAPTER','CLOCK_ADAPTER')),
+    producer_role TEXT NOT NULL CHECK (producer_role IN ('RITHMIC_LISTENER','BRIDGE_CONTROLLER','EXECUTOR','TRADE_MANAGER','ENTRY_AGENT','OS_ADAPTER','RAPI_ADAPTER','CLOCK_ADAPTER','SUPERVISOR_ADAPTER','OPERATOR_ADAPTER')),
     process_id INTEGER NOT NULL CHECK (process_id>0),
     process_start_utc TEXT NOT NULL CHECK (length(process_start_utc)=27 AND substr(process_start_utc,1,4) NOT GLOB '*[^0-9]*' AND substr(process_start_utc,5,1)='-' AND substr(process_start_utc,6,2) NOT GLOB '*[^0-9]*' AND substr(process_start_utc,8,1)='-' AND substr(process_start_utc,9,2) NOT GLOB '*[^0-9]*' AND substr(process_start_utc,11,1)='T' AND substr(process_start_utc,12,2) NOT GLOB '*[^0-9]*' AND CAST(substr(process_start_utc,12,2) AS INTEGER) BETWEEN 0 AND 23 AND substr(process_start_utc,14,1)=':' AND substr(process_start_utc,15,2) NOT GLOB '*[^0-9]*' AND CAST(substr(process_start_utc,15,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(process_start_utc,17,1)=':' AND substr(process_start_utc,18,2) NOT GLOB '*[^0-9]*' AND CAST(substr(process_start_utc,18,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(process_start_utc,20,1)='.' AND substr(process_start_utc,21,6) NOT GLOB '*[^0-9]*' AND substr(process_start_utc,27,1)='Z' AND CAST(substr(process_start_utc,1,4) AS INTEGER) BETWEEN 1 AND 9999 AND CAST(substr(process_start_utc,6,2) AS INTEGER) BETWEEN 1 AND 12 AND CAST(substr(process_start_utc,9,2) AS INTEGER) BETWEEN 1 AND (CASE CAST(substr(process_start_utc,6,2) AS INTEGER) WHEN 2 THEN CASE WHEN (CAST(substr(process_start_utc,1,4) AS INTEGER)%400=0 OR (CAST(substr(process_start_utc,1,4) AS INTEGER)%4=0 AND CAST(substr(process_start_utc,1,4) AS INTEGER)%100<>0)) THEN 29 ELSE 28 END WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 ELSE 31 END) AND strftime('%Y-%m-%dT%H:%M:%S',substr(process_start_utc,1,19)||'Z')||substr(process_start_utc,20,8)=process_start_utc),
     build_hash TEXT NOT NULL CHECK (length(build_hash)=64 AND build_hash=lower(build_hash) AND build_hash NOT GLOB '*[^0-9a-f]*'),
@@ -674,31 +686,112 @@ CREATE TABLE subscription_verifications (
 
 CREATE TABLE termination_evidence (
     termination_evidence_id TEXT NOT NULL PRIMARY KEY CHECK (length(termination_evidence_id)=36 AND termination_evidence_id=lower(termination_evidence_id) AND substr(termination_evidence_id,9,1)='-' AND substr(termination_evidence_id,14,1)='-' AND substr(termination_evidence_id,19,1)='-' AND substr(termination_evidence_id,24,1)='-' AND replace(termination_evidence_id,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(termination_evidence_id,15,1) IN ('1','2','3','4','5') AND substr(termination_evidence_id,20,1) IN ('8','9','a','b')),
-    bridge_generation_id TEXT NOT NULL,
     producer_instance_id TEXT NOT NULL,
+    producer_sequence INTEGER NOT NULL CHECK (producer_sequence>=1),
+    ingress_sequence INTEGER NOT NULL CHECK (ingress_sequence>=1),
+    supervisor_generation_id TEXT NOT NULL,
+    listener_epoch_id TEXT NOT NULL,
+    bridge_generation_id TEXT NOT NULL,
+    observed_process_identity TEXT NOT NULL CHECK (length(observed_process_identity)=36 AND observed_process_identity=lower(observed_process_identity) AND substr(observed_process_identity,9,1)='-' AND substr(observed_process_identity,14,1)='-' AND substr(observed_process_identity,19,1)='-' AND substr(observed_process_identity,24,1)='-' AND replace(observed_process_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(observed_process_identity,15,1) IN ('1','2','3','4','5') AND substr(observed_process_identity,20,1) IN ('8','9','a','b')),
+    termination_observation_identity TEXT NOT NULL CHECK (length(termination_observation_identity)=36 AND termination_observation_identity=lower(termination_observation_identity) AND substr(termination_observation_identity,9,1)='-' AND substr(termination_observation_identity,14,1)='-' AND substr(termination_observation_identity,19,1)='-' AND substr(termination_observation_identity,24,1)='-' AND replace(termination_observation_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(termination_observation_identity,15,1) IN ('1','2','3','4','5') AND substr(termination_observation_identity,20,1) IN ('8','9','a','b')),
+    evidence_role TEXT NOT NULL CHECK (evidence_role IN ('INITIATOR_EVIDENCE','REQUESTED_ACTION_EVIDENCE','EXECUTION_METHOD_EVIDENCE','OBSERVED_CAUSE_EVIDENCE','RESULT_EVIDENCE')),
+    assertion_kind TEXT NOT NULL CHECK (assertion_kind IN ('POSITIVE','ABSENCE','UNCERTAINTY')),
+    asserted_value TEXT NOT NULL CHECK (
+        (evidence_role='INITIATOR_EVIDENCE' AND asserted_value IN ('NONE','LISTENER','LISTENER_SUPERVISOR','AUTHENTICATED_OPERATOR','RAPI_PROVIDER','UNKNOWN')) OR
+        (evidence_role='REQUESTED_ACTION_EVIDENCE' AND asserted_value IN ('NONE','BRIDGE_RECYCLE','BRIDGE_SHUTDOWN','LISTENER_SHUTDOWN','FULL_LISTENER_RESTART','UNKNOWN')) OR
+        (evidence_role='EXECUTION_METHOD_EVIDENCE' AND asserted_value IN ('NONE','GRACEFUL_RAPI_LOGOUT','GRACEFUL_PROCESS_EXIT','SUPERVISOR_TERMINATE','SUPERVISOR_KILL','PROCESS_SELF_EXIT','PROVIDER_FORCED_LOGOUT','PROVIDER_SHUTDOWN_SIGNAL','UNKNOWN')) OR
+        (evidence_role='OBSERVED_CAUSE_EVIDENCE' AND asserted_value IN ('NONE','PLANNED_SHUTDOWN','BRIDGE_CRASH','AUTHENTICATION_FAILURE','CONNECTION_LOSS','SUBSCRIPTION_FAILURE','LISTENER_EXIT','RAPI_ENGINE_INERT','UNKNOWN')) OR
+        (evidence_role='RESULT_EVIDENCE' AND asserted_value IN ('NONE','COMPLETED_EXPECTED','RECOVERED','FAILED','TIMED_OUT','CANCELED','PROCESS_EXITED','ENGINE_INERT','UNKNOWN'))),
+    absence_scope TEXT NULL CHECK (absence_scope IS NULL OR absence_scope IN ('NO_INITIATOR_THROUGH_CUTOFF','NO_REQUEST_THROUGH_CUTOFF','NO_EXECUTION_THROUGH_CUTOFF','NO_CAUSE_THROUGH_CUTOFF','NO_RESULT_THROUGH_CUTOFF')),
+    uncertainty_reason TEXT NULL CHECK (uncertainty_reason IS NULL OR uncertainty_reason IN ('CONFLICT','INDETERMINATE')),
+    request_identity TEXT NULL CHECK (request_identity IS NULL OR (length(request_identity)=36 AND request_identity=lower(request_identity) AND substr(request_identity,9,1)='-' AND substr(request_identity,14,1)='-' AND substr(request_identity,19,1)='-' AND substr(request_identity,24,1)='-' AND replace(request_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(request_identity,15,1) IN ('1','2','3','4','5') AND substr(request_identity,20,1) IN ('8','9','a','b'))),
+    operator_command_identity TEXT NULL CHECK (operator_command_identity IS NULL OR (length(operator_command_identity)=36 AND operator_command_identity=lower(operator_command_identity) AND substr(operator_command_identity,9,1)='-' AND substr(operator_command_identity,14,1)='-' AND substr(operator_command_identity,19,1)='-' AND substr(operator_command_identity,24,1)='-' AND replace(operator_command_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(operator_command_identity,15,1) IN ('1','2','3','4','5') AND substr(operator_command_identity,20,1) IN ('8','9','a','b'))),
     evidence_type TEXT NOT NULL CHECK (evidence_type IN ('RAPI_CALLBACK','PROCESS_EXIT','PROCESS_EXCEPTION','SUPERVISOR_COMMAND','OPERATOR_COMMAND','OS_HANDLE','LISTENER_SHUTDOWN','STARTUP_TRANSITION')),
     canonical_evidence_json TEXT NOT NULL CHECK (json_valid(canonical_evidence_json)=1 AND json_type(canonical_evidence_json)='object'),
     evidence_sha256 TEXT NOT NULL CHECK (length(evidence_sha256)=64 AND evidence_sha256=lower(evidence_sha256) AND evidence_sha256 NOT GLOB '*[^0-9a-f]*'),
+    termination_schema_version INTEGER NOT NULL CHECK (termination_schema_version=2),
     authentication_disposition TEXT NOT NULL CHECK (authentication_disposition IN ('AUTHENTICATED','REJECTED')),
     observed_at_utc TEXT NOT NULL CHECK (length(observed_at_utc)=27 AND substr(observed_at_utc,1,4) NOT GLOB '*[^0-9]*' AND substr(observed_at_utc,5,1)='-' AND substr(observed_at_utc,6,2) NOT GLOB '*[^0-9]*' AND substr(observed_at_utc,8,1)='-' AND substr(observed_at_utc,9,2) NOT GLOB '*[^0-9]*' AND substr(observed_at_utc,11,1)='T' AND substr(observed_at_utc,12,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observed_at_utc,12,2) AS INTEGER) BETWEEN 0 AND 23 AND substr(observed_at_utc,14,1)=':' AND substr(observed_at_utc,15,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observed_at_utc,15,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(observed_at_utc,17,1)=':' AND substr(observed_at_utc,18,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observed_at_utc,18,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(observed_at_utc,20,1)='.' AND substr(observed_at_utc,21,6) NOT GLOB '*[^0-9]*' AND substr(observed_at_utc,27,1)='Z' AND CAST(substr(observed_at_utc,1,4) AS INTEGER) BETWEEN 1 AND 9999 AND CAST(substr(observed_at_utc,6,2) AS INTEGER) BETWEEN 1 AND 12 AND CAST(substr(observed_at_utc,9,2) AS INTEGER) BETWEEN 1 AND (CASE CAST(substr(observed_at_utc,6,2) AS INTEGER) WHEN 2 THEN CASE WHEN (CAST(substr(observed_at_utc,1,4) AS INTEGER)%400=0 OR (CAST(substr(observed_at_utc,1,4) AS INTEGER)%4=0 AND CAST(substr(observed_at_utc,1,4) AS INTEGER)%100<>0)) THEN 29 ELSE 28 END WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 ELSE 31 END) AND strftime('%Y-%m-%dT%H:%M:%S',substr(observed_at_utc,1,19)||'Z')||substr(observed_at_utc,20,8)=observed_at_utc),
     observed_monotonic_ns INTEGER NOT NULL CHECK (observed_monotonic_ns>=0),
     transaction_id TEXT NOT NULL,
     writer_id TEXT NOT NULL CHECK (writer_id='HEALTH_DURABLE_WRITER'),
-    FOREIGN KEY (bridge_generation_id) REFERENCES bridge_generations(bridge_generation_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    FOREIGN KEY (bridge_generation_id,listener_epoch_id,supervisor_generation_id) REFERENCES bridge_generations(bridge_generation_id,listener_epoch_id,supervisor_generation_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    FOREIGN KEY (producer_instance_id) REFERENCES producer_registrations(producer_instance_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    FOREIGN KEY (transaction_id) REFERENCES transaction_commits(transaction_id) ON UPDATE RESTRICT ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+    UNIQUE (producer_instance_id,producer_sequence),
+    UNIQUE (producer_instance_id,ingress_sequence),
+    UNIQUE (termination_evidence_id,producer_instance_id,producer_sequence,evidence_type,observed_at_utc,termination_schema_version,evidence_sha256,supervisor_generation_id,listener_epoch_id,bridge_generation_id,observed_process_identity,termination_observation_identity,authentication_disposition,evidence_role,assertion_kind,asserted_value),
+    CHECK (ingress_sequence=producer_sequence),
+    CHECK ((asserted_value='NONE' AND assertion_kind='ABSENCE' AND uncertainty_reason IS NULL AND absence_scope=CASE evidence_role WHEN 'INITIATOR_EVIDENCE' THEN 'NO_INITIATOR_THROUGH_CUTOFF' WHEN 'REQUESTED_ACTION_EVIDENCE' THEN 'NO_REQUEST_THROUGH_CUTOFF' WHEN 'EXECUTION_METHOD_EVIDENCE' THEN 'NO_EXECUTION_THROUGH_CUTOFF' WHEN 'OBSERVED_CAUSE_EVIDENCE' THEN 'NO_CAUSE_THROUGH_CUTOFF' ELSE 'NO_RESULT_THROUGH_CUTOFF' END AND evidence_type='STARTUP_TRANSITION') OR (asserted_value='UNKNOWN' AND assertion_kind='UNCERTAINTY' AND absence_scope IS NULL AND uncertainty_reason IS NOT NULL) OR (asserted_value NOT IN ('NONE','UNKNOWN') AND assertion_kind='POSITIVE' AND absence_scope IS NULL AND uncertainty_reason IS NULL)),
+    CHECK ((asserted_value='AUTHENTICATED_OPERATOR' AND evidence_type='OPERATOR_COMMAND' AND operator_command_identity IS NOT NULL) OR asserted_value<>'AUTHENTICATED_OPERATOR'),
+    CHECK ((asserted_value='RAPI_PROVIDER' AND evidence_type='RAPI_CALLBACK') OR asserted_value<>'RAPI_PROVIDER'),
+    CHECK ((asserted_value='LISTENER' AND evidence_type='LISTENER_SHUTDOWN') OR asserted_value<>'LISTENER'),
+    CHECK ((asserted_value='LISTENER_SUPERVISOR' AND evidence_type='SUPERVISOR_COMMAND') OR asserted_value<>'LISTENER_SUPERVISOR'),
+    CHECK ((evidence_role='REQUESTED_ACTION_EVIDENCE' AND asserted_value NOT IN ('NONE','UNKNOWN') AND request_identity IS NOT NULL AND evidence_type IN ('SUPERVISOR_COMMAND','OPERATOR_COMMAND','LISTENER_SHUTDOWN')) OR evidence_role<>'REQUESTED_ACTION_EVIDENCE' OR asserted_value IN ('NONE','UNKNOWN')),
+    CHECK ((asserted_value='GRACEFUL_RAPI_LOGOUT' AND evidence_type IN ('RAPI_CALLBACK','SUPERVISOR_COMMAND')) OR asserted_value<>'GRACEFUL_RAPI_LOGOUT'),
+    CHECK ((asserted_value='GRACEFUL_PROCESS_EXIT' AND evidence_type IN ('PROCESS_EXIT','OS_HANDLE')) OR asserted_value<>'GRACEFUL_PROCESS_EXIT'),
+    CHECK ((asserted_value IN ('SUPERVISOR_TERMINATE','SUPERVISOR_KILL') AND evidence_type IN ('SUPERVISOR_COMMAND','OS_HANDLE')) OR asserted_value NOT IN ('SUPERVISOR_TERMINATE','SUPERVISOR_KILL')),
+    CHECK ((asserted_value='PROCESS_SELF_EXIT' AND evidence_type IN ('PROCESS_EXIT','OS_HANDLE')) OR asserted_value<>'PROCESS_SELF_EXIT'),
+    CHECK ((asserted_value IN ('PROVIDER_FORCED_LOGOUT','PROVIDER_SHUTDOWN_SIGNAL') AND evidence_type='RAPI_CALLBACK') OR asserted_value NOT IN ('PROVIDER_FORCED_LOGOUT','PROVIDER_SHUTDOWN_SIGNAL')),
+    CHECK ((asserted_value='BRIDGE_CRASH' AND evidence_type IN ('PROCESS_EXCEPTION','OS_HANDLE')) OR asserted_value<>'BRIDGE_CRASH'),
+    CHECK ((asserted_value='PLANNED_SHUTDOWN' AND evidence_type IN ('SUPERVISOR_COMMAND','OPERATOR_COMMAND','LISTENER_SHUTDOWN')) OR asserted_value<>'PLANNED_SHUTDOWN'),
+    CHECK ((asserted_value IN ('AUTHENTICATION_FAILURE','CONNECTION_LOSS','SUBSCRIPTION_FAILURE','RAPI_ENGINE_INERT') AND evidence_type='RAPI_CALLBACK') OR asserted_value NOT IN ('AUTHENTICATION_FAILURE','CONNECTION_LOSS','SUBSCRIPTION_FAILURE','RAPI_ENGINE_INERT')),
+    CHECK ((asserted_value='LISTENER_EXIT' AND evidence_type IN ('PROCESS_EXIT','OS_HANDLE','LISTENER_SHUTDOWN')) OR asserted_value<>'LISTENER_EXIT'),
+    CHECK ((asserted_value IN ('COMPLETED_EXPECTED','RECOVERED','FAILED','TIMED_OUT','CANCELED') AND evidence_type IN ('SUPERVISOR_COMMAND','RAPI_CALLBACK','OS_HANDLE','PROCESS_EXIT')) OR asserted_value NOT IN ('COMPLETED_EXPECTED','RECOVERED','FAILED','TIMED_OUT','CANCELED')),
+    CHECK ((asserted_value='PROCESS_EXITED' AND evidence_type IN ('PROCESS_EXIT','OS_HANDLE')) OR asserted_value<>'PROCESS_EXITED'),
+    CHECK ((asserted_value='ENGINE_INERT' AND evidence_type='RAPI_CALLBACK') OR asserted_value<>'ENGINE_INERT'),
+    CHECK ((evidence_type='OPERATOR_COMMAND' AND operator_command_identity IS NOT NULL) OR evidence_type<>'OPERATOR_COMMAND')
+) STRICT;
+
+CREATE TABLE termination_evidence_sets (
+    termination_evidence_set_id TEXT NOT NULL PRIMARY KEY CHECK (length(termination_evidence_set_id)=36 AND termination_evidence_set_id=lower(termination_evidence_set_id) AND substr(termination_evidence_set_id,9,1)='-' AND substr(termination_evidence_set_id,14,1)='-' AND substr(termination_evidence_set_id,19,1)='-' AND substr(termination_evidence_set_id,24,1)='-' AND replace(termination_evidence_set_id,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(termination_evidence_set_id,15,1) IN ('1','2','3','4','5') AND substr(termination_evidence_set_id,20,1) IN ('8','9','a','b')),
+    termination_result_id TEXT NOT NULL UNIQUE CHECK (length(termination_result_id)=36 AND termination_result_id=lower(termination_result_id) AND substr(termination_result_id,9,1)='-' AND substr(termination_result_id,14,1)='-' AND substr(termination_result_id,19,1)='-' AND substr(termination_result_id,24,1)='-' AND replace(termination_result_id,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(termination_result_id,15,1) IN ('1','2','3','4','5') AND substr(termination_result_id,20,1) IN ('8','9','a','b')),
+    supervisor_generation_id TEXT NOT NULL,
+    listener_epoch_id TEXT NOT NULL,
+    bridge_generation_id TEXT NOT NULL,
+    observed_process_identity TEXT NOT NULL CHECK (length(observed_process_identity)=36 AND observed_process_identity=lower(observed_process_identity) AND substr(observed_process_identity,9,1)='-' AND substr(observed_process_identity,14,1)='-' AND substr(observed_process_identity,19,1)='-' AND substr(observed_process_identity,24,1)='-' AND replace(observed_process_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(observed_process_identity,15,1) IN ('1','2','3','4','5') AND substr(observed_process_identity,20,1) IN ('8','9','a','b')),
+    termination_observation_identity TEXT NOT NULL CHECK (length(termination_observation_identity)=36 AND termination_observation_identity=lower(termination_observation_identity) AND substr(termination_observation_identity,9,1)='-' AND substr(termination_observation_identity,14,1)='-' AND substr(termination_observation_identity,19,1)='-' AND substr(termination_observation_identity,24,1)='-' AND replace(termination_observation_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(termination_observation_identity,15,1) IN ('1','2','3','4','5') AND substr(termination_observation_identity,20,1) IN ('8','9','a','b')),
+    observation_sequence INTEGER NOT NULL CHECK (observation_sequence>=1),
+    observation_cutoff_utc TEXT NOT NULL CHECK (length(observation_cutoff_utc)=27 AND substr(observation_cutoff_utc,1,4) NOT GLOB '*[^0-9]*' AND substr(observation_cutoff_utc,5,1)='-' AND substr(observation_cutoff_utc,6,2) NOT GLOB '*[^0-9]*' AND substr(observation_cutoff_utc,8,1)='-' AND substr(observation_cutoff_utc,9,2) NOT GLOB '*[^0-9]*' AND substr(observation_cutoff_utc,11,1)='T' AND substr(observation_cutoff_utc,12,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observation_cutoff_utc,12,2) AS INTEGER) BETWEEN 0 AND 23 AND substr(observation_cutoff_utc,14,1)=':' AND substr(observation_cutoff_utc,15,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observation_cutoff_utc,15,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(observation_cutoff_utc,17,1)=':' AND substr(observation_cutoff_utc,18,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observation_cutoff_utc,18,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(observation_cutoff_utc,20,1)='.' AND substr(observation_cutoff_utc,21,6) NOT GLOB '*[^0-9]*' AND substr(observation_cutoff_utc,27,1)='Z' AND CAST(substr(observation_cutoff_utc,1,4) AS INTEGER) BETWEEN 1 AND 9999 AND CAST(substr(observation_cutoff_utc,6,2) AS INTEGER) BETWEEN 1 AND 12 AND CAST(substr(observation_cutoff_utc,9,2) AS INTEGER) BETWEEN 1 AND (CASE CAST(substr(observation_cutoff_utc,6,2) AS INTEGER) WHEN 2 THEN CASE WHEN (CAST(substr(observation_cutoff_utc,1,4) AS INTEGER)%400=0 OR (CAST(substr(observation_cutoff_utc,1,4) AS INTEGER)%4=0 AND CAST(substr(observation_cutoff_utc,1,4) AS INTEGER)%100<>0)) THEN 29 ELSE 28 END WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 ELSE 31 END) AND strftime('%Y-%m-%dT%H:%M:%S',substr(observation_cutoff_utc,1,19)||'Z')||substr(observation_cutoff_utc,20,8)=observation_cutoff_utc),
+    classification_decision_identity TEXT NOT NULL CHECK (length(classification_decision_identity)=36 AND classification_decision_identity=lower(classification_decision_identity) AND substr(classification_decision_identity,9,1)='-' AND substr(classification_decision_identity,14,1)='-' AND substr(classification_decision_identity,19,1)='-' AND substr(classification_decision_identity,24,1)='-' AND replace(classification_decision_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(classification_decision_identity,15,1) IN ('1','2','3','4','5') AND substr(classification_decision_identity,20,1) IN ('8','9','a','b')),
+    evaluator_version INTEGER NOT NULL CHECK (evaluator_version>=1),
+    termination_schema_version INTEGER NOT NULL CHECK (termination_schema_version=2),
+    evidence_set_integrity_sha256 TEXT NOT NULL CHECK (length(evidence_set_integrity_sha256)=64 AND evidence_set_integrity_sha256=lower(evidence_set_integrity_sha256) AND evidence_set_integrity_sha256 NOT GLOB '*[^0-9a-f]*'),
+    transaction_id TEXT NOT NULL,
+    writer_id TEXT NOT NULL CHECK (writer_id='HEALTH_DURABLE_WRITER'),
+    UNIQUE (termination_evidence_set_id,termination_result_id,supervisor_generation_id,listener_epoch_id,bridge_generation_id,observed_process_identity,termination_observation_identity,observation_sequence,observation_cutoff_utc,classification_decision_identity,evaluator_version,termination_schema_version,evidence_set_integrity_sha256,transaction_id),
+    FOREIGN KEY (termination_result_id) REFERENCES termination_results(termination_result_id) ON UPDATE RESTRICT ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY (bridge_generation_id,listener_epoch_id,supervisor_generation_id) REFERENCES bridge_generations(bridge_generation_id,listener_epoch_id,supervisor_generation_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    FOREIGN KEY (transaction_id) REFERENCES transaction_commits(transaction_id) ON UPDATE RESTRICT ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE termination_evidence_set_producers (
+    termination_evidence_set_id TEXT NOT NULL,
+    producer_role TEXT NOT NULL CHECK (producer_role IN ('RITHMIC_LISTENER','BRIDGE_CONTROLLER','OS_ADAPTER','RAPI_ADAPTER','SUPERVISOR_ADAPTER','OPERATOR_ADAPTER')),
+    producer_instance_id TEXT NOT NULL,
+    expected_start_sequence INTEGER NOT NULL CHECK (expected_start_sequence>=1),
+    expected_end_sequence INTEGER NOT NULL CHECK (expected_end_sequence>=expected_start_sequence),
+    last_accepted_sequence INTEGER NOT NULL CHECK (last_accepted_sequence=expected_end_sequence),
+    transaction_id TEXT NOT NULL,
+    writer_id TEXT NOT NULL CHECK (writer_id='HEALTH_DURABLE_WRITER'),
+    PRIMARY KEY (termination_evidence_set_id,producer_role),
+    UNIQUE (termination_evidence_set_id,producer_instance_id),
+    FOREIGN KEY (termination_evidence_set_id) REFERENCES termination_evidence_sets(termination_evidence_set_id) ON UPDATE RESTRICT ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
     FOREIGN KEY (producer_instance_id) REFERENCES producer_registrations(producer_instance_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     FOREIGN KEY (transaction_id) REFERENCES transaction_commits(transaction_id) ON UPDATE RESTRICT ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
 
 CREATE TABLE termination_results (
     termination_result_id TEXT NOT NULL PRIMARY KEY CHECK (length(termination_result_id)=36 AND termination_result_id=lower(termination_result_id) AND substr(termination_result_id,9,1)='-' AND substr(termination_result_id,14,1)='-' AND substr(termination_result_id,19,1)='-' AND substr(termination_result_id,24,1)='-' AND replace(termination_result_id,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(termination_result_id,15,1) IN ('1','2','3','4','5') AND substr(termination_result_id,20,1) IN ('8','9','a','b')),
-    bridge_generation_id TEXT NOT NULL UNIQUE,
+    bridge_generation_id TEXT NOT NULL,
     supervisor_generation_id TEXT NOT NULL,
     listener_epoch_id TEXT NOT NULL,
     termination_observation_identity TEXT NOT NULL CHECK (length(termination_observation_identity)=36 AND termination_observation_identity=lower(termination_observation_identity) AND substr(termination_observation_identity,9,1)='-' AND substr(termination_observation_identity,14,1)='-' AND substr(termination_observation_identity,19,1)='-' AND substr(termination_observation_identity,24,1)='-' AND replace(termination_observation_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(termination_observation_identity,15,1) IN ('1','2','3','4','5') AND substr(termination_observation_identity,20,1) IN ('8','9','a','b')),
     observed_process_identity TEXT NOT NULL CHECK (length(observed_process_identity)=36 AND observed_process_identity=lower(observed_process_identity) AND substr(observed_process_identity,9,1)='-' AND substr(observed_process_identity,14,1)='-' AND substr(observed_process_identity,19,1)='-' AND substr(observed_process_identity,24,1)='-' AND replace(observed_process_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(observed_process_identity,15,1) IN ('1','2','3','4','5') AND substr(observed_process_identity,20,1) IN ('8','9','a','b')),
     observation_sequence INTEGER NOT NULL CHECK (observation_sequence>=1),
-    request_identity TEXT NOT NULL CHECK (request_identity='NONE' OR (length(request_identity)=36 AND request_identity=lower(request_identity) AND substr(request_identity,9,1)='-' AND substr(request_identity,14,1)='-' AND substr(request_identity,19,1)='-' AND substr(request_identity,24,1)='-' AND replace(request_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(request_identity,15,1) IN ('1','2','3','4','5') AND substr(request_identity,20,1) IN ('8','9','a','b'))),
-    operator_command_identity TEXT NOT NULL CHECK (operator_command_identity='NONE' OR (length(operator_command_identity)=36 AND operator_command_identity=lower(operator_command_identity) AND substr(operator_command_identity,9,1)='-' AND substr(operator_command_identity,14,1)='-' AND substr(operator_command_identity,19,1)='-' AND substr(operator_command_identity,24,1)='-' AND replace(operator_command_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(operator_command_identity,15,1) IN ('1','2','3','4','5') AND substr(operator_command_identity,20,1) IN ('8','9','a','b'))),
+    request_identity TEXT NULL CHECK (request_identity IS NULL OR (length(request_identity)=36 AND request_identity=lower(request_identity) AND substr(request_identity,9,1)='-' AND substr(request_identity,14,1)='-' AND substr(request_identity,19,1)='-' AND substr(request_identity,24,1)='-' AND replace(request_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(request_identity,15,1) IN ('1','2','3','4','5') AND substr(request_identity,20,1) IN ('8','9','a','b'))),
+    operator_command_identity TEXT NULL CHECK (operator_command_identity IS NULL OR (length(operator_command_identity)=36 AND operator_command_identity=lower(operator_command_identity) AND substr(operator_command_identity,9,1)='-' AND substr(operator_command_identity,14,1)='-' AND substr(operator_command_identity,19,1)='-' AND substr(operator_command_identity,24,1)='-' AND replace(operator_command_identity,'-','') NOT GLOB '*[^0-9a-f]*' AND substr(operator_command_identity,15,1) IN ('1','2','3','4','5') AND substr(operator_command_identity,20,1) IN ('8','9','a','b'))),
+    provider_evidence_identity TEXT NULL,
     os_evidence_identity TEXT NULL,
     bridge_evidence_identity TEXT NULL,
     listener_evidence_identity TEXT NULL,
@@ -708,34 +801,57 @@ CREATE TABLE termination_results (
     execution_method TEXT NOT NULL CHECK (execution_method IN ('NONE','GRACEFUL_RAPI_LOGOUT','GRACEFUL_PROCESS_EXIT','SUPERVISOR_TERMINATE','SUPERVISOR_KILL','PROCESS_SELF_EXIT','PROVIDER_FORCED_LOGOUT','PROVIDER_SHUTDOWN_SIGNAL','UNKNOWN')),
     observed_cause TEXT NOT NULL CHECK (observed_cause IN ('NONE','PLANNED_SHUTDOWN','BRIDGE_CRASH','AUTHENTICATION_FAILURE','CONNECTION_LOSS','SUBSCRIPTION_FAILURE','LISTENER_EXIT','RAPI_ENGINE_INERT','UNKNOWN')),
     result TEXT NOT NULL CHECK (result IN ('NONE','COMPLETED_EXPECTED','RECOVERED','FAILED','TIMED_OUT','CANCELED','PROCESS_EXITED','ENGINE_INERT','UNKNOWN')),
-    initiator_evidence_set_hash TEXT NOT NULL CHECK (length(initiator_evidence_set_hash)=64 AND initiator_evidence_set_hash=lower(initiator_evidence_set_hash) AND initiator_evidence_set_hash NOT GLOB '*[^0-9a-f]*'),
-    requested_action_evidence_set_hash TEXT NOT NULL CHECK (length(requested_action_evidence_set_hash)=64 AND requested_action_evidence_set_hash=lower(requested_action_evidence_set_hash) AND requested_action_evidence_set_hash NOT GLOB '*[^0-9a-f]*'),
-    execution_method_evidence_set_hash TEXT NOT NULL CHECK (length(execution_method_evidence_set_hash)=64 AND execution_method_evidence_set_hash=lower(execution_method_evidence_set_hash) AND execution_method_evidence_set_hash NOT GLOB '*[^0-9a-f]*'),
-    observed_cause_evidence_set_hash TEXT NOT NULL CHECK (length(observed_cause_evidence_set_hash)=64 AND observed_cause_evidence_set_hash=lower(observed_cause_evidence_set_hash) AND observed_cause_evidence_set_hash NOT GLOB '*[^0-9a-f]*'),
-    result_evidence_set_hash TEXT NOT NULL CHECK (length(result_evidence_set_hash)=64 AND result_evidence_set_hash=lower(result_evidence_set_hash) AND result_evidence_set_hash NOT GLOB '*[^0-9a-f]*'),
+    termination_evidence_set_id TEXT NOT NULL UNIQUE,
+    evidence_set_integrity_sha256 TEXT NOT NULL CHECK (length(evidence_set_integrity_sha256)=64 AND evidence_set_integrity_sha256=lower(evidence_set_integrity_sha256) AND evidence_set_integrity_sha256 NOT GLOB '*[^0-9a-f]*'),
     evaluator TEXT NOT NULL CHECK (evaluator='LISTENER_SUPERVISOR_STATE_EVALUATOR'),
     durable_writer TEXT NOT NULL CHECK (durable_writer='HEALTH_DURABLE_WRITER'),
     evaluator_version INTEGER NOT NULL CHECK (evaluator_version>=1),
-    evidence_set_hash TEXT NOT NULL CHECK (length(evidence_set_hash)=64 AND evidence_set_hash=lower(evidence_set_hash) AND evidence_set_hash NOT GLOB '*[^0-9a-f]*'),
+    observed_at_utc TEXT NOT NULL CHECK (length(observed_at_utc)=27 AND substr(observed_at_utc,1,4) NOT GLOB '*[^0-9]*' AND substr(observed_at_utc,5,1)='-' AND substr(observed_at_utc,6,2) NOT GLOB '*[^0-9]*' AND substr(observed_at_utc,8,1)='-' AND substr(observed_at_utc,9,2) NOT GLOB '*[^0-9]*' AND substr(observed_at_utc,11,1)='T' AND substr(observed_at_utc,12,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observed_at_utc,12,2) AS INTEGER) BETWEEN 0 AND 23 AND substr(observed_at_utc,14,1)=':' AND substr(observed_at_utc,15,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observed_at_utc,15,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(observed_at_utc,17,1)=':' AND substr(observed_at_utc,18,2) NOT GLOB '*[^0-9]*' AND CAST(substr(observed_at_utc,18,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(observed_at_utc,20,1)='.' AND substr(observed_at_utc,21,6) NOT GLOB '*[^0-9]*' AND substr(observed_at_utc,27,1)='Z' AND CAST(substr(observed_at_utc,1,4) AS INTEGER) BETWEEN 1 AND 9999 AND CAST(substr(observed_at_utc,6,2) AS INTEGER) BETWEEN 1 AND 12 AND CAST(substr(observed_at_utc,9,2) AS INTEGER) BETWEEN 1 AND (CASE CAST(substr(observed_at_utc,6,2) AS INTEGER) WHEN 2 THEN CASE WHEN (CAST(substr(observed_at_utc,1,4) AS INTEGER)%400=0 OR (CAST(substr(observed_at_utc,1,4) AS INTEGER)%4=0 AND CAST(substr(observed_at_utc,1,4) AS INTEGER)%100<>0)) THEN 29 ELSE 28 END WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 ELSE 31 END) AND strftime('%Y-%m-%dT%H:%M:%S',substr(observed_at_utc,1,19)||'Z')||substr(observed_at_utc,20,8)=observed_at_utc),
+    recorded_at_utc TEXT NOT NULL CHECK (length(recorded_at_utc)=27 AND substr(recorded_at_utc,1,4) NOT GLOB '*[^0-9]*' AND substr(recorded_at_utc,5,1)='-' AND substr(recorded_at_utc,6,2) NOT GLOB '*[^0-9]*' AND substr(recorded_at_utc,8,1)='-' AND substr(recorded_at_utc,9,2) NOT GLOB '*[^0-9]*' AND CAST(substr(recorded_at_utc,9,2) AS INTEGER)>=1 AND substr(recorded_at_utc,11,1)='T' AND substr(recorded_at_utc,12,2) NOT GLOB '*[^0-9]*' AND CAST(substr(recorded_at_utc,12,2) AS INTEGER) BETWEEN 0 AND 23 AND substr(recorded_at_utc,14,1)=':' AND substr(recorded_at_utc,15,2) NOT GLOB '*[^0-9]*' AND CAST(substr(recorded_at_utc,15,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(recorded_at_utc,17,1)=':' AND substr(recorded_at_utc,18,2) NOT GLOB '*[^0-9]*' AND CAST(substr(recorded_at_utc,18,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(recorded_at_utc,20,1)='.' AND substr(recorded_at_utc,21,6) NOT GLOB '*[^0-9]*' AND substr(recorded_at_utc,27,1)='Z' AND CAST(substr(recorded_at_utc,1,4) AS INTEGER) BETWEEN 1 AND 9999 AND CAST(substr(recorded_at_utc,6,2) AS INTEGER) BETWEEN 1 AND 12 AND CAST(substr(recorded_at_utc,9,2) AS INTEGER) BETWEEN 1 AND (CASE CAST(substr(recorded_at_utc,6,2) AS INTEGER) WHEN 2 THEN CASE WHEN (CAST(substr(recorded_at_utc,1,4) AS INTEGER)%400=0 OR (CAST(substr(recorded_at_utc,1,4) AS INTEGER)%4=0 AND CAST(substr(recorded_at_utc,1,4) AS INTEGER)%100<>0)) THEN 29 ELSE 28 END WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 ELSE 31 END) AND strftime('%Y-%m-%dT%H:%M:%S',substr(recorded_at_utc,1,19)||'Z')||substr(recorded_at_utc,20,8)=recorded_at_utc),
+    termination_schema_version INTEGER NOT NULL CHECK (termination_schema_version=2),
+    record_integrity_sha256 TEXT NOT NULL CHECK (length(record_integrity_sha256)=64 AND record_integrity_sha256=lower(record_integrity_sha256) AND record_integrity_sha256 NOT GLOB '*[^0-9a-f]*'),
     transaction_id TEXT NOT NULL,
-    classified_at_utc TEXT NOT NULL CHECK (length(classified_at_utc)=27 AND substr(classified_at_utc,1,4) NOT GLOB '*[^0-9]*' AND substr(classified_at_utc,5,1)='-' AND substr(classified_at_utc,6,2) NOT GLOB '*[^0-9]*' AND substr(classified_at_utc,8,1)='-' AND substr(classified_at_utc,9,2) NOT GLOB '*[^0-9]*' AND substr(classified_at_utc,11,1)='T' AND substr(classified_at_utc,12,2) NOT GLOB '*[^0-9]*' AND CAST(substr(classified_at_utc,12,2) AS INTEGER) BETWEEN 0 AND 23 AND substr(classified_at_utc,14,1)=':' AND substr(classified_at_utc,15,2) NOT GLOB '*[^0-9]*' AND CAST(substr(classified_at_utc,15,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(classified_at_utc,17,1)=':' AND substr(classified_at_utc,18,2) NOT GLOB '*[^0-9]*' AND CAST(substr(classified_at_utc,18,2) AS INTEGER) BETWEEN 0 AND 59 AND substr(classified_at_utc,20,1)='.' AND substr(classified_at_utc,21,6) NOT GLOB '*[^0-9]*' AND substr(classified_at_utc,27,1)='Z' AND CAST(substr(classified_at_utc,1,4) AS INTEGER) BETWEEN 1 AND 9999 AND CAST(substr(classified_at_utc,6,2) AS INTEGER) BETWEEN 1 AND 12 AND CAST(substr(classified_at_utc,9,2) AS INTEGER) BETWEEN 1 AND (CASE CAST(substr(classified_at_utc,6,2) AS INTEGER) WHEN 2 THEN CASE WHEN (CAST(substr(classified_at_utc,1,4) AS INTEGER)%400=0 OR (CAST(substr(classified_at_utc,1,4) AS INTEGER)%4=0 AND CAST(substr(classified_at_utc,1,4) AS INTEGER)%100<>0)) THEN 29 ELSE 28 END WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 ELSE 31 END) AND strftime('%Y-%m-%dT%H:%M:%S',substr(classified_at_utc,1,19)||'Z')||substr(classified_at_utc,20,8)=classified_at_utc),
     FOREIGN KEY (bridge_generation_id,listener_epoch_id,supervisor_generation_id) REFERENCES bridge_generations(bridge_generation_id,listener_epoch_id,supervisor_generation_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    FOREIGN KEY (provider_evidence_identity) REFERENCES termination_evidence(termination_evidence_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     FOREIGN KEY (os_evidence_identity) REFERENCES termination_evidence(termination_evidence_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     FOREIGN KEY (bridge_evidence_identity) REFERENCES termination_evidence(termination_evidence_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     FOREIGN KEY (listener_evidence_identity) REFERENCES termination_evidence(termination_evidence_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-    FOREIGN KEY (transaction_id) REFERENCES transaction_commits(transaction_id) ON UPDATE RESTRICT ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED
+    FOREIGN KEY (termination_evidence_set_id,termination_result_id,supervisor_generation_id,listener_epoch_id,bridge_generation_id,observed_process_identity,termination_observation_identity,observation_sequence,observed_at_utc,classification_decision_identity,evaluator_version,termination_schema_version,evidence_set_integrity_sha256,transaction_id) REFERENCES termination_evidence_sets(termination_evidence_set_id,termination_result_id,supervisor_generation_id,listener_epoch_id,bridge_generation_id,observed_process_identity,termination_observation_identity,observation_sequence,observation_cutoff_utc,classification_decision_identity,evaluator_version,termination_schema_version,evidence_set_integrity_sha256,transaction_id) ON UPDATE RESTRICT ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY (transaction_id) REFERENCES transaction_commits(transaction_id) ON UPDATE RESTRICT ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+    UNIQUE (bridge_generation_id,observation_sequence),
+    UNIQUE (bridge_generation_id,termination_observation_identity),
+    CHECK (recorded_at_utc>=observed_at_utc AND ((CAST(strftime('%s',substr(recorded_at_utc,1,19)||'Z') AS INTEGER)*1000000+CAST(substr(recorded_at_utc,21,6) AS INTEGER))-(CAST(strftime('%s',substr(observed_at_utc,1,19)||'Z') AS INTEGER)*1000000+CAST(substr(observed_at_utc,21,6) AS INTEGER))) BETWEEN 0 AND 30000000)
 ) STRICT;
 
 CREATE TABLE termination_result_evidence (
+    termination_evidence_set_id TEXT NOT NULL,
     termination_result_id TEXT NOT NULL,
-    dimension TEXT NOT NULL CHECK (dimension IN ('INITIATOR','REQUESTED_ACTION','EXECUTION_METHOD','OBSERVED_CAUSE','RESULT')),
+    contributor_role TEXT NOT NULL CHECK (contributor_role IN ('INITIATOR_EVIDENCE','REQUESTED_ACTION_EVIDENCE','EXECUTION_METHOD_EVIDENCE','OBSERVED_CAUSE_EVIDENCE','RESULT_EVIDENCE')),
     termination_evidence_id TEXT NOT NULL,
-    classification_basis TEXT NOT NULL CHECK (classification_basis IN ('CONCRETE','COMPLETE_ABSENCE_PROOF','UNCERTAINTY')),
+    producer_instance_id TEXT NOT NULL,
+    producer_sequence INTEGER NOT NULL CHECK (producer_sequence>=1),
+    evidence_type TEXT NOT NULL CHECK (evidence_type IN ('RAPI_CALLBACK','PROCESS_EXIT','PROCESS_EXCEPTION','SUPERVISOR_COMMAND','OPERATOR_COMMAND','OS_HANDLE','LISTENER_SHUTDOWN','STARTUP_TRANSITION')),
+    observed_at_utc TEXT NOT NULL,
+    termination_schema_version INTEGER NOT NULL CHECK (termination_schema_version=2),
+    evidence_sha256 TEXT NOT NULL CHECK (length(evidence_sha256)=64 AND evidence_sha256=lower(evidence_sha256) AND evidence_sha256 NOT GLOB '*[^0-9a-f]*'),
+    supervisor_generation_id TEXT NOT NULL,
+    listener_epoch_id TEXT NOT NULL,
+    bridge_generation_id TEXT NOT NULL,
+    observed_process_identity TEXT NOT NULL,
+    termination_observation_identity TEXT NOT NULL,
+    authentication_disposition TEXT NOT NULL CHECK (authentication_disposition='AUTHENTICATED'),
+    assertion_kind TEXT NOT NULL CHECK (assertion_kind IN ('POSITIVE','ABSENCE','UNCERTAINTY')),
+    asserted_value TEXT NOT NULL,
+    classification_basis TEXT NOT NULL CHECK (classification_basis IN ('POSITIVE_PROOF','COMPLETE_ABSENCE_PROOF','UNCERTAINTY')),
     transaction_id TEXT NOT NULL,
     writer_id TEXT NOT NULL CHECK (writer_id='HEALTH_DURABLE_WRITER'),
-    PRIMARY KEY (termination_result_id,dimension),
+    PRIMARY KEY (termination_evidence_set_id,contributor_role),
+    UNIQUE (termination_evidence_set_id,termination_evidence_id),
+    UNIQUE (termination_evidence_id),
+    UNIQUE (termination_result_id,contributor_role),
+    FOREIGN KEY (termination_evidence_set_id) REFERENCES termination_evidence_sets(termination_evidence_set_id) ON UPDATE RESTRICT ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
     FOREIGN KEY (termination_result_id) REFERENCES termination_results(termination_result_id) ON UPDATE RESTRICT ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
-    FOREIGN KEY (termination_evidence_id) REFERENCES termination_evidence(termination_evidence_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    FOREIGN KEY (termination_evidence_id,producer_instance_id,producer_sequence,evidence_type,observed_at_utc,termination_schema_version,evidence_sha256,supervisor_generation_id,listener_epoch_id,bridge_generation_id,observed_process_identity,termination_observation_identity,authentication_disposition,contributor_role,assertion_kind,asserted_value) REFERENCES termination_evidence(termination_evidence_id,producer_instance_id,producer_sequence,evidence_type,observed_at_utc,termination_schema_version,evidence_sha256,supervisor_generation_id,listener_epoch_id,bridge_generation_id,observed_process_identity,termination_observation_identity,authentication_disposition,evidence_role,assertion_kind,asserted_value) ON UPDATE RESTRICT ON DELETE RESTRICT,
     FOREIGN KEY (transaction_id) REFERENCES transaction_commits(transaction_id) ON UPDATE RESTRICT ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
 
@@ -795,6 +911,9 @@ CREATE TABLE store_incidents (
     FOREIGN KEY (transaction_id) REFERENCES transaction_commits(transaction_id) ON UPDATE RESTRICT ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED,
     CHECK ((disposition='OPEN' AND closed_at_utc IS NULL) OR (disposition<>'OPEN' AND closed_at_utc IS NOT NULL))
 ) STRICT;
+
+CREATE VIEW randle_sha256_preflight_v AS
+SELECT randle_sha256_hex_utf8('') AS empty_sha256;
 
 CREATE UNIQUE INDEX uq_writer_registry_active_scope ON writer_registry(table_name,operation) WHERE active=1;
 CREATE UNIQUE INDEX uq_supervisor_generation_current ON supervisor_generations(state) WHERE state='CURRENT';
@@ -915,20 +1034,153 @@ WHEN NEW.disposition='SUBSCRIPTION_VERIFIED' AND NOT EXISTS (
 )
 BEGIN SELECT RAISE(ABORT,'SUBSCRIPTION_PROOF_INVALID'); END;
 
-CREATE TRIGGER trg_termination_results_evidence
+CREATE TRIGGER trg_termination_evidence_integrity
+BEFORE INSERT ON termination_evidence
+WHEN NOT (
+    EXISTS (SELECT 1 FROM transaction_commits tc WHERE tc.transaction_id=NEW.transaction_id AND tc.transaction_type='TX-TERMINATION-EVIDENCE' AND tc.committed_at_utc>=NEW.observed_at_utc) AND
+    EXISTS (SELECT 1 FROM producer_registrations p WHERE p.producer_instance_id=NEW.producer_instance_id AND p.revoked_sequence IS NULL) AND
+    EXISTS (SELECT 1 FROM supervisor_generations sg JOIN listener_epochs le ON le.supervisor_generation_id=sg.supervisor_generation_id JOIN bridge_generations bg ON bg.listener_epoch_id=le.listener_epoch_id AND bg.supervisor_generation_id=sg.supervisor_generation_id WHERE sg.supervisor_generation_id=NEW.supervisor_generation_id AND sg.state='CURRENT' AND le.listener_epoch_id=NEW.listener_epoch_id AND le.listener_process_instance_id=NEW.observed_process_identity AND le.state='CURRENT' AND bg.bridge_generation_id=NEW.bridge_generation_id AND bg.state='CURRENT') AND
+    NEW.canonical_evidence_json=json_object(
+        'termination_evidence_id',NEW.termination_evidence_id,'producer_instance_id',NEW.producer_instance_id,'producer_sequence',NEW.producer_sequence,'ingress_sequence',NEW.ingress_sequence,
+        'supervisor_generation_id',NEW.supervisor_generation_id,'listener_epoch_id',NEW.listener_epoch_id,'bridge_generation_id',NEW.bridge_generation_id,
+        'observed_process_identity',NEW.observed_process_identity,'termination_observation_identity',NEW.termination_observation_identity,
+        'evidence_role',NEW.evidence_role,'assertion_kind',NEW.assertion_kind,'asserted_value',NEW.asserted_value,
+        'absence_scope',coalesce(NEW.absence_scope,'-'),'uncertainty_reason',coalesce(NEW.uncertainty_reason,'-'),
+        'request_identity',coalesce(NEW.request_identity,'-'),'operator_command_identity',coalesce(NEW.operator_command_identity,'-'),
+        'evidence_type',NEW.evidence_type,'termination_schema_version',NEW.termination_schema_version,'authentication_disposition',NEW.authentication_disposition,
+        'observed_at_utc',NEW.observed_at_utc,'observed_monotonic_ns',NEW.observed_monotonic_ns,'transaction_id',NEW.transaction_id) AND
+    randle_sha256_hex_utf8(NEW.canonical_evidence_json)=NEW.evidence_sha256
+)
+BEGIN SELECT RAISE(ABORT,'TERMINATION_EVIDENCE_INTEGRITY_INVALID'); END;
+
+CREATE TRIGGER trg_termination_evidence_observation_sealed
+BEFORE INSERT ON termination_evidence
+WHEN EXISTS (SELECT 1 FROM termination_results r WHERE r.termination_observation_identity=NEW.termination_observation_identity)
+BEGIN SELECT RAISE(ABORT,'TERMINATION_OBSERVATION_ALREADY_CLASSIFIED'); END;
+
+CREATE TRIGGER trg_termination_results_structure
 BEFORE INSERT ON termination_results
 WHEN NOT (
-    (SELECT count(*) FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id WHERE x.termination_result_id=NEW.termination_result_id AND x.transaction_id=NEW.transaction_id AND e.bridge_generation_id=NEW.bridge_generation_id AND e.authentication_disposition='AUTHENTICATED')=5 AND
-    EXISTS (SELECT 1 FROM transaction_commits tc WHERE tc.transaction_id=NEW.transaction_id AND tc.transaction_type='TX-TERMINATION-CLASSIFY') AND
-    EXISTS (SELECT 1 FROM termination_result_evidence x WHERE x.termination_result_id=NEW.termination_result_id AND x.dimension='INITIATOR' AND x.classification_basis=CASE WHEN NEW.initiator='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.initiator='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'CONCRETE' END) AND
-    EXISTS (SELECT 1 FROM termination_result_evidence x WHERE x.termination_result_id=NEW.termination_result_id AND x.dimension='REQUESTED_ACTION' AND x.classification_basis=CASE WHEN NEW.requested_action='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.requested_action='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'CONCRETE' END) AND
-    EXISTS (SELECT 1 FROM termination_result_evidence x WHERE x.termination_result_id=NEW.termination_result_id AND x.dimension='EXECUTION_METHOD' AND x.classification_basis=CASE WHEN NEW.execution_method='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.execution_method='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'CONCRETE' END) AND
-    EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id WHERE x.termination_result_id=NEW.termination_result_id AND x.dimension='OBSERVED_CAUSE' AND x.classification_basis=CASE WHEN NEW.observed_cause='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.observed_cause='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'CONCRETE' END AND (NEW.observed_cause<>'BRIDGE_CRASH' OR e.evidence_type IN ('PROCESS_EXCEPTION','OS_HANDLE'))) AND
-    EXISTS (SELECT 1 FROM termination_result_evidence x WHERE x.termination_result_id=NEW.termination_result_id AND x.dimension='RESULT' AND x.classification_basis=CASE WHEN NEW.result='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.result='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'CONCRETE' END) AND
-    ((NEW.requested_action IN ('NONE','UNKNOWN') AND NEW.request_identity='NONE') OR (NEW.requested_action NOT IN ('NONE','UNKNOWN') AND NEW.request_identity<>'NONE')) AND
-    ((NEW.initiator='AUTHENTICATED_OPERATOR' AND NEW.operator_command_identity<>'NONE') OR (NEW.initiator<>'AUTHENTICATED_OPERATOR' AND NEW.operator_command_identity='NONE'))
+    EXISTS (
+        SELECT 1 FROM termination_evidence_sets s
+        JOIN transaction_commits tc ON tc.transaction_id=NEW.transaction_id AND tc.transaction_type='TX-TERMINATION-CLASSIFY'
+        JOIN supervisor_generations sg ON sg.supervisor_generation_id=NEW.supervisor_generation_id AND sg.state='CURRENT'
+        JOIN listener_epochs le ON le.listener_epoch_id=NEW.listener_epoch_id AND le.supervisor_generation_id=NEW.supervisor_generation_id AND le.listener_process_instance_id=NEW.observed_process_identity AND le.state='CURRENT'
+        JOIN bridge_generations bg ON bg.bridge_generation_id=NEW.bridge_generation_id AND bg.listener_epoch_id=NEW.listener_epoch_id AND bg.supervisor_generation_id=NEW.supervisor_generation_id AND bg.state='CURRENT'
+        WHERE s.termination_evidence_set_id=NEW.termination_evidence_set_id AND s.termination_result_id=NEW.termination_result_id
+          AND s.supervisor_generation_id=NEW.supervisor_generation_id AND s.listener_epoch_id=NEW.listener_epoch_id AND s.bridge_generation_id=NEW.bridge_generation_id
+          AND s.observed_process_identity=NEW.observed_process_identity AND s.termination_observation_identity=NEW.termination_observation_identity
+          AND s.observation_sequence=NEW.observation_sequence AND s.observation_cutoff_utc=NEW.observed_at_utc
+          AND s.classification_decision_identity=NEW.classification_decision_identity AND s.evaluator_version=NEW.evaluator_version
+          AND s.termination_schema_version=NEW.termination_schema_version AND s.evidence_set_integrity_sha256=NEW.evidence_set_integrity_sha256
+          AND s.transaction_id=NEW.transaction_id AND tc.committed_at_utc=NEW.recorded_at_utc AND tc.evidence_set_hash=NEW.evidence_set_integrity_sha256
+          AND json_array_length(tc.writer_set_json)=1 AND EXISTS (SELECT 1 FROM json_each(tc.writer_set_json) w WHERE w.type='text' AND w.value='HEALTH_DURABLE_WRITER')) AND
+    NEW.observation_sequence=coalesce((SELECT max(r.observation_sequence)+1 FROM termination_results r WHERE r.bridge_generation_id=NEW.bridge_generation_id),1) AND
+    (SELECT count(*) FROM termination_evidence_set_producers p WHERE p.termination_evidence_set_id=NEW.termination_evidence_set_id AND p.transaction_id=NEW.transaction_id)=6 AND
+    NOT EXISTS (
+        SELECT 1 FROM termination_evidence_set_producers p
+        JOIN termination_evidence_sets s ON s.termination_evidence_set_id=p.termination_evidence_set_id
+        WHERE p.termination_evidence_set_id=NEW.termination_evidence_set_id AND NOT (
+            EXISTS (SELECT 1 FROM producer_registrations pr WHERE pr.producer_instance_id=p.producer_instance_id AND pr.producer_role=p.producer_role AND pr.revoked_sequence IS NULL) AND
+            p.expected_start_sequence=coalesce((SELECT max(pp.expected_end_sequence)+1 FROM termination_evidence_set_producers pp JOIN termination_evidence_sets ps ON ps.termination_evidence_set_id=pp.termination_evidence_set_id WHERE pp.producer_instance_id=p.producer_instance_id AND ps.bridge_generation_id=s.bridge_generation_id AND ps.observation_sequence<s.observation_sequence),1) AND
+            (SELECT count(*) FROM termination_evidence e WHERE e.producer_instance_id=p.producer_instance_id AND e.termination_observation_identity=s.termination_observation_identity AND e.supervisor_generation_id=s.supervisor_generation_id AND e.listener_epoch_id=s.listener_epoch_id AND e.bridge_generation_id=s.bridge_generation_id AND e.observed_process_identity=s.observed_process_identity AND e.termination_schema_version=s.termination_schema_version AND e.authentication_disposition='AUTHENTICATED' AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence AND e.observed_at_utc<=s.observation_cutoff_utc)=p.expected_end_sequence-p.expected_start_sequence+1 AND
+            (SELECT min(e.producer_sequence) FROM termination_evidence e WHERE e.producer_instance_id=p.producer_instance_id AND e.termination_observation_identity=s.termination_observation_identity AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence)=p.expected_start_sequence AND
+            (SELECT max(e.producer_sequence) FROM termination_evidence e WHERE e.producer_instance_id=p.producer_instance_id AND e.termination_observation_identity=s.termination_observation_identity AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence)=p.expected_end_sequence AND
+            NOT EXISTS (SELECT 1 FROM termination_evidence a JOIN termination_evidence b ON b.producer_instance_id=a.producer_instance_id AND b.termination_observation_identity=a.termination_observation_identity AND b.producer_sequence>a.producer_sequence AND b.ingress_sequence<=a.ingress_sequence WHERE a.producer_instance_id=p.producer_instance_id AND a.termination_observation_identity=s.termination_observation_identity AND a.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence AND b.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence) AND
+            (SELECT max((CAST(strftime('%s',substr(e.observed_at_utc,1,19)||'Z') AS INTEGER)*1000000+CAST(substr(e.observed_at_utc,21,6) AS INTEGER))) FROM termination_evidence e WHERE e.producer_instance_id=p.producer_instance_id AND e.termination_observation_identity=s.termination_observation_identity AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence) >= (CAST(strftime('%s',substr(s.observation_cutoff_utc,1,19)||'Z') AS INTEGER)*1000000+CAST(substr(s.observation_cutoff_utc,21,6) AS INTEGER))-5000000)) AND
+    NOT EXISTS (
+        SELECT 1 FROM termination_evidence e
+        JOIN producer_registrations pr ON pr.producer_instance_id=e.producer_instance_id
+        WHERE e.termination_observation_identity=NEW.termination_observation_identity
+          AND e.supervisor_generation_id=NEW.supervisor_generation_id AND e.listener_epoch_id=NEW.listener_epoch_id AND e.bridge_generation_id=NEW.bridge_generation_id AND e.observed_process_identity=NEW.observed_process_identity
+          AND pr.producer_role IN ('RITHMIC_LISTENER','BRIDGE_CONTROLLER','OS_ADAPTER','RAPI_ADAPTER','SUPERVISOR_ADAPTER','OPERATOR_ADAPTER')
+          AND NOT EXISTS (SELECT 1 FROM termination_evidence_set_producers p WHERE p.termination_evidence_set_id=NEW.termination_evidence_set_id AND p.producer_instance_id=e.producer_instance_id AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence)) AND
+    NOT EXISTS (SELECT 1 FROM termination_result_evidence x WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND (CAST(strftime('%s',substr(x.observed_at_utc,1,19)||'Z') AS INTEGER)*1000000+CAST(substr(x.observed_at_utc,21,6) AS INTEGER)) < (CAST(strftime('%s',substr(NEW.observed_at_utc,1,19)||'Z') AS INTEGER)*1000000+CAST(substr(NEW.observed_at_utc,21,6) AS INTEGER))-5000000) AND
+    (SELECT count(*) FROM termination_result_evidence x WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND x.termination_result_id=NEW.termination_result_id AND x.transaction_id=NEW.transaction_id)=5
 )
-BEGIN SELECT RAISE(ABORT,'TERMINATION_EVIDENCE_SET_INVALID'); END;
+BEGIN SELECT RAISE(ABORT,'TERMINATION_EVIDENCE_STRUCTURE_INVALID'); END;
+
+CREATE TRIGGER trg_termination_results_semantics
+BEFORE INSERT ON termination_results
+WHEN NOT (
+    EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND x.contributor_role='INITIATOR_EVIDENCE' AND e.asserted_value=NEW.initiator AND x.classification_basis=CASE WHEN NEW.initiator='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.initiator='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'POSITIVE_PROOF' END) AND
+    EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND x.contributor_role='REQUESTED_ACTION_EVIDENCE' AND e.asserted_value=NEW.requested_action AND x.classification_basis=CASE WHEN NEW.requested_action='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.requested_action='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'POSITIVE_PROOF' END) AND
+    EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND x.contributor_role='EXECUTION_METHOD_EVIDENCE' AND e.asserted_value=NEW.execution_method AND x.classification_basis=CASE WHEN NEW.execution_method='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.execution_method='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'POSITIVE_PROOF' END) AND
+    EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND x.contributor_role='OBSERVED_CAUSE_EVIDENCE' AND e.asserted_value=NEW.observed_cause AND x.classification_basis=CASE WHEN NEW.observed_cause='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.observed_cause='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'POSITIVE_PROOF' END) AND
+    EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND x.contributor_role='RESULT_EVIDENCE' AND e.asserted_value=NEW.result AND x.classification_basis=CASE WHEN NEW.result='NONE' THEN 'COMPLETE_ABSENCE_PROOF' WHEN NEW.result='UNKNOWN' THEN 'UNCERTAINTY' ELSE 'POSITIVE_PROOF' END) AND
+    ((NEW.requested_action IN ('NONE','UNKNOWN') AND NEW.request_identity IS NULL) OR (NEW.requested_action NOT IN ('NONE','UNKNOWN') AND NEW.request_identity IS NOT NULL AND EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.request_identity=NEW.request_identity))) AND
+    ((NEW.initiator='AUTHENTICATED_OPERATOR' AND NEW.operator_command_identity IS NOT NULL AND EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.operator_command_identity=NEW.operator_command_identity AND e.evidence_type='OPERATOR_COMMAND' AND p.producer_role='OPERATOR_ADAPTER')) OR (NEW.initiator<>'AUTHENTICATED_OPERATOR' AND NEW.operator_command_identity IS NULL)) AND
+    (NEW.provider_evidence_identity IS NULL OR EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.termination_evidence_id=NEW.provider_evidence_identity AND e.evidence_type='RAPI_CALLBACK' AND p.producer_role='RAPI_ADAPTER')) AND
+    (NEW.os_evidence_identity IS NULL OR EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.termination_evidence_id=NEW.os_evidence_identity AND e.evidence_type IN ('OS_HANDLE','PROCESS_EXIT','PROCESS_EXCEPTION') AND p.producer_role='OS_ADAPTER')) AND
+    (NEW.bridge_evidence_identity IS NULL OR EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.termination_evidence_id=NEW.bridge_evidence_identity AND p.producer_role='BRIDGE_CONTROLLER')) AND
+    (NEW.listener_evidence_identity IS NULL OR EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.termination_evidence_id=NEW.listener_evidence_identity AND p.producer_role='RITHMIC_LISTENER')) AND
+    ((EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.assertion_kind='POSITIVE' AND p.producer_role='RAPI_ADAPTER'))=(NEW.provider_evidence_identity IS NOT NULL)) AND
+    ((EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.assertion_kind='POSITIVE' AND p.producer_role='OS_ADAPTER'))=(NEW.os_evidence_identity IS NOT NULL)) AND
+    ((EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.assertion_kind='POSITIVE' AND p.producer_role='BRIDGE_CONTROLLER'))=(NEW.bridge_evidence_identity IS NOT NULL)) AND
+    ((EXISTS (SELECT 1 FROM termination_result_evidence x JOIN termination_evidence e ON e.termination_evidence_id=x.termination_evidence_id JOIN producer_registrations p ON p.producer_instance_id=e.producer_instance_id WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id AND e.assertion_kind='POSITIVE' AND p.producer_role='RITHMIC_LISTENER'))=(NEW.listener_evidence_identity IS NOT NULL)) AND
+    (NEW.observed_cause<>'PLANNED_SHUTDOWN' OR (NEW.request_identity IS NOT NULL AND NEW.requested_action NOT IN ('NONE','UNKNOWN') AND NEW.execution_method NOT IN ('NONE','UNKNOWN') AND NEW.result IN ('COMPLETED_EXPECTED','PROCESS_EXITED','ENGINE_INERT')))
+)
+BEGIN SELECT RAISE(ABORT,'TERMINATION_EVIDENCE_SEMANTICS_INVALID'); END;
+
+CREATE TRIGGER trg_termination_results_none_completeness
+BEFORE INSERT ON termination_results
+WHEN EXISTS (
+    SELECT 1 FROM termination_result_evidence x
+    WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id
+      AND (CASE x.contributor_role WHEN 'INITIATOR_EVIDENCE' THEN NEW.initiator WHEN 'REQUESTED_ACTION_EVIDENCE' THEN NEW.requested_action WHEN 'EXECUTION_METHOD_EVIDENCE' THEN NEW.execution_method WHEN 'OBSERVED_CAUSE_EVIDENCE' THEN NEW.observed_cause ELSE NEW.result END)='NONE'
+      AND (SELECT count(DISTINCT p.producer_role)
+           FROM termination_evidence e
+           JOIN termination_evidence_set_producers p ON p.producer_instance_id=e.producer_instance_id AND p.termination_evidence_set_id=NEW.termination_evidence_set_id
+           WHERE e.termination_observation_identity=NEW.termination_observation_identity
+             AND e.evidence_role=x.contributor_role
+             AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence
+             AND e.asserted_value='NONE' AND e.assertion_kind='ABSENCE'
+             AND e.evidence_type='STARTUP_TRANSITION'
+             AND e.absence_scope=CASE x.contributor_role WHEN 'INITIATOR_EVIDENCE' THEN 'NO_INITIATOR_THROUGH_CUTOFF' WHEN 'REQUESTED_ACTION_EVIDENCE' THEN 'NO_REQUEST_THROUGH_CUTOFF' WHEN 'EXECUTION_METHOD_EVIDENCE' THEN 'NO_EXECUTION_THROUGH_CUTOFF' WHEN 'OBSERVED_CAUSE_EVIDENCE' THEN 'NO_CAUSE_THROUGH_CUTOFF' ELSE 'NO_RESULT_THROUGH_CUTOFF' END)<>6
+)
+BEGIN SELECT RAISE(ABORT,'TERMINATION_NONE_EVIDENCE_INCOMPLETE'); END;
+
+CREATE TRIGGER trg_termination_results_known_conflict
+BEFORE INSERT ON termination_results
+WHEN EXISTS (
+    SELECT 1 FROM termination_result_evidence x
+    WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id
+      AND (CASE x.contributor_role WHEN 'INITIATOR_EVIDENCE' THEN NEW.initiator WHEN 'REQUESTED_ACTION_EVIDENCE' THEN NEW.requested_action WHEN 'EXECUTION_METHOD_EVIDENCE' THEN NEW.execution_method WHEN 'OBSERVED_CAUSE_EVIDENCE' THEN NEW.observed_cause ELSE NEW.result END)<>'UNKNOWN'
+      AND EXISTS (
+          SELECT 1 FROM termination_evidence e JOIN termination_evidence_set_producers p ON p.producer_instance_id=e.producer_instance_id AND p.termination_evidence_set_id=NEW.termination_evidence_set_id
+          WHERE e.termination_observation_identity=NEW.termination_observation_identity AND e.evidence_role=x.contributor_role
+            AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence AND e.asserted_value<>'UNKNOWN'
+            AND e.asserted_value<>(CASE x.contributor_role WHEN 'INITIATOR_EVIDENCE' THEN NEW.initiator WHEN 'REQUESTED_ACTION_EVIDENCE' THEN NEW.requested_action WHEN 'EXECUTION_METHOD_EVIDENCE' THEN NEW.execution_method WHEN 'OBSERVED_CAUSE_EVIDENCE' THEN NEW.observed_cause ELSE NEW.result END))
+)
+BEGIN SELECT RAISE(ABORT,'TERMINATION_EVIDENCE_CONFLICT_UNRESOLVED'); END;
+
+CREATE TRIGGER trg_termination_results_unknown_conflict
+BEFORE INSERT ON termination_results
+WHEN EXISTS (
+    SELECT 1 FROM termination_result_evidence x JOIN termination_evidence c ON c.termination_evidence_id=x.termination_evidence_id
+    WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id
+      AND (CASE x.contributor_role WHEN 'INITIATOR_EVIDENCE' THEN NEW.initiator WHEN 'REQUESTED_ACTION_EVIDENCE' THEN NEW.requested_action WHEN 'EXECUTION_METHOD_EVIDENCE' THEN NEW.execution_method WHEN 'OBSERVED_CAUSE_EVIDENCE' THEN NEW.observed_cause ELSE NEW.result END)='UNKNOWN'
+      AND ((c.uncertainty_reason='CONFLICT' AND (SELECT count(DISTINCT e.asserted_value) FROM termination_evidence e JOIN termination_evidence_set_producers p ON p.producer_instance_id=e.producer_instance_id AND p.termination_evidence_set_id=NEW.termination_evidence_set_id WHERE e.termination_observation_identity=NEW.termination_observation_identity AND e.evidence_role=x.contributor_role AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence AND e.asserted_value<>'UNKNOWN')<=1)
+        OR (c.uncertainty_reason='INDETERMINATE' AND (SELECT count(DISTINCT e.asserted_value) FROM termination_evidence e JOIN termination_evidence_set_producers p ON p.producer_instance_id=e.producer_instance_id AND p.termination_evidence_set_id=NEW.termination_evidence_set_id WHERE e.termination_observation_identity=NEW.termination_observation_identity AND e.evidence_role=x.contributor_role AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence AND e.asserted_value<>'UNKNOWN')>1))
+)
+BEGIN SELECT RAISE(ABORT,'TERMINATION_UNKNOWN_REASON_INVALID'); END;
+
+CREATE TRIGGER trg_termination_results_integrity
+BEFORE INSERT ON termination_results
+WHEN NOT EXISTS (
+    SELECT 1 FROM termination_evidence_sets s WHERE s.termination_evidence_set_id=NEW.termination_evidence_set_id AND
+    s.evidence_set_integrity_sha256=randle_sha256_hex_utf8(
+        'RANDLE-TERMINATION-EVIDENCE-SET-2'||char(10)||
+        s.termination_evidence_set_id||char(9)||s.termination_result_id||char(9)||s.supervisor_generation_id||char(9)||s.listener_epoch_id||char(9)||s.bridge_generation_id||char(9)||s.observed_process_identity||char(9)||s.termination_observation_identity||char(9)||s.observation_sequence||char(9)||s.observation_cutoff_utc||char(9)||s.classification_decision_identity||char(9)||s.evaluator_version||char(9)||s.termination_schema_version||char(9)||s.transaction_id||char(10)||
+        (SELECT group_concat(line,char(10)) FROM (SELECT 'P'||char(9)||p.producer_role||char(9)||p.producer_instance_id||char(9)||p.expected_start_sequence||char(9)||p.expected_end_sequence||char(9)||p.last_accepted_sequence AS line FROM termination_evidence_set_producers p WHERE p.termination_evidence_set_id=s.termination_evidence_set_id ORDER BY p.producer_role))||char(10)||
+        (SELECT group_concat(line,char(10)) FROM (SELECT 'E'||char(9)||p.producer_role||char(9)||e.producer_sequence||char(9)||e.termination_evidence_id||char(9)||e.evidence_sha256 AS line FROM termination_evidence_set_producers p JOIN termination_evidence e ON e.producer_instance_id=p.producer_instance_id AND e.producer_sequence BETWEEN p.expected_start_sequence AND p.expected_end_sequence WHERE p.termination_evidence_set_id=s.termination_evidence_set_id AND e.termination_observation_identity=s.termination_observation_identity ORDER BY p.producer_role,e.producer_sequence))||char(10)||
+        (SELECT group_concat(line,char(10)) FROM (SELECT 'C'||char(9)||x.contributor_role||char(9)||x.termination_evidence_id AS line FROM termination_result_evidence x WHERE x.termination_evidence_set_id=s.termination_evidence_set_id ORDER BY x.contributor_role))||char(10)) AND
+    NEW.record_integrity_sha256=randle_sha256_hex_utf8(
+        'RANDLE-TERMINATION-RESULT-2'||char(10)||
+        NEW.termination_result_id||char(9)||NEW.termination_evidence_set_id||char(9)||NEW.supervisor_generation_id||char(9)||NEW.listener_epoch_id||char(9)||NEW.bridge_generation_id||char(9)||NEW.observed_process_identity||char(9)||NEW.termination_observation_identity||char(9)||NEW.observation_sequence||char(9)||coalesce(NEW.request_identity,'-')||char(9)||coalesce(NEW.operator_command_identity,'-')||char(9)||coalesce(NEW.provider_evidence_identity,'-')||char(9)||coalesce(NEW.os_evidence_identity,'-')||char(9)||coalesce(NEW.bridge_evidence_identity,'-')||char(9)||coalesce(NEW.listener_evidence_identity,'-')||char(9)||NEW.classification_decision_identity||char(9)||NEW.initiator||char(9)||NEW.requested_action||char(9)||NEW.execution_method||char(9)||NEW.observed_cause||char(9)||NEW.result||char(9)||NEW.evaluator||char(9)||NEW.durable_writer||char(9)||NEW.evaluator_version||char(9)||NEW.evidence_set_integrity_sha256||char(9)||NEW.observed_at_utc||char(9)||NEW.recorded_at_utc||char(9)||NEW.termination_schema_version||char(9)||NEW.transaction_id||char(10)||
+        (SELECT group_concat(line,char(10)) FROM (SELECT x.contributor_role||char(9)||x.termination_evidence_id AS line FROM termination_result_evidence x WHERE x.termination_evidence_set_id=NEW.termination_evidence_set_id ORDER BY x.contributor_role))||char(10))
+)
+BEGIN SELECT RAISE(ABORT,'TERMINATION_RECORD_INTEGRITY_INVALID'); END;
 
 CREATE TRIGGER trg_health_aggregate_exact_state
 BEFORE INSERT ON health_aggregate
@@ -957,7 +1209,9 @@ INSERT INTO writer_registry(registry_version,table_name,operation,writer_id,writ
 (2,'listener_restart_incident_transitions','INSERT','LISTENER_INCIDENT_WRITER','PHASE3C1-R1-LISTENER-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'listener_restart_incidents','INSERT','LISTENER_INCIDENT_WRITER','PHASE3C1-R1-LISTENER-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'listener_restart_incidents','UPDATE','LISTENER_INCIDENT_WRITER','PHASE3C1-R1-LISTENER-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'listener_restart_outcomes','INSERT','LISTENER_INCIDENT_WRITER','PHASE3C1-R1-LISTENER-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'listener_state_transitions','INSERT','LISTENER_STATE_WRITER','PHASE3C1-R1-LISTENER-STATE-WRITER-V1',NULL,0,NULL,1),
 (2,'market_data_expectations','INSERT','LISTENER_INCIDENT_WRITER','PHASE3C1-R1-LISTENER-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'market_data_expectations','UPDATE','LISTENER_INCIDENT_WRITER','PHASE3C1-R1-LISTENER-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'producer_registrations','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R1-HEALTH-DURABLE-WRITER-V1',NULL,0,NULL,1),(2,'producer_registrations','UPDATE','HEALTH_DURABLE_WRITER','PHASE3C1-R1-HEALTH-DURABLE-WRITER-V1',NULL,0,NULL,1),(2,'projection_cursors','INSERT','PROJECTION_WRITER','PHASE3C1-R1-PROJECTION-WRITER-V1',NULL,0,NULL,1),(2,'projection_cursors','UPDATE','PROJECTION_WRITER','PHASE3C1-R1-PROJECTION-WRITER-V1',NULL,0,NULL,1),
 (2,'recovery_required_domains','INSERT','LISTENER_ACKNOWLEDGEMENT_WRITER','PHASE3C1-R1-LISTENER-ACKNOWLEDGEMENT-WRITER-V1',NULL,0,NULL,1),(2,'recovery_transactions','INSERT','RECOVERY_TRANSACTION_WRITER','PHASE3C1-R1-RECOVERY-TRANSACTION-WRITER-V1',NULL,0,NULL,1),(2,'recovery_transactions','UPDATE','RECOVERY_TRANSACTION_WRITER','PHASE3C1-R1-RECOVERY-TRANSACTION-WRITER-V1',NULL,0,NULL,1),(2,'shared_feed_policies','INSERT','LISTENER_INCIDENT_WRITER','PHASE3C1-R1-LISTENER-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'shared_feed_policies','UPDATE','LISTENER_INCIDENT_WRITER','PHASE3C1-R1-LISTENER-INCIDENT-WRITER-V1',NULL,0,NULL,1),
-(2,'store_incidents','INSERT','STORE_INCIDENT_WRITER','PHASE3C1-R1-STORE-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'store_incidents','UPDATE','STORE_INCIDENT_WRITER','PHASE3C1-R1-STORE-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'store_metadata','INSERT','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1),(2,'store_metadata','UPDATE','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1),(2,'subscription_verifications','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R1-HEALTH-DURABLE-WRITER-V1',NULL,0,NULL,1),(2,'supervisor_generations','INSERT','SUPERVISOR_GENERATION_WRITER','PHASE3C1-R1-SUPERVISOR-GENERATION-WRITER-V1',NULL,0,NULL,1),(2,'supervisor_generations','UPDATE','SUPERVISOR_GENERATION_WRITER','PHASE3C1-R1-SUPERVISOR-GENERATION-WRITER-V1',NULL,0,NULL,1),(2,'supervisor_leases','INSERT','SUPERVISOR_GENERATION_WRITER','PHASE3C1-R1-SUPERVISOR-GENERATION-WRITER-V1',NULL,0,NULL,1),(2,'supervisor_leases','UPDATE','SUPERVISOR_GENERATION_WRITER','PHASE3C1-R1-SUPERVISOR-GENERATION-WRITER-V1',NULL,0,NULL,1),(2,'termination_evidence','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R1-HEALTH-DURABLE-WRITER-V1',NULL,0,NULL,1),(2,'termination_result_evidence','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R1-HEALTH-DURABLE-WRITER-V1',NULL,0,NULL,1),(2,'termination_results','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R1-HEALTH-DURABLE-WRITER-V1',NULL,0,NULL,1),(2,'transaction_commits','INSERT','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1),(2,'writer_registry','INSERT','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1),(2,'writer_registry','UPDATE','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1);
+(2,'store_incidents','INSERT','STORE_INCIDENT_WRITER','PHASE3C1-R1-STORE-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'store_incidents','UPDATE','STORE_INCIDENT_WRITER','PHASE3C1-R1-STORE-INCIDENT-WRITER-V1',NULL,0,NULL,1),(2,'store_metadata','INSERT','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1),(2,'store_metadata','UPDATE','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1),(2,'subscription_verifications','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R1-HEALTH-DURABLE-WRITER-V1',NULL,0,NULL,1),(2,'supervisor_generations','INSERT','SUPERVISOR_GENERATION_WRITER','PHASE3C1-R1-SUPERVISOR-GENERATION-WRITER-V1',NULL,0,NULL,1),(2,'supervisor_generations','UPDATE','SUPERVISOR_GENERATION_WRITER','PHASE3C1-R1-SUPERVISOR-GENERATION-WRITER-V1',NULL,0,NULL,1),(2,'supervisor_leases','INSERT','SUPERVISOR_GENERATION_WRITER','PHASE3C1-R1-SUPERVISOR-GENERATION-WRITER-V1',NULL,0,NULL,1),(2,'supervisor_leases','UPDATE','SUPERVISOR_GENERATION_WRITER','PHASE3C1-R1-SUPERVISOR-GENERATION-WRITER-V1',NULL,0,NULL,1),(2,'termination_evidence','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R2-HEALTH-DURABLE-WRITER-TERMINATION-V1',NULL,0,NULL,1),(2,'termination_evidence_set_producers','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R2-HEALTH-DURABLE-WRITER-TERMINATION-V1',NULL,0,NULL,1),(2,'termination_evidence_sets','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R2-HEALTH-DURABLE-WRITER-TERMINATION-V1',NULL,0,NULL,1),(2,'termination_result_evidence','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R2-HEALTH-DURABLE-WRITER-TERMINATION-V1',NULL,0,NULL,1),(2,'termination_results','INSERT','HEALTH_DURABLE_WRITER','PHASE3C1-R2-HEALTH-DURABLE-WRITER-TERMINATION-V1',NULL,0,NULL,1),(2,'transaction_commits','INSERT','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1),(2,'writer_registry','INSERT','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1),(2,'writer_registry','UPDATE','RUNTIME_AUTHORITY_STORE_TRANSACTION_COORDINATOR','PHASE3C1-R1-RUNTIME-AUTHORITY-STORE-TRANSACTION-COORDINATOR-V1',NULL,0,NULL,1);
 -- WRITER-REGISTRY-HASH-END
+
+SELECT empty_sha256 FROM randle_sha256_preflight_v;
 
 COMMIT;
