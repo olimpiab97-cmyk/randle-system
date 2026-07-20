@@ -1,0 +1,53 @@
+{
+  "source": "tradingview_level_helper",
+  "version": "v14_canonical_liquidity_sender",
+  "context_mode": "locked_levels_recurring_status",
+  "timestamp": "2026-07-20T13:16:00Z",
+  "session_date": "2026-07-20",
+  "session_locked": true,
+  "locked": true,
+  "is_premarket_end": false,
+  "is_recurring_update": true,
+  "price_is_true_level": true,
+  "display_offsets_applied_to_chart_only": true,
+  "symbol": "YM1!",
+  "time_zone": "America/Los_Angeles",
+  "timeframe": "1",
+  "atr_1m_14": 42.25,
+  "daily_atr14": 590.0,
+  "stack_threshold": 59.0,
+  "stack_threshold_pct": 10.0,
+  "session_lock_price": 52500.0,
+  "pm_atr_pct": 30.0,
+  "daily_range_pct": 70.0,
+  "levels": {
+    "PMH": {"price": 52720.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+    "PML": {"price": 52320.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+    "LH": {"price": 52680.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+    "LL": {"price": 52380.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+    "ONH": {"price": 52789.0, "status": "ACTIVE", "stack_group": "HIGH 1", "stack_groups": ["HIGH 1"], "stack_display": "HIGH 1"},
+    "ONL": {"price": 52262.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+    "YH": {"price": 52835.0, "status": "ACTIVE", "stack_group": "HIGH 1", "stack_groups": ["HIGH 1"], "stack_display": "HIGH 1"},
+    "YL": {"price": 52174.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"}
+  },
+  "stacks": [
+    {"id": "HIGH 1", "side": "HIGH", "members": ["ONH", "YH"], "innermost_price": 52789.0, "outermost_price": 52835.0}
+  ],
+  "liquidity_map": {
+    "levels": [
+      {"name": "PMH", "price": 52720.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+      {"name": "PML", "price": 52320.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+      {"name": "LH", "price": 52680.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+      {"name": "LL", "price": 52380.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+      {"name": "ONH", "price": 52789.0, "status": "ACTIVE", "stack_group": "HIGH 1", "stack_groups": ["HIGH 1"], "stack_display": "HIGH 1"},
+      {"name": "ONL", "price": 52262.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"},
+      {"name": "YH", "price": 52835.0, "status": "ACTIVE", "stack_group": "HIGH 1", "stack_groups": ["HIGH 1"], "stack_display": "HIGH 1"},
+      {"name": "YL", "price": 52174.0, "status": "ACTIVE", "stack_group": "NONE", "stack_groups": [], "stack_display": "NONE"}
+    ],
+    "stacks": [
+      {"id": "HIGH 1", "side": "HIGH", "members": ["ONH", "YH"], "innermost_price": 52789.0, "outermost_price": 52835.0}
+    ]
+  },
+  "midpoints": {},
+  "exhaustion_boundaries": {}
+}
