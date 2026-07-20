@@ -1,0 +1,325 @@
+//---------------------------------------------------------
+// ENTRY AGENT TRADINGVIEW CONTEXT WEBHOOK
+// OVERLAPPING STACK PAYLOAD - FINALIZED TABLE STATE
+//---------------------------------------------------------
+// Replace the production source from its existing
+// ENTRY AGENT TRADINGVIEW CONTEXT WEBHOOK heading to EOF.
+
+f_json_num(float x) =>
+    na(x) ? "null" : str.tostring(x)
+
+f_json_str(string x) =>
+    "\"" + x + "\""
+
+f_json_bool(bool x) =>
+    x ? "true" : "false"
+
+payloadLevelNameAtIndex(int levelIdx) =>
+    switch levelIdx
+        0 => "YH"
+        1 => "YL"
+        2 => "ONH"
+        3 => "ONL"
+        4 => "LH"
+        5 => "LL"
+        6 => "PMH"
+        7 => "PML"
+        => "UNKNOWN"
+
+payloadLevelPriceAtIndex(int levelIdx) =>
+    switch levelIdx
+        0 => YH_eff
+        1 => YL_eff
+        2 => ONH_eff
+        3 => ONL_eff
+        4 => LH_eff
+        5 => LL_eff
+        6 => PMH_eff
+        7 => PML_eff
+        => na
+
+payloadLevelStatusAtIndex(int levelIdx) =>
+    switch levelIdx
+        0 => yhStatus_eff
+        1 => ylStatus_eff
+        2 => onhStatus_eff
+        3 => onlStatus_eff
+        4 => lhStatus_eff
+        5 => llStatus_eff
+        6 => pmhStatus_eff
+        7 => pmlStatus_eff
+        => "INACTIVE"
+
+payloadTableStackLabelAtIndex(int levelIdx) =>
+    switch levelIdx
+        0 => yhStackGroup
+        1 => ylStackGroup
+        2 => onhStackGroup
+        3 => onlStackGroup
+        4 => lhStackGroup
+        5 => llStackGroup
+        6 => pmhStackGroup
+        7 => pmlStackGroup
+        => "NONE"
+
+payloadLevelPriorityAtIndex(int levelIdx) =>
+    switch levelIdx
+        0 => 1
+        1 => 1
+        2 => 2
+        3 => 2
+        4 => 3
+        5 => 3
+        6 => 4
+        7 => 4
+        => 0
+
+payloadDisplayHasStackLabel(string displayLabel, string stackLabel) =>
+    bool found = false
+
+    if displayLabel != "NONE"
+        string[] labels = str.split(displayLabel, " / ")
+        int labelCount = array.size(labels)
+
+        if labelCount > 0
+            for i = 0 to labelCount - 1
+                if array.get(labels, i) == stackLabel
+                    found := true
+
+    found
+
+payloadSingleStackGroupJson(int levelIdx) =>
+    string displayLabel = payloadTableStackLabelAtIndex(levelIdx)
+
+    if displayLabel == "NONE"
+        f_json_str("NONE")
+    else
+        string[] labels = str.split(displayLabel, " / ")
+        array.size(labels) == 1 ? f_json_str(array.get(labels, 0)) : "null"
+
+payloadStackGroupsJsonForLevel(int levelIdx) =>
+    string displayLabel = payloadTableStackLabelAtIndex(levelIdx)
+    string result = "["
+    bool first = true
+
+    if displayLabel != "NONE"
+        string[] labels = str.split(displayLabel, " / ")
+        int labelCount = array.size(labels)
+
+        if labelCount > 0
+            for i = 0 to labelCount - 1
+                if not first
+                    result += ","
+
+                result += f_json_str(array.get(labels, i))
+                first := false
+
+    result += "]"
+    result
+
+payloadExplicitStackObjectJson(string stackLabel, string side) =>
+    int[] memberIndexes = array.new_int()
+    float[] memberPrices = array.new_float()
+
+    for levelIdx = 0 to 7
+        string displayLabel = payloadTableStackLabelAtIndex(levelIdx)
+        float levelPrice = payloadLevelPriceAtIndex(levelIdx)
+        string levelStatus = payloadLevelStatusAtIndex(levelIdx)
+
+        if levelStatus != "INACTIVE" and not na(levelPrice) and payloadDisplayHasStackLabel(displayLabel, stackLabel)
+            array.push(memberIndexes, levelIdx)
+            array.push(memberPrices, levelPrice)
+
+    int memberCount = array.size(memberIndexes)
+
+    if memberCount > 1
+        for i = 0 to memberCount - 2
+            for j = i + 1 to memberCount - 1
+                float priceI = array.get(memberPrices, i)
+                float priceJ = array.get(memberPrices, j)
+                int indexI = array.get(memberIndexes, i)
+                int indexJ = array.get(memberIndexes, j)
+                bool samePrice = priceI == priceJ
+                bool priceOutOfOrder = side == "HIGH" ? priceJ < priceI : priceJ > priceI
+                bool tieOutOfOrder = samePrice and payloadLevelPriorityAtIndex(indexJ) > payloadLevelPriorityAtIndex(indexI)
+
+                if priceOutOfOrder or tieOutOfOrder
+                    array.set(memberPrices, i, priceJ)
+                    array.set(memberPrices, j, priceI)
+                    array.set(memberIndexes, i, indexJ)
+                    array.set(memberIndexes, j, indexI)
+
+    if memberCount < 2
+        ""
+    else
+        string membersJson = "["
+
+        for i = 0 to memberCount - 1
+            if i > 0
+                membersJson += ","
+
+            membersJson += f_json_str(payloadLevelNameAtIndex(array.get(memberIndexes, i)))
+
+        membersJson += "]"
+
+        float innermostPrice = array.get(memberPrices, 0)
+        float outermostPrice = array.get(memberPrices, memberCount - 1)
+
+        "{"
+         + "\"id\":" + f_json_str(stackLabel) + ","
+         + "\"side\":" + f_json_str(side) + ","
+         + "\"members\":" + membersJson + ","
+         + "\"innermost_price\":" + f_json_num(innermostPrice) + ","
+         + "\"outermost_price\":" + f_json_num(outermostPrice)
+         + "}"
+
+payloadExplicitStacksArrayJson() =>
+    string result = "["
+    bool firstStack = true
+
+    for stackNumber = 1 to 4
+        string stackLabel = "HIGH " + str.tostring(stackNumber)
+        string stackObject = payloadExplicitStackObjectJson(stackLabel, "HIGH")
+
+        if stackObject != ""
+            if not firstStack
+                result += ","
+
+            result += stackObject
+            firstStack := false
+
+    for stackNumber = 1 to 4
+        string stackLabel = "LOW " + str.tostring(stackNumber)
+        string stackObject = payloadExplicitStackObjectJson(stackLabel, "LOW")
+
+        if stackObject != ""
+            if not firstStack
+                result += ","
+
+            result += stackObject
+            firstStack := false
+
+    result += "]"
+    result
+
+payloadLevelJson(int levelIdx) =>
+    string displayLabel = payloadTableStackLabelAtIndex(levelIdx)
+
+    "{"
+     + "\"price\":" + f_json_num(payloadLevelPriceAtIndex(levelIdx)) + ","
+     + "\"status\":" + f_json_str(payloadLevelStatusAtIndex(levelIdx)) + ","
+     + "\"stack_group\":" + payloadSingleStackGroupJson(levelIdx) + ","
+     + "\"stack_groups\":" + payloadStackGroupsJsonForLevel(levelIdx) + ","
+     + "\"stack_display\":" + f_json_str(displayLabel)
+     + "}"
+
+bool isPremarketEnd = sessionEnd(inPremarket)
+bool isRecurringUpdate = timeframe.isminutes and timeframe.multiplier == 1 and barstate.isconfirmed and not isPremarketEnd
+
+buildMidpointsJson(string[] names, float[] prices) =>
+    string out = ""
+
+    int nameCount = array.size(names)
+    int priceCount = array.size(prices)
+    int n = math.min(nameCount, priceCount)
+
+    if sessionLocked and n > 1
+        for i = 0 to n - 2
+            string fromName = array.get(names, i)
+            string toName = array.get(names, i + 1)
+            float fromPrice = array.get(prices, i)
+            float toPrice = array.get(prices, i + 1)
+            bool validGap = notStacked(fromPrice, toPrice)
+            float mid50 = validGap ? midpoint(fromPrice, toPrice) : na
+            string key = fromName + "_" + toName
+
+            out += (str.length(out) > 0 ? "," : "")
+            out += "\"" + key + "\":" + f_json_num(mid50)
+
+    out
+
+string highMidpointsJson = buildMidpointsJson(frozenHighNames, frozenHighPrices)
+string lowMidpointsJson = buildMidpointsJson(frozenLowNames, frozenLowPrices)
+
+string midpointsJson =
+     "\"midpoints\":{"
+     + highMidpointsJson
+     + (str.length(highMidpointsJson) > 0 and str.length(lowMidpointsJson) > 0 ? "," : "")
+     + lowMidpointsJson
+     + "}"
+
+buildExhaustionJson(string[] names, float[] prices, string side) =>
+    string out = ""
+
+    int nameCount = array.size(names)
+    int priceCount = array.size(prices)
+    int n = math.min(nameCount, priceCount)
+
+    if sessionLocked and n > 1
+        for i = 0 to n - 2
+            string fromName = array.get(names, i)
+            string toName = array.get(names, i + 1)
+            float fromPrice = array.get(prices, i)
+            float toPrice = array.get(prices, i + 1)
+            bool validGap = notStacked(fromPrice, toPrice)
+            float mid50 = validGap ? midpoint(fromPrice, toPrice) : na
+            float rem25 = validGap ? exhaust25(fromPrice, toPrice) : na
+            string key = fromName + "_" + toName
+
+            out += (str.length(out) > 0 ? "," : "")
+            out += "\"" + key + "\":{\"side\":\"" + side + "\",\"mid_50\":" + f_json_num(mid50) + ",\"remaining_25\":" + f_json_num(rem25) + "}"
+
+    out
+
+string highExhaustionJson = buildExhaustionJson(frozenHighNames, frozenHighPrices, "high")
+string lowExhaustionJson = buildExhaustionJson(frozenLowNames, frozenLowPrices, "low")
+
+string exhaustionJson =
+     "\"exhaustion_boundaries\":{"
+     + highExhaustionJson
+     + (str.length(highExhaustionJson) > 0 and str.length(lowExhaustionJson) > 0 ? "," : "")
+     + lowExhaustionJson
+     + "}"
+
+if timeframe.isminutes and timeframe.multiplier == 1 and barstate.isconfirmed
+    string explicitStacksJson = payloadExplicitStacksArrayJson()
+
+    string levelsJson =
+         "\"levels\":{"
+         + "\"PMH\":" + payloadLevelJson(6) + ","
+         + "\"PML\":" + payloadLevelJson(7) + ","
+         + "\"LH\":" + payloadLevelJson(4) + ","
+         + "\"LL\":" + payloadLevelJson(5) + ","
+         + "\"ONH\":" + payloadLevelJson(2) + ","
+         + "\"ONL\":" + payloadLevelJson(3) + ","
+         + "\"YH\":" + payloadLevelJson(0) + ","
+         + "\"YL\":" + payloadLevelJson(1)
+         + "}"
+
+    string entryAgentPayload =
+         "{"
+         + "\"source\":\"tradingview_level_helper\","
+         + "\"version\":\"v14_overlapping_stack_smoke\","
+         + "\"context_mode\":\"locked_levels_recurring_status\","
+         + "\"session_locked\":" + f_json_bool(sessionLocked) + ","
+         + "\"is_premarket_end\":" + f_json_bool(isPremarketEnd) + ","
+         + "\"is_recurring_update\":" + f_json_bool(isRecurringUpdate) + ","
+         + "\"price_is_true_level\":true,"
+         + "\"display_offsets_applied_to_chart_only\":" + f_json_bool(stackOffset) + ","
+         + "\"symbol\":" + f_json_str(syminfo.ticker) + ","
+         + "\"time_zone\":" + f_json_str(tzInput) + ","
+         + "\"timeframe\":" + f_json_str(timeframe.period) + ","
+         + "\"daily_atr14\":" + f_json_num(dailyATR14) + ","
+         + "\"stack_threshold\":" + f_json_num(stackThreshold) + ","
+         + "\"stack_threshold_pct\":" + f_json_num(stackAtrPct) + ","
+         + "\"session_lock_price\":" + f_json_num(sessionLockPrice_eff) + ","
+         + "\"pm_atr_pct\":" + f_json_num(pmATRpct) + ","
+         + "\"daily_range_pct\":" + f_json_num(dailyRangePct) + ","
+         + levelsJson + ","
+         + "\"stacks\":" + explicitStacksJson + ","
+         + "\"liquidity_map\":{\"stacks\":" + explicitStacksJson + "},"
+         + midpointsJson + ","
+         + exhaustionJson
+         + "}"
+
+    alert(entryAgentPayload, alert.freq_once_per_bar_close)
