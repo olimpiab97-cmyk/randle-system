@@ -7,10 +7,7 @@ param(
     [int]$ListenerTimeoutSeconds = 60,
 
     [ValidateRange(5, 120)]
-    [int]$NgrokTimeoutSeconds = 75,
-
-    [ValidateRange(30, 300)]
-    [int]$AtrTimeoutSeconds = 90
+    [int]$NgrokTimeoutSeconds = 75
 )
 
 $script:repositoryRoot = [IO.Path]::GetFullPath($PSScriptRoot)
@@ -42,8 +39,24 @@ $RithmicFeedHealthPath = Join-Path $script:runtimeDataRoot "rithmic_feed_health.
 $CommandCenterPath = Join-Path $script:repositoryRoot "command_center.html"
 $PublicHealthHelperPath = Join-Path $script:repositoryRoot "startup_public_health_check.py"
 $ExecutorJournalMaintenancePath = Join-Path $script:repositoryRoot "compact_executor_tick_journals.py"
+$TradeManagerJournalMaintenancePath = Join-Path $script:repositoryRoot "compact_trade_manager_tick_journals.py"
 $script:executorTickJournalDirectory = Join-Path $env:LOCALAPPDATA "RandleRuntimeData\executor_tick_authority"
+$script:tradeManagerTickJournalDirectory = Join-Path $env:LOCALAPPDATA "RandleRuntimeData\trade_manager_tick_authority"
+$TradeManagerPersistencePath = Join-Path $script:runtimeDataRoot "persistence_state.json"
+$RithmicRecentBarsPath = Join-Path $script:runtimeDataRoot "rithmic_recent_bars.json"
 $ExecutorJournalMaintenanceTimeoutSeconds = 300
+$TradeManagerJournalMaintenanceTimeoutSeconds = 300
+$CanonicalMinuteSeconds = 60
+$FirstCompleteCandleIntervalCount = 2
+$CanonicalAtrRequiredTrueRangeCount = 14
+$MarketReadinessSchedulingAllowanceIntervals = 1
+$FirstCompleteCandleMaximumSeconds = $FirstCompleteCandleIntervalCount * $CanonicalMinuteSeconds
+$CanonicalAtrWarmupMaximumSeconds = $CanonicalAtrRequiredTrueRangeCount * $CanonicalMinuteSeconds
+$MarketReadinessSchedulingAllowanceSeconds = $MarketReadinessSchedulingAllowanceIntervals * $CanonicalMinuteSeconds
+$MarketReadinessObservationSeconds = $FirstCompleteCandleMaximumSeconds +
+    $CanonicalAtrWarmupMaximumSeconds +
+    $MarketReadinessSchedulingAllowanceSeconds
+$MarketReadinessStallSeconds = $FirstCompleteCandleMaximumSeconds + $MarketReadinessSchedulingAllowanceSeconds
 
 $ExecutorMarker = '\bexecutor\.py\b'
 $TradeManagerMarker = '\bEngines[\\/]trade_manager\.py\b'
@@ -56,8 +69,9 @@ $ComponentTimeouts = [ordered]@{
     EntryAgent = $ServiceTimeoutSeconds
     TradingViewRelay = 10
     RithmicListenerBridge = $ListenerTimeoutSeconds
+    MarketDataReadiness = $MarketReadinessObservationSeconds
     CommandCenter = 1
-    CanonicalATR = $AtrTimeoutSeconds
+    CanonicalATR = $ServiceTimeoutSeconds
     Ngrok = $NgrokTimeoutSeconds
     ReadinessVerification = 5
 }
@@ -67,7 +81,6 @@ $ChildLogs = [ordered]@{}
 $ListenerObservation = $null
 $ListenerProcess = $null
 $NgrokProcess = $null
-$CanonicalAtrBaseline = $null
 $NgrokReadinessStartedAt = $null
 $TradingViewContextBaseline = $null
 $PublicSelfProbeDisabledReason = $null
@@ -107,7 +120,7 @@ function New-ProbeResult {
 function Set-ComponentResult {
     param(
         [string]$Name,
-        [ValidateSet("READY", "FAILED")]
+        [ValidateSet("READY", "WARMING", "FAILED")]
         [string]$Status,
         [string]$Reason,
         [object]$Evidence = $null
@@ -122,7 +135,15 @@ function Set-ComponentResult {
         Evidence = $Evidence
     }
 
-    $color = if ($Status -eq "READY") { [ConsoleColor]::Green } else { [ConsoleColor]::Red }
+    $color = if ($Status -eq "READY") {
+        [ConsoleColor]::Green
+    }
+    elseif ($Status -eq "WARMING") {
+        [ConsoleColor]::Yellow
+    }
+    else {
+        [ConsoleColor]::Red
+    }
     Write-StartupLine "COMPONENT=$Name STATUS=$Status REASON=$Reason" $color
 }
 
@@ -154,6 +175,68 @@ function Wait-ForContract {
     } while ([DateTime]::UtcNow -lt $deadline)
 
     return $last
+}
+
+function Resolve-MarketReadinessState {
+    param(
+        [bool]$ServiceAvailable,
+        [bool]$ObservationValid,
+        [bool]$AuthorityReady,
+        [bool]$ProgressAdvanced,
+        [double]$ElapsedSeconds,
+        [double]$SecondsSinceProgress,
+        [int]$MaximumObservationSeconds,
+        [int]$StallSeconds,
+        [ValidateSet("SERVICE_UNAVAILABLE", "COMPLETED_CANDLE_WARMING", "ATR_WARMING", "READY_WAITING_FOR_ADVANCEMENT")]
+        [string]$Phase,
+        [string]$DetailReason
+    )
+
+    if (-not $ServiceAvailable) {
+        return [PSCustomObject]@{
+            Status = "FAILED"
+            Reason = ("service_unavailable:{0}" -f $DetailReason)
+            TradingReady = $false
+            ProgressAdvancing = $false
+        }
+    }
+    if (-not $ObservationValid) {
+        return [PSCustomObject]@{
+            Status = "FAILED"
+            Reason = ("market_authority_invalid:{0}" -f $DetailReason)
+            TradingReady = $false
+            ProgressAdvancing = $false
+        }
+    }
+    if ($AuthorityReady -and $ProgressAdvanced) {
+        return [PSCustomObject]@{
+            Status = "READY"
+            Reason = "current_candles_canonical_atr_and_advancement_confirmed"
+            TradingReady = $true
+            ProgressAdvancing = $true
+        }
+    }
+    if ($SecondsSinceProgress -gt $StallSeconds) {
+        return [PSCustomObject]@{
+            Status = "FAILED"
+            Reason = ("market_readiness_progress_stalled:{0}:seconds_since_progress={1:N1}" -f $Phase, $SecondsSinceProgress)
+            TradingReady = $false
+            ProgressAdvancing = $false
+        }
+    }
+
+    $windowState = if ($ElapsedSeconds -ge $MaximumObservationSeconds) {
+        "governed_window_elapsed_while_progressing"
+    }
+    else {
+        "governed_observation_in_progress"
+    }
+    return [PSCustomObject]@{
+        Status = "WARMING"
+        Reason = ("{0}:{1}:{2}" -f $Phase, $windowState, $DetailReason)
+        TradingReady = $false
+        ProgressAdvancing = $ProgressAdvanced
+    }
 }
 
 function Invoke-LocalJson {
@@ -345,35 +428,62 @@ function Test-TradeManagerContract {
         return New-ProbeResult $false ("trade_manager_process_count:{0}" -f $processes.Count) $processes
     }
 
+    $tradeManagerProcess = $processes[0]
+    $tradeManagerPortOwners = @(Get-PortOwners 7001)
     try {
         $health = Invoke-LocalJson $TradeManagerHealthUrl
-        $pipeline = Invoke-LocalJson $TradeManagerPipelineUrl
-        $atr = Invoke-LocalJson $TradeManagerCanonicalAtrStatusUrl
-        $portOwners = @(Get-PortOwners 7001)
-        $processId = [int]$health.pid
-        $pidMatches = @($processes.ProcessId) -contains $processId
-        $portMatches = @($portOwners.OwningProcess) -contains $processId
-        $ok = $health.ok -eq $true -and
-            $pipeline.ok -eq $true -and
-            $null -ne $atr -and
-            $health.authority_mutex -eq $TradeManagerAuthorityMutexName -and
-            $health.tick_pipeline_version -eq "trade_manager_symbol_fifo_wal_v3" -and
-            (Test-MutexOwned $TradeManagerAuthorityMutexName) -and
-            $pidMatches -and
-            $portMatches
-        $reason = if ($ok) { "authority_health_required_endpoints_and_port_owner_confirmed" } else { "trade_manager_contract_mismatch" }
-        return New-ProbeResult $ok $reason ([PSCustomObject]@{
-            Pid = $processId
-            Health = $health
-            Pipeline = $pipeline
-            AtrEndpointResponded = $null -ne $atr
-            PortOwners = $portOwners
-            Process = $processes[0]
-        })
     }
     catch {
-        return New-ProbeResult $false ("trade_manager_endpoint_error:{0}" -f $_.Exception.Message)
+        return New-ProbeResult $false ("trade_manager_health_endpoint_error:{0}" -f $_.Exception.Message) ([PSCustomObject]@{
+            FailedEndpoint = $TradeManagerHealthUrl
+            PortOwners = $tradeManagerPortOwners
+            Process = $tradeManagerProcess
+        })
     }
+    try {
+        $pipeline = Invoke-LocalJson $TradeManagerPipelineUrl
+    }
+    catch {
+        return New-ProbeResult $false ("trade_manager_tick_pipeline_endpoint_error:{0}" -f $_.Exception.Message) ([PSCustomObject]@{
+            FailedEndpoint = $TradeManagerPipelineUrl
+            Health = $health
+            PortOwners = $tradeManagerPortOwners
+            Process = $tradeManagerProcess
+        })
+    }
+    try {
+        $atr = Invoke-LocalJson $TradeManagerCanonicalAtrStatusUrl
+    }
+    catch {
+        return New-ProbeResult $false ("trade_manager_canonical_atr_endpoint_error:{0}" -f $_.Exception.Message) ([PSCustomObject]@{
+            FailedEndpoint = $TradeManagerCanonicalAtrStatusUrl
+            Health = $health
+            Pipeline = $pipeline
+            PortOwners = $tradeManagerPortOwners
+            Process = $tradeManagerProcess
+        })
+    }
+
+    $processId = [int]$health.pid
+    $pidMatches = @($processes.ProcessId) -contains $processId
+    $portMatches = @($tradeManagerPortOwners.OwningProcess) -contains $processId
+    $ok = $health.ok -eq $true -and
+        $pipeline.ok -eq $true -and
+        $null -ne $atr -and
+        $health.authority_mutex -eq $TradeManagerAuthorityMutexName -and
+        $health.tick_pipeline_version -eq "trade_manager_symbol_fifo_wal_v3" -and
+        (Test-MutexOwned $TradeManagerAuthorityMutexName) -and
+        $pidMatches -and
+        $portMatches
+    $reason = if ($ok) { "authority_health_required_endpoints_and_port_owner_confirmed" } else { "trade_manager_contract_mismatch" }
+    return New-ProbeResult $ok $reason ([PSCustomObject]@{
+        Pid = $processId
+        Health = $health
+        Pipeline = $pipeline
+        AtrEndpointResponded = $null -ne $atr
+        PortOwners = $tradeManagerPortOwners
+        Process = $tradeManagerProcess
+    })
 }
 
 function Test-EntryAgentContract {
@@ -387,6 +497,7 @@ function Test-EntryAgentContract {
         $status = $response.Payload
         $portOwners = @(Get-PortOwners 7002)
         $processId = [int]$processes[0].ProcessId
+        $serviceResponsive = (@($portOwners.OwningProcess) -contains $processId)
         $baseEvidence = [ordered]@{
             Pid = $processId
             HttpStatusCode = $response.StatusCode
@@ -400,10 +511,12 @@ function Test-EntryAgentContract {
                 "{0}:{1}" -f $_.symbol, $_.reason
             })
             $baseEvidence["ReadinessClass"] = "expected_fail_closed_rehydration"
+            $baseEvidence["ServiceReady"] = $serviceResponsive
+            $baseEvidence["TradingReady"] = $false
             $baseEvidence["RehydrationFailures"] = $status.rehydration_failures
             $baseEvidence["Symbols"] = $status.symbols
             $reasonDetail = if ($rehydrationFailures.Count -gt 0) { $rehydrationFailures -join "," } else { "reason_unavailable" }
-            return New-ProbeResult $false ("entry_agent_fail_closed_rehydrating:{0}" -f $reasonDetail) ([PSCustomObject]$baseEvidence)
+            return New-ProbeResult $serviceResponsive ("entry_agent_service_responsive_fail_closed_rehydrating:{0}" -f $reasonDetail) ([PSCustomObject]$baseEvidence)
         }
         if ([int]$response.StatusCode -ne 200) {
             $baseEvidence["ReadinessClass"] = "endpoint_http_failure"
@@ -425,6 +538,7 @@ function Test-EntryAgentContract {
             (@($portOwners.OwningProcess) -contains $processId)
         $reason = if ($ok) { "entry_status_responded_for_nq_ym" } else { "entry_agent_contract_mismatch" }
         $baseEvidence["ReadinessClass"] = if ($ok) { "live" } else { "endpoint_contract_mismatch" }
+        $baseEvidence["ServiceReady"] = $ok
         $baseEvidence["Symbols"] = $symbolRoots
         return New-ProbeResult $ok $reason ([PSCustomObject]$baseEvidence)
     }
@@ -577,6 +691,85 @@ function Get-RithmicFeedHealth {
     }
 }
 
+function Get-CanonicalCompletedCandleEvidence {
+    param(
+        [string]$NqContract,
+        [string]$YmContract
+    )
+
+    if (-not (Test-Path -LiteralPath $RithmicRecentBarsPath -PathType Leaf)) {
+        return [PSCustomObject]@{
+            Ok = $false
+            Valid = $true
+            Reason = "canonical_completed_candle_authority_missing"
+            NQ = $null
+            YM = $null
+        }
+    }
+
+    try {
+        $recentBars = Get-Content -LiteralPath $RithmicRecentBarsPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        $expectedSessionDate = Get-MarketSessionDate
+        $evidenceBySymbol = [ordered]@{}
+        $failures = @()
+        foreach ($symbolRoot in @("NQ", "YM")) {
+            $contract = if ($symbolRoot -eq "NQ") { $NqContract } else { $YmContract }
+            $contractProperty = if ($recentBars.symbols) { $recentBars.symbols.PSObject.Properties[$contract] } else { $null }
+            $bars = if ($contractProperty) { @($contractProperty.Value) } else { @() }
+            $currentSessionCompleted = @($bars | Where-Object {
+                $_.status -eq "FINAL" -and $_.session_date -eq $expectedSessionDate
+            })
+            $completed = @($currentSessionCompleted | Select-Object -Last 1)
+            $candle = if ($completed.Count -eq 1) { $completed[0] } else { $null }
+            $ageSeconds = $null
+            if ($candle -and $candle.timestamp) {
+                try {
+                    $ageSeconds = [math]::Round(([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse([string]$candle.timestamp)).TotalSeconds, 3)
+                }
+                catch {
+                    $ageSeconds = $null
+                }
+            }
+            $current = $null -ne $candle -and
+                $candle.session_date -eq $expectedSessionDate -and
+                $null -ne $ageSeconds -and
+                $ageSeconds -ge -5 -and
+                $ageSeconds -le 180
+            if (-not $current) {
+                $failures += ("{0}:canonical_completed_candle_unavailable" -f $symbolRoot)
+            }
+            $evidenceBySymbol[$symbolRoot] = [PSCustomObject]@{
+                Symbol = $symbolRoot
+                Contract = $contract
+                ExpectedSessionDate = $expectedSessionDate
+                SessionDate = if ($candle) { $candle.session_date } else { $null }
+                Timestamp = if ($candle) { $candle.timestamp } else { $null }
+                AgeSeconds = $ageSeconds
+                BarId = if ($candle) { $candle.bar_id } else { $null }
+                CurrentSessionCompletedCount = $currentSessionCompleted.Count
+                LastCompletedCandleTime = if ($candle) { $candle.timestamp } else { $null }
+                Current = $current
+            }
+        }
+        return [PSCustomObject]@{
+            Ok = $failures.Count -eq 0
+            Valid = $true
+            Reason = if ($failures.Count -eq 0) { "current_canonical_completed_candles_confirmed" } else { $failures -join "," }
+            NQ = $evidenceBySymbol["NQ"]
+            YM = $evidenceBySymbol["YM"]
+        }
+    }
+    catch {
+        return [PSCustomObject]@{
+            Ok = $false
+            Valid = $false
+            Reason = ("canonical_completed_candle_authority_error:{0}" -f $_.Exception.Message)
+            NQ = $null
+            YM = $null
+        }
+    }
+}
+
 function Test-ListenerBridgeContract {
     $process = $script:ListenerProcess
     if ($null -eq $process -or $null -eq $process.ProcessId) {
@@ -655,7 +848,7 @@ function Test-ListenerBridgeContract {
         if (-not $bridgeHealthy) { $reasonParts += ("price_bridge_status:NQ={0},YM={1}" -f $nq.price_bridge_status, $ym.price_bridge_status) }
         if (-not $publicationCurrent) { $reasonParts += "nq_ym_publication_not_current" }
         if (-not $pricesPresent) { $reasonParts += "executor_nq_ym_prices_missing" }
-        $reason = if ($ok) { "single_listener_login_subscriptions_generation_bridge_and_publication_confirmed" } else { $reasonParts -join ";" }
+        $reason = if ($ok) { "single_listener_service_login_subscriptions_generation_bridge_and_publication_confirmed" } else { $reasonParts -join ";" }
 
         return New-ProbeResult $ok $reason ([PSCustomObject]@{
             Process = $process
@@ -691,6 +884,280 @@ function Test-ListenerBridgeContract {
     }
     catch {
         return New-ProbeResult $false ("listener_bridge_probe_error:{0}" -f $_.Exception.Message)
+    }
+}
+
+function Get-CanonicalAtrWarmupEvidence {
+    try {
+        $payload = Invoke-LocalJson $TradeManagerCanonicalAtrStatusUrl 4
+        if ($payload.ok -ne $true -or $null -eq $payload.symbols) {
+            return [PSCustomObject]@{
+                Valid = $false
+                Ready = $false
+                Reason = "canonical_atr_payload_invalid"
+                Symbols = [ordered]@{}
+            }
+        }
+
+        $records = @()
+        if ($payload.symbols -is [System.Collections.IDictionary] -or $payload.symbols.PSObject.Properties.Name -contains "NQ") {
+            foreach ($symbolRoot in @("NQ", "YM")) {
+                $record = $payload.symbols.$symbolRoot
+                if ($null -ne $record) {
+                    $records += [PSCustomObject]@{ Symbol = $symbolRoot; Record = $record }
+                }
+            }
+        }
+        else {
+            foreach ($record in @($payload.symbols)) {
+                $symbolRoot = [string]$record.symbol
+                if ($symbolRoot -in @("NQ", "YM")) {
+                    $records += [PSCustomObject]@{ Symbol = $symbolRoot; Record = $record }
+                }
+            }
+        }
+
+        $expectedSession = Get-MarketSessionDate
+        $validationFailures = @()
+        $warmingReasons = @()
+        $observations = [ordered]@{}
+        foreach ($symbolRoot in @("NQ", "YM")) {
+            $wrapped = @($records | Where-Object { $_.Symbol -eq $symbolRoot } | Select-Object -First 1)
+            if ($wrapped.Count -ne 1) {
+                $validationFailures += ("{0}:canonical_atr_record_missing" -f $symbolRoot)
+                continue
+            }
+
+            $record = $wrapped[0].Record
+            $canonical = if ($record.canonical_atr) { $record.canonical_atr } else { $record.canonical_record }
+            $included = [int]$record.included_bar_count
+            $required = [int]$record.required_bar_count
+            $lastBar = [string]$record.last_included_bar
+            $authorityEpoch = if ($canonical) { [string]$canonical.atr_authority_epoch_id } else { "" }
+            $source = if ($canonical -and $canonical.atr_source) { [string]$canonical.atr_source } else { [string]$payload.authority }
+            $barAgeSeconds = $null
+            if (-not [string]::IsNullOrWhiteSpace($lastBar)) {
+                try {
+                    $barAgeSeconds = [math]::Round(([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse($lastBar)).TotalSeconds, 3)
+                }
+                catch {
+                    $barAgeSeconds = $null
+                }
+            }
+
+            if ($required -ne $CanonicalAtrRequiredTrueRangeCount) { $validationFailures += ("{0}:required_count_mismatch:{1}" -f $symbolRoot, $required) }
+            if ($included -lt 0) { $validationFailures += ("{0}:included_count_negative" -f $symbolRoot) }
+            if ([string]$payload.authority -ne "rithmic_exchange_time_rma14" -or $source -ne "rithmic_exchange_time_rma14") { $validationFailures += ("{0}:canonical_authority_invalid" -f $symbolRoot) }
+            if ($included -gt 0) {
+                if ([string]$record.session_date -ne $expectedSession) { $validationFailures += ("{0}:session_not_current" -f $symbolRoot) }
+                if ([string]::IsNullOrWhiteSpace([string]$record.contract_symbol)) { $validationFailures += ("{0}:contract_missing" -f $symbolRoot) }
+                if ([string]::IsNullOrWhiteSpace($lastBar) -or $null -eq $barAgeSeconds -or $barAgeSeconds -gt 180) { $validationFailures += ("{0}:last_completed_candle_not_current" -f $symbolRoot) }
+                if ([string]::IsNullOrWhiteSpace($authorityEpoch)) { $validationFailures += ("{0}:authority_epoch_missing" -f $symbolRoot) }
+            }
+
+            $ready = $record.ready -eq $true -and $null -ne $record.atr_value
+            if (-not $ready) {
+                $warmingReasons += ("{0}:atr_warming:{1}/{2}:{3}" -f $symbolRoot, $included, $required, [string]$record.readiness_reason)
+            }
+            $observations[$symbolRoot] = [PSCustomObject]@{
+                Symbol = $symbolRoot
+                Contract = $record.contract_symbol
+                SessionDate = $record.session_date
+                AtrIncludedCount = $included
+                AtrRequiredCount = $required
+                LastCompletedCandleTime = $lastBar
+                AuthorityEpoch = $authorityEpoch
+                Ready = $ready
+                AtrValue = $record.atr_value
+                ReadinessReason = $record.readiness_reason
+                Source = $source
+                BarAgeSeconds = $barAgeSeconds
+            }
+        }
+
+        $valid = $validationFailures.Count -eq 0
+        $ready = $valid -and $observations.Count -eq 2 -and @($observations.Values | Where-Object { $_.Ready -ne $true }).Count -eq 0
+        return [PSCustomObject]@{
+            Valid = $valid
+            Ready = $ready
+            Reason = if (-not $valid) { $validationFailures -join ";" } elseif ($ready) { "canonical_atr_ready" } else { $warmingReasons -join ";" }
+            ExpectedSession = $expectedSession
+            Symbols = $observations
+        }
+    }
+    catch {
+        return [PSCustomObject]@{
+            Valid = $false
+            Ready = $false
+            Reason = ("canonical_atr_endpoint_error:{0}" -f $_.Exception.Message)
+            Symbols = [ordered]@{}
+        }
+    }
+}
+
+function Get-MarketDataReadinessObservation {
+    $serviceAvailable = $Results.Contains("TradeManager") -and
+        $Results.Contains("RithmicListenerBridge") -and
+        $Results["TradeManager"].Status -eq "READY" -and
+        $Results["RithmicListenerBridge"].Status -eq "READY"
+    if (-not $serviceAvailable) {
+        return [PSCustomObject]@{
+            ServiceAvailable = $false
+            Valid = $false
+            AuthorityReady = $false
+            Phase = "SERVICE_UNAVAILABLE"
+            Reason = "dependency_unavailable:TradeManager_or_RithmicListenerBridge"
+            Symbols = [ordered]@{}
+        }
+    }
+
+    $listenerEvidence = $Results["RithmicListenerBridge"].Evidence
+    $nqContract = [string]$listenerEvidence.NQ.Contract
+    $ymContract = [string]$listenerEvidence.YM.Contract
+    if ([string]::IsNullOrWhiteSpace($nqContract) -or [string]::IsNullOrWhiteSpace($ymContract)) {
+        return [PSCustomObject]@{
+            ServiceAvailable = $true
+            Valid = $false
+            AuthorityReady = $false
+            Phase = "SERVICE_UNAVAILABLE"
+            Reason = "listener_contract_authority_missing"
+            Symbols = [ordered]@{}
+        }
+    }
+
+    $candles = Get-CanonicalCompletedCandleEvidence $nqContract $ymContract
+    $atr = Get-CanonicalAtrWarmupEvidence
+    $valid = $candles.Valid -eq $true -and $atr.Valid -eq $true
+    $authorityReady = $valid -and $candles.Ok -eq $true -and $atr.Ready -eq $true
+    $phase = if (-not $candles.Ok) {
+        "COMPLETED_CANDLE_WARMING"
+    }
+    elseif (-not $atr.Ready) {
+        "ATR_WARMING"
+    }
+    else {
+        "READY_WAITING_FOR_ADVANCEMENT"
+    }
+    $symbols = [ordered]@{}
+    foreach ($symbolRoot in @("NQ", "YM")) {
+        $candle = $candles.$symbolRoot
+        $atrRecord = $atr.Symbols[$symbolRoot]
+        $symbols[$symbolRoot] = [PSCustomObject]@{
+            Symbol = $symbolRoot
+            Contract = if ($symbolRoot -eq "NQ") { $nqContract } else { $ymContract }
+            CompletedCandleCount = if ($candle) { [int]$candle.CurrentSessionCompletedCount } else { 0 }
+            LastCompletedCandleTime = if ($candle) { $candle.LastCompletedCandleTime } else { $null }
+            CompletedCandleCurrent = if ($candle) { $candle.Current } else { $false }
+            AtrIncludedCount = if ($atrRecord) { [int]$atrRecord.AtrIncludedCount } else { 0 }
+            AtrRequiredCount = if ($atrRecord) { [int]$atrRecord.AtrRequiredCount } else { $CanonicalAtrRequiredTrueRangeCount }
+            AuthorityEpoch = if ($atrRecord) { $atrRecord.AuthorityEpoch } else { $null }
+            AtrReady = if ($atrRecord) { $atrRecord.Ready } else { $false }
+        }
+    }
+    return [PSCustomObject]@{
+        ServiceAvailable = $true
+        Valid = $valid
+        AuthorityReady = $authorityReady
+        Phase = $phase
+        Reason = if (-not $valid) { "candles=$($candles.Reason);atr=$($atr.Reason)" } elseif ($authorityReady) { "source_authority_ready" } else { "candles=$($candles.Reason);atr=$($atr.Reason)" }
+        ExpectedSession = Get-MarketSessionDate
+        Symbols = $symbols
+    }
+}
+
+function Wait-ForMarketDataReadiness {
+    $observationStartedAt = [DateTime]::UtcNow
+    $lastProgressAt = $observationStartedAt
+    $previousObservation = $null
+    $progressAdvanced = $false
+    $lastLoggedSignature = ""
+
+    while ($true) {
+        $observation = Get-MarketDataReadinessObservation
+        $now = [DateTime]::UtcNow
+        $progressThisPoll = $false
+        if ($null -ne $previousObservation -and $observation.Valid -eq $true) {
+            foreach ($symbolRoot in @("NQ", "YM")) {
+                $previous = $previousObservation.Symbols[$symbolRoot]
+                $current = $observation.Symbols[$symbolRoot]
+                if ($null -eq $previous -or $null -eq $current) {
+                    $observation.Valid = $false
+                    $observation.Reason = ("{0}:market_progress_record_missing" -f $symbolRoot)
+                    continue
+                }
+                if ($current.CompletedCandleCount -lt $previous.CompletedCandleCount -or $current.AtrIncludedCount -lt $previous.AtrIncludedCount -or
+                    (-not [string]::IsNullOrWhiteSpace([string]$previous.LastCompletedCandleTime) -and [string]$current.LastCompletedCandleTime -lt [string]$previous.LastCompletedCandleTime)) {
+                    $observation.Valid = $false
+                    $observation.Reason = ("{0}:market_readiness_progress_regressed" -f $symbolRoot)
+                }
+                if (-not [string]::IsNullOrWhiteSpace([string]$previous.AuthorityEpoch) -and
+                    -not [string]::IsNullOrWhiteSpace([string]$current.AuthorityEpoch) -and
+                    [string]$previous.AuthorityEpoch -ne [string]$current.AuthorityEpoch) {
+                    $observation.Valid = $false
+                    $observation.Reason = ("{0}:authority_epoch_changed_during_observation" -f $symbolRoot)
+                }
+                if ($current.CompletedCandleCount -gt $previous.CompletedCandleCount -or
+                    $current.AtrIncludedCount -gt $previous.AtrIncludedCount -or
+                    [string]$current.LastCompletedCandleTime -gt [string]$previous.LastCompletedCandleTime) {
+                    $progressThisPoll = $true
+                }
+            }
+        }
+        if ($progressThisPoll) {
+            $progressAdvanced = $true
+            $lastProgressAt = $now
+        }
+
+        $elapsedSeconds = [math]::Round(($now - $observationStartedAt).TotalSeconds, 3)
+        $secondsSinceProgress = [math]::Round(($now - $lastProgressAt).TotalSeconds, 3)
+        $state = Resolve-MarketReadinessState `
+            -ServiceAvailable ($observation.ServiceAvailable -eq $true) `
+            -ObservationValid ($observation.Valid -eq $true) `
+            -AuthorityReady ($observation.AuthorityReady -eq $true) `
+            -ProgressAdvanced $progressAdvanced `
+            -ElapsedSeconds $elapsedSeconds `
+            -SecondsSinceProgress $secondsSinceProgress `
+            -MaximumObservationSeconds $MarketReadinessObservationSeconds `
+            -StallSeconds $MarketReadinessStallSeconds `
+            -Phase $observation.Phase `
+            -DetailReason $observation.Reason
+
+        $evidence = [PSCustomObject]@{
+            Status = $state.Status
+            Phase = $observation.Phase
+            TradingReady = $state.TradingReady
+            ProgressAdvanced = $progressAdvanced
+            ProgressAdvancedThisPoll = $progressThisPoll
+            SecondsSinceProgress = $secondsSinceProgress
+            ElapsedSeconds = $elapsedSeconds
+            MaximumObservationSeconds = $MarketReadinessObservationSeconds
+            StallSeconds = $MarketReadinessStallSeconds
+            FirstCompleteCandleMaximumSeconds = $FirstCompleteCandleMaximumSeconds
+            CanonicalAtrRequiredTrueRangeCount = $CanonicalAtrRequiredTrueRangeCount
+            CanonicalAtrWarmupMaximumSeconds = $CanonicalAtrWarmupMaximumSeconds
+            SchedulingAllowanceSeconds = $MarketReadinessSchedulingAllowanceSeconds
+            ExpectedSession = $observation.ExpectedSession
+            Symbols = $observation.Symbols
+            DetailReason = $observation.Reason
+        }
+        $symbolProgress = @($observation.Symbols.Keys | ForEach-Object {
+            $item = $observation.Symbols[$_]
+            "{0}:candle={1}:atr={2}/{3}:last={4}:epoch={5}" -f $_, $item.CompletedCandleCount, $item.AtrIncludedCount, $item.AtrRequiredCount, $item.LastCompletedCandleTime, $item.AuthorityEpoch
+        }) -join ","
+        $signature = "status=$($state.Status)|phase=$($observation.Phase)|progress=$progressAdvanced|symbols=$symbolProgress"
+        if ($signature -ne $lastLoggedSignature) {
+            Write-StartupLine ("MARKET_READINESS STATUS={0} PHASE={1} TRADING_READY={2} PROGRESS_ADVANCING={3} ELAPSED_SECONDS={4} MAXIMUM_SECONDS={5} SYMBOLS={6}" -f $state.Status, $observation.Phase, $state.TradingReady, $progressAdvanced, $elapsedSeconds, $MarketReadinessObservationSeconds, $symbolProgress)
+            $lastLoggedSignature = $signature
+        }
+
+        if ($state.Status -in @("READY", "FAILED")) {
+            return [PSCustomObject]@{ Status = $state.Status; Reason = $state.Reason; Evidence = $evidence }
+        }
+        if ($elapsedSeconds -ge $MarketReadinessObservationSeconds) {
+            return [PSCustomObject]@{ Status = "WARMING"; Reason = $state.Reason; Evidence = $evidence }
+        }
+        $previousObservation = $observation
+        Start-Sleep -Seconds 5
     }
 }
 
@@ -751,7 +1218,7 @@ function Test-CanonicalAtrContract {
                 continue
             }
             $record = $wrapped[0].Record
-            $canonical = $record.canonical_record
+            $canonical = if ($record.canonical_atr) { $record.canonical_atr } else { $record.canonical_record }
             $entry = @($entryPayload.symbols | Where-Object { $_.symbol -eq $symbolRoot } | Select-Object -First 1)
             $value = if ($record.PSObject.Properties.Name -contains "atr_value") { $record.atr_value } elseif ($record.PSObject.Properties.Name -contains "atr_1m_14") { $record.atr_1m_14 } else { $canonical.atr_value }
             $source = [string]$canonical.atr_source
@@ -787,32 +1254,17 @@ function Test-CanonicalAtrContract {
                 LastIncludedBar = $lastBar
                 BarAgeSeconds = $barAgeSeconds
                 RecordId = $canonical.atr_record_id
+                AuthorityEpoch = $canonical.atr_authority_epoch_id
                 Source = $source
             }
         }
 
-        if ($null -eq $script:CanonicalAtrBaseline) {
-            $script:CanonicalAtrBaseline = [ordered]@{}
-            foreach ($symbolRoot in @("NQ", "YM")) {
-                if ($observations.Contains($symbolRoot)) { $script:CanonicalAtrBaseline[$symbolRoot] = $observations[$symbolRoot].LastIncludedBar }
-            }
-            $failures += "waiting_for_finalized_bar_advancement_after_startup"
-        }
-        else {
-            foreach ($symbolRoot in @("NQ", "YM")) {
-                if (-not $observations.Contains($symbolRoot) -or [string]::IsNullOrWhiteSpace([string]$script:CanonicalAtrBaseline[$symbolRoot]) -or [string]$observations[$symbolRoot].LastIncludedBar -le [string]$script:CanonicalAtrBaseline[$symbolRoot]) {
-                    $failures += "${symbolRoot}:finalized_bar_has_not_advanced"
-                }
-            }
-        }
-
         $ok = $failures.Count -eq 0
-        $reason = if ($ok) { "current_rithmic_rma_ready_projected_and_finalized_bars_advanced" } else { $failures -join ";" }
+        $reason = if ($ok) { "current_rithmic_rma_ready_and_projected" } else { $failures -join ";" }
         return New-ProbeResult $ok $reason ([PSCustomObject]@{
             Source = $payload.source
             Policy = $payload.policy
             ExpectedSession = $expectedSession
-            Baseline = $script:CanonicalAtrBaseline
             Symbols = $observations
             Failures = $failures
         })
@@ -1065,6 +1517,52 @@ function Invoke-ExecutorJournalMaintenance {
     Write-StartupLine ("COMPONENT=Executor ACTION=JOURNAL_MAINTENANCE_COMPLETE RESULT={0}" -f $stdout)
 }
 
+function Invoke-TradeManagerJournalMaintenance {
+    if (-not (Test-Path -LiteralPath $TradeManagerJournalMaintenancePath -PathType Leaf)) {
+        throw "trade_manager_journal_maintenance_script_missing:$TradeManagerJournalMaintenancePath"
+    }
+    if (-not (Test-Path -LiteralPath $TradeManagerPersistencePath -PathType Leaf)) {
+        throw "trade_manager_persistence_missing:$TradeManagerPersistencePath"
+    }
+    if (-not (Test-Path -LiteralPath $script:tradeManagerTickJournalDirectory -PathType Container)) {
+        throw "trade_manager_tick_journal_directory_missing:$script:tradeManagerTickJournalDirectory"
+    }
+    if (-not (Test-Path -LiteralPath $script:executorTickJournalDirectory -PathType Container)) {
+        throw "executor_tick_journal_directory_missing:$script:executorTickJournalDirectory"
+    }
+
+    $python = (Get-Command python.exe -ErrorAction Stop).Source
+    $stdoutPath = Join-Path $script:startupLogDirectory ("TradeManagerJournalMaintenance_{0}.stdout.log" -f $LaunchId)
+    $stderrPath = Join-Path $script:startupLogDirectory ("TradeManagerJournalMaintenance_{0}.stderr.log" -f $LaunchId)
+    Write-StartupLine "COMPONENT=TradeManager ACTION=JOURNAL_MAINTENANCE TIMEOUT_SECONDS=$TradeManagerJournalMaintenanceTimeoutSeconds"
+    $process = Start-Process -FilePath $python `
+        -ArgumentList @(
+            $TradeManagerJournalMaintenancePath,
+            "--journal-root", $script:tradeManagerTickJournalDirectory,
+            "--executor-journal-root", $script:executorTickJournalDirectory,
+            "--persistence-file", $TradeManagerPersistencePath
+        ) `
+        -WorkingDirectory $script:repositoryRoot `
+        -RedirectStandardOutput $stdoutPath `
+        -RedirectStandardError $stderrPath `
+        -WindowStyle Hidden `
+        -PassThru `
+        -ErrorAction Stop
+    if (-not $process.WaitForExit($TradeManagerJournalMaintenanceTimeoutSeconds * 1000)) {
+        $process.Kill()
+        throw "trade_manager_journal_maintenance_timeout"
+    }
+    $process.WaitForExit()
+    $process.Refresh()
+    $stdout = if (Test-Path -LiteralPath $stdoutPath) { [IO.File]::ReadAllText($stdoutPath).Trim() } else { "" }
+    $stderr = if (Test-Path -LiteralPath $stderrPath) { [IO.File]::ReadAllText($stderrPath).Trim() } else { "" }
+    $result = if (-not [string]::IsNullOrWhiteSpace($stdout)) { $stdout | ConvertFrom-Json -ErrorAction Stop } else { $null }
+    if ($null -eq $result -or $result.ok -ne $true) {
+        throw ("trade_manager_journal_maintenance_failed:{0}" -f $stderr)
+    }
+    Write-StartupLine ("COMPONENT=TradeManager ACTION=JOURNAL_MAINTENANCE_COMPLETE RESULT={0}" -f $stdout)
+}
+
 function Get-NgrokFailureEvidence {
     param([object]$LastProbe)
 
@@ -1146,6 +1644,13 @@ function Ensure-TradeManager {
             return
         }
         try {
+            Invoke-TradeManagerJournalMaintenance
+        }
+        catch {
+            Set-ComponentResult "TradeManager" "FAILED" ("journal_maintenance_failed:{0}" -f $_.Exception.Message)
+            return
+        }
+        try {
             $python = (Get-Command python.exe -ErrorAction Stop).Source
             Start-ManagedProcess "TradeManager" $python @("Engines\trade_manager.py") | Out-Null
         }
@@ -1208,7 +1713,7 @@ function Ensure-EntryAgentAndRelay {
         }
     }
     else {
-        Set-ComponentResult "EntryAgent" "READY" "preserved_healthy_instance" $probe.Evidence
+        Set-ComponentResult "EntryAgent" "READY" $probe.Reason $probe.Evidence
     }
 
     Write-StartupLine "COMPONENT=TradingViewRelay ACTION=VERIFY_LIQUIDITY_ONLY_RELAY TIMEOUT_SECONDS=10"
@@ -1275,12 +1780,31 @@ function Ensure-ListenerBridge {
     }
 }
 
+function Verify-MarketDataReadiness {
+    Write-StartupLine ("COMPONENT=MarketDataReadiness ACTION=OBSERVE_CANDLES_AND_CANONICAL_ATR MAXIMUM_SECONDS={0} POLICY=first_complete_candle:{1}+true_ranges:{2}x{3}+scheduling_allowance:{4}" -f $MarketReadinessObservationSeconds, $FirstCompleteCandleMaximumSeconds, $CanonicalAtrRequiredTrueRangeCount, $CanonicalMinuteSeconds, $MarketReadinessSchedulingAllowanceSeconds)
+    if ($Results["TradeManager"].Status -ne "READY" -or $Results["RithmicListenerBridge"].Status -ne "READY") {
+        Set-ComponentResult "MarketDataReadiness" "FAILED" "dependency_failed:TradeManager_or_RithmicListenerBridge"
+        return
+    }
+
+    $result = Wait-ForMarketDataReadiness
+    Set-ComponentResult "MarketDataReadiness" $result.Status $result.Reason $result.Evidence
+}
+
 function Verify-EntryCurrentSession {
     $entryCurrentSessionTimeoutSeconds = 130
     Write-StartupLine "COMPONENT=EntryAgentCurrentSession ACTION=VERIFY_TODAY_STATE TIMEOUT_SECONDS=$entryCurrentSessionTimeoutSeconds"
     $script:ComponentTimeouts["EntryAgentCurrentSession"] = $entryCurrentSessionTimeoutSeconds
     if ($Results["EntryAgent"].Status -ne "READY") {
         Set-ComponentResult "EntryAgentCurrentSession" "FAILED" "dependency_failed:EntryAgent"
+        return
+    }
+    if ($Results["MarketDataReadiness"].Status -eq "WARMING") {
+        Set-ComponentResult "EntryAgentCurrentSession" "WARMING" "dependency_warming:MarketDataReadiness" $Results["MarketDataReadiness"].Evidence
+        return
+    }
+    if ($Results["MarketDataReadiness"].Status -ne "READY") {
+        Set-ComponentResult "EntryAgentCurrentSession" "FAILED" "dependency_failed:MarketDataReadiness" $Results["MarketDataReadiness"].Evidence
         return
     }
     $probe = Wait-ForContract "EntryAgentCurrentSession" $entryCurrentSessionTimeoutSeconds { Test-EntryCurrentSessionContract }
@@ -1304,12 +1828,20 @@ function Verify-CommandCenter {
 }
 
 function Verify-CanonicalAtr {
-    Write-StartupLine "COMPONENT=CanonicalATR ACTION=VERIFY_CURRENT_READY_PROJECTED_AND_ADVANCING TIMEOUT_SECONDS=$AtrTimeoutSeconds"
+    Write-StartupLine "COMPONENT=CanonicalATR ACTION=VERIFY_READY_SOURCE_AND_ENTRY_PROJECTION TIMEOUT_SECONDS=$ServiceTimeoutSeconds"
     if ($Results["TradeManager"].Status -ne "READY") {
         Set-ComponentResult "CanonicalATR" "FAILED" "dependency_failed:TradeManager"
         return
     }
-    $probe = Wait-ForContract "CanonicalATR" $AtrTimeoutSeconds { Test-CanonicalAtrContract }
+    if ($Results["MarketDataReadiness"].Status -eq "WARMING") {
+        Set-ComponentResult "CanonicalATR" "WARMING" "dependency_warming:MarketDataReadiness" $Results["MarketDataReadiness"].Evidence
+        return
+    }
+    if ($Results["MarketDataReadiness"].Status -ne "READY") {
+        Set-ComponentResult "CanonicalATR" "FAILED" "dependency_failed:MarketDataReadiness" $Results["MarketDataReadiness"].Evidence
+        return
+    }
+    $probe = Wait-ForContract "CanonicalATR" $ServiceTimeoutSeconds { Test-CanonicalAtrContract }
     if ($probe.Ok) {
         Set-ComponentResult "CanonicalATR" "READY" $probe.Reason $probe.Evidence
     }
@@ -1473,14 +2005,15 @@ function Get-FinalDiagnostics {
 }
 
 Write-StartupLine "STARTUP_BEGIN launch_id=$LaunchId repository_root=$script:repositoryRoot runtime_data_root=$script:runtimeDataRoot" Cyan
-Write-StartupLine "STARTUP_POLICY bounded=true preserve_healthy=true duplicate_policy=reject tradingview_authority=liquidity_only"
+Write-StartupLine ("STARTUP_POLICY bounded=true preserve_healthy=true duplicate_policy=reject tradingview_authority=liquidity_only service_timeout_seconds={0} market_readiness_maximum_seconds={1} market_formula=({2}x{3})+({4}x{3})+({5}x{3})" -f $ServiceTimeoutSeconds, $MarketReadinessObservationSeconds, $FirstCompleteCandleIntervalCount, $CanonicalMinuteSeconds, $CanonicalAtrRequiredTrueRangeCount, $MarketReadinessSchedulingAllowanceIntervals)
 
 try {
     Ensure-Executor
     Ensure-TradeManager
+    Ensure-ListenerBridge
     Ensure-EntryAgentAndRelay
     Ensure-Ngrok
-    Ensure-ListenerBridge
+    Verify-MarketDataReadiness
     Verify-EntryCurrentSession
     Verify-CommandCenter
     Verify-CanonicalAtr
@@ -1496,26 +2029,33 @@ $requiredComponents = @(
     "EntryAgent",
     "TradingViewRelay",
     "RithmicListenerBridge",
+    "MarketDataReadiness",
     "EntryAgentCurrentSession",
     "CommandCenter",
     "CanonicalATR",
     "Ngrok"
 )
 $failedComponents = @($requiredComponents | Where-Object {
-    -not $Results.Contains($_) -or $Results[$_].Status -ne "READY"
+    -not $Results.Contains($_) -or $Results[$_].Status -eq "FAILED"
+})
+$warmingComponents = @($requiredComponents | Where-Object {
+    $Results.Contains($_) -and $Results[$_].Status -eq "WARMING"
 })
 
-if ($failedComponents.Count -eq 0) {
-    Set-ComponentResult "ReadinessVerification" "READY" "all_required_component_contracts_passed"
+if ($failedComponents.Count -gt 0) {
+    Set-ComponentResult "ReadinessVerification" "FAILED" ("failed_components:{0}" -f ($failedComponents -join ","))
+}
+elseif ($warmingComponents.Count -gt 0) {
+    Set-ComponentResult "ReadinessVerification" "WARMING" ("warming_components:{0};trading_readiness=false" -f ($warmingComponents -join ","))
 }
 else {
-    Set-ComponentResult "ReadinessVerification" "FAILED" ("failed_components:{0}" -f ($failedComponents -join ","))
+    Set-ComponentResult "ReadinessVerification" "READY" "all_required_component_contracts_passed"
 }
 
 $diagnostics = Get-FinalDiagnostics
 Write-StartupLine "FINALIZATION_STEP=diagnostics_captured"
 $durationSeconds = [math]::Round(([DateTime]::UtcNow - $StartupStartedAt).TotalSeconds, 3)
-$finalStatus = if ($failedComponents.Count -eq 0) { "READY" } else { "FAILED" }
+$finalStatus = if ($failedComponents.Count -gt 0) { "FAILED" } elseif ($warmingComponents.Count -gt 0) { "WARMING" } else { "READY" }
 $resultSummaries = @()
 foreach ($name in $Results.Keys) {
     $result = $Results[$name]
@@ -1533,8 +2073,21 @@ $evidence = [PSCustomObject]@{
     CompletedAtUtc = [DateTime]::UtcNow.ToString("o")
     DurationSeconds = $durationSeconds
     FinalStatus = $finalStatus
+    TradingReadiness = $finalStatus -eq "READY"
     FailedComponents = $failedComponents
+    WarmingComponents = $warmingComponents
     Timeouts = $ComponentTimeouts
+    MarketReadinessPolicy = [PSCustomObject]@{
+        CanonicalMinuteSeconds = $CanonicalMinuteSeconds
+        FirstCompleteCandleIntervalCount = $FirstCompleteCandleIntervalCount
+        FirstCompleteCandleMaximumSeconds = $FirstCompleteCandleMaximumSeconds
+        CanonicalAtrRequiredTrueRangeCount = $CanonicalAtrRequiredTrueRangeCount
+        CanonicalAtrWarmupMaximumSeconds = $CanonicalAtrWarmupMaximumSeconds
+        SchedulingAllowanceIntervals = $MarketReadinessSchedulingAllowanceIntervals
+        SchedulingAllowanceSeconds = $MarketReadinessSchedulingAllowanceSeconds
+        MaximumObservationSeconds = $MarketReadinessObservationSeconds
+        StallSeconds = $MarketReadinessStallSeconds
+    }
     Results = $resultSummaries
     Diagnostics = $diagnostics
     StartupLogPath = $StartupLogPath
@@ -1550,9 +2103,12 @@ foreach ($name in $Results.Keys) {
     Write-StartupLine ("SUMMARY component={0} status={1} timeout_seconds={2} reason={3}" -f $name, $result.Status, $result.TimeoutSeconds, $result.Reason)
 }
 Write-StartupLine "STARTUP_SUMMARY_END" Cyan
-Write-StartupLine "STARTUP_RESULT=$finalStatus duration_seconds=$durationSeconds evidence=$EvidencePath" $(if ($finalStatus -eq "READY") { [ConsoleColor]::Green } else { [ConsoleColor]::Red })
+Write-StartupLine "STARTUP_RESULT=$finalStatus trading_readiness=$($finalStatus -eq 'READY') duration_seconds=$durationSeconds evidence=$EvidencePath" $(if ($finalStatus -eq "READY") { [ConsoleColor]::Green } elseif ($finalStatus -eq "WARMING") { [ConsoleColor]::Yellow } else { [ConsoleColor]::Red })
 
 if ($finalStatus -eq "READY") {
     exit 0
+}
+if ($finalStatus -eq "WARMING") {
+    exit 2
 }
 exit 1
