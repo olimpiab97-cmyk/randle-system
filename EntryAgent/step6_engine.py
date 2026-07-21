@@ -9,6 +9,96 @@ from step7_engine import STRUCTURE_FIELDS, terminate_interaction
 
 
 STEP6_PHASE_WINDOW_CANDLES = 4
+STEP6_NEXT_SAME_SIDE_LIQUIDITY_CLOSE_TOUCHED = "STEP6_NEXT_SAME_SIDE_LIQUIDITY_CLOSE_TOUCHED"
+
+# STEP 6 CONTRACT
+#
+# Entry models are evaluated inside a fixed 4-candle Step 6 window.
+# The first valid Step 6 entry model wins.
+#
+# STEP 6 EXECUTION WINDOW AND ANCHOR OWNERSHIP
+#
+# Step 5 confirmation starts one fixed 4-candle Step 6 execution window.
+# That window never resets, extends, or rolls forward.
+#
+# The active Step 6 anchor candle ("A") is the candle currently used by the
+# Step 6 entry models. During the fixed window, a newer qualifying anchor may
+# replace the current anchor.
+#
+# Replacement begins no earlier than Candle 2 of the fixed Step 6 window.
+# Replacement transfers before entry evaluation against the old anchor.
+#
+# Anchor progression is adverse/deeper into the setup:
+# - LONG replacement requires a close below the current anchor close by at least 1 tick.
+# - SHORT replacement requires a close above the current anchor close by at least 1 tick.
+#
+# Active anchor eligibility:
+# - The active anchor must have a positive directional wick.
+# - Zero directional wick is not eligible for Small Wick, Large Wick, or Double Wick.
+#
+# When replacement happens, Step 6 calculations immediately switch to the newer
+# anchor, but the original Step 5 execution window remains in force.
+#
+# Real NQ example — 2026-06-19
+#
+# 06:39 PT / 13:39Z = A0 / original Step 6 anchor
+# O 30667.75 H 30667.75 L 30659.00 C 30663.75
+#
+# 06:40 PT / 13:40Z = Candle 1
+# O 30663.75 H 30673.00 L 30663.50 C 30667.00
+# Expected: no entry, no LONG replacement.
+#
+# 06:41 PT / 13:41Z = Candle 2
+# O 30666.50 H 30668.00 L 30655.75 C 30658.75
+# Expected: becomes replacement LONG anchor because the close is lower/deeper
+# than A0 by at least 1 tick and the candle has a positive lower wick.
+#
+# 06:42 PT / 13:42Z = Candle 3
+# O 30659.25 H 30660.75 L 30651.25 C 30659.75
+# Expected: evaluates against the 06:41 anchor and triggers LONG Large Wick Sweep.
+#
+# Entry math:
+# - 06:41 lower wick = 30658.75 - 30655.75 = 3.00
+# - 60% reclaim = 30655.75 + (3.00 * 0.60) = 30657.55
+# - 06:42 low sweeps below 30655.75
+# - 06:42 high reclaims above 30657.55
+# - Valid Step 6 entry = 30657.55
+#
+# Important:
+# - 06:42 is evaluated against 06:41, not 06:39 or 06:40.
+# - The Step 6 clock remains tied to 06:39.
+# - No reset.
+# - No extension.
+# - No Step 1–5 behavior changes.
+#
+# STEP 6 EXPIRATION RULE
+#
+# If no valid Step 6 entry model triggers within the 4-candle Step 6 window:
+# - Step 6 expires.
+# - The continuation pathway is invalidated.
+# - The controlling R/S level is invalidated for continuation purposes.
+#
+# That continuation level is permanently dead as a continuation level. It may not:
+# - restart Step 6
+# - reactivate continuation
+# - create a new continuation pathway
+#
+# The only pathway that may remain alive after Step 6 expiry is an already-active
+# rejection pathway, if that rejection pathway is still valid on its own contract.
+#
+# Canonical summary:
+# No Step 6 entry by Candle 4
+# -> Continuation invalid
+# -> Continuation level invalid
+# -> Rejection pathway may continue if still valid
+#
+# Additional invalidation:
+# - Before Step 6 entry completes, price must not touch the next same-side
+#   liquidity close level.
+# - SHORT: candle high touching/exceeding the next upper same-side close
+#   invalidates.
+# - LONG: candle low touching/falling through the next lower same-side close
+#   invalidates.
 
 
 def as_float(value: Any) -> float | None:
@@ -138,12 +228,22 @@ def sc_decision_pass(sc: dict[str, Any], direction: str) -> dict[str, Any] | Non
     wick = sc_wick(sc, direction)
     if full_range is None or wick is None:
         return None
+    if wick <= 0:
+        return {
+            "wick_percent": 0.0,
+            "sweep_entry_path": None,
+            "double_wick_state": "ELIMINATED",
+            "anchor_eligible": False,
+            "ineligible_reason": "Active anchor has no directional wick; wick-sweep models require a positive directional wick.",
+        }
     wick_percent = wick / full_range
     large = wick_percent >= 0.20
     return {
         "wick_percent": wick_percent,
         "sweep_entry_path": "Large Wick" if large else "Small Wick",
         "double_wick_state": "ACTIVE" if large else "ELIMINATED",
+        "anchor_eligible": True,
+        "ineligible_reason": None,
     }
 
 
@@ -183,11 +283,24 @@ def close_reclaims(entry_candle: dict[str, Any], level: float, direction: str, t
     return False
 
 
+def intrabar_reclaims(entry_candle: dict[str, Any], level: float, direction: str, tick_size: float) -> bool:
+    if direction == "SHORT":
+        low = as_float(entry_candle.get("low"))
+        return low is not None and low <= level - tick_size
+    if direction == "LONG":
+        high = as_float(entry_candle.get("high"))
+        return high is not None and high >= level + tick_size
+    return False
+
+
 def evaluate_large_wick_sweep(sc: dict[str, Any], entry_candle: dict[str, Any], direction: str, tick_size: float) -> tuple[bool, float | None, str]:
+    wick = sc_wick(sc, direction)
+    if wick is None or wick <= 0:
+        return False, None, "Large Wick Sweep requires a positive SC directional wick."
     reclaim_level = large_wick_reclaim_level(sc, direction)
     if reclaim_level is None:
         return False, None, "Large Wick Sweep requires SC wick measurement."
-    if sweep_extreme(entry_candle, sc, direction, tick_size) and close_reclaims(entry_candle, reclaim_level, direction, tick_size):
+    if sweep_extreme(entry_candle, sc, direction, tick_size) and intrabar_reclaims(entry_candle, reclaim_level, direction, tick_size):
         return True, reclaim_level, "Large Wick Sweep triggered: SC extreme swept by 1 tick and 60% wick reclaim exceeded by 1 tick."
     return False, None, "Large Wick Sweep did not trigger."
 
@@ -200,19 +313,127 @@ def small_wick_body_level(sc: dict[str, Any], direction: str) -> float | None:
     return None
 
 
-def evaluate_small_wick_sweep(sc: dict[str, Any], entry_candle: dict[str, Any], direction: str, tick_size: float) -> tuple[bool, float | None, str]:
+def small_wick_open_accepts_body(entry_candle: dict[str, Any], body_level: float, direction: str, tick_size: float) -> bool:
+    open_price = as_float(entry_candle.get("open"))
+    if open_price is None:
+        return False
+    if direction == "SHORT":
+        return open_price <= body_level - tick_size
+    if direction == "LONG":
+        return open_price >= body_level + tick_size
+    return False
+
+
+def intrabar_touches_level(entry_candle: dict[str, Any], level: float, direction: str) -> bool:
+    if direction == "SHORT":
+        low = as_float(entry_candle.get("low"))
+        return low is not None and low <= level
+    if direction == "LONG":
+        high = as_float(entry_candle.get("high"))
+        return high is not None and high >= level
+    return False
+
+
+def atr_1m_14_from_state(state: dict[str, Any]) -> float | None:
+    direct = as_float(state.get("atr_1m_14") or state.get("current_1m_atr") or state.get("atr_1m"))
+    if direct is not None:
+        return direct
+    atr = state.get("atr")
+    if isinstance(atr, dict):
+        return as_float(atr.get("atr_1m_14") or atr.get("current_1m_atr") or atr.get("atr_1m"))
+    return as_float(atr)
+
+
+def intrabar_path_points(state: dict[str, Any]) -> list[tuple[datetime | None, float]]:
+    bucket = state.get("step6_intrabar_previous_minute_path")
+    if not isinstance(bucket, dict) or bucket.get("truncated") is True:
+        return []
+    raw_points = bucket.get("points")
+    if not isinstance(raw_points, list):
+        return []
+    points: list[tuple[datetime | None, float]] = []
+    for item in raw_points:
+        if not (isinstance(item, (list, tuple)) and len(item) >= 2):
+            continue
+        price = as_float(item[1])
+        if price is None:
+            continue
+        points.append((parse_timestamp(item[0]), price))
+    points.sort(key=lambda item: (item[0] is None, item[0]))
+    return points
+
+
+def small_wick_sequence_triggered(
+    state: dict[str, Any],
+    sc: dict[str, Any],
+    entry_candle: dict[str, Any],
+    direction: str,
+    tick_size: float,
+) -> tuple[bool, float | None, str] | None:
+    points = intrabar_path_points(state)
+    if not points:
+        return None
+
     body_level = small_wick_body_level(sc, direction)
     if body_level is None:
         return False, None, "Small Wick Sweep requires SC body level."
-    if sweep_extreme(entry_candle, sc, direction, tick_size) and close_reclaims(entry_candle, body_level, direction, tick_size):
-        return True, body_level, "Small Wick Sweep triggered: SC extreme swept by 1 tick and SC body level reclaimed by 1 tick."
+
+    if direction == "SHORT":
+        sweep_level = as_float(sc.get("high"))
+        accepted = small_wick_open_accepts_body(entry_candle, body_level, direction, tick_size)
+        swept = False
+        for _, price in points:
+            if not accepted and price <= body_level - tick_size:
+                accepted = True
+                continue
+            if accepted and not swept and sweep_level is not None and price >= sweep_level + tick_size:
+                swept = True
+                continue
+            if accepted and swept and price <= body_level:
+                return True, body_level, "Small Wick Sweep triggered: ordered intrabar sequence confirmed body acceptance, 1-tick sweep, and reclaim at SC body level."
+        return False, None, "Small Wick Sweep did not trigger: intrabar path did not complete body acceptance -> sweep -> reclaim in order."
+
+    if direction == "LONG":
+        sweep_level = as_float(sc.get("low"))
+        accepted = small_wick_open_accepts_body(entry_candle, body_level, direction, tick_size)
+        swept = False
+        for _, price in points:
+            if not accepted and price >= body_level + tick_size:
+                accepted = True
+                continue
+            if accepted and not swept and sweep_level is not None and price <= sweep_level - tick_size:
+                swept = True
+                continue
+            if accepted and swept and price >= body_level:
+                return True, body_level, "Small Wick Sweep triggered: ordered intrabar sequence confirmed body acceptance, 1-tick sweep, and reclaim at SC body level."
+        return False, None, "Small Wick Sweep did not trigger: intrabar path did not complete body acceptance -> sweep -> reclaim in order."
+
+    return False, None, "Small Wick Sweep requires setup_direction LONG or SHORT."
+
+
+def evaluate_small_wick_sweep(state: dict[str, Any], sc: dict[str, Any], entry_candle: dict[str, Any], direction: str, tick_size: float) -> tuple[bool, float | None, str]:
+    wick = sc_wick(sc, direction)
+    if wick is None or wick <= 0:
+        return False, None, "Small Wick Sweep requires a positive SC directional wick."
+    sequenced = small_wick_sequence_triggered(state, sc, entry_candle, direction, tick_size)
+    if sequenced is not None:
+        return sequenced
+    body_level = small_wick_body_level(sc, direction)
+    if body_level is None:
+        return False, None, "Small Wick Sweep requires SC body level."
+    if (
+        small_wick_open_accepts_body(entry_candle, body_level, direction, tick_size)
+        and sweep_extreme(entry_candle, sc, direction, tick_size)
+        and intrabar_touches_level(entry_candle, body_level, direction)
+    ):
+        return True, body_level, "Small Wick Sweep triggered: conservative OHLC body acceptance, 1-tick sweep, and intrabar reclaim at SC body level."
     return False, None, "Small Wick Sweep did not trigger."
 
 
 def evaluate_double_wick(sc: dict[str, Any], entry_candle: dict[str, Any], direction: str, tick_size: float) -> tuple[bool, float | None, str]:
     wick = sc_wick(sc, direction)
-    if wick is None:
-        return False, None, "Double Wick requires SC wick measurement."
+    if wick is None or wick <= 0:
+        return False, None, "Double Wick requires a positive SC directional wick."
     if direction == "SHORT":
         top_body = body_high(sc)
         entry_high = as_float(entry_candle.get("high"))
@@ -226,9 +447,47 @@ def evaluate_double_wick(sc: dict[str, Any], entry_candle: dict[str, Any], direc
     else:
         reclaim = None
         penetrated = False
-    if reclaim is not None and penetrated and close_reclaims(entry_candle, reclaim, direction, tick_size):
-        return True, reclaim, "Double Wick Rejection triggered: entry penetrated 50% of SC wick and reclaimed opposite side."
+    if reclaim is not None and penetrated and intrabar_touches_level(entry_candle, reclaim, direction):
+        return True, reclaim, "Double Wick Rejection triggered: entry penetrated 50% of SC wick and reclaimed the SC body level intrabar."
     return False, None, "Double Wick Rejection did not trigger."
+
+
+def evaluate_extended_retrace(state: dict[str, Any], sc: dict[str, Any], entry_candle: dict[str, Any], direction: str) -> tuple[bool, float | None, str]:
+    atr_1m_14 = atr_1m_14_from_state(state)
+    if atr_1m_14 is None:
+        return False, None, "Extended Retrace requires 1-minute ATR(14)."
+
+    threshold = atr_1m_14 * 0.50
+    entry_price = None
+    extension = None
+    filled = False
+
+    if direction == "SHORT":
+        anchor = as_float(sc.get("high"))
+        trigger_extreme = as_float(entry_candle.get("high"))
+        low = as_float(entry_candle.get("low"))
+        if anchor is not None and trigger_extreme is not None:
+            extension = trigger_extreme - anchor
+            entry_price = anchor + (extension * 0.50)
+            filled = low is not None and entry_price is not None and low <= entry_price
+    elif direction == "LONG":
+        anchor = as_float(sc.get("low"))
+        trigger_extreme = as_float(entry_candle.get("low"))
+        high = as_float(entry_candle.get("high"))
+        if anchor is not None and trigger_extreme is not None:
+            extension = anchor - trigger_extreme
+            entry_price = anchor - (extension * 0.50)
+            filled = high is not None and entry_price is not None and high >= entry_price
+    else:
+        return False, None, "Extended Retrace requires setup_direction LONG or SHORT."
+
+    if extension is None or entry_price is None:
+        return False, None, "Extended Retrace requires Step 6 Candle A/B extremes."
+    if extension < threshold:
+        return False, None, "Extended Retrace did not trigger: extension stayed below 0.50 x ATR(14)."
+    if not filled:
+        return False, None, "Extended Retrace did not trigger: extension qualified but intrabar retrace fill did not occur."
+    return True, entry_price, "Extended Retrace triggered: extension reached 0.50 x ATR(14) and retraced 50% intrabar."
 
 
 def close_beyond_sc_close(candle: dict[str, Any], sc: dict[str, Any], direction: str, tick_size: float) -> bool:
@@ -236,10 +495,11 @@ def close_beyond_sc_close(candle: dict[str, Any], sc: dict[str, Any], direction:
     sc_close = as_float(sc.get("close"))
     if close is None or sc_close is None:
         return False
+    # Step 6 anchor progression moves deeper/adverse into the setup direction.
     if direction == "LONG":
-        return close >= sc_close + tick_size
-    if direction == "SHORT":
         return close <= sc_close - tick_size
+    if direction == "SHORT":
+        return close >= sc_close + tick_size
     return False
 
 
@@ -278,6 +538,24 @@ def close_beyond_anchor_extreme(candle: dict[str, Any], direction: str, anchor_e
         return close > anchor
     if direction == "LONG":
         return close < anchor
+    return False
+
+
+def next_same_side_liquidity_close_touched(state: dict[str, Any], candle: dict[str, Any], direction: str) -> bool:
+    reference = state.get("next_break_side_liquidity")
+    if not isinstance(reference, dict):
+        reference = state.get("step2_step4_reference_liquidity")
+    if not isinstance(reference, dict):
+        reference = state.get("next_same_side_liquidity")
+    close_level = as_float(reference.get("price") if isinstance(reference, dict) else None)
+    if close_level is None:
+        return False
+    if direction == "SHORT":
+        high = as_float(candle.get("high"))
+        return high is not None and high >= close_level
+    if direction == "LONG":
+        low = as_float(candle.get("low"))
+        return low is not None and low <= close_level
     return False
 
 
@@ -352,21 +630,99 @@ def evaluate_entry_models(
     state["sc_decision_pass_output"] = decision
     state["sweep_entry_path"] = decision["sweep_entry_path"]
     state["double_wick_state"] = decision["double_wick_state"]
-
-    if decision["sweep_entry_path"] == "Large Wick":
-        ok, price, reason = evaluate_large_wick_sweep(anchor, candidate, direction, tick_size)
-        if ok and price is not None:
-            return entry_confirmed(state, events, "Large Wick Sweep", price, reason)
+    ineligible_reason = decision.get("ineligible_reason") or "Decision Pass did not select this model."
+    selected_path = decision.get("sweep_entry_path")
+    sweep_ineligible_reason = ineligible_reason if selected_path is None else f"Decision Pass selected {selected_path}."
+    double_ineligible_reason = ineligible_reason if selected_path is None else "Decision Pass eliminated Double Wick."
+    large_ok, large_price, large_reason = evaluate_large_wick_sweep(anchor, candidate, direction, tick_size)
+    small_ok, small_price, small_reason = evaluate_small_wick_sweep(state, anchor, candidate, direction, tick_size)
+    double_ok, double_price, double_reason = evaluate_double_wick(anchor, candidate, direction, tick_size)
+    extended_ok, extended_price, extended_reason = evaluate_extended_retrace(state, anchor, candidate, direction)
+    state["step6_entry_models"] = {
+        "large_wick_sweep": {
+            "evaluated": True,
+            "passed": large_ok and decision["sweep_entry_path"] == "Large Wick",
+            "eligible": decision["sweep_entry_path"] == "Large Wick",
+            "reason": large_reason if decision["sweep_entry_path"] == "Large Wick" else f"{large_reason} Ineligible because {sweep_ineligible_reason}",
+        },
+        "small_wick_sweep": {
+            "evaluated": True,
+            "passed": small_ok and decision["sweep_entry_path"] == "Small Wick",
+            "eligible": decision["sweep_entry_path"] == "Small Wick",
+            "reason": small_reason if decision["sweep_entry_path"] == "Small Wick" else f"{small_reason} Ineligible because {sweep_ineligible_reason}",
+        },
+        "double_wick_rejection": {
+            "evaluated": True,
+            "passed": double_ok and decision["double_wick_state"] == "ACTIVE",
+            "eligible": decision["double_wick_state"] == "ACTIVE",
+            "reason": double_reason if decision["double_wick_state"] == "ACTIVE" else f"{double_reason} Ineligible because {double_ineligible_reason}",
+        },
+        "extended_retrace": {
+            "evaluated": True,
+            "passed": extended_ok,
+            "eligible": atr_1m_14_from_state(state) is not None,
+            "reason": extended_reason,
+        },
+    }
+    state["extended_retrace_entry_valid"] = extended_ok
+    state["extended_retrace_entry_price"] = extended_price
+    state["extended_retrace_entry_active"] = extended_ok
+    state["extended_retrace_pending"] = extended_price is not None and extended_ok is not True
+    state["extended_retrace_blocked_immediate_entry"] = False
+    state["extended_retrace_block_reason"] = None if extended_ok or extended_price is not None else extended_reason
+    state["extended_retrace_intrabar_fill"] = extended_ok
+    if extended_price is not None:
+        tick_value = tick_size if tick_size > 0 else 0.25
+        anchor_extreme = as_float(anchor.get("high")) if direction == "SHORT" else as_float(anchor.get("low"))
+        trigger_extreme = as_float(candidate.get("high")) if direction == "SHORT" else as_float(candidate.get("low"))
+        if anchor_extreme is not None and trigger_extreme is not None:
+            extension_distance = abs(trigger_extreme - anchor_extreme)
+            state["extended_retrace_extension_ticks"] = extension_distance / tick_value
+            atr_1m_14 = atr_1m_14_from_state(state)
+            state["extended_retrace_extension_atr_percent"] = ((extension_distance / atr_1m_14) * 100.0) if atr_1m_14 else None
+        state["extended_retrace_step6_extreme"] = trigger_extreme
     else:
-        ok, price, reason = evaluate_small_wick_sweep(anchor, candidate, direction, tick_size)
-        if ok and price is not None:
-            return entry_confirmed(state, events, "Small Wick Sweep", price, reason)
+        state["extended_retrace_extension_ticks"] = None
+        state["extended_retrace_extension_atr_percent"] = None
+        state["extended_retrace_step6_extreme"] = None
+    state["extended_retrace_step6_candle"] = candidate
+    state["extended_retrace_step6_candle_time"] = candle_timestamp(candidate)
+    state["extended_retrace_expires_at_candle"] = STEP6_PHASE_WINDOW_CANDLES
+    state["extended_retrace_invalidated"] = False
+    state["extended_retrace_expired"] = False
+    state["extended_retrace_entry_triggered"] = extended_ok
 
-    if decision["double_wick_state"] == "ACTIVE":
-        ok, price, reason = evaluate_double_wick(anchor, candidate, direction, tick_size)
-        if ok and price is not None:
-            return entry_confirmed(state, events, "Double Wick Rejection", price, reason)
+    if decision["sweep_entry_path"] == "Large Wick" and large_ok and large_price is not None:
+        return entry_confirmed(state, events, "Large Wick Sweep", large_price, large_reason)
+    if decision["sweep_entry_path"] == "Small Wick" and small_ok and small_price is not None:
+        return entry_confirmed(state, events, "Small Wick Sweep", small_price, small_reason)
+    if decision["double_wick_state"] == "ACTIVE" and double_ok and double_price is not None:
+        return entry_confirmed(state, events, "Double Wick Rejection", double_price, double_reason)
+    if extended_ok and extended_price is not None:
+        return entry_confirmed(state, events, "Extended Retrace", extended_price, extended_reason)
     return None
+
+
+def qualifies_phase1_anchor(current_anchor: dict[str, Any], candidate: dict[str, Any], direction: str, tick_size: float) -> bool:
+    """Return True when the candidate can own the next Step 6 SC anchor."""
+    if not close_beyond_sc_close(candidate, current_anchor, direction, tick_size):
+        return False
+    wick = sc_wick(candidate, direction)
+    full_range = candle_range(candidate)
+    return wick is not None and full_range is not None and wick > 0
+
+
+def replace_phase1_anchor(state: dict[str, Any], candidate: dict[str, Any]) -> None:
+    progression = int(state.get("sc_progression_count") or 1) + 1
+    if progression >= 2 and state.get("sc2") is None:
+        state["sc2"] = candidate
+    elif progression >= 3:
+        state["sc3"] = candidate
+    state["sc_progression_count"] = progression
+    state["phase1_anchor"] = candidate
+    state["active_entry_anchor"] = candidate
+    state["sc"] = candidate
+    state["current_sc"] = candidate
 
 
 def failed_entry_participation_exists(state: dict[str, Any], candidate: dict[str, Any]) -> bool:
@@ -427,22 +783,54 @@ def evaluate_phase1(state: dict[str, Any], events: list[dict[str, Any]], candida
     state["phase1_candle_count"] = count
     update_step6_window(state, candidate, count)
 
-    if count < 4:
-        reason = f"Phase 1 Candle {count}: entry blocked until required Candle 4."
-        events.append({"event": "step6_phase1_wait", "phase1_candle_count": count, "reason": reason})
-        return result("WAIT", state, "Step 6", reason, events)
-
     if count > 4:
         close_step6_window(state, candidate, count)
         return terminate_interaction(state, "Step 6", "Phase 1 timing expired; no late entry after Candle 4.")
 
     if required_leg_in_liquidity_gate_active(state):
-        close_step6_window(state, candidate)
-        return terminate_interaction(state, "Step 6", "Required leg-in liquidity gate blocked entry until Phase 1 timing expired.")
+        if count >= 4:
+            close_step6_window(state, candidate)
+            return terminate_interaction(state, "Step 6", "Required leg-in liquidity gate blocked entry until Phase 1 timing expired.")
+        return wait_for_required_leg_in_liquidity_sweep(
+            state,
+            events,
+            f"Phase 1 Candle {count}: required leg-in liquidity sweep gate active; entry evaluation blocked while timing continues.",
+        )
+
+    replaced_anchor = False
+    prior_anchor_time = candle_timestamp(anchor)
+    candidate_time = candle_timestamp(candidate)
+    if 2 <= count < STEP6_PHASE_WINDOW_CANDLES and (
+        qualifies_phase1_anchor(anchor, candidate, direction, tick_size)
+        and (
+            candidate_time is None
+            or prior_anchor_time is None
+            or candidate_time != prior_anchor_time
+        )
+    ):
+        replace_phase1_anchor(state, candidate)
+        replaced_anchor = True
+
+    if replaced_anchor:
+        reason = f"Phase 1 Candle {count}: newer qualifying anchor adopted for the remaining fixed Step 6 window."
+        events.append(
+            {
+                "event": "step6_phase1_anchor_replaced",
+                "phase1_candle_count": count,
+                "reason": reason,
+                "anchor_timestamp": candle_timestamp(candidate),
+            }
+        )
+        return result("WAIT", state, "Step 6", reason, events)
 
     entry = evaluate_entry_models(state, events, anchor, candidate, direction, tick_size)
     if entry is not None:
         return entry
+
+    if count < 4:
+        reason = f"Phase 1 Candle {count}: entry models evaluated; no valid entry yet."
+        events.append({"event": "step6_phase1_wait", "phase1_candle_count": count, "reason": reason})
+        return result("WAIT", state, "Step 6", reason, events)
 
     if failed_entry_participation_exists(state, candidate) and state.get("phase2_attempt_used") is not True:
         return activate_phase2(state, events, candidate)
@@ -536,6 +924,16 @@ def evaluate_step6(interaction: dict[str, Any], entry_candle: dict[str, Any] | N
         state["phase1_candle_count"] = count
         close_step6_window(state, candidate, count)
         return terminate_interaction(state, "Step 6", "Price closed beyond Anchor Extreme before entry.")
+
+    if next_same_side_liquidity_close_touched(state, candidate, direction):
+        count = next_phase1_count(state, candidate)
+        state["step6_phase"] = state.get("step6_phase") or "PHASE1"
+        state["phase1_candle_count"] = count
+        close_step6_window(state, candidate, count)
+        state["invalidation_source"] = "step6_next_same_side_liquidity_close"
+        state["invalidation_source_step"] = "Step 6"
+        state["invalidation_source_candle_time"] = candle_timestamp(candidate)
+        return terminate_interaction(state, "Step 6", STEP6_NEXT_SAME_SIDE_LIQUIDITY_CLOSE_TOUCHED)
 
     phase = state.get("step6_phase") or "PHASE1"
     if phase == "PHASE2" or state.get("phase2_active") is True:

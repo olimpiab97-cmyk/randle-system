@@ -1,0 +1,372 @@
+//---------------------------------------------------------
+// STACK GROUP LOGIC - FINAL MERGED COMPONENT STACKS
+//---------------------------------------------------------
+
+withinStack(float a, float b) =>
+    not na(a) and not na(b) and not na(stackThreshold) and math.abs(a - b) <= stackThreshold
+
+groupLabel(float price) =>
+    if na(price)
+        "NONE"
+    else if price > close
+        "HIGH"
+    else if price < close
+        "LOW"
+    else
+        "TOUCH"
+
+var int[] stackParents = array.new_int()
+var int[] stackLevelGroups = array.new_int()
+var int[] stackCounts = array.new_int()
+var float[] stackExtremePrices = array.new_float()
+var float[] stackClosePrices = array.new_float()
+var string[] stackSides = array.new_string()
+var int[] stackIdxA = array.new_int()
+var int[] stackIdxB = array.new_int()
+
+var int[] frozenStackLevelGroups = array.new_int()
+var int[] frozenStackCounts = array.new_int()
+var float[] frozenStackExtremePrices = array.new_float()
+var float[] frozenStackClosePrices = array.new_float()
+var string[] frozenStackSides = array.new_string()
+var int[] frozenStackIdxA = array.new_int()
+var int[] frozenStackIdxB = array.new_int()
+
+levelActive(float price, string status) =>
+    not na(price) and status != "INACTIVE" and (groupLabel(price) == "HIGH" or groupLabel(price) == "LOW")
+
+priceAtIndex(int idx) =>
+    switch idx
+        0 => YH_eff
+        1 => YL_eff
+        2 => ONH_eff
+        3 => ONL_eff
+        4 => LH_eff
+        5 => LL_eff
+        6 => PMH_eff
+        7 => PML_eff
+        => na
+
+statusAtIndex(int idx) =>
+    switch idx
+        0 => yhStatus_eff
+        1 => ylStatus_eff
+        2 => onhStatus_eff
+        3 => onlStatus_eff
+        4 => lhStatus_eff
+        5 => llStatus_eff
+        6 => pmhStatus_eff
+        7 => pmlStatus_eff
+        => "INACTIVE"
+
+sideAtIndex(int idx) =>
+    groupLabel(priceAtIndex(idx))
+
+// YH/YL are always independent and may not join a stack.
+stackEligibleIndex(int idx) =>
+    idx >= 2 and idx <= 7
+
+clearLiveStacks() =>
+    array.clear(stackParents)
+    array.clear(stackLevelGroups)
+    array.clear(stackCounts)
+    array.clear(stackExtremePrices)
+    array.clear(stackClosePrices)
+    array.clear(stackSides)
+    array.clear(stackIdxA)
+    array.clear(stackIdxB)
+
+clearFrozenStacks() =>
+    array.clear(frozenStackLevelGroups)
+    array.clear(frozenStackCounts)
+    array.clear(frozenStackExtremePrices)
+    array.clear(frozenStackClosePrices)
+    array.clear(frozenStackSides)
+    array.clear(frozenStackIdxA)
+    array.clear(frozenStackIdxB)
+
+restoreFrozenStacks() =>
+    clearLiveStacks()
+
+    int frozenGroupCount = array.size(frozenStackLevelGroups)
+    if frozenGroupCount > 0
+        for i = 0 to frozenGroupCount - 1
+            array.push(stackLevelGroups, array.get(frozenStackLevelGroups, i))
+
+    int frozenCountCount = array.size(frozenStackCounts)
+    if frozenCountCount > 0
+        for i = 0 to frozenCountCount - 1
+            array.push(stackCounts, array.get(frozenStackCounts, i))
+            array.push(stackExtremePrices, array.get(frozenStackExtremePrices, i))
+            array.push(stackClosePrices, array.get(frozenStackClosePrices, i))
+            array.push(stackSides, array.get(frozenStackSides, i))
+            array.push(stackIdxA, array.get(frozenStackIdxA, i))
+            array.push(stackIdxB, array.get(frozenStackIdxB, i))
+
+ufFind(int node) =>
+    int root = node
+    int parent = array.get(stackParents, root)
+
+    while parent != root
+        root := parent
+        parent := array.get(stackParents, root)
+
+    int cur = node
+    int curParent = array.get(stackParents, cur)
+
+    while curParent != cur
+        int nextParent = curParent
+        array.set(stackParents, cur, root)
+        cur := nextParent
+        curParent := array.get(stackParents, cur)
+
+    root
+
+ufUnion(int a, int b) =>
+    int rootA = ufFind(a)
+    int rootB = ufFind(b)
+
+    if rootA != rootB
+        int keepRoot = math.min(rootA, rootB)
+        int moveRoot = math.max(rootA, rootB)
+        array.set(stackParents, moveRoot, keepRoot)
+
+sortStackSideArrays(int[] idxArr, float[] priceArr, bool ascending) =>
+    int n = array.size(priceArr)
+
+    if n > 1
+        for i = 0 to n - 2
+            for j = i + 1 to n - 1
+                float pi = array.get(priceArr, i)
+                float pj = array.get(priceArr, j)
+
+                bool shouldSwap = ascending ? pj < pi : pj > pi
+
+                if shouldSwap
+                    int idxI = array.get(idxArr, i)
+                    int idxJ = array.get(idxArr, j)
+
+                    array.set(priceArr, i, pj)
+                    array.set(priceArr, j, pi)
+                    array.set(idxArr, i, idxJ)
+                    array.set(idxArr, j, idxI)
+
+buildLiveStacks() =>
+    clearLiveStacks()
+
+    for i = 0 to 7
+        array.push(stackParents, i)
+        array.push(stackLevelGroups, 0)
+
+    int[] highIdx = array.new_int()
+    float[] highPrices = array.new_float()
+    int[] lowIdx = array.new_int()
+    float[] lowPrices = array.new_float()
+
+    for i = 0 to 7
+        float p = priceAtIndex(i)
+        string st = statusAtIndex(i)
+        string side = sideAtIndex(i)
+
+        if levelActive(p, st) and stackEligibleIndex(i)
+            if side == "HIGH"
+                array.push(highIdx, i)
+                array.push(highPrices, p)
+            if side == "LOW"
+                array.push(lowIdx, i)
+                array.push(lowPrices, p)
+
+    int highCount = array.size(highPrices)
+    if highCount > 1
+        sortStackSideArrays(highIdx, highPrices, true)
+
+        for i = 0 to highCount - 2
+            int idxA = array.get(highIdx, i)
+            int idxB = array.get(highIdx, i + 1)
+            float priceA = array.get(highPrices, i)
+            float priceB = array.get(highPrices, i + 1)
+
+            if withinStack(priceA, priceB)
+                ufUnion(idxA, idxB)
+
+    int lowCount = array.size(lowPrices)
+    if lowCount > 1
+        sortStackSideArrays(lowIdx, lowPrices, false)
+
+        for i = 0 to lowCount - 2
+            int idxA = array.get(lowIdx, i)
+            int idxB = array.get(lowIdx, i + 1)
+            float priceA = array.get(lowPrices, i)
+            float priceB = array.get(lowPrices, i + 1)
+
+            if withinStack(priceA, priceB)
+                ufUnion(idxA, idxB)
+
+    for i = 0 to 7
+        array.set(stackParents, i, ufFind(i))
+
+    int[] rootCounts = array.new_int(8, 0)
+    float[] rootExtremePrices = array.new_float(8, na)
+    float[] rootClosePrices = array.new_float(8, na)
+    string[] rootSides = array.new_string(8, "NONE")
+
+    for i = 0 to 7
+        float p = priceAtIndex(i)
+        string st = statusAtIndex(i)
+        string side = sideAtIndex(i)
+
+        if levelActive(p, st) and stackEligibleIndex(i)
+            int root = array.get(stackParents, i)
+
+            array.set(rootCounts, root, array.get(rootCounts, root) + 1)
+            array.set(rootSides, root, side)
+
+            float existingExtreme = array.get(rootExtremePrices, root)
+            float existingClose = array.get(rootClosePrices, root)
+
+            if side == "HIGH"
+                array.set(rootExtremePrices, root, na(existingExtreme) ? p : math.max(existingExtreme, p))
+                array.set(rootClosePrices, root, na(existingClose) ? p : math.min(existingClose, p))
+            else
+                array.set(rootExtremePrices, root, na(existingExtreme) ? p : math.min(existingExtreme, p))
+                array.set(rootClosePrices, root, na(existingClose) ? p : math.max(existingClose, p))
+
+    int[] rootToGroupId = array.new_int(8, 0)
+
+    for root = 0 to 7
+        int count = array.get(rootCounts, root)
+
+        if count >= 2
+            array.push(stackCounts, count)
+            array.push(stackExtremePrices, array.get(rootExtremePrices, root))
+            array.push(stackClosePrices, array.get(rootClosePrices, root))
+            array.push(stackSides, array.get(rootSides, root))
+            array.push(stackIdxA, root)
+            array.push(stackIdxB, root)
+
+            int groupId = array.size(stackCounts)
+            array.set(rootToGroupId, root, groupId)
+
+    for i = 0 to 7
+        float p = priceAtIndex(i)
+        string st = statusAtIndex(i)
+
+        if levelActive(p, st) and stackEligibleIndex(i)
+            int root = array.get(stackParents, i)
+            int groupId = array.get(rootToGroupId, root)
+            array.set(stackLevelGroups, i, groupId)
+
+freezeStacks() =>
+    clearFrozenStacks()
+
+    int groupCount = array.size(stackLevelGroups)
+    if groupCount > 0
+        for i = 0 to groupCount - 1
+            array.push(frozenStackLevelGroups, array.get(stackLevelGroups, i))
+
+    int stackCount = array.size(stackCounts)
+    if stackCount > 0
+        for i = 0 to stackCount - 1
+            array.push(frozenStackCounts, array.get(stackCounts, i))
+            array.push(frozenStackExtremePrices, array.get(stackExtremePrices, i))
+            array.push(frozenStackClosePrices, array.get(stackClosePrices, i))
+            array.push(frozenStackSides, array.get(stackSides, i))
+            array.push(frozenStackIdxA, array.get(stackIdxA, i))
+            array.push(frozenStackIdxB, array.get(stackIdxB, i))
+
+if not sessionTableFrozen or shouldFreezeNow
+    buildLiveStacks()
+
+if shouldFreezeNow
+    freezeStacks()
+
+if sessionTableFrozen and not shouldFreezeNow
+    restoreFrozenStacks()
+
+int yhGroup  = array.size(stackLevelGroups) > 0 ? array.get(stackLevelGroups, 0) : 0
+int ylGroup  = array.size(stackLevelGroups) > 1 ? array.get(stackLevelGroups, 1) : 0
+int onhGroup = array.size(stackLevelGroups) > 2 ? array.get(stackLevelGroups, 2) : 0
+int onlGroup = array.size(stackLevelGroups) > 3 ? array.get(stackLevelGroups, 3) : 0
+int lhGroup  = array.size(stackLevelGroups) > 4 ? array.get(stackLevelGroups, 4) : 0
+int llGroup  = array.size(stackLevelGroups) > 5 ? array.get(stackLevelGroups, 5) : 0
+int pmhGroup = array.size(stackLevelGroups) > 6 ? array.get(stackLevelGroups, 6) : 0
+int pmlGroup = array.size(stackLevelGroups) > 7 ? array.get(stackLevelGroups, 7) : 0
+
+priceStackCount(int groupId) =>
+    groupId == 0 ? 0 : array.get(stackCounts, groupId - 1)
+
+priceStackAnchor(int groupId) =>
+    groupId == 0 ? na : array.get(stackExtremePrices, groupId - 1)
+
+priceStackClose(int groupId) =>
+    groupId == 0 ? na : array.get(stackClosePrices, groupId - 1)
+
+priceStackSide(int groupId) =>
+    groupId == 0 ? "NONE" : array.get(stackSides, groupId - 1)
+
+cleanStackLabel(int groupId) =>
+    if groupId == 0 or priceStackCount(groupId) < 2
+        "NONE"
+    else
+        string side = priceStackSide(groupId)
+        float thisClose = priceStackClose(groupId)
+        int sideNumber = 1
+
+        int stackTotal = array.size(stackCounts)
+        if stackTotal > 0
+            for i = 0 to stackTotal - 1
+                int otherGroupId = i + 1
+                string otherSide = priceStackSide(otherGroupId)
+                float otherClose = priceStackClose(otherGroupId)
+
+                if otherGroupId != groupId and otherSide == side
+                    if side == "HIGH" and otherClose < thisClose
+                        sideNumber += 1
+                    if side == "LOW" and otherClose > thisClose
+                        sideNumber += 1
+
+        side == "HIGH" ? "HIGH " + str.tostring(sideNumber) :
+         side == "LOW" ? "LOW " + str.tostring(sideNumber) :
+         "TOUCH"
+
+stackLabelForLevel(int idx) =>
+    int groupId = array.size(stackLevelGroups) > idx ? array.get(stackLevelGroups, idx) : 0
+    cleanStackLabel(groupId)
+
+string yhStackGroup_raw  = stackLabelForLevel(0)
+string ylStackGroup_raw  = stackLabelForLevel(1)
+string onhStackGroup_raw = stackLabelForLevel(2)
+string onlStackGroup_raw = stackLabelForLevel(3)
+string lhStackGroup_raw  = stackLabelForLevel(4)
+string llStackGroup_raw  = stackLabelForLevel(5)
+string pmhStackGroup_raw = stackLabelForLevel(6)
+string pmlStackGroup_raw = stackLabelForLevel(7)
+
+var string yhStackGroup_lock  = "NONE"
+var string ylStackGroup_lock  = "NONE"
+var string onhStackGroup_lock = "NONE"
+var string onlStackGroup_lock = "NONE"
+var string lhStackGroup_lock  = "NONE"
+var string llStackGroup_lock  = "NONE"
+var string pmhStackGroup_lock = "NONE"
+var string pmlStackGroup_lock = "NONE"
+
+if shouldFreezeNow
+    yhStackGroup_lock  := "NONE"
+    ylStackGroup_lock  := "NONE"
+    onhStackGroup_lock := onhStackGroup_raw
+    onlStackGroup_lock := onlStackGroup_raw
+    lhStackGroup_lock  := lhStackGroup_raw
+    llStackGroup_lock  := llStackGroup_raw
+    pmhStackGroup_lock := pmhStackGroup_raw
+    pmlStackGroup_lock := pmlStackGroup_raw
+
+string yhStackGroup  = "NONE"
+string ylStackGroup  = "NONE"
+string onhStackGroup = sessionLocked ? onhStackGroup_lock : onhStackGroup_raw
+string onlStackGroup = sessionLocked ? onlStackGroup_lock : onlStackGroup_raw
+string lhStackGroup  = sessionLocked ? lhStackGroup_lock  : lhStackGroup_raw
+string llStackGroup  = sessionLocked ? llStackGroup_lock  : llStackGroup_raw
+string pmhStackGroup = sessionLocked ? pmhStackGroup_lock : pmhStackGroup_raw
+string pmlStackGroup = sessionLocked ? pmlStackGroup_lock : pmlStackGroup_raw
+

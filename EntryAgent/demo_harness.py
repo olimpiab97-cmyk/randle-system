@@ -1912,7 +1912,7 @@ def evaluate_fixture(fixture: dict[str, Any]) -> list[dict[str, Any]]:
             step25 = evaluate_step25(lifecycle)
             lifecycle.update(step25["state"])
             if step25["status"] == "READY":
-                step = "Step 2.5"
+                step = "Step 2 Continuation"
                 reason = step25["reason"]
 
                 active_stack = active if len(active.get("components") or []) > 1 else None

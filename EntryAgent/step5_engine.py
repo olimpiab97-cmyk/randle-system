@@ -165,13 +165,27 @@ def continuation_acceptance_satisfied(state: dict[str, Any], candle: dict[str, A
 
 
 def apply_candle_b_reference_upgrade(state: dict[str, Any], direction: str) -> float | None:
-    """Deprecated compatibility shim; Step 5 now uses fixed Candle A close."""
-    reference = leg1_candle_a_close(state)
+    """Deprecated compatibility shim; Step 5 now uses the frozen Step 5 close boundary."""
+    reference = frozen_step5_close_boundary(state)
     state["active_leg1_reference"] = reference
     state["active_reference"] = reference
-    state["leg1_reference_owner"] = "Candle A"
+    state["leg1_reference_owner"] = "step4_window"
     state["candle_b_reference_upgrade_active"] = False
     return reference
+
+
+def frozen_step5_close_boundary(state: dict[str, Any]) -> float | None:
+    boundary = as_float(state.get("step5_close_boundary"))
+    if boundary is not None:
+        return boundary
+    return leg1_candle_a_close(state)
+
+
+def frozen_leg2_sweep_extreme(state: dict[str, Any]) -> float | None:
+    extreme = as_float(state.get("leg2_sweep_extreme"))
+    if extreme is not None:
+        return extreme
+    return as_float(state.get("anchor_extreme"))
 
 
 def leg1_candle_a_close(state: dict[str, Any]) -> float | None:
@@ -289,15 +303,15 @@ def lock_leg2_candle_a(state: dict[str, Any], candle: dict[str, Any], reference:
     state["anchor_extreme_swept"] = False
     state["step5_trigger_valid"] = False
     seed_step6_window(state, candle.get("timestamp"), 0)
-    reason = "Leg 2 Candle A locked: close beyond fixed Leg 1 Candle A reference; 4-candle confirmation window started."
-    events.append({"event": "step5_leg2_candle_a_locked", "reason": reason, "leg1_reference": reference})
+    reason = "Leg 2 trigger locked: close beyond frozen Step 5 close boundary; 4-candle confirmation window started."
+    events.append({"event": "step5_leg2_candle_a_locked", "reason": reason, "step5_close_boundary": reference})
     return result("WAIT", state, "Step 5", reason, events)
 
 
 def validate_confirmation_window(state: dict[str, Any], candle: dict[str, Any], direction: str, tick_size: float, events: list[dict[str, Any]]) -> dict[str, Any]:
-    anchor_extreme = as_float(state.get("anchor_extreme"))
+    anchor_extreme = frozen_leg2_sweep_extreme(state)
     if anchor_extreme is None:
-        return terminate_interaction(state, "Step 5", "Step 5 confirmation requires Anchor Extreme.")
+        return terminate_interaction(state, "Step 5", "Step 5 confirmation requires frozen leg2_sweep_extreme.")
 
     if closes_through_anchor_extreme(candle, anchor_extreme, direction, tick_size):
         state["leg2_status"] = "INVALID"
@@ -340,7 +354,7 @@ def validate_confirmation_window(state: dict[str, Any], candle: dict[str, Any], 
         state["step6_active"] = True
         index = minute_index(state.get("step6_window_started_at") or state.get("leg2_candle_a_time"), candle.get("timestamp"))
         seed_step6_window(state, state.get("step6_window_started_at") or state.get("leg2_candle_a_time") or candle.get("timestamp"), index if index is not None else count)
-        reason = f"Leg 2 validated: Anchor Extreme swept and valid trigger occurred within Candle {count} of 4."
+        reason = f"Leg 2 validated: frozen leg2_sweep_extreme swept and valid trigger occurred within Candle {count} of 4."
         events.append(
             {
                 "event": "step5_leg2_validated",
@@ -356,7 +370,7 @@ def validate_confirmation_window(state: dict[str, Any], candle: dict[str, Any], 
         state["leg2_status"] = "INVALID"
         state["structure_status"] = "INVALID"
         state["interaction_state"] = "CONSUMED"
-        reason = "Leg 2 invalid: 4-candle window expired without Anchor Extreme sweep and valid trigger."
+        reason = "Leg 2 invalid: 4-candle window expired without frozen leg2_sweep_extreme sweep and valid trigger."
         events.append(
             {
                 "event": "step5_leg2_window_expired",
@@ -368,7 +382,7 @@ def validate_confirmation_window(state: dict[str, Any], candle: dict[str, Any], 
         return terminate_interaction(state, "Step 5", reason)
 
     reason = (
-        f"Step 5 confirmation window Candle {count}: waiting for Anchor Extreme sweep and valid trigger "
+        f"Step 5 confirmation window Candle {count}: waiting for frozen leg2_sweep_extreme sweep and valid trigger "
         f"(sweep={state['anchor_extreme_swept']}, trigger={state['step5_trigger_valid']})."
     )
     events.append(
@@ -383,8 +397,40 @@ def validate_confirmation_window(state: dict[str, Any], candle: dict[str, Any], 
     return result("WAIT", state, "Step 5", reason, events)
 
 
+#
+# STEP 5 CONTRACT (LEG 2)
+#
+# Purpose:
+# - Leg 2 confirms continuation beyond the Leg 1 reference.
+#
+# Reference:
+# - Frozen step5_close_boundary from the confirmed Step 4 participation window.
+#
+# LONG:
+# - Leg 2 confirms when a future candle closes below Candle A close.
+#
+# SHORT:
+# - Leg 2 confirms when a future candle closes above Candle A close.
+#
+# Precedence:
+# - A valid Leg 2 confirmation wins.
+# - Anchor-extreme invalidation does not override a candle that already
+#   satisfies the Leg 2 confirmation rule.
+#
+# Lifecycle:
+# - Step 4 / Leg 1 completes.
+# - Future candles are evaluated for Leg 2 confirmation.
+# - First qualifying close confirms Leg 2.
+# - Step 6 window begins immediately after Leg 2 confirmation.
+#
+# Canonical replay example:
+# - 2026-06-19 continuation LONG
+# - frozen step5_close_boundary = 30668.25
+# - 07:02 close = 30653.5
+# - Result: Leg 2 CONFIRMED
+#
 def evaluate_step5(interaction: dict[str, Any], leg2_candle: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Confirm Leg 2 with fixed Candle A, 4-candle window, and Anchor Extreme rules."""
+    """Confirm Leg 2 with the frozen Step 4 window structure and hand off to Step 6 after validation."""
     state = dict(interaction)
     events = list(state.get("events") or [])
     candle = leg2_candle or state.get("latest_candle") or state.get("leg2_candle")
@@ -405,19 +451,14 @@ def evaluate_step5(interaction: dict[str, Any], leg2_candle: dict[str, Any] | No
         events.append({"event": "step5_already_validated", "reason": reason})
         return result("READY", state, "Step 6", reason, events)
 
-    reference = leg1_candle_a_close(state)
-    anchor_extreme = as_float(state.get("anchor_extreme"))
+    reference = frozen_step5_close_boundary(state)
+    anchor_extreme = frozen_leg2_sweep_extreme(state)
     if reference is None or anchor_extreme is None:
-        return terminate_interaction(state, "Step 5", "Step 5 requires fixed Leg 1 Candle A reference and Anchor Extreme.")
+        return terminate_interaction(state, "Step 5", "Step 5 requires frozen step5_close_boundary and leg2_sweep_extreme.")
 
     if state.get("step5_confirmed") is True and state.get("leg2_status") == "CONFIRMED":
         return validate_confirmation_window(state, candle, str(direction), tick_size, events)
 
-    if closes_through_anchor_extreme(candle, anchor_extreme, str(direction), tick_size):
-        state["leg2_status"] = "INVALID"
-        state["structure_status"] = "INVALID"
-        state["interaction_state"] = "CONSUMED"
-        return terminate_interaction(state, "Step 5", "Anchor Extreme close invalidation occurred before Leg 2 activation.")
     if not continuation_acceptance_satisfied(state, candle):
         update_continuation_acceptance_probe(state, candle)
         reason = "Step 5 waiting: provisional continuation requires acceptance close beyond the active wick threshold."
@@ -425,8 +466,8 @@ def evaluate_step5(interaction: dict[str, Any], leg2_candle: dict[str, Any] | No
         return result("WAIT", state, "Step 5", reason, events)
 
     if not close_beyond_reference(candle, reference, str(direction), tick_size):
-        reason = "Step 5 waiting: Leg 2 Candle A requires close beyond fixed Leg 1 Candle A reference."
-        events.append({"event": "step5_waiting_for_leg2_candle_a", "reason": reason, "leg1_reference": reference})
+        reason = "Step 5 waiting: Leg 2 trigger requires a close beyond the frozen Step 5 close boundary."
+        events.append({"event": "step5_waiting_for_leg2_candle_a", "reason": reason, "step5_close_boundary": reference})
         return result("WAIT", state, "Step 5", reason, events)
 
     return lock_leg2_candle_a(state, candle, reference, events)

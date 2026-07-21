@@ -1,0 +1,1666 @@
+//@version=6
+indicator("7/16/2026 Randle AI - Level Map Helper (Liquidity Ladder Fix)", overlay=true, max_lines_count=500)
+
+//---------------------------------------------------------
+// INPUTS
+//---------------------------------------------------------
+string tzInput = input.string("America/Los_Angeles", "Timezone")
+bool useDst = input.bool(true, "US Daylight Savings Active")
+
+string londonSession    = useDst ? "0100-0500" : "0000-0500"
+string premarketSession = input.session("0500-0615", "Pre-Market Session")
+string overnightSession = input.session("1500-0615", "Overnight Session")
+string rthSession       = input.session("0630-1300", "RTH Session (for YH/YL)")
+
+bool showTable = input.bool(true, "Show Level Table")
+
+bool showPMH = input.bool(true, "Show PMH")
+bool showPML = input.bool(true, "Show PML")
+bool showLH  = input.bool(true, "Show LH")
+bool showLL  = input.bool(true, "Show LL")
+bool showONH = input.bool(true, "Show ONH")
+bool showONL = input.bool(true, "Show ONL")
+bool showYH  = input.bool(true, "Show YH")
+bool showYL  = input.bool(true, "Show YL")
+
+bool stackOffset = input.bool(true, "Offset Stacked Levels")
+int stackTicks   = input.int(8, "Stack Offset Ticks", minval=1, maxval=20)
+
+float stackAtrPct = input.float(10.0, "Stack Group Threshold % of Daily ATR", minval=1.0, maxval=50.0)
+bool showMidpoints = input.bool(true, "Show 50% Lines Between Non-Stacked Levels")
+bool showExhaustion25 = input.bool(true, "Show 25% Remaining Exhaustion Lines")
+
+//---------------------------------------------------------
+// GLOBAL TICK / TOLERANCE HELPERS
+//---------------------------------------------------------
+float tick = syminfo.mintick
+float tol  = tick * 0.25
+float stackStep = tick * stackTicks
+
+sameLevel(float a, float b) =>
+    not na(a) and not na(b) and math.abs(a - b) <= tol
+
+//---------------------------------------------------------
+// SESSION HELPERS
+//---------------------------------------------------------
+inSession(string sess) =>
+    not na(time(timeframe.period, sess, tzInput))
+
+bool inLondon    = inSession(londonSession)
+bool inPremarket = inSession(premarketSession)
+bool inOvernight = inSession(overnightSession)
+bool inRTH       = inSession(rthSession)
+
+sessionStart(bool sessionState) =>
+    sessionState and not sessionState[1]
+
+sessionEnd(bool sessionState) =>
+    not sessionState and sessionState[1]
+
+// Fixed session timestamps for the chart day.
+int today0615 = timestamp(tzInput, year, month, dayofmonth, 6, 15)
+int today1400 = timestamp(tzInput, year, month, dayofmonth, 14, 0)
+
+bool before0615 = time < today0615
+bool atOrAfter0615 = time >= today0615
+bool before1400 = time <= today1400
+
+bool newDay = dayofmonth(time, tzInput) != dayofmonth(time[1], tzInput) or month(time, tzInput) != month(time[1], tzInput) or year(time, tzInput) != year(time[1], tzInput)
+
+// True only on the first confirmed bar that reaches or crosses 06:15.
+// Covers normal running case.
+bool firstBarAtOrAfter0615 = atOrAfter0615 and not atOrAfter0615[1]
+
+// Late-start detector.
+// If the script loads after 06:15, this lets the next confirmed bar freeze/send once.
+bool shouldHaveSessionFrozen = atOrAfter0615
+
+//---------------------------------------------------------
+// SESSION TRACKERS
+//---------------------------------------------------------
+
+// London
+var float londonHi = na
+var float londonLo = na
+var float lastLondonHi = na
+var float lastLondonLo = na
+
+if sessionStart(inLondon)
+    londonHi := high
+    londonLo := low
+else if inLondon
+    londonHi := math.max(nz(londonHi, high), high)
+    londonLo := math.min(nz(londonLo, low), low)
+
+if sessionEnd(inLondon)
+    lastLondonHi := londonHi
+    lastLondonLo := londonLo
+
+// Pre-market
+var float pmHi = na
+var float pmLo = na
+var float lastPmHi = na
+var float lastPmLo = na
+
+if sessionStart(inPremarket)
+    pmHi := high
+    pmLo := low
+else if inPremarket
+    pmHi := math.max(nz(pmHi, high), high)
+    pmLo := math.min(nz(pmLo, low), low)
+
+if sessionEnd(inPremarket)
+    lastPmHi := pmHi
+    lastPmLo := pmLo
+
+// Overnight
+var float onHi = na
+var float onLo = na
+var float lastOnHi = na
+var float lastOnLo = na
+
+if sessionStart(inOvernight)
+    onHi := high
+    onLo := low
+else if inOvernight
+    onHi := math.max(nz(onHi, high), high)
+    onLo := math.min(nz(onLo, low), low)
+
+if sessionEnd(inOvernight)
+    lastOnHi := onHi
+    lastOnLo := onLo
+
+// Prior RTH high/low
+var float rthHi = na
+var float rthLo = na
+var float prevRthHi = na
+var float prevRthLo = na
+
+if sessionStart(inRTH)
+    rthHi := high
+    rthLo := low
+else if inRTH
+    rthHi := math.max(nz(rthHi, high), high)
+    rthLo := math.min(nz(rthLo, low), low)
+
+if sessionEnd(inRTH)
+    prevRthHi := rthHi
+    prevRthLo := rthLo
+
+//---------------------------------------------------------
+// RAW LEVEL VALUES
+//---------------------------------------------------------
+float LH_base  = inLondon ? londonHi : lastLondonHi
+float LL_raw   = inLondon ? londonLo : lastLondonLo
+
+float PMH_raw = inPremarket ? pmHi : lastPmHi
+float PML_raw = inPremarket ? pmLo : lastPmLo
+
+float ONH_raw = inOvernight ? onHi : lastOnHi
+float ONL_raw = inOvernight ? onLo : lastOnLo
+
+float YH_raw = prevRthHi
+float YL_raw = prevRthLo
+
+//---------------------------------------------------------
+// LH PROMOTION LOGIC
+//---------------------------------------------------------
+bool newPMHBar = not na(PMH_raw) and (na(PMH_raw[1]) or PMH_raw > PMH_raw[1] + tol)
+bool newONHBar = not na(ONH_raw) and (na(ONH_raw[1]) or ONH_raw > ONH_raw[1] + tol)
+
+bool lhWickOnlySweep = not inLondon and not na(lastLondonHi) and high > lastLondonHi and close <= lastLondonHi
+bool lhPromoteThisBar = lhWickOnlySweep and newPMHBar and newONHBar and sameLevel(high, PMH_raw) and sameLevel(high, ONH_raw)
+
+var float lhPromotedHi = na
+
+if newDay or sessionStart(inLondon) or sessionEnd(inLondon)
+    lhPromotedHi := na
+
+if lhPromoteThisBar
+    lhPromotedHi := high
+
+float LH_raw = not na(lhPromotedHi) ? lhPromotedHi : LH_base
+
+//---------------------------------------------------------
+// DAILY ATR / RANGE METRICS
+//---------------------------------------------------------
+float dailyATR14 = request.security(syminfo.tickerid, "D", ta.atr(14), lookahead=barmerge.lookahead_off)
+
+float pmRange = na(PMH_raw) or na(PML_raw) ? na : (PMH_raw - PML_raw)
+float pmATRpct = na(pmRange) or na(dailyATR14) or dailyATR14 == 0 ? na : (pmRange / dailyATR14) * 100.0
+
+float onRange = na(ONH_raw) or na(ONL_raw) ? na : (ONH_raw - ONL_raw)
+float dailyRangePct = na(onRange) or na(dailyATR14) or dailyATR14 == 0 ? na : (onRange / dailyATR14) * 100.0
+
+float stackThresholdRaw = na(dailyATR14) or dailyATR14 == 0 ? na : dailyATR14 * (stackAtrPct / 100.0)
+
+fmtPct(float x) =>
+    na(x) ? "na" : str.tostring(x, "#.0") + "%"
+
+fmt(float x) =>
+    na(x) ? "na" : str.tostring(x, format.mintick)
+
+roundToMintick(float x) =>
+    na(x) ? na : math.round(x / syminfo.mintick) * syminfo.mintick
+
+float stackThreshold = roundToMintick(stackThresholdRaw)
+
+sessionStateText(bool state) =>
+    state ? "LIVE" : "SET"
+
+//---------------------------------------------------------
+// 5-MIN DATA FOR BREAK-THROUGH LOGIC
+//---------------------------------------------------------
+float close5 = request.security(syminfo.tickerid, "5", close, lookahead=barmerge.lookahead_off)
+int   time5  = request.security(syminfo.tickerid, "5", time,  lookahead=barmerge.lookahead_off)
+bool  new5ConfirmedBar = ta.change(time5) != 0
+
+//---------------------------------------------------------
+// STATUS ENGINE
+//---------------------------------------------------------
+var bool lhInactive = false
+var bool llInactive = false
+
+if sessionEnd(inLondon)
+    lhInactive := false
+    llInactive := false
+
+if not na(LH_raw) and not inLondon and not lhInactive and close > LH_raw
+    lhInactive := true
+
+if not na(lastLondonLo) and not inLondon and not llInactive and close < lastLondonLo
+    llInactive := true
+
+var bool onhReactivated = false
+var bool onhInactive = false
+var bool onlReactivated = false
+var bool onlInactive = false
+var bool yhReactivated = false
+var bool yhInactive = false
+var bool ylReactivated = false
+var bool ylInactive = false
+
+bool newONH = not na(ONH_raw) and (na(ONH_raw[1]) or ONH_raw != ONH_raw[1])
+bool newONL = not na(ONL_raw) and (na(ONL_raw[1]) or ONL_raw != ONL_raw[1])
+bool newYH  = not na(YH_raw)  and (na(YH_raw[1])  or YH_raw != YH_raw[1])
+bool newYL  = not na(YL_raw)  and (na(YL_raw[1])  or YL_raw != YL_raw[1])
+
+if newONH
+    onhReactivated := false
+    onhInactive := false
+if newONL
+    onlReactivated := false
+    onlInactive := false
+if newYH
+    yhReactivated := false
+    yhInactive := false
+if newYL
+    ylReactivated := false
+    ylInactive := false
+
+if not na(ONH_raw) and not onhReactivated and not onhInactive and new5ConfirmedBar and close5 > ONH_raw
+    onhReactivated := true
+if not na(ONL_raw) and not onlReactivated and not onlInactive and new5ConfirmedBar and close5 < ONL_raw
+    onlReactivated := true
+if not na(YH_raw) and not yhReactivated and not yhInactive and new5ConfirmedBar and close5 > YH_raw
+    yhReactivated := true
+if not na(YL_raw) and not ylReactivated and not ylInactive and new5ConfirmedBar and close5 < YL_raw
+    ylReactivated := true
+
+if onhReactivated and not onhInactive and close < ONH_raw
+    onhInactive := true
+if onlReactivated and not onlInactive and close > ONL_raw
+    onlInactive := true
+if yhReactivated and not yhInactive and close < YH_raw
+    yhInactive := true
+if ylReactivated and not ylInactive and close > YL_raw
+    ylInactive := true
+
+string pmhStatus = "ACTIVE"
+string pmlStatus = "ACTIVE"
+string lhStatus  = lhInactive ? "INACTIVE" : "ACTIVE"
+string llStatus  = llInactive ? "INACTIVE" : "ACTIVE"
+string onhStatus = onhInactive ? "INACTIVE" : onhReactivated ? "REACTIVATED" : "ACTIVE"
+string onlStatus = onlInactive ? "INACTIVE" : onlReactivated ? "REACTIVATED" : "ACTIVE"
+string yhStatus  = yhInactive ? "INACTIVE" : yhReactivated ? "REACTIVATED" : "ACTIVE"
+string ylStatus  = ylInactive ? "INACTIVE" : ylReactivated ? "REACTIVATED" : "ACTIVE"
+
+//---------------------------------------------------------
+// SESSION-END LOCK
+//---------------------------------------------------------
+
+// Session state
+var bool sessionLocked = false
+var bool sessionTableFrozen = false
+var bool sessionTableSent = false
+
+// Frozen level values
+var float LH_lock  = na
+var float LL_lock  = na
+var float PMH_lock = na
+var float PML_lock = na
+var float ONH_lock = na
+var float ONL_lock = na
+var float YH_lock  = na
+var float YL_lock  = na
+
+// Frozen statuses
+var string lhStatus_lock  = "ACTIVE"
+var string llStatus_lock  = "ACTIVE"
+var string pmhStatus_lock = "ACTIVE"
+var string pmlStatus_lock = "ACTIVE"
+var string onhStatus_lock = "ACTIVE"
+var string onlStatus_lock = "ACTIVE"
+var string yhStatus_lock  = "ACTIVE"
+var string ylStatus_lock  = "ACTIVE"
+
+// Reset every session
+if newDay
+    sessionLocked := false
+    sessionTableFrozen := false
+    sessionTableSent := false
+
+    LH_lock  := na
+    LL_lock  := na
+    PMH_lock := na
+    PML_lock := na
+    ONH_lock := na
+    ONL_lock := na
+    YH_lock  := na
+    YL_lock  := na
+
+// Freeze exactly once.
+// Either:
+// 1) normal 06:15 transition
+// 2) script started after 06:15 and table hasn't been frozen yet.
+bool shouldFreezeNow =
+     not sessionTableFrozen and
+     (
+         sessionEnd(inPremarket) or
+         (shouldHaveSessionFrozen and not sessionLocked)
+     )
+
+if shouldFreezeNow
+    sessionLocked := true
+    sessionTableFrozen := true
+
+    LH_lock  := LH_raw
+    LL_lock  := LL_raw
+    PMH_lock := lastPmHi
+    PML_lock := lastPmLo
+    ONH_lock := lastOnHi
+    ONL_lock := lastOnLo
+    YH_lock  := prevRthHi
+    YL_lock  := prevRthLo
+
+    lhStatus_lock  := lhStatus
+    llStatus_lock  := llStatus
+    pmhStatus_lock := pmhStatus
+    pmlStatus_lock := pmlStatus
+    onhStatus_lock := onhStatus
+    onlStatus_lock := onlStatus
+    yhStatus_lock  := yhStatus
+    ylStatus_lock  := ylStatus
+
+float LH_eff  = sessionLocked ? LH_lock  : LH_raw
+float LL_eff  = sessionLocked ? LL_lock  : LL_raw
+float PMH_eff = sessionLocked ? PMH_lock : PMH_raw
+float PML_eff = sessionLocked ? PML_lock : PML_raw
+float ONH_eff = sessionLocked ? ONH_lock : ONH_raw
+float ONL_eff = sessionLocked ? ONL_lock : ONL_raw
+float YH_eff  = sessionLocked ? YH_lock  : YH_raw
+float YL_eff  = sessionLocked ? YL_lock  : YL_raw
+
+string lhStatus_eff  = sessionLocked ? lhStatus_lock  : lhStatus
+string llStatus_eff  = sessionLocked ? llStatus_lock  : llStatus
+string pmhStatus_eff = sessionLocked ? pmhStatus_lock : pmhStatus
+string pmlStatus_eff = sessionLocked ? pmlStatus_lock : pmlStatus
+string onhStatus_eff = sessionLocked ? onhStatus_lock : onhStatus
+string onlStatus_eff = sessionLocked ? onlStatus_lock : onlStatus
+string yhStatus_eff  = sessionLocked ? yhStatus_lock  : yhStatus
+string ylStatus_eff  = sessionLocked ? ylStatus_lock  : ylStatus
+
+//---------------------------------------------------------
+// STACK GROUP LOGIC - FINAL MERGED COMPONENT STACKS
+//---------------------------------------------------------
+
+withinStack(float a, float b) =>
+    not na(a) and not na(b) and not na(stackThreshold) and math.abs(a - b) <= stackThreshold
+
+groupLabel(float price) =>
+    if na(price)
+        "NONE"
+    else if price > close
+        "HIGH"
+    else if price < close
+        "LOW"
+    else
+        "TOUCH"
+
+var int[] stackParents = array.new_int()
+var int[] stackLevelGroups = array.new_int()
+var int[] stackCounts = array.new_int()
+var float[] stackExtremePrices = array.new_float()
+var float[] stackClosePrices = array.new_float()
+var string[] stackSides = array.new_string()
+var int[] stackIdxA = array.new_int()
+var int[] stackIdxB = array.new_int()
+
+var int[] frozenStackLevelGroups = array.new_int()
+var int[] frozenStackCounts = array.new_int()
+var float[] frozenStackExtremePrices = array.new_float()
+var float[] frozenStackClosePrices = array.new_float()
+var string[] frozenStackSides = array.new_string()
+var int[] frozenStackIdxA = array.new_int()
+var int[] frozenStackIdxB = array.new_int()
+
+levelActive(float price, string status) =>
+    not na(price) and status != "INACTIVE" and (groupLabel(price) == "HIGH" or groupLabel(price) == "LOW")
+
+priceAtIndex(int idx) =>
+    switch idx
+        0 => YH_eff
+        1 => YL_eff
+        2 => ONH_eff
+        3 => ONL_eff
+        4 => LH_eff
+        5 => LL_eff
+        6 => PMH_eff
+        7 => PML_eff
+        => na
+
+statusAtIndex(int idx) =>
+    switch idx
+        0 => yhStatus_eff
+        1 => ylStatus_eff
+        2 => onhStatus_eff
+        3 => onlStatus_eff
+        4 => lhStatus_eff
+        5 => llStatus_eff
+        6 => pmhStatus_eff
+        7 => pmlStatus_eff
+        => "INACTIVE"
+
+sideAtIndex(int idx) =>
+    groupLabel(priceAtIndex(idx))
+
+// Canonical stack eligibility:
+// YH/YL remain independent prior-RTH liquidity references.
+// They may roam above or below current price, but they must never be
+// absorbed into an ON/London/Pre-Market component stack.
+stackEligibleIndex(int idx) =>
+    idx >= 2 and idx <= 7
+
+clearLiveStacks() =>
+    array.clear(stackParents)
+    array.clear(stackLevelGroups)
+    array.clear(stackCounts)
+    array.clear(stackExtremePrices)
+    array.clear(stackClosePrices)
+    array.clear(stackSides)
+    array.clear(stackIdxA)
+    array.clear(stackIdxB)
+
+clearFrozenStacks() =>
+    array.clear(frozenStackLevelGroups)
+    array.clear(frozenStackCounts)
+    array.clear(frozenStackExtremePrices)
+    array.clear(frozenStackClosePrices)
+    array.clear(frozenStackSides)
+    array.clear(frozenStackIdxA)
+    array.clear(frozenStackIdxB)
+
+restoreFrozenStacks() =>
+    clearLiveStacks()
+
+    int frozenGroupCount = array.size(frozenStackLevelGroups)
+    if frozenGroupCount > 0
+        for i = 0 to frozenGroupCount - 1
+            array.push(stackLevelGroups, array.get(frozenStackLevelGroups, i))
+
+    int frozenCountCount = array.size(frozenStackCounts)
+    if frozenCountCount > 0
+        for i = 0 to frozenCountCount - 1
+            array.push(stackCounts, array.get(frozenStackCounts, i))
+            array.push(stackExtremePrices, array.get(frozenStackExtremePrices, i))
+            array.push(stackClosePrices, array.get(frozenStackClosePrices, i))
+            array.push(stackSides, array.get(frozenStackSides, i))
+            array.push(stackIdxA, array.get(frozenStackIdxA, i))
+            array.push(stackIdxB, array.get(frozenStackIdxB, i))
+
+ufFind(int node) =>
+    int root = node
+    int parent = array.get(stackParents, root)
+
+    while parent != root
+        root := parent
+        parent := array.get(stackParents, root)
+
+    int cur = node
+    int curParent = array.get(stackParents, cur)
+
+    while curParent != cur
+        int nextParent = curParent
+        array.set(stackParents, cur, root)
+        cur := nextParent
+        curParent := array.get(stackParents, cur)
+
+    root
+
+ufUnion(int a, int b) =>
+    int rootA = ufFind(a)
+    int rootB = ufFind(b)
+
+    if rootA != rootB
+        int keepRoot = math.min(rootA, rootB)
+        int moveRoot = math.max(rootA, rootB)
+        array.set(stackParents, moveRoot, keepRoot)
+
+sortStackSideArrays(int[] idxArr, float[] priceArr, bool ascending) =>
+    int n = array.size(priceArr)
+
+    if n > 1
+        for i = 0 to n - 2
+            for j = i + 1 to n - 1
+                float pi = array.get(priceArr, i)
+                float pj = array.get(priceArr, j)
+
+                bool shouldSwap = ascending ? pj < pi : pj > pi
+
+                if shouldSwap
+                    int idxI = array.get(idxArr, i)
+                    int idxJ = array.get(idxArr, j)
+
+                    array.set(priceArr, i, pj)
+                    array.set(priceArr, j, pi)
+                    array.set(idxArr, i, idxJ)
+                    array.set(idxArr, j, idxI)
+
+buildLiveStacks() =>
+    clearLiveStacks()
+
+    for i = 0 to 7
+        array.push(stackParents, i)
+        array.push(stackLevelGroups, 0)
+
+    int[] highIdx = array.new_int()
+    float[] highPrices = array.new_float()
+    int[] lowIdx = array.new_int()
+    float[] lowPrices = array.new_float()
+
+    for i = 0 to 7
+        float p = priceAtIndex(i)
+        string st = statusAtIndex(i)
+        string side = sideAtIndex(i)
+
+        if levelActive(p, st) and stackEligibleIndex(i)
+            if side == "HIGH"
+                array.push(highIdx, i)
+                array.push(highPrices, p)
+            if side == "LOW"
+                array.push(lowIdx, i)
+                array.push(lowPrices, p)
+
+    int highCount = array.size(highPrices)
+    if highCount > 1
+        sortStackSideArrays(highIdx, highPrices, true)
+
+        for i = 0 to highCount - 2
+            int idxA = array.get(highIdx, i)
+            int idxB = array.get(highIdx, i + 1)
+            float priceA = array.get(highPrices, i)
+            float priceB = array.get(highPrices, i + 1)
+
+            if withinStack(priceA, priceB)
+                ufUnion(idxA, idxB)
+
+    int lowCount = array.size(lowPrices)
+    if lowCount > 1
+        sortStackSideArrays(lowIdx, lowPrices, false)
+
+        for i = 0 to lowCount - 2
+            int idxA = array.get(lowIdx, i)
+            int idxB = array.get(lowIdx, i + 1)
+            float priceA = array.get(lowPrices, i)
+            float priceB = array.get(lowPrices, i + 1)
+
+            if withinStack(priceA, priceB)
+                ufUnion(idxA, idxB)
+
+    for i = 0 to 7
+        array.set(stackParents, i, ufFind(i))
+
+    int[] rootCounts = array.new_int(8, 0)
+    float[] rootExtremePrices = array.new_float(8, na)
+    float[] rootClosePrices = array.new_float(8, na)
+    string[] rootSides = array.new_string(8, "NONE")
+
+    for i = 0 to 7
+        float p = priceAtIndex(i)
+        string st = statusAtIndex(i)
+        string side = sideAtIndex(i)
+
+        if levelActive(p, st) and stackEligibleIndex(i)
+            int root = array.get(stackParents, i)
+
+            array.set(rootCounts, root, array.get(rootCounts, root) + 1)
+            array.set(rootSides, root, side)
+
+            float existingExtreme = array.get(rootExtremePrices, root)
+            float existingClose = array.get(rootClosePrices, root)
+
+            if side == "HIGH"
+                array.set(rootExtremePrices, root, na(existingExtreme) ? p : math.max(existingExtreme, p))
+                array.set(rootClosePrices, root, na(existingClose) ? p : math.min(existingClose, p))
+            else
+                array.set(rootExtremePrices, root, na(existingExtreme) ? p : math.min(existingExtreme, p))
+                array.set(rootClosePrices, root, na(existingClose) ? p : math.max(existingClose, p))
+
+    int[] rootToGroupId = array.new_int(8, 0)
+
+    for root = 0 to 7
+        int count = array.get(rootCounts, root)
+
+        if count >= 2
+            array.push(stackCounts, count)
+            array.push(stackExtremePrices, array.get(rootExtremePrices, root))
+            array.push(stackClosePrices, array.get(rootClosePrices, root))
+            array.push(stackSides, array.get(rootSides, root))
+            array.push(stackIdxA, root)
+            array.push(stackIdxB, root)
+
+            int groupId = array.size(stackCounts)
+            array.set(rootToGroupId, root, groupId)
+
+    for i = 0 to 7
+        float p = priceAtIndex(i)
+        string st = statusAtIndex(i)
+
+        if levelActive(p, st) and stackEligibleIndex(i)
+            int root = array.get(stackParents, i)
+            int groupId = array.get(rootToGroupId, root)
+            array.set(stackLevelGroups, i, groupId)
+
+freezeStacks() =>
+    clearFrozenStacks()
+
+    int groupCount = array.size(stackLevelGroups)
+    if groupCount > 0
+        for i = 0 to groupCount - 1
+            array.push(frozenStackLevelGroups, array.get(stackLevelGroups, i))
+
+    int stackCount = array.size(stackCounts)
+    if stackCount > 0
+        for i = 0 to stackCount - 1
+            array.push(frozenStackCounts, array.get(stackCounts, i))
+            array.push(frozenStackExtremePrices, array.get(stackExtremePrices, i))
+            array.push(frozenStackClosePrices, array.get(stackClosePrices, i))
+            array.push(frozenStackSides, array.get(stackSides, i))
+            array.push(frozenStackIdxA, array.get(stackIdxA, i))
+            array.push(frozenStackIdxB, array.get(stackIdxB, i))
+
+if not sessionTableFrozen or shouldFreezeNow
+    buildLiveStacks()
+
+if shouldFreezeNow
+    freezeStacks()
+
+if sessionTableFrozen and not shouldFreezeNow
+    restoreFrozenStacks()
+
+int yhGroup  = array.size(stackLevelGroups) > 0 ? array.get(stackLevelGroups, 0) : 0
+int ylGroup  = array.size(stackLevelGroups) > 1 ? array.get(stackLevelGroups, 1) : 0
+int onhGroup = array.size(stackLevelGroups) > 2 ? array.get(stackLevelGroups, 2) : 0
+int onlGroup = array.size(stackLevelGroups) > 3 ? array.get(stackLevelGroups, 3) : 0
+int lhGroup  = array.size(stackLevelGroups) > 4 ? array.get(stackLevelGroups, 4) : 0
+int llGroup  = array.size(stackLevelGroups) > 5 ? array.get(stackLevelGroups, 5) : 0
+int pmhGroup = array.size(stackLevelGroups) > 6 ? array.get(stackLevelGroups, 6) : 0
+int pmlGroup = array.size(stackLevelGroups) > 7 ? array.get(stackLevelGroups, 7) : 0
+
+priceStackCount(int groupId) =>
+    groupId == 0 ? 0 : array.get(stackCounts, groupId - 1)
+
+priceStackAnchor(int groupId) =>
+    groupId == 0 ? na : array.get(stackExtremePrices, groupId - 1)
+
+priceStackClose(int groupId) =>
+    groupId == 0 ? na : array.get(stackClosePrices, groupId - 1)
+
+priceStackSide(int groupId) =>
+    groupId == 0 ? "NONE" : array.get(stackSides, groupId - 1)
+
+cleanStackLabel(int groupId) =>
+    if groupId == 0 or priceStackCount(groupId) < 2
+        "NONE"
+    else
+        string side = priceStackSide(groupId)
+        float thisClose = priceStackClose(groupId)
+        int sideNumber = 1
+
+        int stackTotal = array.size(stackCounts)
+        if stackTotal > 0
+            for i = 0 to stackTotal - 1
+                int otherGroupId = i + 1
+                string otherSide = priceStackSide(otherGroupId)
+                float otherClose = priceStackClose(otherGroupId)
+
+                if otherGroupId != groupId and otherSide == side
+                    if side == "HIGH" and otherClose < thisClose
+                        sideNumber += 1
+                    if side == "LOW" and otherClose > thisClose
+                        sideNumber += 1
+
+        side == "HIGH" ? "HIGH " + str.tostring(sideNumber) :
+         side == "LOW" ? "LOW " + str.tostring(sideNumber) :
+         "TOUCH"
+
+stackLabelForLevel(int idx) =>
+    int groupId = array.size(stackLevelGroups) > idx ? array.get(stackLevelGroups, idx) : 0
+    cleanStackLabel(groupId)
+
+string yhStackGroup_raw  = stackLabelForLevel(0)
+string ylStackGroup_raw  = stackLabelForLevel(1)
+string onhStackGroup_raw = stackLabelForLevel(2)
+string onlStackGroup_raw = stackLabelForLevel(3)
+string lhStackGroup_raw  = stackLabelForLevel(4)
+string llStackGroup_raw  = stackLabelForLevel(5)
+string pmhStackGroup_raw = stackLabelForLevel(6)
+string pmlStackGroup_raw = stackLabelForLevel(7)
+
+var string yhStackGroup_lock  = "NONE"
+var string ylStackGroup_lock  = "NONE"
+var string onhStackGroup_lock = "NONE"
+var string onlStackGroup_lock = "NONE"
+var string lhStackGroup_lock  = "NONE"
+var string llStackGroup_lock  = "NONE"
+var string pmhStackGroup_lock = "NONE"
+var string pmlStackGroup_lock = "NONE"
+
+if shouldFreezeNow
+    yhStackGroup_lock  := yhStackGroup_raw
+    ylStackGroup_lock  := ylStackGroup_raw
+    onhStackGroup_lock := onhStackGroup_raw
+    onlStackGroup_lock := onlStackGroup_raw
+    lhStackGroup_lock  := lhStackGroup_raw
+    llStackGroup_lock  := llStackGroup_raw
+    pmhStackGroup_lock := pmhStackGroup_raw
+    pmlStackGroup_lock := pmlStackGroup_raw
+
+string yhStackGroup  = sessionLocked ? yhStackGroup_lock  : yhStackGroup_raw
+string ylStackGroup  = sessionLocked ? ylStackGroup_lock  : ylStackGroup_raw
+string onhStackGroup = sessionLocked ? onhStackGroup_lock : onhStackGroup_raw
+string onlStackGroup = sessionLocked ? onlStackGroup_lock : onlStackGroup_raw
+string lhStackGroup  = sessionLocked ? lhStackGroup_lock  : lhStackGroup_raw
+string llStackGroup  = sessionLocked ? llStackGroup_lock  : llStackGroup_raw
+string pmhStackGroup = sessionLocked ? pmhStackGroup_lock : pmhStackGroup_raw
+string pmlStackGroup = sessionLocked ? pmlStackGroup_lock : pmlStackGroup_raw
+
+//---------------------------------------------------------
+// DYNAMIC LADDER / EXHAUSTION BOUNDARY HELPERS
+//---------------------------------------------------------
+
+isStackedGroup(string stackLabel) =>
+    stackLabel != "NONE"
+
+stackSideExtremeHigh(int groupId) =>
+    priceStackAnchor(groupId)
+
+stackSideCloseHigh(int groupId) =>
+    priceStackClose(groupId)
+
+stackSideExtremeLow(int groupId) =>
+    priceStackAnchor(groupId)
+
+stackSideCloseLow(int groupId) =>
+    priceStackClose(groupId)
+
+//---------------------------------------------------------
+// DYNAMIC LADDER ARRAYS
+//---------------------------------------------------------
+
+var string[] highNames = array.new_string()
+var float[] highAnchorPrices = array.new_float()
+var float[] highTargetPrices = array.new_float()
+var string[] highStackLabels = array.new_string()
+var bool[] highIsStack = array.new_bool()
+
+var string[] lowNames = array.new_string()
+var float[] lowAnchorPrices = array.new_float()
+var float[] lowTargetPrices = array.new_float()
+var string[] lowStackLabels = array.new_string()
+var bool[] lowIsStack = array.new_bool()
+
+var string[] frozenHighNames = array.new_string()
+var float[] frozenHighPrices = array.new_float()
+
+var string[] frozenLowNames = array.new_string()
+var float[] frozenLowPrices = array.new_float()
+
+clearLiveLadder() =>
+    array.clear(highNames)
+    array.clear(highAnchorPrices)
+    array.clear(highTargetPrices)
+    array.clear(highStackLabels)
+    array.clear(highIsStack)
+
+    array.clear(lowNames)
+    array.clear(lowAnchorPrices)
+    array.clear(lowTargetPrices)
+    array.clear(lowStackLabels)
+    array.clear(lowIsStack)
+
+clearFrozenLadder() =>
+    array.clear(frozenHighNames)
+    array.clear(frozenHighPrices)
+    array.clear(frozenLowNames)
+    array.clear(frozenLowPrices)
+
+clearLiveLadder()
+
+//---------------------------------------------------------
+// HIGH LADDER BUILDER
+//---------------------------------------------------------
+
+addHighLevel(string name, float price, string status, string stackLabel, int groupId) =>
+    if not na(price) and status != "INACTIVE" and price > close
+
+        bool isStack = isStackedGroup(stackLabel)
+
+        float anchor =
+             isStack
+             ? stackSideExtremeHigh(groupId)
+             : price
+
+        bool alreadyExists = false
+
+        int highStackCount = array.size(highStackLabels)
+
+        if highStackCount > 0
+            for i = 0 to highStackCount - 1
+                if array.get(highStackLabels, i) == stackLabel and stackLabel != "NONE"
+                    alreadyExists := true
+
+        if not alreadyExists
+            array.push(highNames, name)
+            array.push(highAnchorPrices, anchor)
+            array.push(highTargetPrices, na)
+            array.push(highStackLabels, stackLabel)
+            array.push(highIsStack, isStack)
+
+//---------------------------------------------------------
+// LOW LADDER BUILDER
+//---------------------------------------------------------
+
+addLowLevel(string name, float price, string status, string stackLabel, int groupId) =>
+    if not na(price) and status != "INACTIVE" and price < close
+
+        bool isStack = isStackedGroup(stackLabel)
+
+        float anchor =
+             isStack
+             ? stackSideExtremeLow(groupId)
+             : price
+
+        bool alreadyExists = false
+
+        int lowStackCount = array.size(lowStackLabels)
+
+        if lowStackCount > 0
+            for i = 0 to lowStackCount - 1
+                if array.get(lowStackLabels, i) == stackLabel and stackLabel != "NONE"
+                    alreadyExists := true
+
+        if not alreadyExists
+            array.push(lowNames, name)
+            array.push(lowAnchorPrices, anchor)
+            array.push(lowTargetPrices, na)
+            array.push(lowStackLabels, stackLabel)
+            array.push(lowIsStack, isStack)
+//---------------------------------------------------------
+// SORT HIGH LADDER (NEAREST ABOVE → OUTWARD)
+//---------------------------------------------------------
+
+sortHighLadder() =>
+    int n = array.size(highAnchorPrices)
+
+    if n > 1
+        for i = 0 to n - 2
+            for j = i + 1 to n - 1
+
+                float pi = array.get(highAnchorPrices, i)
+                float pj = array.get(highAnchorPrices, j)
+
+                if pj < pi
+
+                    string ni = array.get(highNames, i)
+                    string nj = array.get(highNames, j)
+
+                    float ai = array.get(highAnchorPrices, i)
+                    float aj = array.get(highAnchorPrices, j)
+
+                    float ti = array.get(highTargetPrices, i)
+                    float tj = array.get(highTargetPrices, j)
+
+                    string si = array.get(highStackLabels, i)
+                    string sj = array.get(highStackLabels, j)
+
+                    bool bi = array.get(highIsStack, i)
+                    bool bj = array.get(highIsStack, j)
+
+                    array.set(highNames, i, nj)
+                    array.set(highNames, j, ni)
+
+                    array.set(highAnchorPrices, i, aj)
+                    array.set(highAnchorPrices, j, ai)
+
+                    array.set(highTargetPrices, i, tj)
+                    array.set(highTargetPrices, j, ti)
+
+                    array.set(highStackLabels, i, sj)
+                    array.set(highStackLabels, j, si)
+
+                    array.set(highIsStack, i, bj)
+                    array.set(highIsStack, j, bi)
+
+//---------------------------------------------------------
+// POPULATE HIGH / LOW LADDER
+//---------------------------------------------------------
+
+addHighLevel("PMH", PMH_eff, pmhStatus_eff, pmhStackGroup, pmhGroup)
+addHighLevel("LH",  LH_eff,  lhStatus_eff,  lhStackGroup,  lhGroup)
+addHighLevel("ONH", ONH_eff, onhStatus_eff, onhStackGroup, onhGroup)
+addHighLevel("YH",  YH_eff,  yhStatus_eff,  yhStackGroup,  yhGroup)
+
+addLowLevel("PML", PML_eff, pmlStatus_eff, pmlStackGroup, pmlGroup)
+addLowLevel("LL",  LL_eff,  llStatus_eff,  llStackGroup,  llGroup)
+addLowLevel("ONL", ONL_eff, onlStatus_eff, onlStackGroup, onlGroup)
+addLowLevel("YL",  YL_eff,  ylStatus_eff,  ylStackGroup,  ylGroup)
+
+//---------------------------------------------------------
+// SORT LOW LADDER (NEAREST BELOW → OUTWARD)
+//---------------------------------------------------------
+
+sortLowLadder() =>
+    int n = array.size(lowAnchorPrices)
+
+    if n > 1
+        for i = 0 to n - 2
+            for j = i + 1 to n - 1
+
+                float pi = array.get(lowAnchorPrices, i)
+                float pj = array.get(lowAnchorPrices, j)
+
+                if pj > pi
+
+                    string ni = array.get(lowNames, i)
+                    string nj = array.get(lowNames, j)
+
+                    float ai = array.get(lowAnchorPrices, i)
+                    float aj = array.get(lowAnchorPrices, j)
+
+                    float ti = array.get(lowTargetPrices, i)
+                    float tj = array.get(lowTargetPrices, j)
+
+                    string si = array.get(lowStackLabels, i)
+                    string sj = array.get(lowStackLabels, j)
+
+                    bool bi = array.get(lowIsStack, i)
+                    bool bj = array.get(lowIsStack, j)
+
+                    array.set(lowNames, i, nj)
+                    array.set(lowNames, j, ni)
+
+                    array.set(lowAnchorPrices, i, aj)
+                    array.set(lowAnchorPrices, j, ai)
+
+                    array.set(lowTargetPrices, i, tj)
+                    array.set(lowTargetPrices, j, ti)
+
+                    array.set(lowStackLabels, i, sj)
+                    array.set(lowStackLabels, j, si)
+
+                    array.set(lowIsStack, i, bj)
+                    array.set(lowIsStack, j, bi)
+
+sortHighLadder()
+sortLowLadder()
+
+if shouldFreezeNow
+    clearFrozenLadder()
+
+    int highCount = array.size(highNames)
+
+    if highCount > 0
+        for i = 0 to highCount - 1
+            array.push(frozenHighNames, array.get(highNames, i))
+            array.push(frozenHighPrices, array.get(highAnchorPrices, i))
+
+    int lowCount = array.size(lowNames)
+
+    if lowCount > 0
+        for i = 0 to lowCount - 1
+            array.push(frozenLowNames, array.get(lowNames, i))
+            array.push(frozenLowPrices, array.get(lowAnchorPrices, i))
+
+if sessionTableFrozen
+    clearLiveLadder()
+
+    int frozenHighCount = array.size(frozenHighNames)
+
+    if frozenHighCount > 0
+        for i = 0 to frozenHighCount - 1
+            array.push(highNames, array.get(frozenHighNames, i))
+            array.push(highAnchorPrices, array.get(frozenHighPrices, i))
+            array.push(highTargetPrices, na)
+            array.push(highStackLabels, "NONE")
+            array.push(highIsStack, false)
+
+    int frozenLowCount = array.size(frozenLowNames)
+
+    if frozenLowCount > 0
+        for i = 0 to frozenLowCount - 1
+            array.push(lowNames, array.get(frozenLowNames, i))
+            array.push(lowAnchorPrices, array.get(frozenLowPrices, i))
+            array.push(lowTargetPrices, na)
+            array.push(lowStackLabels, "NONE")
+            array.push(lowIsStack, false)
+
+//---------------------------------------------------------
+// MIDPOINT / 25% LOGIC BETWEEN RESOLVED LADDER LEVELS
+//---------------------------------------------------------
+// Uses deduped ladder anchors.
+// Stacked levels count as ONE owner.
+// Close boundary remains for activation/table/webhook level price.
+// 25/50 projections use stack extreme anchor only.
+//
+// IMPORTANT:
+// After session lock, midpoint/exhaustion lines are frozen.
+// They do NOT disappear later because a level becomes inactive,
+// price crosses a level, or the ladder rebuilds.
+
+notStacked(float a, float b) =>
+    not na(a) and not na(b) and not na(stackThreshold) and math.abs(a - b) > stackThreshold
+
+midpoint(float a, float b) =>
+    (a + b) / 2.0
+
+exhaust25(float fromLevel, float toLevel) =>
+    fromLevel + ((toLevel - fromLevel) * 0.75)
+
+ladderGapMid(float[] prices, int idx) =>
+    int n = array.size(prices)
+    if n > idx + 1
+        float fromPrice = array.get(prices, idx)
+        float toPrice   = array.get(prices, idx + 1)
+        notStacked(fromPrice, toPrice) ? midpoint(fromPrice, toPrice) : na
+    else
+        na
+
+ladderGap25(float[] prices, int idx) =>
+    int n = array.size(prices)
+    if n > idx + 1
+        float fromPrice = array.get(prices, idx)
+        float toPrice   = array.get(prices, idx + 1)
+        notStacked(fromPrice, toPrice) ? exhaust25(fromPrice, toPrice) : na
+    else
+        na
+
+frozenFloat(float[] arr, int idx) =>
+    array.size(arr) > idx ? array.get(arr, idx) : na
+
+// Frozen midpoint/exhaustion values.
+// These are populated once, at premarket session end.
+var float[] frozenHighMid50 = array.new_float()
+var float[] frozenHighEx25  = array.new_float()
+var float[] frozenLowMid50  = array.new_float()
+var float[] frozenLowEx25   = array.new_float()
+
+if sessionEnd(inPremarket)
+    array.clear(frozenHighMid50)
+    array.clear(frozenHighEx25)
+    array.clear(frozenLowMid50)
+    array.clear(frozenLowEx25)
+
+    int highFreezeCount = array.size(highAnchorPrices)
+
+    if highFreezeCount > 1
+        for i = 0 to highFreezeCount - 2
+            float fromPrice = array.get(highAnchorPrices, i)
+            float toPrice   = array.get(highAnchorPrices, i + 1)
+
+            bool validGap = notStacked(fromPrice, toPrice)
+
+            array.push(frozenHighMid50, validGap ? midpoint(fromPrice, toPrice) : na)
+            array.push(frozenHighEx25,  validGap ? exhaust25(fromPrice, toPrice) : na)
+
+    int lowFreezeCount = array.size(lowAnchorPrices)
+
+    if lowFreezeCount > 1
+        for i = 0 to lowFreezeCount - 2
+            float fromPrice = array.get(lowAnchorPrices, i)
+            float toPrice   = array.get(lowAnchorPrices, i + 1)
+
+            bool validGap = notStacked(fromPrice, toPrice)
+
+            array.push(frozenLowMid50, validGap ? midpoint(fromPrice, toPrice) : na)
+            array.push(frozenLowEx25,  validGap ? exhaust25(fromPrice, toPrice) : na)
+
+// Legacy variable names preserved for drawing block.
+// They now mean: resolved ladder gap 0 / 1 / 2, not raw named level pairs.
+//
+// Before premarket lock:
+// - use live ladder values.
+//
+// After premarket lock:
+// - use frozen session values only.
+
+// High side: nearest above -> outward
+float mid_LH_PMH  = sessionLocked ? frozenFloat(frozenHighMid50, 0) : ladderGapMid(highAnchorPrices, 0)
+float mid_ONH_LH  = sessionLocked ? frozenFloat(frozenHighMid50, 1) : ladderGapMid(highAnchorPrices, 1)
+float mid_YH_ONH  = sessionLocked ? frozenFloat(frozenHighMid50, 2) : ladderGapMid(highAnchorPrices, 2)
+
+float ex25_PMH_LH = sessionLocked ? frozenFloat(frozenHighEx25, 0) : ladderGap25(highAnchorPrices, 0)
+float ex25_LH_ONH = sessionLocked ? frozenFloat(frozenHighEx25, 1) : ladderGap25(highAnchorPrices, 1)
+float ex25_ONH_YH = sessionLocked ? frozenFloat(frozenHighEx25, 2) : ladderGap25(highAnchorPrices, 2)
+
+// Low side: nearest below -> outward
+float mid_LL_PML  = sessionLocked ? frozenFloat(frozenLowMid50, 0) : ladderGapMid(lowAnchorPrices, 0)
+float mid_ONL_LL  = sessionLocked ? frozenFloat(frozenLowMid50, 1) : ladderGapMid(lowAnchorPrices, 1)
+float mid_YL_ONL  = sessionLocked ? frozenFloat(frozenLowMid50, 2) : ladderGapMid(lowAnchorPrices, 2)
+
+float ex25_PML_LL = sessionLocked ? frozenFloat(frozenLowEx25, 0) : ladderGap25(lowAnchorPrices, 0)
+float ex25_LL_ONL = sessionLocked ? frozenFloat(frozenLowEx25, 1) : ladderGap25(lowAnchorPrices, 1)
+float ex25_ONL_YL = sessionLocked ? frozenFloat(frozenLowEx25, 2) : ladderGap25(lowAnchorPrices, 2)
+//---------------------------------------------------------
+// FROZEN LEVELS FOR CARRY
+//---------------------------------------------------------
+float PMH_frozen = PMH_eff
+float PML_frozen = PML_eff
+float LH_frozen  = LH_eff
+float LL_frozen  = LL_eff
+float ONH_frozen = ONH_eff
+float ONL_frozen = ONL_eff
+float YH_frozen  = YH_eff
+float YL_frozen  = YL_eff
+
+//---------------------------------------------------------
+// STACK OFFSET LOGIC
+//---------------------------------------------------------
+applyHighOffsetDown(float base, float ref1, float ref2, float ref3, int rank) =>
+    float out = base
+    if not na(base)
+        int matchesBefore = 0
+        if rank > 0 and sameLevel(base, ref1)
+            matchesBefore += 1
+        if rank > 1 and sameLevel(base, ref2)
+            matchesBefore += 1
+        if rank > 2 and sameLevel(base, ref3)
+            matchesBefore += 1
+        out -= matchesBefore * stackStep
+    out
+
+applyLowOffsetUp(float base, float ref1, float ref2, float ref3, int rank) =>
+    float out = base
+    if not na(base)
+        int matchesBefore = 0
+        if rank > 0 and sameLevel(base, ref1)
+            matchesBefore += 1
+        if rank > 1 and sameLevel(base, ref2)
+            matchesBefore += 1
+        if rank > 2 and sameLevel(base, ref3)
+            matchesBefore += 1
+        out += matchesBefore * stackStep
+    out
+
+float PMH_live = PMH_eff
+float LH_live  = LH_eff
+float ONH_live = ONH_eff
+float YH_live  = YH_eff
+
+float PML_live = PML_eff
+float LL_live  = LL_eff
+float ONL_live = ONL_eff
+float YL_live  = YL_eff
+
+float PMH_carry = PMH_frozen
+float LH_carry  = LH_frozen
+float ONH_carry = ONH_frozen
+float YH_carry  = YH_frozen
+
+float PML_carry = PML_frozen
+float LL_carry  = LL_frozen
+float ONL_carry = ONL_frozen
+float YL_carry  = YL_frozen
+
+if stackOffset
+    YH_live  := applyHighOffsetDown(YH_eff,  na,      na,      na,      0)
+    ONH_live := applyHighOffsetDown(ONH_eff, YH_eff,  na,      na,      1)
+    LH_live  := applyHighOffsetDown(LH_eff,  YH_eff,  ONH_eff, na,      2)
+    PMH_live := applyHighOffsetDown(PMH_eff, YH_eff,  ONH_eff, LH_eff,  3)
+
+    YH_carry  := applyHighOffsetDown(YH_frozen,  na,         na,         na,        0)
+    ONH_carry := applyHighOffsetDown(ONH_frozen, YH_frozen,  na,         na,        1)
+    LH_carry  := applyHighOffsetDown(LH_frozen,  YH_frozen,  ONH_frozen, na,        2)
+    PMH_carry := applyHighOffsetDown(PMH_frozen, YH_frozen,  ONH_frozen, LH_frozen, 3)
+
+    YL_live  := applyLowOffsetUp(YL_eff,  na,      na,      na,      0)
+    ONL_live := applyLowOffsetUp(ONL_eff, YL_eff,  na,      na,      1)
+    LL_live  := applyLowOffsetUp(LL_eff,  YL_eff,  ONL_eff, na,      2)
+    PML_live := applyLowOffsetUp(PML_eff, YL_eff,  ONL_eff, LL_eff,  3)
+
+    YL_carry  := applyLowOffsetUp(YL_frozen,  na,         na,         na,        0)
+    ONL_carry := applyLowOffsetUp(ONL_frozen, YL_frozen,  na,         na,        1)
+    LL_carry  := applyLowOffsetUp(LL_frozen,  YL_frozen,  ONL_frozen, na,        2)
+    PML_carry := applyLowOffsetUp(PML_frozen, YL_frozen,  ONL_frozen, LL_frozen, 3)
+
+//---------------------------------------------------------
+// HIDE INACTIVE LEVELS COMPLETELY
+//---------------------------------------------------------
+if lhStatus_eff == "INACTIVE"
+    LH_live := na
+    LH_carry := na
+if llStatus_eff == "INACTIVE"
+    LL_live := na
+    LL_carry := na
+if onhStatus_eff == "INACTIVE"
+    ONH_live := na
+    ONH_carry := na
+if onlStatus_eff == "INACTIVE"
+    ONL_live := na
+    ONL_carry := na
+if yhStatus_eff == "INACTIVE"
+    YH_live := na
+    YH_carry := na
+if ylStatus_eff == "INACTIVE"
+    YL_live := na
+    YL_carry := na
+
+bool showLH_final  = showLH and lhStatus_eff != "INACTIVE"
+bool showLL_final  = showLL and llStatus_eff != "INACTIVE"
+bool showONH_final = showONH and onhStatus_eff != "INACTIVE"
+bool showONL_final = showONL and onlStatus_eff != "INACTIVE"
+bool showYH_final  = showYH and yhStatus_eff != "INACTIVE"
+bool showYL_final  = showYL and ylStatus_eff != "INACTIVE"
+
+//---------------------------------------------------------
+// LIVE PLOTS
+//---------------------------------------------------------
+plot(showPMH ? PMH_live : na, title="PMH", color=color.new(color.white, 0), linewidth=1, style=plot.style_linebr)
+plot(showPML ? PML_live : na, title="PML", color=color.new(color.white, 0), linewidth=1, style=plot.style_linebr)
+
+plot(showLH_final ? LH_live : na, title="LH", color=color.new(color.green, 0), linewidth=1, style=plot.style_linebr)
+plot(showLL_final ? LL_live : na, title="LL", color=color.new(color.red, 0), linewidth=1, style=plot.style_linebr)
+
+plot(showONH_final ? ONH_live : na, title="ONH", color=color.new(color.green, 0), linewidth=1, style=plot.style_linebr)
+plot(showONL_final ? ONL_live : na, title="ONL", color=color.new(color.red, 0), linewidth=1, style=plot.style_linebr)
+
+plot(showYH_final ? YH_live : na, title="YH", color=color.new(color.green, 0), linewidth=3, style=plot.style_linebr)
+plot(showYL_final ? YL_live : na, title="YL", color=color.new(color.red, 0), linewidth=3, style=plot.style_linebr)
+
+//---------------------------------------------------------
+// FLAT CARRY LINES TO 14:00
+//---------------------------------------------------------
+var line carryPMH = na
+var line carryPML = na
+var line carryLH  = na
+var line carryLL  = na
+var line carryONH = na
+var line carryONL = na
+var line carryYH  = na
+var line carryYL  = na
+
+var line midLine_YH_ONH = na
+var line midLine_ONH_LH = na
+var line midLine_LH_PMH = na
+var line midLine_YL_ONL = na
+var line midLine_ONL_LL = na
+var line midLine_LL_PML = na
+var line ex25Line_PMH_LH = na
+var line ex25Line_LH_ONH = na
+var line ex25Line_ONH_YH = na
+var line ex25Line_PML_LL = na
+var line ex25Line_LL_ONL = na
+var line ex25Line_ONL_YL = na
+
+deleteLine(line l) =>
+    if not na(l)
+        line.delete(l)
+
+deleteLine(carryPMH)
+deleteLine(carryPML)
+deleteLine(carryLH)
+deleteLine(carryLL)
+deleteLine(carryONH)
+deleteLine(carryONL)
+deleteLine(carryYH)
+deleteLine(carryYL)
+
+deleteLine(midLine_YH_ONH)
+deleteLine(midLine_ONH_LH)
+deleteLine(midLine_LH_PMH)
+deleteLine(midLine_YL_ONL)
+deleteLine(midLine_ONL_LL)
+deleteLine(midLine_LL_PML)
+deleteLine(ex25Line_PMH_LH)
+deleteLine(ex25Line_LH_ONH)
+deleteLine(ex25Line_ONH_YH)
+deleteLine(ex25Line_PML_LL)
+deleteLine(ex25Line_LL_ONL)
+deleteLine(ex25Line_ONL_YL)
+
+carryPMH := na
+carryPML := na
+carryLH  := na
+carryLL  := na
+carryONH := na
+carryONL := na
+carryYH  := na
+carryYL  := na
+
+midLine_YH_ONH := na
+midLine_ONH_LH := na
+midLine_LH_PMH := na
+midLine_YL_ONL := na
+midLine_ONL_LL := na
+midLine_LL_PML := na
+ex25Line_PMH_LH := na
+ex25Line_LH_ONH := na
+ex25Line_ONH_YH := na
+ex25Line_PML_LL := na
+ex25Line_LL_ONL := na
+ex25Line_ONL_YL := na
+
+color midpointColor = color.new(color.gray, 55)
+color exhaustion25Color = color.new(color.orange, 45)
+
+if barstate.islast and before1400
+    if showPMH and not na(PMH_carry)
+        carryPMH := line.new(time, PMH_carry, today1400, PMH_carry, xloc=xloc.bar_time, color=color.new(color.white, 0), width=2, style=line.style_dotted)
+    if showPML and not na(PML_carry)
+        carryPML := line.new(time, PML_carry, today1400, PML_carry, xloc=xloc.bar_time, color=color.new(color.white, 0), width=2, style=line.style_dotted)
+    if showLH_final and not na(LH_carry)
+        carryLH := line.new(time, LH_carry, today1400, LH_carry, xloc=xloc.bar_time, color=color.new(color.green, 0), width=3, style=line.style_dotted)
+    if showLL_final and not na(LL_carry)
+        carryLL := line.new(time, LL_carry, today1400, LL_carry, xloc=xloc.bar_time, color=color.new(color.red, 0), width=3, style=line.style_dotted)
+    if showONH_final and not na(ONH_carry)
+        carryONH := line.new(time, ONH_carry, today1400, ONH_carry, xloc=xloc.bar_time, color=color.new(color.green, 0), width=1, style=line.style_solid)
+    if showONL_final and not na(ONL_carry)
+        carryONL := line.new(time, ONL_carry, today1400, ONL_carry, xloc=xloc.bar_time, color=color.new(color.red, 0), width=1, style=line.style_solid)
+    if showYH_final and not na(YH_carry)
+        carryYH := line.new(time, YH_carry, today1400, YH_carry, xloc=xloc.bar_time, color=color.new(color.green, 0), width=3, style=line.style_solid)
+    if showYL_final and not na(YL_carry)
+        carryYL := line.new(time, YL_carry, today1400, YL_carry, xloc=xloc.bar_time, color=color.new(color.red, 0), width=3, style=line.style_solid)
+
+    if showMidpoints and not na(mid_YH_ONH)
+        midLine_YH_ONH := line.new(time, mid_YH_ONH, today1400, mid_YH_ONH, xloc=xloc.bar_time, color=midpointColor, width=1, style=line.style_dotted)
+    if showMidpoints and not na(mid_ONH_LH)
+        midLine_ONH_LH := line.new(time, mid_ONH_LH, today1400, mid_ONH_LH, xloc=xloc.bar_time, color=midpointColor, width=1, style=line.style_dotted)
+    if showMidpoints and not na(mid_LH_PMH)
+        midLine_LH_PMH := line.new(time, mid_LH_PMH, today1400, mid_LH_PMH, xloc=xloc.bar_time, color=midpointColor, width=1, style=line.style_dotted)
+
+    if showMidpoints and not na(mid_YL_ONL)
+        midLine_YL_ONL := line.new(time, mid_YL_ONL, today1400, mid_YL_ONL, xloc=xloc.bar_time, color=midpointColor, width=1, style=line.style_dotted)
+    if showMidpoints and not na(mid_ONL_LL)
+        midLine_ONL_LL := line.new(time, mid_ONL_LL, today1400, mid_ONL_LL, xloc=xloc.bar_time, color=midpointColor, width=1, style=line.style_dotted)
+    if showMidpoints and not na(mid_LL_PML)
+        midLine_LL_PML := line.new(time, mid_LL_PML, today1400, mid_LL_PML, xloc=xloc.bar_time, color=midpointColor, width=1, style=line.style_dotted)
+
+    if showExhaustion25 and not na(ex25_PMH_LH)
+        ex25Line_PMH_LH := line.new(time, ex25_PMH_LH, today1400, ex25_PMH_LH, xloc=xloc.bar_time, color=exhaustion25Color, width=1, style=line.style_dashed)
+    if showExhaustion25 and not na(ex25_LH_ONH)
+        ex25Line_LH_ONH := line.new(time, ex25_LH_ONH, today1400, ex25_LH_ONH, xloc=xloc.bar_time, color=exhaustion25Color, width=1, style=line.style_dashed)
+    if showExhaustion25 and not na(ex25_ONH_YH)
+        ex25Line_ONH_YH := line.new(time, ex25_ONH_YH, today1400, ex25_ONH_YH, xloc=xloc.bar_time, color=exhaustion25Color, width=1, style=line.style_dashed)
+
+    if showExhaustion25 and not na(ex25_PML_LL)
+        ex25Line_PML_LL := line.new(time, ex25_PML_LL, today1400, ex25_PML_LL, xloc=xloc.bar_time, color=exhaustion25Color, width=1, style=line.style_dashed)
+    if showExhaustion25 and not na(ex25_LL_ONL)
+        ex25Line_LL_ONL := line.new(time, ex25_LL_ONL, today1400, ex25_LL_ONL, xloc=xloc.bar_time, color=exhaustion25Color, width=1, style=line.style_dashed)
+    if showExhaustion25 and not na(ex25_ONL_YL)
+        ex25Line_ONL_YL := line.new(time, ex25_ONL_YL, today1400, ex25_ONL_YL, xloc=xloc.bar_time, color=exhaustion25Color, width=1, style=line.style_dashed)
+//---------------------------------------------------------
+// DYNAMIC PRICE-ACTION TABLE
+//---------------------------------------------------------
+var table levelTable = table.new(position.top_right, 6, 15, border_width=1)
+
+levelImportance(string name) =>
+    switch name
+        "YH"  => 1
+        "YL"  => 1
+        "ONH" => 2
+        "ONL" => 2
+        "LH"  => 3
+        "LL"  => 3
+        "PMH" => 4
+        "PML" => 4
+        => 99
+
+isHighLevel(string name) =>
+    name == "YH" or name == "ONH" or name == "LH" or name == "PMH"
+
+isLowLevel(string name) =>
+    name == "YL" or name == "ONL" or name == "LL" or name == "PML"
+
+rowBg(string name) =>
+    switch name
+        "YH"  => color.new(color.green, 60)
+        "ONH" => color.new(color.green, 85)
+        "LH"  => color.new(color.green, 75)
+        "PMH" => color.new(color.gray, 70)
+        "YL"  => color.new(color.red, 60)
+        "ONL" => color.new(color.red, 85)
+        "LL"  => color.new(color.red, 75)
+        "PML" => color.new(color.gray, 70)
+        => color.black
+
+addLevelRow(int row, string name, float truePrice, float visPrice, string state, string status, string stackLabel) =>
+    table.cell(levelTable, 0, row, name, text_color=color.white, bgcolor=rowBg(name))
+    table.cell(levelTable, 1, row, fmt(truePrice), text_color=color.white)
+    table.cell(levelTable, 2, row, fmt(visPrice), text_color=color.white)
+    table.cell(levelTable, 3, row, state, text_color=color.white)
+    table.cell(levelTable, 4, row, status, text_color=color.white)
+    table.cell(levelTable, 5, row, stackLabel, text_color=color.white)
+
+addPriceRow(int row) =>
+    table.cell(levelTable, 0, row, "PRICE", text_color=color.black, bgcolor=color.new(color.yellow, 0))
+    table.cell(levelTable, 1, row, fmt(close), text_color=color.black, bgcolor=color.new(color.yellow, 0))
+    table.cell(levelTable, 2, row, "LIVE", text_color=color.black, bgcolor=color.new(color.yellow, 0))
+    table.cell(levelTable, 3, row, syminfo.ticker, text_color=color.black, bgcolor=color.new(color.yellow, 0))
+    table.cell(levelTable, 4, row, "", text_color=color.black, bgcolor=color.new(color.yellow, 0))
+    table.cell(levelTable, 5, row, "", text_color=color.black, bgcolor=color.new(color.yellow, 0))
+
+clearTable() =>
+    for r = 0 to 14
+        for c = 0 to 5
+            table.cell(levelTable, c, r, "", text_color=color.white, bgcolor=color.new(color.black, 100))
+
+// Arrays for dynamic sorting
+var string[] namesArr = array.new_string()
+var float[] pricesArr = array.new_float()
+var float[] displayArr = array.new_float()
+var string[] statesArr = array.new_string()
+var string[] statusesArr = array.new_string()
+var string[] stacksArr = array.new_string()
+var int[] impArr = array.new_int()
+
+pushLevel(string name, float truePrice, float visPrice, string state, string status, string stackLabel) =>
+    if not na(truePrice) and status != "INACTIVE"
+        array.push(namesArr, name)
+        array.push(pricesArr, truePrice)
+        array.push(displayArr, visPrice)
+        array.push(statesArr, state)
+        array.push(statusesArr, status)
+        array.push(stacksArr, stackLabel)
+        array.push(impArr, levelImportance(name))
+
+swapRows(int i, int j) =>
+    string n1 = array.get(namesArr, i)
+    float p1 = array.get(pricesArr, i)
+    float d1 = array.get(displayArr, i)
+    string s1 = array.get(statesArr, i)
+    string st1 = array.get(statusesArr, i)
+    string g1 = array.get(stacksArr, i)
+    int im1 = array.get(impArr, i)
+
+    array.set(namesArr, i, array.get(namesArr, j))
+    array.set(pricesArr, i, array.get(pricesArr, j))
+    array.set(displayArr, i, array.get(displayArr, j))
+    array.set(statesArr, i, array.get(statesArr, j))
+    array.set(statusesArr, i, array.get(statusesArr, j))
+    array.set(stacksArr, i, array.get(stacksArr, j))
+    array.set(impArr, i, array.get(impArr, j))
+
+    array.set(namesArr, j, n1)
+    array.set(pricesArr, j, p1)
+    array.set(displayArr, j, d1)
+    array.set(statesArr, j, s1)
+    array.set(statusesArr, j, st1)
+    array.set(stacksArr, j, g1)
+    array.set(impArr, j, im1)
+
+// YH/YL are roamers.
+// Table side is determined by price relative to current close, not level name.
+sortAbovePrice() =>
+    int n = array.size(namesArr)
+    if n > 1
+        for i = 0 to n - 2
+            for j = i + 1 to n - 1
+                bool iAbove = array.get(pricesArr, i) >= close
+                bool jAbove = array.get(pricesArr, j) >= close
+
+                if iAbove and jAbove
+                    float pi = array.get(displayArr, i)
+                    float pj = array.get(displayArr, j)
+                    int ii = array.get(impArr, i)
+                    int ij = array.get(impArr, j)
+                    string gi = array.get(stacksArr, i)
+                    string gj = array.get(stacksArr, j)
+
+                    bool sameStack = gi != "NONE" and gi == gj
+                    bool shouldSwap = pj > pi
+
+                    if shouldSwap
+                        swapRows(i, j)
+
+sortBelowPrice() =>
+    int n = array.size(namesArr)
+    if n > 1
+        for i = 0 to n - 2
+            for j = i + 1 to n - 1
+                bool iBelow = array.get(pricesArr, i) <= close
+                bool jBelow = array.get(pricesArr, j) <= close
+
+                if iBelow and jBelow
+                    float pi = array.get(pricesArr, i)
+                    float pj = array.get(pricesArr, j)
+                    int ii = array.get(impArr, i)
+                    int ij = array.get(impArr, j)
+                    string gi = array.get(stacksArr, i)
+                    string gj = array.get(stacksArr, j)
+
+                    bool sameStack = gi != "NONE" and gi == gj
+                    bool shouldSwap = pj > pi
+
+                    if shouldSwap
+                        swapRows(i, j)
+
+if barstate.islast and showTable
+    clearTable()
+
+    table.cell(levelTable, 0, 0, "LEVEL", text_color=color.white, bgcolor=color.black)
+    table.cell(levelTable, 1, 0, "TRUE PRICE", text_color=color.white, bgcolor=color.black)
+    table.cell(levelTable, 2, 0, "VIS", text_color=color.white, bgcolor=color.black)
+    table.cell(levelTable, 3, 0, "STATE", text_color=color.white, bgcolor=color.black)
+    table.cell(levelTable, 4, 0, "STATUS", text_color=color.white, bgcolor=color.black)
+    table.cell(levelTable, 5, 0, "STACK", text_color=color.white, bgcolor=color.black)
+
+    array.clear(namesArr)
+    array.clear(pricesArr)
+    array.clear(displayArr)
+    array.clear(statesArr)
+    array.clear(statusesArr)
+    array.clear(stacksArr)
+    array.clear(impArr)
+
+    // Push all levels together so YH/YL can roam above or below price.
+    pushLevel("YH",  YH_eff,  YH_live,  "PRIOR RTH", yhStatus_eff,  yhStackGroup)
+    pushLevel("YL",  YL_eff,  YL_live,  "PRIOR RTH", ylStatus_eff,  ylStackGroup)
+    pushLevel("ONH", ONH_eff, ONH_live, sessionStateText(inOvernight), onhStatus_eff, onhStackGroup)
+    pushLevel("ONL", ONL_eff, ONL_live, sessionStateText(inOvernight), onlStatus_eff, onlStackGroup)
+    pushLevel("LH",  LH_eff,  LH_live,  sessionStateText(inLondon), lhStatus_eff,  lhStackGroup)
+    pushLevel("LL",  LL_eff,  LL_live,  sessionStateText(inLondon), llStatus_eff,  llStackGroup)
+    pushLevel("PMH", PMH_eff, PMH_live, sessionStateText(inPremarket), pmhStatus_eff, pmhStackGroup)
+    pushLevel("PML", PML_eff, PML_live, sessionStateText(inPremarket), pmlStatus_eff, pmlStackGroup)
+
+    sortAbovePrice()
+
+    int row = 1
+
+    // Print all levels above price.
+    // YH/YL are roamers, so name does not determine table side.
+    for i = 0 to array.size(namesArr) - 1
+        string nm = array.get(namesArr, i)
+        float pr = array.get(pricesArr, i)
+
+        if pr >= close
+            addLevelRow(row, nm, pr, array.get(displayArr, i), array.get(statesArr, i), array.get(statusesArr, i), array.get(stacksArr, i))
+            row += 1
+
+    addPriceRow(row)
+    row += 1
+
+    sortBelowPrice()
+
+    // Print all levels below price.
+    // YH/YL are roamers, so name does not determine table side.
+    for i = 0 to array.size(namesArr) - 1
+        string nm = array.get(namesArr, i)
+        float pr = array.get(pricesArr, i)
+
+        if pr <= close
+            addLevelRow(row, nm, pr, array.get(displayArr, i), array.get(statesArr, i), array.get(statusesArr, i), array.get(stacksArr, i))
+            row += 1
+
+    // Footer
+    if row <= 12
+        table.cell(levelTable, 0, row, "PM ATR%", text_color=color.white, bgcolor=color.black)
+        table.cell(levelTable, 1, row, fmtPct(pmATRpct), text_color=color.white)
+        table.cell(levelTable, 2, row, "5:00-6:14", text_color=color.white)
+        table.cell(levelTable, 3, row, fmt(pmRange), text_color=color.white)
+        table.cell(levelTable, 4, row, "", text_color=color.white)
+        table.cell(levelTable, 5, row, "", text_color=color.white)
+        row += 1
+
+    if row <= 13
+        table.cell(levelTable, 0, row, "Daily Range %", text_color=color.white, bgcolor=color.new(color.blue, 0))
+        table.cell(levelTable, 1, row, fmtPct(dailyRangePct), text_color=color.white)
+        table.cell(levelTable, 2, row, "ONH-ONL", text_color=color.white)
+        table.cell(levelTable, 3, row, fmt(onRange), text_color=color.white)
+        table.cell(levelTable, 4, row, "", text_color=color.white)
+        table.cell(levelTable, 5, row, "", text_color=color.white)
+        row += 1
+
+    if row <= 14
+        table.cell(levelTable, 0, row, "NOTE", text_color=color.white, bgcolor=color.black)
+        table.cell(levelTable, 1, row, "TRUE=WEBHOOK", text_color=color.white)
+        table.cell(levelTable, 2, row, stackOffset ? "VIS=OFFSET" : "VIS=TRUE", text_color=color.white)
+        table.cell(levelTable, 3, row, "STACK", text_color=color.white)
+        table.cell(levelTable, 4, row, fmt(stackThreshold), text_color=color.white)
+        table.cell(levelTable, 5, row, stackOffset ? "ON" : "OFF", text_color=color.white)
+
+//---------------------------------------------------------
+// ENTRY AGENT TRADINGVIEW CONTEXT WEBHOOK
+//---------------------------------------------------------
+
+f_json_num(float x) =>
+    na(x) ? "null" : str.tostring(x)
+
+f_json_str(string x) =>
+    "\"" + x + "\""
+
+f_json_bool(bool x) =>
+    x ? "true" : "false"
+
+bool isPremarketEnd = sessionEnd(inPremarket)
+bool isRecurringUpdate = timeframe.isminutes and timeframe.multiplier == 1 and barstate.isconfirmed and not isPremarketEnd
+
+string levelsJson =
+     "\"levels\":{"
+     + "\"PMH\":{\"price\":" + f_json_num(PMH_eff) + ",\"status\":" + f_json_str(pmhStatus_eff) + ",\"stack_group\":" + f_json_str(pmhStackGroup) + "},"
+     + "\"PML\":{\"price\":" + f_json_num(PML_eff) + ",\"status\":" + f_json_str(pmlStatus_eff) + ",\"stack_group\":" + f_json_str(pmlStackGroup) + "},"
+     + "\"LH\":{\"price\":" + f_json_num(LH_eff) + ",\"status\":" + f_json_str(lhStatus_eff) + ",\"stack_group\":" + f_json_str(lhStackGroup) + "},"
+     + "\"LL\":{\"price\":" + f_json_num(LL_eff) + ",\"status\":" + f_json_str(llStatus_eff) + ",\"stack_group\":" + f_json_str(llStackGroup) + "},"
+     + "\"ONH\":{\"price\":" + f_json_num(ONH_eff) + ",\"status\":" + f_json_str(onhStatus_eff) + ",\"stack_group\":" + f_json_str(onhStackGroup) + "},"
+     + "\"ONL\":{\"price\":" + f_json_num(ONL_eff) + ",\"status\":" + f_json_str(onlStatus_eff) + ",\"stack_group\":" + f_json_str(onlStackGroup) + "},"
+     + "\"YH\":{\"price\":" + f_json_num(YH_eff) + ",\"status\":" + f_json_str(yhStatus_eff) + ",\"stack_group\":" + f_json_str(yhStackGroup) + "},"
+     + "\"YL\":{\"price\":" + f_json_num(YL_eff) + ",\"status\":" + f_json_str(ylStatus_eff) + ",\"stack_group\":" + f_json_str(ylStackGroup) + "}"
+     + "}"
+
+string midpointsJson = "\"midpoints\":{}"
+string exhaustionJson = "\"exhaustion_boundaries\":{}"
+
+string entryAgentPayload =
+     "{"
+     + "\"source\":\"tradingview_level_helper\","
+     + "\"version\":\"v14_yh_yl_unstacked_liquidity_ladder\","
+     + "\"context_mode\":\"locked_levels_recurring_status\","
+     + "\"session_locked\":" + f_json_bool(sessionLocked) + ","
+     + "\"is_premarket_end\":" + f_json_bool(isPremarketEnd) + ","
+     + "\"is_recurring_update\":" + f_json_bool(isRecurringUpdate) + ","
+     + "\"price_is_true_level\":true,"
+     + "\"display_offsets_applied_to_chart_only\":" + f_json_bool(stackOffset) + ","
+     + "\"symbol\":\"" + syminfo.ticker + "\","
+     + "\"time_zone\":\"" + tzInput + "\","
+     + "\"timeframe\":\"" + timeframe.period + "\","
+     + "\"daily_atr14\":" + f_json_num(dailyATR14) + ","
+     + "\"stack_threshold\":" + f_json_num(stackThreshold) + ","
+     + "\"stack_threshold_pct\":" + f_json_num(stackAtrPct) + ","
+     + "\"pm_atr_pct\":" + f_json_num(pmATRpct) + ","
+     + "\"daily_range_pct\":" + f_json_num(dailyRangePct) + ","
+     + levelsJson + ","
+     + midpointsJson + ","
+     + exhaustionJson
+     + "}"
+
+if timeframe.isminutes and timeframe.multiplier == 1 and barstate.isconfirmed
+    alert(entryAgentPayload, alert.freq_once_per_bar_close)

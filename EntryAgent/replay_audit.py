@@ -10,18 +10,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from data_paths import data_path, local_or_shared_path
+
 from blueprint_rules import LOWER_LIQUIDITY_LEVELS, UPPER_LIQUIDITY_LEVELS, optional_float
 from levels import root_symbol
 
-BASE_DIR = Path(__file__).resolve().parent
-ROOT_DIR = BASE_DIR.parent
-DATA_DIR = ROOT_DIR / "Data"
-SYMBOLS = ("NQ", "YM", "RTY")
+DATA_DIR = data_path()
+TV_CONTEXT_BY_SYMBOL_PATH = local_or_shared_path(BASE_DIR, "tv_context_by_symbol.json", shared_prefix="entry_agent")
+TV_CONTEXT_EVENTS_PATH = local_or_shared_path(BASE_DIR, "tv_context_events.jsonl", shared_prefix="entry_agent")
+SYMBOLS = ("NQ", "YM")
 STEP_RANK = {
     "Step 1": 1,
     "Step 2": 2,
@@ -849,8 +857,8 @@ def build_audit(date_text: str) -> dict[str, Any]:
     source_paths = {
         "reasoning": DATA_DIR / f"entry_reasoning_{date_text}.jsonl",
         "recent_bars": DATA_DIR / "rithmic_recent_bars.json",
-        "tv_context_by_symbol": BASE_DIR / "tv_context_by_symbol.json",
-        "tv_context_events": BASE_DIR / "tv_context_events.jsonl",
+        "tv_context_by_symbol": TV_CONTEXT_BY_SYMBOL_PATH,
+        "tv_context_events": TV_CONTEXT_EVENTS_PATH,
         "persistence_state": DATA_DIR / "persistence_state.json",
         "executor_state": DATA_DIR / "executor_state.json",
         "fill_audit": DATA_DIR / "fill_audit_log.jsonl",

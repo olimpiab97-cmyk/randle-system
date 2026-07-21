@@ -199,7 +199,7 @@ def seed_completed_pmh_rejection_state(state_path: Path, symbol: str, pmh: float
             "active_liquidity": active_liquidity,
         },
         "step25": {
-            "step": "Step 2.5",
+            "step": "Step 2 Continuation",
             "status": "READY",
             "next_step": "Step 3",
             "reason": "Seeded completed PMH rejection interaction.",

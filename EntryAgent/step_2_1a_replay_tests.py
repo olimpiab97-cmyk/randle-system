@@ -265,6 +265,28 @@ def scenario_8_original_level_activation_blocked() -> dict:
     )
 
 
+def scenario_9_probe_reclaim_close_back_across_level_activates() -> dict:
+    return run_scenario(
+        "9. Upper probe then red close back below level: activation occurs on reclaim candle",
+        step_2_1a_initial_state("PMH", 100.0, "upper"),
+        [
+            candle(99.75, 100.75, 99.5, 100.0, "2026-04-28T08:31:00-07:00"),
+            candle(100.25, 100.5, 99.25, 99.5, "2026-04-28T08:32:00-07:00"),
+        ],
+        {
+            "events": ["pre_activation_probe_detected", "pre_activation_probe_consumed", "step_2_activated"],
+            "final_state": {
+                "step_2_activated": True,
+                "blocked": False,
+                "candle_a_timestamp": "2026-04-28T08:32:00-07:00",
+                "active_level": "PMH",
+                "level_price": 100.0,
+                "probe": {"active": False, "side": "upper", "source_level": "PMH", "boundary_price": 100.75},
+            },
+        },
+    )
+
+
 def run_tests() -> list[dict]:
     scenarios = [
         scenario_1_wick_beyond_no_close,
@@ -275,6 +297,7 @@ def run_tests() -> list[dict]:
         scenario_6_gap_beyond_level_activation_without_probe,
         scenario_7_new_liquidity_clears_probe,
         scenario_8_original_level_activation_blocked,
+        scenario_9_probe_reclaim_close_back_across_level_activates,
     ]
     report = []
     for scenario in scenarios:

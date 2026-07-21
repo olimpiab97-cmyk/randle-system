@@ -1,12 +1,16 @@
 import json
+from datetime import date, datetime
 from pathlib import Path
 import re
+from data_paths import data_path, get_data_root, log_active_data_root
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "Data"
-ATR_SNAPSHOT_PATH = DATA_DIR / "rithmic_atr_snapshot.json"
-RECENT_BARS_PATH = DATA_DIR / "rithmic_recent_bars.json"
+DATA_DIR = get_data_root()
+ATR_SNAPSHOT_PATH = data_path("rithmic_atr_snapshot.json")
+RECENT_BARS_PATH = data_path("rithmic_recent_bars.json")
+REFERENCE_DATE_OVERRIDE = None
+log_active_data_root("symbol_resolution")
 
 
 INSTRUMENT_CONFIG = {
@@ -30,8 +34,10 @@ INSTRUMENT_CONFIG = {
         "tick_value": 5.0,
         "point_value": 50.0,
         "aliases": ("RTY", "RTY1!", "RTYM6"),
-        "listener_enabled": True,
-        "ui_enabled": True,
+        # Retained for historical symbol resolution only. RTY is not an active
+        # listener or UI market; production market data is NQ/YM only.
+        "listener_enabled": False,
+        "ui_enabled": False,
         "active_contract_resolver": None,
     },
     "YM": {
@@ -73,6 +79,13 @@ INSTRUMENT_CONFIG = {
 }
 
 MONTH_CODES = set("FGHJKMNQUVXZ")
+QUARTERLY_CONTRACT_MONTHS = (3, 6, 9, 12)
+QUARTERLY_MONTH_CODES = {
+    3: "H",
+    6: "M",
+    9: "U",
+    12: "Z",
+}
 
 
 def _normalize_raw_symbol(symbol):
@@ -121,6 +134,67 @@ def _build_alias_map():
 
 
 ALIAS_TO_ROOT = _build_alias_map()
+
+
+def _coerce_reference_date(reference_date=None):
+    if reference_date is None and REFERENCE_DATE_OVERRIDE is not None:
+        reference_date = REFERENCE_DATE_OVERRIDE
+    if reference_date is None:
+        return datetime.now().date()
+    if isinstance(reference_date, datetime):
+        return reference_date.date()
+    if isinstance(reference_date, date):
+        return reference_date
+    raise TypeError(f"Unsupported reference_date type: {type(reference_date)!r}")
+
+
+def _nth_weekday_of_month(year, month, weekday, occurrence):
+    current = date(year, month, 1)
+    hits = 0
+    while current.month == month:
+        if current.weekday() == weekday:
+            hits += 1
+            if hits == occurrence:
+                return current
+        current = date.fromordinal(current.toordinal() + 1)
+    raise ValueError(f"Could not find occurrence={occurrence} weekday={weekday} in {year}-{month:02d}")
+
+
+def _equity_index_roll_date(year, contract_month):
+    # Roll on the second Thursday of the quarterly expiry month so Monday June 15, 2026
+    # resolves to the September contract instead of the stale June contract.
+    return _nth_weekday_of_month(year, contract_month, weekday=3, occurrence=2)
+
+
+def _next_quarter_month_year(year, month):
+    idx = QUARTERLY_CONTRACT_MONTHS.index(month)
+    if idx == len(QUARTERLY_CONTRACT_MONTHS) - 1:
+        return year + 1, QUARTERLY_CONTRACT_MONTHS[0]
+    return year, QUARTERLY_CONTRACT_MONTHS[idx + 1]
+
+
+def _active_quarter_month_year(reference_date=None):
+    current_date = _coerce_reference_date(reference_date)
+    year = current_date.year
+    month = current_date.month
+
+    for contract_month in QUARTERLY_CONTRACT_MONTHS:
+        if month < contract_month:
+            return year, contract_month
+        if month == contract_month:
+            roll_date = _equity_index_roll_date(year, contract_month)
+            if current_date < roll_date:
+                return year, contract_month
+            return _next_quarter_month_year(year, contract_month)
+
+    return year + 1, QUARTERLY_CONTRACT_MONTHS[0]
+
+
+def active_front_month_symbol(symbol, reference_date=None):
+    root_symbol = normalize_symbol_root(symbol)
+    year, contract_month = _active_quarter_month_year(reference_date=reference_date)
+    month_code = QUARTERLY_MONTH_CODES[contract_month]
+    return f"{root_symbol}{month_code}{year % 10}"
 
 
 def _read_json(path):
@@ -172,15 +246,24 @@ def _discover_live_symbols():
 def _resolve_active_contract_from_live_data(config, requested_symbol=None):
     root_symbol = str(config.get("root_symbol", "")).upper()
     live_symbols, recent_symbols, atr_symbols = _discover_live_symbols()
+    matching_candidates = []
 
     for candidate in live_symbols:
         if candidate == root_symbol:
             continue
         if normalize_symbol_root(candidate) == root_symbol:
-            source = "recent_bars" if candidate in recent_symbols else "atr_snapshot"
-            return candidate, source
+            matching_candidates.append(candidate)
 
-    front_month_symbol = str(config.get("front_month_symbol", "")).upper()
+    active_contract = active_front_month_symbol(root_symbol)
+    if active_contract in matching_candidates:
+        source = "recent_bars" if active_contract in recent_symbols else "atr_snapshot"
+        return active_contract, source
+
+    for candidate in matching_candidates:
+        source = "recent_bars" if candidate in recent_symbols else "atr_snapshot"
+        return candidate, source
+
+    front_month_symbol = active_front_month_symbol(root_symbol)
     if front_month_symbol:
         return front_month_symbol, "registry_default"
 
@@ -225,7 +308,10 @@ def get_instrument_spec(symbol):
     root_symbol = normalize_symbol_root(symbol)
     config = INSTRUMENT_CONFIG.get(root_symbol)
     if config:
-        return dict(config)
+        spec = dict(config)
+        if spec.get("listener_enabled"):
+            spec["front_month_symbol"] = active_front_month_symbol(root_symbol)
+        return spec
 
     return {
         "root_symbol": root_symbol,
@@ -241,13 +327,13 @@ def get_instrument_spec(symbol):
     }
 
 
-def get_default_listener_subscriptions():
+def get_default_listener_subscriptions(reference_date=None):
     subscriptions = []
     for root_symbol, config in INSTRUMENT_CONFIG.items():
         if not config.get("listener_enabled"):
             continue
         exchange = str(config.get("exchange", "")).upper()
-        contract = str(config.get("front_month_symbol", "")).upper()
+        contract = str(active_front_month_symbol(root_symbol, reference_date=reference_date)).upper()
         if exchange and contract:
             subscriptions.append((exchange, contract))
     return subscriptions

@@ -159,6 +159,16 @@ def _more_extreme(candidate: float, current: float | None, side: str) -> bool:
     raise ValueError(f"unsupported side: {side}")
 
 
+def _close_back_across_level(close: float, level_price: float, side: str, tick_size: float) -> bool:
+    close = _tick_normalized(close, tick_size)
+    level_price = _tick_normalized(level_price, tick_size)
+    if side == "upper":
+        return close <= _tick_normalized(level_price - tick_size, tick_size)
+    if side == "lower":
+        return close >= _tick_normalized(level_price + tick_size, tick_size)
+    raise ValueError(f"unsupported side: {side}")
+
+
 def _gap_only_candle(candle: dict[str, Any], boundary_price: float, side: str, tick_size: float) -> bool:
     open_price = optional_float(candle.get("open"))
     if open_price is None:
@@ -183,6 +193,7 @@ def step_2_1a_initial_state(
         "side": side,
         "tick_size": tick_size,
         "expiration_candles": expiration_candles,
+        "persist_pending_owner_until_resolution": False,
         "pre_activation_probe_boundary": {
             "active": False,
             "side": side,
@@ -196,6 +207,16 @@ def step_2_1a_initial_state(
 
 def evaluate_step_2_1a_candle(state: dict[str, Any], candle: dict[str, Any], index: int) -> dict[str, Any]:
     """Evaluate one completed candle against Step 2.1A replay rules."""
+    # STEP 2 BOUNDARY CONTRACT
+    # close_boundary:
+    # - informational/reference only
+    # - never activates Step 2
+    # - never confirms rejection
+    # - never confirms continuation
+    # extreme_boundary:
+    # - sole activation trigger
+    # - rejection and continuation decisions are based on closes beyond the active extreme_boundary
+    # - active extreme_boundary may move only in the raid direction while owner is active
     events = state.setdefault("events", [])
     probe = state["pre_activation_probe_boundary"]
     tick_size = float(state["tick_size"])
@@ -232,6 +253,7 @@ def evaluate_step_2_1a_candle(state: dict[str, Any], candle: dict[str, Any], ind
     if (
         probe.get("active")
         and probe.get("detected_at_index") is not None
+        and not state.get("persist_pending_owner_until_resolution")
         and index - int(probe["detected_at_index"]) >= int(state["expiration_candles"])
     ):
         probe.update({"active": False, "boundary_price": None, "detected_at_index": None})

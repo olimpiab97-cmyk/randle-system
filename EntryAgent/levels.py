@@ -11,7 +11,7 @@ LEVELS_PATH = BASE_DIR / "levels.json"
 LEVELS_BY_SYMBOL_PATH = BASE_DIR / "levels_by_symbol.json"
 TV_CONTEXT_PATH = BASE_DIR / "tv_context.json"
 LEVEL_KEYS = ("PMH", "PML", "LH", "LL", "ONH", "ONL", "YH", "YL", "RTHH", "RTHL")
-TICK_SIZES = {"NQ": 0.25, "YM": 1.0, "RTY": 0.10}
+TICK_SIZES = {"NQ": 0.25, "YM": 1.0}
 
 
 def root_symbol(symbol: str) -> str:
