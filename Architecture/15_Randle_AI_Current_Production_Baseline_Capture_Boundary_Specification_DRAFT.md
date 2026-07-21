@@ -1,6 +1,6 @@
 # Current Production Baseline Capture Boundary Specification
 
-Status: **DRAFT — NOT CANONICAL — NOT APPROVED**
+Status: **REMEDIATED DRAFT — NOT CANONICAL — PENDING NEW INDEPENDENT REVIEW**
 Implementation authorization: **None**
 Capture authorization: **None**
 Independent review status: **Pending**
@@ -10,7 +10,7 @@ Normative keywords: **SHALL**, **MUST**, **MUST NOT**, **SHOULD**, and **MAY** a
 
 ### 1.1 Purpose
 
-This specification defines how a future, separately authorized Current Production Baseline Capture derives, freezes, binds, and verifies its complete repository and external-evidence boundary. A conforming capture proves which disk bytes, Git-cleaned bytes, Git objects, path identities, status bytes, and external dependencies existed and were stable during the capture passes.
+This specification defines how a future Current Production Baseline Capture, initiated only after a distinct governed execution approval, derives, freezes, binds, and verifies its complete repository and external-evidence boundary. A conforming capture proves which disk bytes, Git-cleaned bytes, Git objects, path identities, status bytes, and external dependencies existed and were stable during the capture passes.
 
 ### 1.2 Limits of proof
 
@@ -25,7 +25,7 @@ A baseline capture is a disk-state and provenance assertion. It does not prove t
 
 ### 1.3 Governing authority and status
 
-This draft was requested under the governed Randle AI / Entry Agent recovery workflow after `B5_RECAPTURE_REQUIRED`. It is based for provenance on recapture-requirement report commit `8633a233480a76d76899d7d7e90ab72574f20c52`. It is not canonical and has no operational force until independently reviewed and expressly accepted through a later governed action. Acceptance of this specification would authorize only consideration of a separately authorized capture attempt.
+This draft was requested under the governed Randle AI / Entry Agent recovery workflow after `B5_RECAPTURE_REQUIRED`. It is based for provenance on recapture-requirement report commit `8633a233480a76d76899d7d7e90ab72574f20c52` and remediates the enforcement defects found in independent review of specification commit `a9bc860da0ce4296bb6d93b3e1120489d72a2d3b`. It is not canonical. Independent acceptance would establish only that the document is eligible to be considered as a prerequisite in a later, separately authorized capture-execution task; acceptance grants no execution authority.
 
 ## 2. Repository identity
 
@@ -43,7 +43,7 @@ Before selection and before every pass, the capture SHALL bind:
 - Git object format, Git version, active attributes sources, and configured line-ending behavior; and
 - every linked worktree and its administrative relationship, while excluding other worktree contents from the active production boundary.
 
-An identity command that writes an object or updates an index is forbidden during preflight and selection. `git hash-object` MAY be used only without `-w`.
+An identity command that updates the repository object database or index is forbidden during preflight and selection. Git clean-filter execution MAY use `git hash-object -w --path` only with a newly created disposable `GIT_OBJECT_DIRECTORY`; the implementation SHALL prove that neither the repository object database nor index was written and SHALL remove the disposable directory.
 
 ### 2.2 Path and filesystem identity
 
@@ -119,7 +119,7 @@ The selection script SHALL construct an NFC module/path map and iterate to a fix
 6. Resolve selected test imports, fixtures, replay/scenario inputs, subprocess targets, and direct runtime-path references.
 7. Repeat until no new path or unresolved edge remains.
 
-Every edge SHALL record source path, source location, parser, rule identifier, target, resolution, and evidence. Dynamic observation MAY add dependencies but SHALL NOT erase static ones. Unresolved dynamic behavior stops the attempt.
+Every edge SHALL record source path, source language or format, parser, source location, edge type, rule identifier, literal or declared target, canonical resolved target, resolution status, evidence, and terminal disposition. A literal target absent from enumeration stops selection. Dynamic observation MAY add dependencies but SHALL NOT erase static ones. A computed target is accepted only when an exact, reviewed dynamic-dependency declaration resolves it completely; otherwise the attempt stops.
 
 ## 5. Test-selection algorithm
 
@@ -162,13 +162,17 @@ An accepted future amendment could exclude one only with a new rule, preserved e
 
 ### 7.1 Include registry
 
-`include_registry_schema_DRAFT.json` is normative for the proposed shape. Each entry SHALL contain a stable ID, canonical repository-relative or external-root-relative path, class, selection-rule ID, evidence references, authority status, required capture form, expected existence state, and specific rationale. External entries also require a frozen external-root ID. Exact entries seed derivation or preserve mandatory evidence; they SHALL NOT form a hand-maintained final allowlist.
+`include_registry_schema_DRAFT.json` is normative for the proposed shape. Each entry SHALL contain a stable ID, canonical repository-relative or external-root-relative path, class, selection-rule ID, evidence references, authority status, required capture form, expected existence state, and specific rationale. External entries also require a frozen external-root ID. Exact entries seed derivation or preserve mandatory evidence; they SHALL NOT form a hand-maintained final allowlist. The selection-rule registry has its own schema; every rule referenced by a registry, dependency edge, or terminal disposition SHALL exist exactly once.
 
 ### 7.2 Exclusion registry
 
 `exclusion_registry_schema_DRAFT.json` is normative for the proposed shape. Each entry SHALL contain a canonical exact path or narrowly bounded pattern, match type, rule ID, class, exact rationale, evidence, comparable-path consistency proof, authority, reviewer status, and explicit stop behavior. Pattern `*`, `**`, unanchored recursive globs, undocumented predicates, and exclusions conflicting with dependency closure are invalid.
 
 Duplicate entries, include/exclude overlap, invalid rule IDs, missing evidence, missing rationale, pending review at capture authorization, case collisions, and normalization collisions stop the attempt.
+
+### 7.3 Terminal-disposition inventory
+
+Selection SHALL emit one `terminal_disposition_schema_DRAFT.json` record for every enumerated repository path and governed external artifact. An exclusion or separately bound artifact remains visible in that inventory. The `INCLUDE`, `EXCLUDE`, and `SEPARATE_AND_BIND` sets SHALL be pairwise disjoint and their union SHALL equal the governed enumeration universe. Each separately bound item SHALL identify a complete evidence-binding obligation, and every obligation SHALL point back to exactly one separately bound item. Missing, duplicate, conflicting, or orphan records stop selection.
 
 ## 8. Inventory generation
 
@@ -203,12 +207,13 @@ The inventory records exact item count and byte total. The count emerges only af
 
 Before Pass A, a separately authorized capture SHALL write a content-addressed freeze package containing:
 
-- specification commit, tree, document blob, and status;
-- include-registry blob, exclusion-registry blob, selection-rule registry blob, and canonical configuration blob;
-- capture/selection script blob, verification script blob, version, and raw SHA-256;
-- generated ordered inventory, inventory semantic SHA-256, item count, and byte total;
+- specification commit, parent, tree, document blob, and document raw SHA-256;
+- include-registry, exclusion-registry, selection-rule-registry, and boundary-configuration Git blobs and raw SHA-256 values;
+- selection-engine, inventory-generator, boundary-verifier, and operational-capture-script Git blobs and raw SHA-256 values;
+- generated ordered inventory identity, item count, byte total, and independent included-, excluded-, and separately-bound-set identities;
 - Python/runtime version, Git version, operating-system and filesystem identity;
-- capture attempt ID, repository HEAD, branch/detached state, index identity, and raw status identity;
+- capture attempt ID, repository HEAD, branch/detached state, index identity, raw status identity, repository object format, and `.gitattributes` identity;
+- required-evidence-set identity, attempt-ledger root, and freeze-receipt schema identity;
 - timestamp, timestamp authority, initiating identity, reviewer/authorization identity; and
 - a self-hashed freeze receipt conforming to `freeze_receipt_schema_DRAFT.json`.
 
@@ -224,9 +229,9 @@ Before a future Pass A, the operational script SHALL be committed or externally 
 
 ## 11. Attempt ledger
 
-Every initiated attempt SHALL receive an append-only ledger record conforming to `attempt_ledger_schema_DRAFT.json`, including unique attempt ID; start/end times; initiating session; repository, specification, script, and inventory identities; worktree; branch; evidence directory; Pass A and Pass B status; staging state; commits; runtime access; production modification; stop reason; terminal disposition; manifest path/size/SHA-256; and relationships to prior attempts.
+Every initiated attempt SHALL receive an append-only ledger record conforming to `attempt_ledger_schema_DRAFT.json`, including unique attempt ID; monotonic sequence; predecessor identity; start/end times; initiating session; repository, specification, script, and inventory identities; worktree; branch; evidence directory; Pass A and Pass B status; staging state; commits; runtime access; production modification; deployment-attempt and service-restart-attempt facts; stop reason; terminal disposition; manifest path/size/SHA-256; and validated relationships to prior attempts. The ledger SHALL bind an independently frozen expected-attempt universe or append-only authority, entry count, previous root, and current semantic root. Removal, reordering, collapse, cycle, nonexistent relationship, or root substitution stops verification.
 
-The terminal types `NO_ARTIFACT`, `PRE_PASS_A_STOP`, `UNSTABLE`, `ABORTED`, `REJECTED`, `SUCCESSFUL`, `SUPERSEDED`, and `REVIEWED` are distinct. A no-artifact/pre-Pass-A record SHALL state explicit `none` for worktree, branch, evidence directory, staging, commits, and manifest and `NOT_STARTED` for both passes. An unstable or later record SHALL bind its manifest and created artifacts. Contradictory claims, duplicate IDs, missing evidence, or collapsed attempts stop the workflow.
+The terminal types `NO_ARTIFACT`, `PRE_PASS_A_STOP`, `UNSTABLE`, `ABORTED`, `REJECTED`, `SUCCESSFUL`, `SUPERSEDED`, and `REVIEWED` are distinct. A no-artifact/pre-Pass-A record SHALL state explicit `none` for worktree, branch, evidence directory, staging, commits, and manifest and `NOT_STARTED` for both passes. An unstable or later record SHALL bind its manifest and created artifacts. Truthful incident flags SHALL remain representable; a true runtime, production-modification, deployment-attempt, or restart-attempt flag preserves the incident and separately fails capture authority. Contradictory claims, duplicate IDs, missing evidence, or collapsed attempts stop the workflow.
 
 ## 12. Long-path-safe durable manifest
 
@@ -247,15 +252,15 @@ This requirement prevents recurrence of the B1 long-path omission. Historical si
 
 ## 13. Durable evidence binding
 
-The eventual committed provenance record SHALL cryptographically bind every original or corrective manifest, status artifact, command result, complete test log, complete failure classification, attempt ledger, include registry, exclusion registry, selection specification, selection/capture script, verification script, freeze receipt, YM patch dependency, external dependency, capture commit, tree, parent, path inventory, Git blob, raw hash, count, and byte total.
+The complete required-evidence universe SHALL be defined and frozen before capture by registry identity, canonical entry count, canonical path-set identity, required role set, required artifact-class set, total bytes, semantic root, and registry identity. The eventual committed provenance record SHALL cryptographically bind every original or corrective manifest, status artifact, command result, complete test log, complete failure classification, attempt ledger, include registry, exclusion registry, selection specification, selection/capture script, verification script, freeze receipt, YM patch dependency, external dependency, capture commit, tree, parent, path inventory, Git blob, raw hash, count, and byte total.
 
-Each binding SHALL contain canonical path/root ID, role, byte size, SHA-256, Git blob when applicable, authority status, immutability status, and whether later recovery requires it. Filename-only or prose-only references are invalid. External mutable locations may be referenced only through a content-addressed immutable snapshot or a binding that explicitly declares the source mutable and separately preserves the bound bytes. Mutation of any required binding stops verification.
+Each binding SHALL contain canonical path/root ID, role, artifact class, byte size, SHA-256, Git blob when applicable, authority status, immutability status, recovery requirement, source attempt, capture pass, and semantic purpose. Filename-only or prose-only references are invalid. External mutable locations may be referenced only through a content-addressed immutable snapshot or a binding that explicitly declares the source mutable and separately preserves the bound bytes. Removal of one entry or an entire role/class, duplicate, replacement, count/root mismatch, or mutation of any required field stops verification against the independently frozen registry identity.
 
 ## 14. Test-result preservation
 
-The future parser SHALL preserve at least `PASSED`, `FAILED`, `SUBFAILED`, `SKIPPED`, `ERROR`, `XFAIL`, and `XPASS`. Every outcome record SHALL contain normalized original identity, parent identity where applicable, outcome, source location, and—when failed/error/unexpected-pass—classification category, rationale, and evidence reference.
+The future parser SHALL preserve at least `PASSED`, `FAILED`, `SUBFAILED`, `SKIPPED`, `ERROR`, `XFAIL`, and `XPASS`. Every outcome record SHALL contain normalized original identity, parent identity where applicable, outcome, and source-log location. Every `FAILED`, `SUBFAILED`, `ERROR`, and unexpected `XPASS` SHALL additionally contain nonempty category, rationale, source reference, parser name/version, normalization rule, and classification rule. A `SUBFAILED` record SHALL contain a nonempty parent identity.
 
-The classification SHALL bind full-log path, size, SHA-256, parser name/version, normalization rules, classification rules, ordered source outcome set, per-kind totals, and accounted total. Parent failures and child/subtest failures remain distinct. Classification cannot relabel a source failure as pass, skip, xfail, or nonfailure. Duplicate, omitted, unsupported, or total-mismatched outcomes cause nonzero exit.
+The classification SHALL bind full-log path, size, SHA-256, parser name/version, normalization rules, classification rules, exact unique outcome-identity-set SHA-256, per-status counts, per-category counts, source total, and accounted total. Parent failures and child/subtest failures remain distinct. Classification cannot relabel a source failure as pass, skip, xfail, or nonfailure. Empty classification, duplicate, omitted, unsupported, source/log mismatch, or total mismatch causes nonzero exit. Schema and semantic validation SHALL agree.
 
 The historical `156 FAILED + 23 SUBFAILED = 179` is a regression vector demonstrating complete failure retention; it is not an assumed result for a future capture.
 
@@ -263,7 +268,7 @@ The historical `156 FAILED + 23 SUBFAILED = 179` is a regression vector demonstr
 
 ### 15.1 Pass A, Pass B, and final
 
-Pass A, Pass B, and final SHALL independently recompute the same frozen specification/script/verifier/registry/configuration identities; ordered inventory; raw-byte and Git-cleaned identities; raw status bytes; path count; external evidence identity; HEAD; branch/detached state; and index identity. Writer scans SHALL be repeated before each pass and after final. Runtime operations are forbidden.
+Pass A, Pass B, and final SHALL independently recompute and compare branch/detached identity; HEAD and capture parent; index; status bytes; specification commit/tree/blob; every registry; configuration; selection engine; inventory generator; verifier; operational script; generated inventory; included/excluded/separately-bound sets; raw, Git-cleaned, mode, and path identities; artifact count and byte total; external and required-evidence identities; attempt-ledger root; freeze receipt; `.gitattributes`; writer count; runtime-operation count; and deployment/restart indicators. Writer scans SHALL be repeated before each pass and after final. Runtime operations are forbidden.
 
 The passes SHALL use identical commands, canonicalization, environment identity, and included/excluded fields. Timestamps are ledger metadata and SHALL NOT enter the governed state-comparison identity. Machine-specific fields enter the environment identity and must match across passes but do not prevent a later reviewer from recomputing content identities from preserved evidence.
 
@@ -279,7 +284,7 @@ During Pass B/final, the same conditions terminate the attempt as unstable. No o
 
 ## 17. Authorization boundaries
 
-Independent acceptance of this specification would authorize only the later execution of a separately requested and separately authorized capture using an accepted frozen version. This draft and its fixture results do not authorize the capture itself, merge, canonical incorporation, implementation, production restart, deployment, runtime migration, NQ cutover, automated paper trading, live-money trading, Bucket 0 completion, Bucket 1, Phase 3C2, or Phase 3C1-R11 acceptance.
+Independent acceptance of this specification would establish a prerequisite only. It grants no permission to execute a baseline capture. A separately requested and separately approved capture-execution task is mandatory. This draft and its fixture results do not authorize merge, canonical incorporation, implementation, production restart, deployment, runtime migration, NQ cutover, automated paper trading, live-money trading, Bucket 0 completion, Bucket 1, Phase 3C2, or Phase 3C1-R11 acceptance.
 
 No production code or captured code is approved by this document. Bucket 0 remains incomplete and Bucket 1 remains blocked.
 
@@ -288,3 +293,9 @@ No production code or captured code is approved by this document. Bucket 0 remai
 The governed draft package is under `Architecture/Audits/2026-07-21_Current_Production_Baseline_Capture_Boundary_Specification_DRAFT/`. Its schemas, registries, verifier, inventory generator, expectation vectors, mutation vectors, independent expectations, fixture runner, fixture results, and machine-readable traceability are specification evidence only.
 
 The scripts SHALL NOT be represented as production capture implementations. Fixture verification SHALL use disposable synthetic roots and SHALL emit no capture, runtime, deployment, merge, or trading operation.
+
+## 18. Executable conformance and remediation
+
+The remediated draft package SHALL enforce clauses 1–17 through Draft 2020-12 schemas and semantic functions. `schema_validation_DRAFT.py` pins `jsonschema` 4.25.1 and validates every schema and active or complete synthetic instance. `selection_engine_DRAFT.py` emits dependency edges and terminal dispositions. `inventory_generator_DRAFT.py` uses real Windows stream enumeration, extended-length paths, no-follow traversal, stable reads, and isolated Git clean filters. `boundary_verifier_DRAFT.py` validates registries, the five mandatory tests, package Git blobs, dispositions, inventories, freezes, ledgers, evidence universes, outcome classifications, stability, traceability, and authorization language.
+
+`fixture_runner_DRAFT.py` SHALL compare observations to the static `independent_expectations_DRAFT.json`; implementation code SHALL NOT generate that expectation file. It SHALL test real filesystem and Git surfaces where supported, report an explicit unsupported-environment failure otherwise, preserve the historical 571/156/23/3 vector, clean every disposable root, and bind fresh observations by a semantic SHA-256. The traceability matrix SHALL map BR-01 through BR-13 and every normative clause to schemas, rules, enforcing functions, cases, expectations, observations, and future capture obligations. Descriptive identifiers alone do not establish coverage.

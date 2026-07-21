@@ -1,6 +1,6 @@
 # Canonical Delta — Current Production Baseline Capture Boundary
 
-Status: **DRAFT — NOT CANONICAL — NOT APPROVED**
+Status: **REMEDIATED DRAFT — NOT CANONICAL — PENDING NEW INDEPENDENT REVIEW**
 
 ## Proposed new normative concepts
 
@@ -12,6 +12,21 @@ Status: **DRAFT — NOT CANONICAL — NOT APPROVED**
 6. Attempt history is append-only and distinguishes no-artifact, pre-Pass-A, unstable, aborted, rejected, successful, superseded, and reviewed attempts.
 7. Durable evidence is enumerated with extended-length Windows paths and bound by complete content identities.
 8. Every test outcome—including `SUBFAILED`, `XFAIL`, and `XPASS`—is individually preserved and source-reconciled.
+9. Every enumerated artifact remains visible in a terminal-disposition inventory whose three disjoint sets reconcile to the enumeration universe.
+10. Package authority derives registries, configuration, selector, inventory generator, and verifier identities from committed Git objects plus current raw bytes.
+11. Attempt and evidence completeness depend on independently frozen universes, not self-reported mutable counts.
+12. Positive or ambiguous authority language anywhere in the governed package is a semantic verification failure.
+
+## Machine-enforced controls in this remediation
+
+- Python AST, PowerShell, batch/shell, JSON, YAML, TOML, and INI parser fixtures emit resolved dependency edges or fail closed.
+- Pytest fixtures, markers, parameterization, unittest discovery, route/handler/factory/plugin loading, subprocess targets, static resources, replay/scenario data, and configuration targets are exercised.
+- All paths receive `INCLUDE`, `EXCLUDE`, or `SEPARATE_AND_BIND`; exclusions and separate bindings cannot disappear.
+- The five questioned tests remain exact normative inclusions even when relevance signals, registry entries, path case, names, or proposed exclusions are mutated.
+- Real NTFS stream enumeration, extended-length paths, long-path sentinels, reparse points, inaccessible paths, and stable reads are tested on disposable roots.
+- Draft 2020-12 schemas and complete instances are independently validated with pinned `jsonschema` 4.25.1 and then semantically validated.
+- Every freeze and multi-pass field is mutation-tested; the historical 753-outcome classification is complete and source-bound.
+- Static independent expectations and observation roots detect expectation, observation, and enforcing-code drift.
 
 ## Clarified existing concepts
 
@@ -36,8 +51,8 @@ Status: **DRAFT — NOT CANONICAL — NOT APPROVED**
 
 ## Future incorporation set
 
-If independently accepted, a later governed task must incorporate the accepted specification into `Architecture/README.md`, `Architecture/06_Randle_AI_Modernization_Charter.md`, `CODEX_TASK_TEMPLATE.md`, and the accepted successor of `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`. That task must preserve the independent review identity and must not retroactively accept the rejected capture.
+If independently accepted, a later governed task must incorporate the accepted specification into `Architecture/README.md`, `Architecture/06_Randle_AI_Modernization_Charter.md`, `Architecture/07_Randle_AI_Modernization_Roadmap.md`, `CODEX_TASK_TEMPLATE.md`, and the accepted successor of `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`. That task must preserve the independent review identity and must not retroactively accept the rejected capture.
 
 ## Remaining draft matters
 
-The specification text, schemas, registries, rule registry, parser expectations, fixture scripts, and verification results remain draft pending independent review. An operational capture script remains intentionally absent. No repository-specific future inventory exists, no capture has run, and no architecture, merge, deployment, restart, migration, cutover, trading, Bucket, Phase 3C2, or R11 acceptance authority is created.
+The specification text, schemas, registries, rule registry, parser expectations, fixture scripts, and verification results remain draft pending new independent review. The fixture scripts are enforcement evidence, not the future operational capture script; that operational script remains intentionally absent and must later be separately committed or content-addressed and frozen. No repository-specific future inventory exists, no capture has run, and no architecture, merge, deployment, restart, migration, cutover, trading, Bucket, Phase 3C2, or R11 acceptance authority is created.

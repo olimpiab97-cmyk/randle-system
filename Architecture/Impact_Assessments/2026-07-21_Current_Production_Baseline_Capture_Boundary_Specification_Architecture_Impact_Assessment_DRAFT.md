@@ -1,6 +1,6 @@
 # Architecture Impact Assessment — Current Production Baseline Capture Boundary Specification
 
-Status: **DRAFT — NOT CANONICAL — NOT APPROVED**
+Status: **REMEDIATED DRAFT — NOT CANONICAL — PENDING NEW INDEPENDENT REVIEW**
 Assessment date: 2026-07-21
 Implementation, capture, deployment, restart, and trading authority: **None**
 
@@ -12,22 +12,22 @@ The proposed specification replaces operator-selected capture scope with a froze
 
 | Domain | Proposed impact | Authority effect | Principal risk and control |
 |---|---|---|---|
-| Governance | Introduces a reviewed boundary specification, governed registries, freeze gate, and attempt ledger | Draft only; independent acceptance required | False elevation to approval; controlled by explicit status and section 17 |
-| Repository provenance | Binds root, common directory, worktree, HEAD, index, status, raw bytes, clean bytes, trees, and blobs | Makes later capture claims reproducible | Identity gaps; controlled by complete freeze fields and fail-closed comparison |
+| Governance | Introduces a draft boundary specification, governed registries, freeze gate, semantic authorization scanner, and attempt ledger | Draft only; new independent review required | False elevation to approval; machine scanning rejects positive or ambiguous authority language |
+| Repository provenance | Represents root, common directory, worktree, HEAD, index, status, raw bytes, real Git-clean-filter bytes, trees, modes, attributes, and blobs | Makes later capture claims reproducible | Identity gaps; schemas and full-field equality mutations stop on omission or change |
 | Production recovery | Makes the selected file/dependency set reproducible and prevents silent omitted active bytes | Improves future recovery evidence, not recovery authorization | Over- or under-capture; controlled by closure plus unknown-class stop |
-| Test authority | Selects production-relevant tests deterministically and preserves all outcome kinds | Tests remain evidence, not approval | Manual test omission; controlled by discovery universe and explicit disposition |
+| Test authority | Parser-backed rules select production-relevant tests and preserve every governed outcome kind | Tests remain evidence, not approval | Manual test omission; exact five-test authority, content discovery, fixture ownership, and unknown-test stops are executable |
 | Runtime authority | Separates repository bytes from mutable runtime databases/data and external runtime dependencies | No runtime read or mutation authority is created | Accidental runtime access; controlled by separate authorization and stop behavior |
 | Deployment authority | Captures launcher/config dependencies when relevant but grants no deployment right | No deployment, restart, migration, or cutover authority | Conflating captured launcher with approval; controlled by purpose/authorization clauses |
-| Evidence durability | Requires long-path-safe manifests and content-addressed external bindings | Evidence becomes independently auditable when a later capture is authorized | Silent long-path skips; controlled by native enumeration and B1 sentinels |
-| Traceability | Links B1–B5 to clauses, rules, schemas, fixtures, and future obligations | Enables independent review | Prose-only claims; controlled by machine-readable matrix and IDs |
-| Operational safety | Requires writer-free, stable, isolated, multi-pass operation with no runtime operation | No present operational authority | Production mutation; controlled by preflight/freeze/multi-pass stops |
+| Evidence durability | Requires long-path-safe manifests and a frozen complete evidence universe | Evidence becomes independently auditable in a later separately authorized capture | Real extended-path, sentinel, entry/class deletion, count, and semantic-root mutations are enforced |
+| Traceability | Links B1–B5 and BR-01–BR-13 to clauses, schemas, functions, independent expectations, observations, and future obligations | Enables independent review | Prose-only claims; reverse coverage rejects orphan clauses, fields, functions, and cases |
+| Operational safety | Requires writer-free, stable, isolated, multi-pass operation with zero runtime/deployment/restart indicators | No present operational authority | Full-field freeze and multi-pass mutation matrices, truthful incident facts, and authority failure are executable |
 | Future reproducibility | Defines canonical paths, serialization, inventories, environments, and mutation detection | Enables later exact reconstruction of capture decisions | Environment drift; controlled by frozen versions and identities |
 
 ## Data and control-flow impact
 
 The proposed future flow is:
 
-`accepted specification commit → authorized attempt ledger entry → complete disk/Git enumeration → relevance fixed point → exact classification → frozen inventory and receipt → Pass A → Pass B → final reconciliation → durable manifest → provenance commit → independent capture review`
+`independently accepted specification prerequisite → separately authorized attempt ledger entry → complete disk/Git enumeration → relevance fixed point → exact classification → frozen inventory and receipt → Pass A → Pass B → final reconciliation → durable manifest → provenance commit → independent capture review`
 
 Every transition is gated by immutable identities. A failed gate records a terminal attempt and does not reuse its artifact directory.
 
@@ -47,8 +47,13 @@ No canonical document is amended in this task. If the draft is independently acc
 2. `Architecture/06_Randle_AI_Modernization_Charter.md` — incorporate the frozen-boundary, complete-external-binding, and fail-closed evidence requirements into the charter’s evidence standard.
 3. `CODEX_TASK_TEMPLATE.md` — add the mandatory boundary-freeze, writer scan, attempt ledger, and independent-review gates for future baseline captures.
 4. The accepted successor of `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md` — cross-reference complete outcome preservation and clarify that verification evidence does not approve captured implementation.
+5. `Architecture/07_Randle_AI_Modernization_Roadmap.md` — insert the independently accepted pre-capture boundary specification and freeze gate into recovery sequencing before any new baseline capture.
 
-The Constitution, lifecycle, interface, decision, observability, and state-boundary specifications do not require semantic amendment because this proposal does not change runtime behavior or authority. They may receive nonnormative cross-references only if a later architecture owner finds them useful.
+The Constitution, lifecycle, interface, decision, observability, and state-boundary specifications do not require semantic amendment because this proposal does not change runtime behavior or authority. They may receive nonnormative cross-references only if a later architecture owner finds them useful. The Roadmap is an incorporation target because the prerequisite and freeze gate change governed recovery sequencing, not runtime design.
+
+## Remediation enforcement status
+
+The earlier draft overstated fixture enforcement. This remediation limits the assessment to controls exercised by the package: parser-backed Python, launcher, configuration, fixture, route, plugin, subprocess, resource, and test closure; explicit three-way dispositions; exact Git-blob/raw-byte package authority; real NTFS stream detection; full raw/Git identity records; complete freezes; independently frozen attempt/evidence universes; source-bound nonempty classification; full multi-pass equality; independent expectations; and semantic governance scanning. The draft scripts still refuse production roots and are not an operational capture implementation.
 
 ## Assessment conclusion
 
