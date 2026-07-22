@@ -25,7 +25,9 @@ from boundary_verifier_DRAFT import (
     validate_path_set,
 )
 from governed_file_access_DRAFT import GovernedAccessError
+from governed_file_access_DRAFT import enumerate_directory as governed_enumerate_directory
 from governed_file_access_DRAFT import extended_length_path as governed_extended_length_path
+from governed_file_access_DRAFT import named_streams as governed_named_streams
 from governed_file_access_DRAFT import read_binary as governed_read_binary
 from governed_file_access_DRAFT import read_named_stream
 
@@ -96,68 +98,10 @@ def _is_reparse(stat_result: os.stat_result) -> bool:
 
 
 def alternate_data_streams(path: Path) -> list[str]:
-    """Return named NTFS streams using FindFirst/FindNextStreamW."""
-
-    if os.name != "nt":
-        raise InventoryError("ADS_UNSUPPORTED_ENVIRONMENT", os.name)
-
-    class WIN32_FIND_STREAM_DATA(ctypes.Structure):
-        _fields_ = [("StreamSize", ctypes.c_longlong), ("cStreamName", ctypes.c_wchar * 296)]
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    create_file = kernel32.CreateFileW
-    create_file.argtypes = [ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p]
-    create_file.restype = ctypes.c_void_p
-    close_handle = kernel32.CloseHandle
-    close_handle.argtypes = [ctypes.c_void_p]
-    close_handle.restype = ctypes.c_bool
-    find_first = kernel32.FindFirstStreamW
-    find_first.argtypes = [ctypes.c_wchar_p, ctypes.c_int, ctypes.POINTER(WIN32_FIND_STREAM_DATA), ctypes.c_uint]
-    find_first.restype = ctypes.c_void_p
-    find_next = kernel32.FindNextStreamW
-    find_next.argtypes = [ctypes.c_void_p, ctypes.POINTER(WIN32_FIND_STREAM_DATA)]
-    find_next.restype = ctypes.c_bool
-    find_close = kernel32.FindClose
-    find_close.argtypes = [ctypes.c_void_p]
-    find_close.restype = ctypes.c_bool
-
-    governed_path = extended_length_path(path)
-    access_handle = create_file(
-        governed_path,
-        FILE_READ_EA | FILE_READ_ATTRIBUTES,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        None,
-        OPEN_EXISTING,
-        FILE_FLAG_BACKUP_SEMANTICS,
-        None,
-    )
-    if access_handle == INVALID_HANDLE_VALUE:
-        raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:access-not-proven:winerror={ctypes.get_last_error()}")
-    if not close_handle(access_handle):
-        raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:access-handle-close:winerror={ctypes.get_last_error()}")
-
-    data = WIN32_FIND_STREAM_DATA()
-    handle = find_first(governed_path, 0, ctypes.byref(data), 0)
-    if handle == INVALID_HANDLE_VALUE:
-        error = ctypes.get_last_error()
-        if error == ERROR_HANDLE_EOF:
-            return []
-        raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:winerror={error}")
-    streams: list[str] = []
     try:
-        while True:
-            name = data.cStreamName
-            if name != "::$DATA":
-                streams.append(name)
-            if not find_next(handle, ctypes.byref(data)):
-                error = ctypes.get_last_error()
-                if error == ERROR_HANDLE_EOF:
-                    break
-                raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:winerror={error}")
-    finally:
-        if not find_close(handle):
-            raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:FindClose")
-    return sorted(streams)
+        return list(governed_named_streams(path))
+    except GovernedAccessError as exc:
+        raise InventoryError(exc.code, exc.detail) from exc
 
 
 def _stat_identity(value: os.stat_result) -> dict[str, Any]:
@@ -234,21 +178,21 @@ def stable_read(
 def _walk(root: Path, relative: tuple[str, ...] = ()) -> Iterator[tuple[Path, str]]:
     disk = root.joinpath(*relative)
     try:
-        with os.scandir(extended_length_path(disk)) as iterator:
-            entries = sorted(list(iterator), key=lambda entry: entry.name.encode("utf-8"))
-    except PermissionError as exc:
+        children = sorted(governed_enumerate_directory(disk), key=lambda child: Path(child).name.encode("utf-8"))
+    except (PermissionError, GovernedAccessError) as exc:
         raise InventoryError("PERMISSION_DENIED", "/".join(relative) or ".") from exc
-    for entry in entries:
-        if entry.name in {".", ".."} or (not relative and entry.name == ".git"):
+    for child in children:
+        name = Path(child).name
+        if name in {".", ".."} or (not relative and name == ".git"):
             continue
-        next_relative = (*relative, entry.name)
+        next_relative = (*relative, name)
         path = root.joinpath(*next_relative)
         rel = canonical_repository_path("/".join(next_relative))
         try:
-            item_stat = entry.stat(follow_symlinks=False)
+            item_stat = os.lstat(extended_length_path(path))
         except PermissionError as exc:
             raise InventoryError("PERMISSION_DENIED", rel) from exc
-        if entry.is_symlink() or _is_reparse(item_stat):
+        if _is_reparse(item_stat):
             raise InventoryError("REPARSE_POINT_AMBIGUITY", rel)
         if stat.S_ISDIR(item_stat.st_mode):
             yield from _walk(root, next_relative)

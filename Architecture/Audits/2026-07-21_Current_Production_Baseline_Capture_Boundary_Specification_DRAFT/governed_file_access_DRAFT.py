@@ -8,6 +8,7 @@ choice is explicit in :class:`ByteObservation` and never inferred from a path.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import os
 import re
@@ -21,6 +22,8 @@ from typing import Iterator
 _REPARSE_POINT = 0x400
 _DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
 _GIT_OBJECT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
+_INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+_ERROR_HANDLE_EOF = 38
 
 
 class GovernedAccessError(OSError):
@@ -58,6 +61,26 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _reject_stream_selector(path: os.PathLike[str] | str) -> str:
+    """Reject every NTFS named-stream selector while preserving a drive colon."""
+
+    raw = os.fspath(path)
+    if not isinstance(raw, str) or not raw or "\x00" in raw:
+        raise GovernedAccessError("INVALID_AUTHORITY_PATH", repr(raw))
+    normalized = raw
+    if normalized.startswith("\\\\?\\UNC\\"):
+        normalized = "\\\\" + normalized[8:]
+    elif normalized.startswith("\\\\?\\"):
+        normalized = normalized[4:]
+    colon_positions = [index for index, character in enumerate(normalized) if character == ":"]
+    permitted = {1} if re.match(r"^[A-Za-z]:", normalized) else set()
+    if any(index not in permitted for index in colon_positions):
+        raise GovernedAccessError("AUTHORITY_STREAM_SELECTOR_REJECTED", raw)
+    if permitted and not re.match(r"^[A-Za-z]:[\\/]", normalized):
+        raise GovernedAccessError("AMBIGUOUS_AUTHORITY_COLON", raw)
+    return raw
+
+
 def canonical_absolute_path(path: os.PathLike[str] | str) -> str:
     """Return an absolute, normalized Windows identity without dereferencing."""
 
@@ -71,6 +94,49 @@ def canonical_absolute_path(path: os.PathLike[str] | str) -> str:
     if os.name == "nt":
         normalized = os.path.normcase(normalized)
     return normalized
+
+
+def named_streams(path: os.PathLike[str] | str) -> tuple[str, ...]:
+    """Enumerate named NTFS streams on the primary file without selecting one."""
+
+    _reject_stream_selector(path)
+    if os.name != "nt":
+        raise GovernedAccessError("ADS_UNSUPPORTED_ENVIRONMENT", os.name)
+
+    class WIN32_FIND_STREAM_DATA(ctypes.Structure):
+        _fields_ = [("StreamSize", ctypes.c_longlong), ("cStreamName", ctypes.c_wchar * 296)]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    find_first = kernel32.FindFirstStreamW
+    find_first.argtypes = [ctypes.c_wchar_p, ctypes.c_int, ctypes.POINTER(WIN32_FIND_STREAM_DATA), ctypes.c_uint]
+    find_first.restype = ctypes.c_void_p
+    find_next = kernel32.FindNextStreamW
+    find_next.argtypes = [ctypes.c_void_p, ctypes.POINTER(WIN32_FIND_STREAM_DATA)]
+    find_next.restype = ctypes.c_bool
+    find_close = kernel32.FindClose
+    find_close.argtypes = [ctypes.c_void_p]
+    find_close.restype = ctypes.c_bool
+    data = WIN32_FIND_STREAM_DATA()
+    handle = find_first(extended_length_path(path), 0, ctypes.byref(data), 0)
+    if handle == _INVALID_HANDLE_VALUE:
+        error = ctypes.get_last_error()
+        if error == _ERROR_HANDLE_EOF:
+            return ()
+        raise GovernedAccessError("ADS_ENUMERATION_FAILED", f"{canonical_absolute_path(path)}:winerror={error}")
+    result: list[str] = []
+    try:
+        while True:
+            if data.cStreamName != "::$DATA":
+                result.append(data.cStreamName)
+            if not find_next(handle, ctypes.byref(data)):
+                error = ctypes.get_last_error()
+                if error == _ERROR_HANDLE_EOF:
+                    break
+                raise GovernedAccessError("ADS_ENUMERATION_FAILED", f"{canonical_absolute_path(path)}:winerror={error}")
+    finally:
+        if not find_close(handle):
+            raise GovernedAccessError("ADS_ENUMERATION_FAILED", "FindClose")
+    return tuple(sorted(result))
 
 
 def extended_length_path(path: os.PathLike[str] | str) -> str:
@@ -97,6 +163,8 @@ def resolve_relative(root: os.PathLike[str] | str, relative: str) -> str:
     parts = candidate_text.split("/")
     if any(part in {"", ".", ".."} for part in parts):
         raise GovernedAccessError("NONCANONICAL_RELATIVE_PATH", relative)
+    if any(":" in part for part in parts):
+        raise GovernedAccessError("AUTHORITY_STREAM_SELECTOR_REJECTED", relative)
     root_id = canonical_absolute_path(root)
     result = canonical_absolute_path(os.path.join(root_id, *parts))
     prefix = root_id.rstrip(os.sep) + os.sep
@@ -138,6 +206,7 @@ def stat_regular_file(
     *,
     allow_reparse: bool = False,
 ) -> FileIdentity:
+    _reject_stream_selector(path)
     reparse_component = None if allow_reparse else _reparse_component(path)
     if reparse_component is not None:
         raise GovernedAccessError("REPARSE_POINT_REJECTED", reparse_component)
@@ -158,6 +227,22 @@ def stat_regular_file(
     return identity
 
 
+def resolve_primary_file_authority(
+    path: os.PathLike[str] | str,
+    *,
+    allow_reparse: bool = False,
+    forbid_named_streams: bool = True,
+) -> FileIdentity:
+    """Resolve exactly one primary unnamed regular-file stream for authority use."""
+
+    _reject_stream_selector(path)
+    identity = stat_regular_file(path, allow_reparse=allow_reparse)
+    streams = named_streams(path)
+    if forbid_named_streams and streams:
+        raise GovernedAccessError("AUTHORITY_FILE_HAS_NAMED_STREAMS", f"{identity.canonical_path}:{streams}")
+    return identity
+
+
 def read_binary(
     path: os.PathLike[str] | str,
     *,
@@ -165,7 +250,7 @@ def read_binary(
 ) -> ByteObservation:
     """Read one regular file with long-path, reparse, and mutation enforcement."""
 
-    before = stat_regular_file(path, allow_reparse=allow_reparse)
+    before = resolve_primary_file_authority(path, allow_reparse=allow_reparse)
     governed = extended_length_path(path)
     descriptor: int | None = None
     try:
@@ -225,6 +310,7 @@ def read_named_stream(path: os.PathLike[str] | str, stream_name: str) -> bytes:
         raise GovernedAccessError("ADS_UNSUPPORTED_ENVIRONMENT")
     if not re.fullmatch(r":[^:\\/:*?\"<>|]+(?::\$DATA)?", stream_name):
         raise GovernedAccessError("INVALID_STREAM_NAME", stream_name)
+    _reject_stream_selector(path)
     stat_regular_file(path)
     governed = extended_length_path(path) + stream_name
     descriptor: int | None = None
@@ -272,6 +358,7 @@ def enumerate_directory(
 ) -> tuple[str, ...]:
     """Return canonical child identities using a long-path-safe directory handle."""
 
+    _reject_stream_selector(directory)
     governed = extended_length_path(directory)
     try:
         with os.scandir(governed) as iterator:
@@ -336,7 +423,7 @@ def git_object_bytes(
     if authority_ref != ":" and not _GIT_OBJECT.fullmatch(authority_ref):
         raise GovernedAccessError("AUTHORITY_REF_NOT_IMMUTABLE", authority_ref)
     normalized = repository_path.replace("\\", "/")
-    if normalized.startswith("/") or ".." in normalized.split("/") or not normalized:
+    if normalized.startswith("/") or ".." in normalized.split("/") or not normalized or ":" in normalized:
         raise GovernedAccessError("NONCANONICAL_REPOSITORY_PATH", repository_path)
     object_spec = f":{normalized}" if authority_ref == ":" else f"{authority_ref}:{normalized}"
     blob = _run_git(repository, "rev-parse", object_spec).decode("ascii", "strict").strip()
@@ -354,6 +441,8 @@ def git_object_bytes(
 
 
 def git_tree_entries(repository: os.PathLike[str] | str, authority_ref: str, prefix: str = "") -> tuple[str, ...]:
+    if ":" in prefix:
+        raise GovernedAccessError("AUTHORITY_STREAM_SELECTOR_REJECTED", prefix)
     if authority_ref == ":":
         output = _run_git(repository, "ls-files", "--stage")
         paths = [line.split(b"\t", 1)[1].decode("utf-8", "strict") for line in output.splitlines() if b"\t" in line]

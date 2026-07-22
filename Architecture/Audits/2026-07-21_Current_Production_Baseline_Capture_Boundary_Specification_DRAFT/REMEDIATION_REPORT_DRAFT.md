@@ -1,37 +1,42 @@
-# Current Production Baseline Capture Boundary Specification R3 Remediation Report
+# R4 remediation report - baseline capture remains withheld
 
-Status: draft remediation evidence pending independent review.
+## Scope and immutable authorities
 
-Governing base: `fe3718b521cd6cf2339302fd66cf05380c27ded4`.
+R4 is a draft, provenance-only remediation directly above `f04105fdbffbad1fe58779a8ac3bb809a99ee2a5`. It consumes the R3 rejection at `119bff0e09cb49e70884d6ca038deab12c9fc739` as immutable external review authority and does not incorporate that review commit into its ancestry.
 
-Immutable rejection authority: commit `6c83bbe0db8dfad5e2e575cb17934899decef468`, document `Architecture/Audits/2026-07-21_Current_Production_Baseline_Boundary_R2_Independent_Review_fe3718b_REJECTED.md`, Sections 31 through 37.
+Preflight preserved the dirty active production root without modification. Its two command-scoped long-path status reads were byte-identical: stdout was 84,230 bytes, 1,022 records, SHA-256 `53db7b5c3820f743ea97746bd813871c02bf2f924a546426db186701fda6c764`; stderr was 6,358 bytes, 60 warnings, SHA-256 `6785fe51ed5b0258744cfe310a7a87ad4da103b9a4c15596bdcdb96d309f0ddb`. The branch was `laptop_saved_work`, HEAD was `e84774e8b3681ae0aeb8390390dafea8a4b8cfd4`, no Git lock was present, and a 10-second recursive watch observed zero writes.
 
-## Preflight and isolation
+## R4 correction surfaces
 
-The expected dirty production root was read twice with command-scoped `core.longpaths=true` and safe-directory handling. Both stdout streams and both stderr streams were byte-identical. No Git lock or Git writer existed, a 10-second recursive watch observed zero write events, and all required governed commits were confirmed absent from `main`, `origin/main`, `laptop_saved_work`, and `origin/laptop_saved_work`. The R3 branch and worktree were created separately from the production root at the immutable base.
+The candidate package provides machine-enforced surfaces for all R3 blocking findings:
 
-The production-root modified and untracked files were not cleaned, reset, stashed, deleted, moved, or used as remediation inputs.
+- primary unnamed-stream authority resolution rejects ADS selectors and prohibited named streams, while package enumeration is centrally audited;
+- SEPARATE_AND_BIND review requirements derive from immutable policy and prohibit self-review;
+- family-specific Draft 2020-12 schemas are closed and canonical JSON rejects duplicate keys, floats, and non-NFC keys or values;
+- timestamp issuer, role, capability, trust root, chronology, attempt, and cutoff are independently bound;
+- historical parsing loads the authorized parser implementation from committed Git bytes and binds the actual historical log;
+- observer authority binds the accepted freeze receipt, freeze authority, attempt, source window, implementation, and append-only event root;
+- terminal comparison receipts bind interface, completion, case set and counts, authority set, code, schemas, cleanup, issuance, and committed/fresh identities;
+- expectation and observation provenance are independent and copying in either direction is rejected;
+- protected-domain governance prose accepts only unambiguous withholding or pending-independent-review states and rejects unknown verbs;
+- traceability loads the committed matrix and binds authoritative clauses plus current-run observations;
+- future manifests, compatibility declarations, and independent review receipts use distinct closed schemas and require exact compatible and independently accepted states;
+- the Architecture Impact Assessment and Canonical Delta distinguish retained R3 evidence, corrected R4 controls, draft status, and future authorization.
 
-## Section 37 remediation coverage
+## Verification design
 
-R3-01 through R3-16 are represented by explicit clauses, byte-bound authorities, enforcing functions, coverage-derived cases, static independent expectations, fresh observations, and comparison-receipt validation. In particular, R3 removes the rejected self-authentication paths for obligation, freeze, prefix, evidence, historical-path, observer, comparator, traceability, and future-package review authorities.
+Coverage, rather than a target count, yields 254 cases: 43 positive and 211 mutation cases; 97 exercise real surfaces and 157 are synthetic; 157 are meta-verification cases. Static committed expectations bind exact status, error code, enforcing function, authority source, and evidence obligation. Fresh observations bind actual execution provenance and have no expectation dependency. The external comparison engine independently recomputes discrepancies.
 
-The authoritative verification totals, individual observations, deterministic identities, comparator receipt, validation environment, and reconciliation state are preserved in `fixture_results_R3_DRAFT.json`; this narrative does not redefine them.
+The schema package uses Python 3.12.2, jsonschema 4.25.1, referencing 0.36.2, rfc3339-validator 0.1.4, PyYAML 6.0.2, Unicode NFC normalization, and a content-bound validator lock. Candidate verification requires all schemas and active instances to validate, all 17 invalid synthetic instances to reject, the valid synthetic instance to pass, and zero canonical/schema/semantic disagreement.
 
-## Evidence architecture
+The terminal result cannot succeed without an immutable committed result. Candidate generation is deliberately non-successful; review mode requires exact committed/fresh equality, `MATCHED`, complete cases and comparison, valid comparator authority and terminal receipt, and cleanup `PASS`. `NOT_YET_RECORDED` is never a successful state.
 
-A claim is always compared with a separately loaded immutable authority by a named enforcing function. Fresh observations carry actual status, code, function, authority source, evidence result, authoritative input identity, and current-run identity. The independent comparator is itself bound by code blob, raw SHA-256, interface, policy, and issuance authority, and its receipt is validated outside the comparator.
+## Evidence lifecycle
 
-The observation-semantic identity excludes expected worktree line-ending differences and includes every authority-critical result. Review mode succeeds only on `MATCHED`; `NOT_YET_RECORDED`, missing or invalid committed results, mismatches, unauthorized comparator state, cleanup failure, and invalid terminal receipts terminate.
+Durable evidence consists only of this draft package's specification, schemas, policies, verifier code, fixture definitions, independent expectations, governed result, traceability, impact assessment, Canonical Delta, and this report. Disposable preflight, candidate, checkout, and validation evidence is kept outside the repository and removed after the final audit where governance does not require retention. No production source, production test, runtime data, configuration, launcher, deployment file, or operational capture script is changed.
 
-## Durable versus disposable evidence
+Final commit identity and four-way checkout receipts are intentionally reported by the post-commit audit rather than embedded self-referentially in this commit.
 
-Durable evidence consists only of the exact Git paths in the R3 commit and the separately hash-bound historical log. Temporary repositories, long-path trees, ADS fixtures, checkout variants, observer mutations, and future-package examples are disposable test surfaces and must be absent after cleanup.
+## Continuing authorization
 
-## Limitations and next action
-
-This package does not perform a capture and is not an operational capture package. Its next governed action, if and only if the final receipt reconciles and the provenance commit passes post-commit audit, is independent review of the R3 commit. Operational capture-package work remains withheld. Baseline capture remains withheld pending independent review and a later authorization.
-
-## Continuing authorization statement
-
-A baseline capture is not authorized. Operational capture-script work is not authorized. Merge and canonical incorporation are not authorized. Production implementation, deployment, production restart, runtime migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, and Phase 3C1-R11 acceptance are not authorized. Bucket 0 remains incomplete. Bucket 1 remains blocked.
+A baseline capture is not authorized. Operational capture-script work is not authorized. Merge is not authorized. Canonical incorporation is not authorized. Production implementation is not authorized. Deployment is not authorized. Production restart is not authorized. Runtime migration is not authorized. NQ cutover is not authorized. Automated paper trading is not authorized. Live-money trading is not authorized. Phase 3C2 is not authorized. Phase 3C1-R11 acceptance is not authorized during this task. Bucket 0 remains incomplete. Bucket 1 remains blocked. Any successful R4 remediation still requires independent review before any separately governed next step.

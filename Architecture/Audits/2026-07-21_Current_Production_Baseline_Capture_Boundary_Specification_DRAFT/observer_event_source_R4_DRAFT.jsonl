@@ -1,0 +1,6 @@
+{"attempt_id":"r4-specification-fixture-attempt-001","event_type":"WRITER_ACTIVITY","freeze_receipt_identity":"9cd2e65119e8fe3613f2e4a148f3d0b43117331133c157f8c670b6993ee62571","sequence":1,"timestamp":"2026-07-22T11:06:00Z"}
+{"attempt_id":"r4-specification-fixture-attempt-001","event_type":"RUNTIME_OPERATION","freeze_receipt_identity":"9cd2e65119e8fe3613f2e4a148f3d0b43117331133c157f8c670b6993ee62571","sequence":2,"timestamp":"2026-07-22T11:07:00Z"}
+{"attempt_id":"r4-specification-fixture-attempt-001","event_type":"DEPLOYMENT_ATTEMPT","freeze_receipt_identity":"9cd2e65119e8fe3613f2e4a148f3d0b43117331133c157f8c670b6993ee62571","sequence":3,"timestamp":"2026-07-22T11:08:00Z"}
+{"attempt_id":"r4-specification-fixture-attempt-001","event_type":"RESTART_ATTEMPT","freeze_receipt_identity":"9cd2e65119e8fe3613f2e4a148f3d0b43117331133c157f8c670b6993ee62571","sequence":4,"timestamp":"2026-07-22T11:09:00Z"}
+{"attempt_id":"r4-specification-fixture-attempt-001","event_type":"BRANCH_MOVEMENT","freeze_receipt_identity":"9cd2e65119e8fe3613f2e4a148f3d0b43117331133c157f8c670b6993ee62571","sequence":5,"timestamp":"2026-07-22T11:10:00Z"}
+{"attempt_id":"r4-specification-fixture-attempt-001","event_type":"INDEX_MOVEMENT","freeze_receipt_identity":"9cd2e65119e8fe3613f2e4a148f3d0b43117331133c157f8c670b6993ee62571","sequence":6,"timestamp":"2026-07-22T11:11:00Z"}

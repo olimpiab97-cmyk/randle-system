@@ -1,0 +1,1 @@
+{"authority_type":"selection_rule_registry","registry_id":"RANDLE-R4-SELECTION-RULES-1","rules":[{"artifact_class":"runtime-log","rule_id":"R4-SEPARATE-RUNTIME-LOG","terminal_disposition":"SEPARATE_AND_BIND"}],"schema_version":"6.0.0-DRAFT"}

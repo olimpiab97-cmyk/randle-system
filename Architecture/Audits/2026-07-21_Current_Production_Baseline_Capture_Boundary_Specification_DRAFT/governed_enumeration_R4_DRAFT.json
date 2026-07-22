@@ -1,0 +1,1 @@
+{"authority_id":"RANDLE-R4-GOVERNED-ENUMERATION-1","authority_type":"governed_enumeration_policy","authorized_artifact_classes":["runtime-log"],"enumeration_implementation":"governed_file_access_DRAFT.enumerate_directory","inventory_boundary":"inventory_generator_DRAFT._walk","primary_stream_only":true,"schema_version":"6.0.0-DRAFT"}

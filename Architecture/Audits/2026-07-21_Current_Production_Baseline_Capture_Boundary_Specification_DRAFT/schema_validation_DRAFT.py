@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -33,6 +34,22 @@ REQUIRED_FORMATS = ("date-time", "hostname", "idn-hostname", "ipv4", "ipv6", "ur
 
 class SchemaValidationError(ValueError):
     pass
+
+
+def _require_nfc(value: Any, pointer: str = "") -> None:
+    if isinstance(value, str):
+        if unicodedata.normalize("NFC", value) != value:
+            raise SchemaValidationError(f"JSON_NON_NFC:{pointer or '/'}")
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _require_nfc(item, f"{pointer}/{index}")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if unicodedata.normalize("NFC", key) != key:
+                raise SchemaValidationError(f"JSON_NON_NFC_KEY:{pointer}/{key}")
+            _require_nfc(item, f"{pointer}/{key}")
 
 
 def validator_identity(lock_authority_bytes: bytes | None = None) -> dict[str, Any]:
@@ -127,6 +144,7 @@ def strict_canonical_json_loads(raw: bytes) -> Any:
         parse_constant=lambda token: (_ for _ in ()).throw(SchemaValidationError(f"JSON_NONFINITE:{token}")),
         parse_float=lambda token: (_ for _ in ()).throw(SchemaValidationError(f"JSON_FLOAT_FORBIDDEN:{token}")),
     )
+    _require_nfc(value)
     reproduced = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
     if reproduced != raw:
         raise SchemaValidationError("JSON_NONCANONICAL")

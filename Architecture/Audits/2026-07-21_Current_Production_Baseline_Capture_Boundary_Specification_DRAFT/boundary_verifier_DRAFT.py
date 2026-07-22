@@ -26,6 +26,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Sequence
 
 from governed_file_access_DRAFT import extended_length_path as governed_extended_length_path
+from governed_file_access_DRAFT import enumerate_regular_files as governed_enumerate_regular_files
 from governed_file_access_DRAFT import read_binary as governed_read_binary
 
 
@@ -1554,7 +1555,12 @@ def validate_traceability_v4(
         require(item["case_id"] in expectation_by_id, "TRACE_RULE_CASE", item["rule_id"])
         require(item["symbol"] in _source_functions(package_root, item["source_file"]), "TRACE_RULE_FUNCTION", item["rule_id"])
     declared_fields: set[str] = set()
-    for schema_path in sorted(package_root.glob("*_schema_DRAFT.json")):
+    schema_paths = sorted(
+        Path(identity.canonical_path)
+        for identity in governed_enumerate_regular_files(package_root)
+        if Path(identity.canonical_path).parent == package_root and Path(identity.canonical_path).name.endswith("_schema_DRAFT.json")
+    )
+    for schema_path in schema_paths:
         schema = strict_json_loads(read_bytes_long(schema_path))
         declared_fields |= {f"{schema_path.name}#{pointer}" for pointer in _schema_authority_pointers(schema)}
     mapped_fields = {f"{item['schema_file']}#{item['schema_pointer']}" for item in matrix["schema_field_mappings"]}

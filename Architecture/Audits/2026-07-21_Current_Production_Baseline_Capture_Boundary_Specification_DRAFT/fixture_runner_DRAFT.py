@@ -27,6 +27,10 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 
+from governed_file_access_DRAFT import enumerate_directory as governed_enumerate_directory
+from governed_file_access_DRAFT import enumerate_regular_files as governed_enumerate_regular_files
+from governed_file_access_DRAFT import canonical_absolute_path as governed_canonical_absolute_path
+
 from boundary_verifier_DRAFT import (
     BoundaryError,
     FREEZE_V4_FIELDS,
@@ -546,7 +550,7 @@ def op_schema(case: Mapping[str, Any]) -> Mapping[str, Any]:
             "STRICT_SCHEMA_SEMANTIC_CROSS_AUTHORITY_PIPELINE",
         )
     if vector == "all_metaschemas":
-        names = sorted(path.name for path in PACKAGE.glob("*_schema_DRAFT.json"))
+        names = sorted(path.name for path in _governed_schema_paths())
         for name in names:
             validate_schema_and_instance(schema_by_name(name), _minimal_valid_instance(name), f"active:{name}")
         return success("schema_validation_DRAFT.validate_schema_and_instance", "DRAFT_2020_12", "ACTIVE_INSTANCES", identities={"schemas": semantic_identity(names)})
@@ -1711,8 +1715,17 @@ def enforcing_code_identity() -> str:
     return semantic_identity([{"path":name,"sha256":sha256_bytes(read_bytes(PACKAGE/name))} for name in names])
 
 
+def _governed_schema_paths() -> list[Path]:
+    package_identity = Path(governed_canonical_absolute_path(PACKAGE))
+    return sorted(
+        Path(identity.canonical_path)
+        for identity in governed_enumerate_regular_files(PACKAGE)
+        if Path(identity.canonical_path).parent == package_identity and Path(identity.canonical_path).name.endswith("_schema_DRAFT.json")
+    )
+
+
 def schema_set_identity() -> str:
-    return semantic_identity([{"path":path.name,"sha256":sha256_bytes(read_bytes(path))} for path in sorted(PACKAGE.glob("*_schema_DRAFT.json"))])
+    return semantic_identity([{"path":path.name,"sha256":sha256_bytes(read_bytes(path))} for path in _governed_schema_paths()])
 
 
 def run() -> dict[str, Any]:
@@ -1736,13 +1749,13 @@ def run() -> dict[str, Any]:
             raise FixtureInfrastructureError("EXPECTATION_INPUT_IDENTITY",case["case_id"])
     started=time.perf_counter()
     observations=[]
-    before={path.name for path in Path(tempfile.gettempdir()).glob(FIXTURE_PREFIX+"*")}
+    before={Path(path).name for path in governed_enumerate_directory(tempfile.gettempdir(),allow_reparse_entries=True) if Path(path).name.startswith(FIXTURE_PREFIX)}
     for case in cases:
         operation=OPERATIONS.get(case["operation"])
         if operation is None:
             raise FixtureInfrastructureError("UNKNOWN_OPERATION",case["operation"])
         observations.append(execute_raw(case,operation))
-    after={path.name for path in Path(tempfile.gettempdir()).glob(FIXTURE_PREFIX+"*")}
+    after={Path(path).name for path in governed_enumerate_directory(tempfile.gettempdir(),allow_reparse_entries=True) if Path(path).name.startswith(FIXTURE_PREFIX)}
     cleanup="PASS"
     if after!=before:
         cleanup="FAIL"

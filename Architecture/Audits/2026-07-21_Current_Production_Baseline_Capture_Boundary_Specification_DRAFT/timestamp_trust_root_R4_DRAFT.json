@@ -1,0 +1,1 @@
+{"authority_id":"RANDLE-R4-TIMESTAMP-TRUST-ROOT-1","authority_type":"timestamp_trust_root","schema_version":"6.0.0-DRAFT","trusted_issuers":[{"capabilities":["ISSUE_FROZEN_SPECIFICATION_TIME"],"issuer_id":"RANDLE-R4-TIMESTAMP-ISSUER-1","issuer_role":"GOVERNANCE_TIMESTAMP_ISSUER"}]}
