@@ -83,6 +83,7 @@ from schema_validation_DRAFT import (
     validator_identity,
 )
 from selection_engine_DRAFT import derive_repository_selection
+from governed_file_access_DRAFT import read_binary as governed_read_binary
 
 
 PACKAGE = Path(__file__).resolve().parent
@@ -108,8 +109,7 @@ class FixtureInfrastructureError(ValueError):
 
 
 def read_bytes(path: Path) -> bytes:
-    with open(path, "rb") as handle:
-        return handle.read()
+    return governed_read_binary(path).data
 
 
 def load_json(name: str) -> Any:
@@ -1324,8 +1324,7 @@ def op_checkout(case: Mapping[str, Any]) -> Mapping[str, Any]:
             git(source, "-c", "user.name=Randle Fixture", "-c", "user.email=fixture@invalid", "commit", "-q", "-m", "long path")
             clone_snapshot(source, checkout, False)
             blob = git(checkout, "show", f"HEAD:{long_relative}").stdout
-            with open(extended_length_path(checkout.joinpath(*long_relative.split("/"))), "rb") as handle:
-                disk = handle.read()
+            disk = governed_read_binary(checkout.joinpath(*long_relative.split("/"))).data
             if blob != disk:
                 raise FixtureInfrastructureError("LONG_PATH_CHECKOUT_BYTES")
             return success("fixture_runner_DRAFT.op_checkout", "LONG_PATH_GIT_OBJECT", "LONG_PATH_WORKTREE")
@@ -1775,14 +1774,19 @@ def run() -> dict[str, Any]:
     }
     committed=load_json("fixture_results_DRAFT.json")
     fields=("total_cases","positive_cases","mutation_cases","real_surface_cases","meta_verification_cases","passed","failed","discrepancies","cleanup_result","case_definition_sha256","case_set_sha256","independent_expectation_sha256","observation_semantic_sha256","enforcing_code_identity","schema_set_identity","external_historical_evidence_identity")
-    result["committed_result_match"]="PASS" if committed.get("schema_version")=="4.0.0-DRAFT" and all(committed.get(field)==result[field] for field in fields) else "NOT_YET_RECORDED"
+    if committed.get("schema_version") != "4.0.0-DRAFT":
+        result["committed_result_match"] = "INVALID_COMMITTED_RESULT"
+    elif all(committed.get(field) == result[field] for field in fields):
+        result["committed_result_match"] = "MATCHED"
+    else:
+        result["committed_result_match"] = "MISMATCH"
     return result
 
 
 def main() -> int:
     result=run()
     print(json.dumps(result,sort_keys=True,separators=(",",":"),ensure_ascii=False))
-    return 0 if result["failed"]==0 and result["cleanup_result"]=="PASS" and result["committed_result_match"] in {"PASS","NOT_YET_RECORDED"} else 1
+    return 0 if result["failed"] == 0 and result["cleanup_result"] == "PASS" and result["committed_result_match"] == "MATCHED" else 1
 
 
 if __name__=="__main__":

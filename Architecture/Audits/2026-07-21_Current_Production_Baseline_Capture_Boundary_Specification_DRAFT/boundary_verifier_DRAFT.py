@@ -25,6 +25,9 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Sequence
 
+from governed_file_access_DRAFT import extended_length_path as governed_extended_length_path
+from governed_file_access_DRAFT import read_binary as governed_read_binary
+
 
 SERIALIZATION_ID = "RANDLE-CAPTURE-CJSON-1"
 PACKAGE_ROLE_MAP_PATH = "Architecture/Audits/2026-07-21_Current_Production_Baseline_Capture_Boundary_Specification_DRAFT/package_role_authority_DRAFT.json"
@@ -142,17 +145,11 @@ def semantic_identity(value: Any) -> str:
 
 
 def extended_length_path(path: Path) -> str:
-    resolved = os.path.abspath(os.fspath(path))
-    if os.name != "nt" or resolved.startswith("\\\\?\\"):
-        return resolved
-    if resolved.startswith("\\\\"):
-        return "\\\\?\\UNC\\" + resolved.lstrip("\\")
-    return "\\\\?\\" + resolved
+    return governed_extended_length_path(path)
 
 
 def read_bytes_long(path: Path) -> bytes:
-    with open(extended_length_path(path), "rb") as handle:
-        return handle.read()
+    return governed_read_binary(path).data
 
 
 def _git(repo: Path, *args: str, text: bool = True) -> str | bytes:

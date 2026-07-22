@@ -1,0 +1,6 @@
+{"attempt_id":"r3-specification-fixture-attempt-001","event_type":"WRITER_ACTIVITY","observed":false,"sequence":1}
+{"attempt_id":"r3-specification-fixture-attempt-001","event_type":"RUNTIME_OPERATION","observed":false,"sequence":2}
+{"attempt_id":"r3-specification-fixture-attempt-001","event_type":"DEPLOYMENT_ATTEMPT","observed":false,"sequence":3}
+{"attempt_id":"r3-specification-fixture-attempt-001","event_type":"RESTART_ATTEMPT","observed":false,"sequence":4}
+{"attempt_id":"r3-specification-fixture-attempt-001","event_type":"BRANCH_MOVEMENT","observed":false,"sequence":5}
+{"attempt_id":"r3-specification-fixture-attempt-001","event_type":"INDEX_MOVEMENT","observed":false,"sequence":6}

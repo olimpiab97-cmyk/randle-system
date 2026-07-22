@@ -18,6 +18,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from governed_file_access_DRAFT import read_binary as governed_read_binary
+
 
 PARSER_NAME = "randle-pytest-quiet-log-parser"
 PARSER_VERSION = "4.0.0-DRAFT"
@@ -249,7 +251,7 @@ def main() -> int:
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--logical-path", required=True)
     args = parser.parse_args()
-    data = args.log.read_bytes()
+    data = governed_read_binary(args.log).data
     print(canonical_bytes(parse_historical_log(data, args.logical_path)).decode("utf-8"), end="")
     return 0
 

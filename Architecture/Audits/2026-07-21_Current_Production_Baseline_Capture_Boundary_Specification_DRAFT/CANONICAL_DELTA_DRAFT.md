@@ -1,68 +1,45 @@
-# Canonical Delta: Current Production Baseline Capture Boundary R2
+# Canonical Delta: Current Production Baseline Capture Boundary R3
 
-Status: proposed draft delta; no canonical incorporation.
+Status: proposed draft delta pending independent review; no canonical incorporation.
 
-## Proposed normative authority
+## Demonstrated R3 enforcement
 
-The draft proposes an accepted-specification identity made from committed Git-object bytes, package-local LF attributes, complete schemas, registries, parser policy, terminal dispositions, evidence policy, preserved attempt-prefix policy, authorization state, verifier interface, and semantic traceability.
+R3 proposes, and its fixtures exercise, committed Git-object byte authority; universal long-path-safe package access; checkout-independent deterministic observations; `MATCHED`-only review reconciliation; complete bounded batch launcher grammar; independently byte-bound obligation, timestamp, freeze, prefix, evidence, historical, observer, comparator, authorization, traceability, and future-package authorities; pinned Draft 2020-12 format validation; and fresh-observation traceability to explicit specification clause IDs.
 
-It also proposes a separate later operational-package identity and a compatibility receipt linking that package to the unchanged accepted specification.
+These are demonstrated draft controls only. They do not modify a canonical architecture source and do not establish operational fitness.
 
-## Demonstrated machine controls
+## Controls still draft
 
-- checkout-independent canonical bytes with actual `core.autocrlf` true and false reconciliation;
-- command-scoped long-path Git access and an actual long-path checkout;
-- Python and PowerShell AST parsing, actual JSON/YAML/TOML/INI parsing, and bounded fail-closed launcher grammars;
-- complete independently regenerated dispositions;
-- mandatory-test policy derived from actual committed package blobs in an exact clean accepted-commit worktree and applied to a separately governed physical inventory root;
-- one schema/semantic/authority pipeline with object-format-conditioned Git identifiers;
-- actual Windows ADS enumeration and two-read content stability;
-- independent freeze reconstruction;
-- preserved-prefix ledger ancestry;
-- independently committed required-evidence policy;
-- actual historical-log classification;
-- controlled-repository multi-pass observation;
-- helper-free raw observations compared with static expectations;
-- structured authorization state and governed-package text scan;
-- field, rule, function, case, expectation, and observation traceability; and
-- distinct accepted-specification and later operational-package interfaces.
+The specification, policies, schemas, verifier modules, fixture runner, expectations, observations, comparison receipts, traceability artifacts, this delta, and the Architecture Impact Assessment remain draft material awaiting independent review. The R3 enforcement has not been incorporated into `Architecture/README.md`, `Architecture/06_Randle_AI_Modernization_Charter.md`, `Architecture/07_Randle_AI_Modernization_Roadmap.md`, `Architecture/10_Randle_AI_Architecture_Traceability_Specification.md`, `Architecture/12_Randle_AI_Development_Process_Specification.md`, or `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`.
 
-## Controls still deferred
+The eventual canonical successor to the boundary specification, `CODEX_TASK_TEMPLATE.md`, and `.gitattributes` or equivalent byte-authority policy also remain unchanged.
 
-The future operational capture script and supporting modules do not exist in this package. A real freeze package, future attempt ledger extension, production inventory, production dispositions, durable capture evidence, and actual capture passes are deferred. Their work remains withheld.
+## Future operational-package work
 
-## Rejected historical practices
+No operational capture script or package is authored here. A future package must bind its actual immutable manifest bytes, script and support blobs, and an independent review object issued by trusted authority against the accepted specification and interface version. That future work remains separately reviewable and separately authorized.
 
-The following practices have no authority:
+## Future capture authorization
 
-- transformed checkout bytes treated as committed package bytes;
-- regex or line splitting represented as full parser support;
-- silent omission of extensionless literal targets;
-- caller-supplied dispositions, inventories, evidence roots, ledger universes, or pass states treated as authority;
-- one-read content stability;
-- self-rebuilt evidence and ledger roots;
-- fabricated historical outcome arithmetic;
-- a negative-assertion helper capable of being disabled without changing PASS;
-- observation labels substituted for actual status, code, surface, evidence, and authority;
-- blacklist-only authorization scanning;
-- identifier-set equality substituted for semantic traceability; and
-- one self-referential identity used for both the specification and later operational package.
+No capture attempt, freeze, inventory, or evidence set is created by R3. Later acceptance of this draft would still require an independently reviewed operational package and an independently issued capture authorization. A review hash, manifest hash, or successful fixture receipt cannot authorize capture.
+
+## Rejected R2 controls
+
+R2 controls are not carried forward merely because they produced self-consistent roots or receipts. The rejected long-path crash, checkout-dependent observation, `NOT_YET_RECORDED` success, missing `start` target, caller-selected obligation/freeze/prefix/evidence/historical/observer/comparator authorities, positive authorization leakage, nonexistent-clause traceability, and hash-only future-package review/manifest interface have no accepted authority.
 
 ## Future canonical targets
 
-Any later canonical-incorporation task would need to assess and explicitly update or dispose of:
+Any later canonical-incorporation task must explicitly assess:
 
 - `Architecture/README.md`
 - `Architecture/06_Randle_AI_Modernization_Charter.md`
 - `Architecture/07_Randle_AI_Modernization_Roadmap.md`
 - `Architecture/10_Randle_AI_Architecture_Traceability_Specification.md`
 - `Architecture/12_Randle_AI_Development_Process_Specification.md`
+- `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`
+- the eventual canonical successor to the boundary specification
 - `CODEX_TASK_TEMPLATE.md`
-- the accepted successor to the Runtime Recovery Verification Specification
-- `.gitattributes` or an equivalent checkout-independent byte-authority policy
+- `.gitattributes` or equivalent byte-authority policy
 
-No target is amended by this remediation.
+## Continuing authorization boundaries
 
-## Authorization boundary
-
-Baseline capture and operational capture-script work remain withheld. Merge and canonical incorporation remain withheld. Production implementation, deployment, service restart, runtime migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, and Phase 3C1-R11 acceptance remain withheld. Bucket 0 remains incomplete. Bucket 1 remains blocked.
+A baseline capture is not authorized. Operational capture-script work is not authorized. Merge, canonical incorporation, production implementation, deployment, production restart, runtime migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, and Phase 3C1-R11 acceptance are not authorized. Bucket 0 remains incomplete. Bucket 1 remains blocked.

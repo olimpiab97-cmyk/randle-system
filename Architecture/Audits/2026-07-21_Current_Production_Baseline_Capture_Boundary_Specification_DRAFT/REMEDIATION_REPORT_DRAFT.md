@@ -1,90 +1,37 @@
-# Current Production Baseline Capture Boundary Specification R2 Remediation Report
+# Current Production Baseline Capture Boundary Specification R3 Remediation Report
 
-Status: draft remediation evidence; pending independent review.
+Status: draft remediation evidence pending independent review.
 
-Governing base: `50bc58afc8861631f253f787d88dbd0f28c2d328`.
+Governing base: `fe3718b521cd6cf2339302fd66cf05380c27ded4`.
 
-External rejection authority: commit `7b60e890b7d426fd1331ab5876004b1b68ee6444`, document `Architecture/Audits/2026-07-21_Current_Production_Baseline_Capture_Boundary_Specification_Independent_Review_50bc_REJECTED.md`, Section 33.
+Immutable rejection authority: commit `6c83bbe0db8dfad5e2e575cb17934899decef468`, document `Architecture/Audits/2026-07-21_Current_Production_Baseline_Boundary_R2_Independent_Review_fe3718b_REJECTED.md`, Sections 31 through 37.
 
-## Remediation disposition
+## Preflight and isolation
 
-The R2 implementation replaces the rejected observation architecture. Readiness is determined only by the fresh raw observations and comparison receipt in `fixture_results_DRAFT.json`. The report does not manufacture expected outcomes and is not part of the accepted-specification input identity; the final Git commit still preserves it as provenance evidence.
+The expected dirty production root was read twice with command-scoped `core.longpaths=true` and safe-directory handling. Both stdout streams and both stderr streams were byte-identical. No Git lock or Git writer existed, a 10-second recursive watch observed zero write events, and all required governed commits were confirmed absent from `main`, `origin/main`, `laptop_saved_work`, and `origin/laptop_saved_work`. The R3 branch and worktree were created separately from the production root at the immutable base.
 
-Final precommit verification status: `PASS_FRESH_RECONCILED`.
+The production-root modified and untracked files were not cleaned, reset, stashed, deleted, moved, or used as remediation inputs.
 
-## Section 33 and R2 coverage
+## Section 37 remediation coverage
 
-| Area | Implemented authority | Actual enforcing surface |
-|---|---|---|
-| R2-01 | committed blob bytes, package LF policy, clean-filter reconciliation, fresh `core.autocrlf` variants, long paths | `derive_committed_package_authority`, `validate_package_checkout`, `op_checkout` |
-| R2-02 | Python AST, PowerShell AST, actual JSON/YAML/TOML/INI parsers, bounded batch/shell grammar, extensionless paths | `derive_repository_selection`, `_config_edges`, `_lex_launch_lines` |
-| R2-03 | independently regenerated complete disposition set and registry blobs | `validate_terminal_dispositions`, `validate_terminal_against_authority` |
-| R2-04 | accepted-commit Git blobs, separately governed physical inventory root, exact clean non-production worktree gate, and five full authority/evidence tuples | `assert_governed_read_only_root`, `derive_selection_from_accepted_specification`, `validate_questioned_test_authority` |
-| R2-05 | strict canonical loader, Draft 2020-12, semantic, cross-artifact, immutable authority | `validate_governed_artifact`, paired `op_schema` and `op_semantic` cases |
-| R2-06 | real Windows stream enumeration and transition detection | `alternate_data_streams`, `stable_read`, `op_ads` |
-| R2-07 | two complete content reads plus actual Git clean-filter identity | `stable_read`, `enumerate_inventory`, `verify_inventory` |
-| R2-08 | independent accepted-repository and later-package reconstruction | `reconstruct_freeze_authority_v4`, `verify_freeze_claim_v4` |
-| R2-09 | immutable preserved prefix and chained entry/root hashes | `validate_attempt_ledger_v4`, `validate_attempt_capture_authority_v4` |
-| R2-10 | committed preexisting evidence policy reconciled to attempt authority | `validate_required_evidence_policy`, `validate_evidence_bindings_v4` |
-| R2-11 | versioned parse of the actual 2,226,181-byte historical log | `parse_historical_log`, `validate_historical_record`, `validate_test_classification` |
-| R2-12 | actual controlled Git repositories and append-only event observer | `observe_controlled_repository_state`, `validate_multi_pass` |
-| R2-13 | static expectations, raw observations, comparison-only receipt, meta-mutations | `execute_raw`, `compare_observations`, `require_comparison_receipt` |
-| R2-14 | structured withholding artifact and complete governed-package scan | `validate_authorization_state`, `validate_governance_package` |
-| R2-15 | exact schema pointers, rules, source symbols, invoked cases, observations | `validate_traceability_v4` |
-| R2-16 | distinct accepted-specification and later operational-package identities | `validate_operational_package_authority` |
+R3-01 through R3-16 are represented by explicit clauses, byte-bound authorities, enforcing functions, coverage-derived cases, static independent expectations, fresh observations, and comparison-receipt validation. In particular, R3 removes the rejected self-authentication paths for obligation, freeze, prefix, evidence, historical-path, observer, comparator, traceability, and future-package review authorities.
 
-## Independent authority sources
+The authoritative verification totals, individual observations, deterministic identities, comparator receipt, validation environment, and reconciliation state are preserved in `fixture_results_R3_DRAFT.json`; this narrative does not redefine them.
 
-- Case definitions: committed `case_definitions_DRAFT.json`.
-- Expectations: separately committed `independent_expectations_DRAFT.json`; static result truth.
-- Observations: produced by real enforcing functions in `fixture_runner_DRAFT.py`.
-- Enforcing code: SHA-256 semantic root over six named implementation files.
-- Schema set: SHA-256 semantic root over every `*_schema_DRAFT.json`.
-- Package authority: committed Git objects named by `package_role_authority_DRAFT.json`; derived review results are deliberately outside the accepted-specification input identity to avoid self-reference.
-- Historical evidence: immutable external SHA-256 `6F1B876C814B25D27F5EF8B4CFE3A66C4B0E847263FEC784C56896DC8FF3194A`.
+## Evidence architecture
 
-The committed fixture receipt exercises both marker-bound synthetic inventory roots and the exact-clean governed-worktree gate. Accepted-specification Git-object authority and physical inventory authority are distinct function inputs. Because a commit cannot contain a result that names its own not-yet-created identity without circularity, the exact final remediation-commit derivation is a required post-commit check and is reported by the governing task record; the verifier derives that authority from final Git objects and does not accept a receipt field as evidence.
+A claim is always compared with a separately loaded immutable authority by a named enforcing function. Fresh observations carry actual status, code, function, authority source, evidence result, authoritative input identity, and current-run identity. The independent comparator is itself bound by code blob, raw SHA-256, interface, policy, and issuance authority, and its receipt is validated outside the comparator.
 
-## Historical classification
+The observation-semantic identity excludes expected worktree line-ending differences and includes every authority-critical result. Review mode succeeds only on `MATCHED`; `NOT_YET_RECORDED`, missing or invalid committed results, mismatches, unauthorized comparator state, cleanup failure, and invalid terminal receipts terminate.
 
-The actual log was independently checked before use. The governed artifact contains 753 derived events: 571 PASSED, 156 FAILED, 23 SUBFAILED, 3 SKIPPED, and 0 ERROR. All 179 failed or subfailed events have nonempty category, rationale, source, parser, version, normalization rule, classification rule, and validated source location. No arithmetic-only synthetic list is used.
+## Durable versus disposable evidence
 
-## Fixture-independence correction
+Durable evidence consists only of the exact Git paths in the R3 commit and the separately hash-bound historical log. Temporary repositories, long-path trees, ADS fixtures, checkout variants, observer mutations, and future-package examples are disposable test surfaces and must be absent after cleanup.
 
-The rejected helper architecture has been removed. No function named by concatenating `expect_` and `failure` exists in the runner. Negative cases are recorded as `REJECTED` only when the invoked enforcing surface raises its governed code. The comparator checks exact status, disposition, code, surface, evidence, and authority result. A comparison receipt is mandatory. Force-success, comparison-disable, observation-replacement, expectation-only, observation-only, enforcing-code, and label-only meta-mutations are preserved.
+## Limitations and next action
 
-## Results
+This package does not perform a capture and is not an operational capture package. Its next governed action, if and only if the final receipt reconciles and the provenance commit passes post-commit audit, is independent review of the R3 commit. Operational capture-package work remains withheld. Baseline capture remains withheld pending independent review and a later authorization.
 
-- Total cases: `250`
-- Positive cases: `28`
-- Mutation cases: `222`
-- Real-surface cases: `250`
-- Meta-verification cases: `10`
-- Passed: `250`
-- Failed: `0`
-- Discrepancies: `0`
-- Cleanup: `PASS`
-- Candidate wall time: `1237.675` seconds
-- Fresh-reconciliation wall time: `1241.850` seconds
-- Case-definition SHA-256: `DC577355FDE118AEC6650876A790C9EDACC58E893969122907B0458E31032DA6`
-- Case-set SHA-256: `DB86AD00233C5C54217DD10F85374D3BAE5A87A529652178CE245C4BC136BEE1`
-- Independent-expectation SHA-256: `9FBDDFD738A59BEB09013CBCC327A2E43A14366B83598D2684D45CCFB933D8ED`
-- Observation-semantic SHA-256: `2F5A3F561410A1EBB1641E5C8EF0CA0BB6F9886017BCC676E9F6057139C8B4EE`
-- Enforcing-code identity: `31009D59B86D8439EC7273FC6433C5FD41A43E2FBCB20B94C33B2BA271B3A213`
-- Schema-set identity: `98E706F2105D62E0624FD54EEC24AA4949153D250C9AE6E180DA51239B5B1292`
-- External historical-evidence identity: `6F1B876C814B25D27F5EF8B4CFE3A66C4B0E847263FEC784C56896DC8FF3194A`
-- Comparison-receipt SHA-256: `7377049E4A9E1D203A4E3F864B6185BE47A76C5C8D7AFDE98C725F34D88BC0F9`
-- Validator: `jsonschema 4.25.1`, Draft `2020-12`
-- Python: `3.12.2`
-- Git: `2.53.0.windows.2`
-- OS: `Windows-11-10.0.22000-SP0`
-- Filesystem: `NTFS`
-- Committed/fresh reconciliation: `PASS`
+## Continuing authorization statement
 
-## Known environment outcome
-
-Named, zero-byte, multiple, appearing, disappearing, and content-changing ADS cases use the actual Windows stream APIs. An independent reproduction of an ADS enumeration access-denial could not be created on this Windows identity without changing protected state; that case terminates explicitly as `ADS_ACCESS_FAILURE_UNSUPPORTED`. It is not reported as filesystem-backed success.
-
-## Boundaries
-
-Baseline capture is not authorized. Operational capture-script work is not authorized. Merge, canonical incorporation, production implementation, deployment, service restart, runtime migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, and Phase 3C1-R11 acceptance are not authorized. Bucket 0 remains incomplete. Bucket 1 remains blocked.
+A baseline capture is not authorized. Operational capture-script work is not authorized. Merge and canonical incorporation are not authorized. Production implementation, deployment, production restart, runtime migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, and Phase 3C1-R11 acceptance are not authorized. Bucket 0 remains incomplete. Bucket 1 remains blocked.

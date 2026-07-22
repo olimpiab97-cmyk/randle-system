@@ -5,27 +5,68 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
-import os
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-PINNED_VALIDATOR = "jsonschema"
-PINNED_VERSION = "4.25.1"
+from governed_file_access_DRAFT import read_binary, sha256_bytes
+
+
+PINNED_DISTRIBUTIONS = {
+    "attrs": "25.3.0",
+    "fqdn": "1.5.1",
+    "idna": "3.11",
+    "jsonschema": "4.25.1",
+    "jsonschema-specifications": "2025.4.1",
+    "lark": "1.2.2",
+    "PyYAML": "6.0.2",
+    "referencing": "0.36.2",
+    "rfc3339-validator": "0.1.4",
+    "rfc3986-validator": "0.1.1",
+    "rfc3987-syntax": "1.1.0",
+    "rpds-py": "0.27.1",
+    "six": "1.17.0",
+    "typing_extensions": "4.16.0",
+}
 SUPPORTED_DRAFT = "2020-12"
+REQUIRED_FORMATS = ("date-time", "hostname", "idn-hostname", "ipv4", "ipv6", "uri")
 
 
 class SchemaValidationError(ValueError):
     pass
 
 
-def validator_identity() -> dict[str, str]:
-    try:
-        installed = importlib.metadata.version(PINNED_VALIDATOR)
-    except importlib.metadata.PackageNotFoundError as exc:
-        raise SchemaValidationError("PINNED_VALIDATOR_UNAVAILABLE") from exc
-    if installed != PINNED_VERSION:
-        raise SchemaValidationError(f"PINNED_VALIDATOR_VERSION_MISMATCH:{installed}")
-    return {"name": PINNED_VALIDATOR, "version": installed, "draft": SUPPORTED_DRAFT}
+def validator_identity(lock_authority_bytes: bytes | None = None) -> dict[str, Any]:
+    installed_versions: dict[str, str] = {}
+    for distribution, expected in PINNED_DISTRIBUTIONS.items():
+        try:
+            installed = importlib.metadata.version(distribution)
+        except importlib.metadata.PackageNotFoundError as exc:
+            raise SchemaValidationError(f"PINNED_VALIDATOR_UNAVAILABLE:{distribution}") from exc
+        if installed != expected:
+            raise SchemaValidationError(
+                f"PINNED_VALIDATOR_VERSION_MISMATCH:{distribution}:{installed}:{expected}"
+            )
+        installed_versions[distribution] = installed
+    from jsonschema import FormatChecker
+
+    available = set(FormatChecker().checkers)
+    missing = sorted(set(REQUIRED_FORMATS) - available)
+    if missing:
+        raise SchemaValidationError(f"FORMAT_CHECKER_INCOMPLETE:{missing}")
+    lock_bytes = (
+        lock_authority_bytes
+        if lock_authority_bytes is not None
+        else read_binary(Path(__file__).resolve().parent / "validator_requirements_DRAFT.lock").data
+    )
+    return {
+        "name": "jsonschema",
+        "version": installed_versions["jsonschema"],
+        "draft": SUPPORTED_DRAFT,
+        "distributions": installed_versions,
+        "format_checker": "jsonschema.FormatChecker",
+        "required_formats": list(REQUIRED_FORMATS),
+        "lock_sha256": sha256_bytes(lock_bytes),
+    }
 
 
 def validate_schema_and_instance(schema: Mapping[str, Any], instance: Any, label: str) -> None:
@@ -43,11 +84,25 @@ def validate_schema_and_instance(schema: Mapping[str, Any], instance: Any, label
         raise SchemaValidationError(f"INSTANCE_INVALID:{label}:{rendered}")
 
 
+def validate_format_checker_configuration(format_checker: Any) -> None:
+    if format_checker is None:
+        raise SchemaValidationError("FORMAT_CHECKER_REQUIRED")
+    available = set(getattr(format_checker, "checkers", {}))
+    missing = sorted(set(REQUIRED_FORMATS) - available)
+    if missing:
+        raise SchemaValidationError(f"FORMAT_CHECKER_INCOMPLETE:{missing}")
+
+
+def validate_validator_environment_claim(
+    claimed: Mapping[str, Any], lock_authority_bytes: bytes | None = None
+) -> None:
+    actual = validator_identity(lock_authority_bytes)
+    if claimed != actual:
+        raise SchemaValidationError("VALIDATOR_ENVIRONMENT_IDENTITY")
+
+
 def load_json(path: Path) -> Any:
-    resolved = os.path.abspath(os.fspath(path))
-    governed = "\\\\?\\" + resolved if os.name == "nt" and not resolved.startswith("\\\\?\\") else resolved
-    with open(governed, "rb") as handle:
-        return strict_canonical_json_loads(handle.read())
+    return strict_canonical_json_loads(read_binary(path).data)
 
 
 def strict_canonical_json_loads(raw: bytes) -> Any:

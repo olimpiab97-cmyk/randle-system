@@ -1,86 +1,55 @@
-# R2 Package Index
+# R3 Package Index
 
-Status: governed draft; pending independent review.
+Status: governed draft pending independent review.
 
-## Accepted-specification input roles
+## Byte authority
 
-`package_role_authority_DRAFT.json` is the only role-to-path authority. Its entries are read from the accepted Git commit, and every named blob is independently derived. The accepted input root deliberately excludes `fixture_results_DRAFT.json` and `REMEDIATION_REPORT_DRAFT.md`; those are derived review evidence whose contents cannot define the input identity they report. The final commit still preserves both files.
+`r3_authority_bindings_DRAFT.json` binds every enforcement authority to a repository-relative path, raw SHA-256, and Git blob. JSON authorities also bind canonical semantic identity and schema bytes. The binding document is loaded directly from the immutable review commit or, only during candidate preparation, from the staged index. No authority-critical object authenticates itself.
 
-### Normative and assessment documents
+The specification, Architecture Impact Assessment, traceability narrative, Canonical Delta, this index, remediation report, schemas, registries, scripts, fixtures, expectations, authorization state and policy, evidence policy, attempt-prefix authority, and operational-package interface are authoritative only as committed Git-object bytes. Worktree bytes are environmental evidence and cannot alter the deterministic observation identity.
 
-- `Architecture/15_Randle_AI_Current_Production_Baseline_Capture_Boundary_Specification_DRAFT.md`
-- `CANONICAL_DELTA_DRAFT.md`
-- this package index
-- the Architecture Impact Assessment
-- the Architecture traceability narrative
+## R3 authority artifacts
 
-### Immutable authority artifacts
+- `r3_authority_bindings_DRAFT.json` and its schema
+- `separate_binding_policy_DRAFT.json`
+- `authority_role_map_DRAFT.json`
+- `attempt_authorization_R3_DRAFT.json`
+- `timestamp_authority_R3_DRAFT.json`
+- `attempt_prefix_authority_R3_DRAFT.json`
+- `required_evidence_policy_R3_DRAFT.json`
+- `historical_evidence_authority_R3_DRAFT.json`
+- `observer_source_authority_R3_DRAFT.json`
+- `observer_event_source_R3_DRAFT.jsonl`
+- `comparison_authority_R3_DRAFT.json`
+- `comparison_policy_R3_DRAFT.json`
+- `authorization_policy_R3_DRAFT.json`
+- `operational_package_interface_R3_DRAFT.json`
 
-- `package_role_authority_DRAFT.json`
-- `governed_authority_universe_DRAFT.json`
-- `.gitattributes`
-- `authorization_state_DRAFT.json`
-- `attempt_prefix_authority_DRAFT.json`
-- `required_evidence_policy_DRAFT.json`
-- `operational_package_interface_DRAFT.json`
-- include, exclusion, selection-rule, and boundary-configuration registries
+## R3 enforcing fixtures
 
-### Schemas
+- `governed_file_access_DRAFT.py`
+- `r3_authority_verifier_DRAFT.py`
+- `comparison_engine_DRAFT.py`
+- `fixture_runner_R3_DRAFT.py`
+- remediated `boundary_verifier_DRAFT.py`, `inventory_generator_DRAFT.py`, `selection_engine_DRAFT.py`, `schema_validation_DRAFT.py`, `historical_log_parser_DRAFT.py`, and legacy `fixture_runner_DRAFT.py`
 
-- capture boundary
-- include registry
-- exclusion registry
-- selection-rule registry
-- terminal disposition
-- freeze receipt
-- attempt ledger
-- attempt-prefix authority
-- durable manifest
-- durable-evidence binding
-- required-evidence policy
-- test classification
-- authorization state
-- operational-package interface
-- case definition
-- independent expectations
-- semantic traceability
+These files are specification fixtures, not an operational capture script.
 
-Every schema file ends in `_schema_DRAFT.json` and is included in the independently derived schema-set identity.
+## Cases, expectations, observations, and traceability
 
-### Draft enforcing code
+- `case_definitions_R3_DRAFT.json` binds immutable inputs and coverage-derived case IDs.
+- `independent_expectations_R3_DRAFT.json` independently binds expected status, code, enforcing function, authority source, and evidence obligation.
+- `semantic_traceability_R3_DRAFT.json` binds explicit specification clauses to schema pointers, rules, source functions, positive and mutation cases, and future obligations.
+- `fixture_results_R3_DRAFT.json` preserves the reconciled observations and external-comparator receipt.
+- every R3 schema file ending `_schema_DRAFT.json` participates in the derived schema-set identity.
+- `validator_requirements_DRAFT.lock` identifies the pinned validation environment.
 
-- `selection_engine_DRAFT.py`
-- `inventory_generator_DRAFT.py`
-- `boundary_verifier_DRAFT.py`
-- `historical_log_parser_DRAFT.py`
-- `schema_validation_DRAFT.py`
-- `fixture_runner_DRAFT.py`
-
-These are review fixtures and interfaces. They are not an operational capture script.
-
-### Static cases, expectations, and traceability
-
-- `case_definitions_DRAFT.json`
-- `independent_expectations_DRAFT.json`
-- `expected_case_vectors_DRAFT.json`
-- `mutation_case_vectors_DRAFT.json`
-- `historical_classification_DRAFT.json`
-- `semantic_traceability_DRAFT.json`
-- `traceability_matrix_DRAFT.json`, retained only as an explicit disposition of the rejected v2 trace artifact
-
-### Derived review evidence
-
-- `fixture_results_DRAFT.json`
-- `REMEDIATION_REPORT_DRAFT.md`
+Earlier R2 artifacts remain only where needed for provenance or remediated compatibility. They do not override an R3 authority object.
 
 ## External immutable evidence
 
-The historical classification binds the external log at SHA-256 `6F1B876C814B25D27F5EF8B4CFE3A66C4B0E847263FEC784C56896DC8FF3194A`. The log is not copied into the repository.
+The historical authority binds the external 2,226,181-byte log at SHA-256 `6f1b876c814b25d27f5ef8b4cfe3a66c4b0e847263fec784c56896dc8ff3194a`. The log is read from its separately authorized physical path and is not copied into Git.
 
-## Serialization
+## Serialization and boundary
 
-All committed JSON uses `RANDLE-CAPTURE-CJSON-1`: UTF-8, no BOM, NFC strings, sorted keys, compact separators, no duplicate keys, no CR, and exactly one terminal LF. Canonical verification reads committed Git blob bytes.
-
-## Boundary
-
-No production source, production test, launcher, deployment file, production configuration, runtime data, runtime database, cache, operational capture script, or temporary fixture artifact belongs in this package.
+Governed JSON is canonical UTF-8 with no BOM, sorted keys, compact separators, and one terminal LF. No production source, production test, launcher, deployment file, production configuration, runtime data, runtime database, cache, operational capture script, or temporary fixture artifact belongs in this package.

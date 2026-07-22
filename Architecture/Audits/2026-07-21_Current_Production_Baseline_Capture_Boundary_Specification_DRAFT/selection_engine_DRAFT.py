@@ -46,12 +46,13 @@ from boundary_verifier_DRAFT import (
     validate_terminal_result,
 )
 from inventory_generator_DRAFT import assert_governed_read_only_root, assert_synthetic_root, enumerate_inventory, extended_length_path
+from governed_file_access_DRAFT import read_binary as governed_read_binary
 
 
 DRAFT_SELECTION_VERSION = "4.0.0-DRAFT"
 PYTHON_PARSER = "python-ast-closure/4.0.0-DRAFT"
 POWERSHELL_PARSER = "System.Management.Automation.Language.Parser/5.1"
-CMD_PARSER = "randle-cmd-bounded-grammar/1.0.0-DRAFT"
+CMD_PARSER = "randle-cmd-bounded-grammar/2.0.0-DRAFT"
 SHELL_PARSER = "randle-posix-shell-bounded-grammar/1.0.0-DRAFT"
 JSON_CONFIG_PARSER = "python-json/3.12"
 YAML_CONFIG_PARSER = "PyYAML-SafeLoader/6.0.2"
@@ -214,7 +215,7 @@ def _call_path_literals(node: ast.Call, constants: Mapping[str, list[str]]) -> l
 
 def _read_text(path: Path, relative: str) -> str:
     try:
-        return Path(extended_length_path(path)).read_bytes().decode("utf-8")
+        return governed_read_binary(path).data.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise BoundaryError("UNSUPPORTED_SOURCE_ENCODING", relative) from exc
 
@@ -518,14 +519,26 @@ def _powershell_commands(source_path: Path, governed_path: str) -> list[dict[str
 
 def _lex_launch_lines(text: str, governed_path: str, *, posix: bool) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    batch_variables: dict[str, str] = {}
     for number, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if not stripped or stripped.casefold().startswith(("#", "rem ", "::")):
             continue
-        unsupported = r"\$\(|`|\|\||&&|(?<!\|)\|(?!\|)|[<>]|\b(?:if|for|while|until|case|function|goto)\b"
+        unsupported = r"\$\(|`|\|\||&&|(?<!\|)\|(?!\|)|(?<!\^)&|[<>]|\b(?:if|for|while|until|case|function|goto)\b"
         require(re.search(unsupported, stripped, flags=re.IGNORECASE) is None, "UNSUPPORTED_LAUNCHER_GRAMMAR", f"{governed_path}:{number}")
+        if not posix and re.match(r"(?i)^set\s+", stripped):
+            match = re.fullmatch(r"(?i)set\s+\"?([A-Za-z_][A-Za-z0-9_]*)=([^\"]*)\"?", stripped)
+            require(match is not None, "UNSUPPORTED_LAUNCHER_GRAMMAR", f"{governed_path}:{number}:set")
+            batch_variables[match.group(1).casefold()] = match.group(2)
+            continue
+        if not posix:
+            def expand(match: re.Match[str]) -> str:
+                name = match.group(1).casefold()
+                require(name in batch_variables, "UNRESOLVED_LAUNCHER_VARIABLE", f"{governed_path}:{number}:{match.group(0)}")
+                return batch_variables[name]
+            stripped = re.sub(r"%([^%]+)%", expand, stripped)
         try:
-            elements = shlex.split(line, posix=posix)
+            elements = shlex.split(stripped, posix=posix)
         except ValueError as exc:
             raise BoundaryError("SOURCE_PARSE_ERROR", f"{governed_path}:{number}:{exc}") from exc
         records.append({"line": number, "text": stripped, "elements": elements})
@@ -543,7 +556,7 @@ def _launch_edges(root: Path, path: str, path_set: set[str]) -> list[dict[str, A
     else:
         parser, language, records = SHELL_PARSER, "shell", _lex_launch_lines(text, path, posix=True)
     edges: list[dict[str, Any]] = []
-    command_names = {"python", "python.exe", "py", "py.exe", "powershell", "powershell.exe", "pwsh", "bash", "sh", "call", ".", "&"}
+    command_names = {"python", "python.exe", "py", "py.exe", "powershell", "powershell.exe", "pwsh", "bash", "sh", "call", "start", "cmd", "cmd.exe", ".", "&"}
     powershell_path_commands = {"start-process", "import-module", "get-content", "set-content", "test-path", "invoke-expression"}
     for record in records:
         elements = [str(item).strip("\"'") for item in record["elements"]]
@@ -553,7 +566,33 @@ def _launch_edges(root: Path, path: str, path_set: set[str]) -> list[dict[str, A
         candidates = [item for item in elements if _looks_like_path(item)]
         if elements:
             command = elements[0].casefold()
-            if command in {".", "&", "call"} and len(elements) > 1:
+            if language == "batch":
+                batch_builtins = {"echo", "cd", "chdir", "pushd", "popd", "exit", "title", "timeout", "pause"}
+                selected = None
+                if command == "start":
+                    require(len(elements) > 1, "LAUNCHER_TARGET_MISSING", f"{path}:{record['line']}")
+                    offset = 2 if str(elements[1]).strip("\"'") == "" else 1
+                    require(len(elements) > offset, "LAUNCHER_TARGET_MISSING", f"{path}:{record['line']}")
+                    selected = elements[offset]
+                elif command in {"cmd", "cmd.exe"}:
+                    require(len(elements) > 2 and elements[1].casefold() in {"/c", "/k"}, "UNSUPPORTED_LAUNCHER_GRAMMAR", f"{path}:{record['line']}:cmd")
+                    selected = elements[2]
+                elif command == "call":
+                    require(len(elements) > 1, "LAUNCHER_TARGET_MISSING", f"{path}:{record['line']}")
+                    selected = elements[1]
+                elif command in {"python", "python.exe", "py", "py.exe", "powershell", "powershell.exe", "pwsh"}:
+                    require(len(elements) > 1, "LAUNCHER_TARGET_MISSING", f"{path}:{record['line']}")
+                    option_index = next((index + 1 for index, item in enumerate(elements[:-1]) if item.casefold() in {"-file", "/file"}), None)
+                    selected = elements[option_index] if option_index is not None else next((item for item in elements[1:] if not item.startswith("-")), None)
+                    require(selected is not None, "LAUNCHER_TARGET_MISSING", f"{path}:{record['line']}")
+                elif command in batch_builtins:
+                    continue
+                else:
+                    selected = elements[0]
+                require(not str(selected).startswith(("/", "-")), "UNSUPPORTED_LAUNCHER_GRAMMAR", f"{path}:{record['line']}:option-target")
+                candidates.append(str(selected))
+                command_like = True
+            elif command in {".", "&", "call"} and len(elements) > 1:
                 candidates.append(elements[1])
             elif command in powershell_path_commands:
                 parameter_names = {"-filepath", "-literalpath", "-path", "-name"}
@@ -570,7 +609,7 @@ def _launch_edges(root: Path, path: str, path_set: set[str]) -> list[dict[str, A
                 offset = 2 if len(elements) > 2 and elements[1].casefold() in {"-file", "-command"} else 1
                 if len(elements) > offset:
                     candidates.append(elements[offset])
-        candidates = list(dict.fromkeys(item for item in candidates if item and not item.startswith("-")))
+        candidates = list(dict.fromkeys(item.strip("\"'") for item in candidates if item and not item.startswith("-")))
         dynamic = [item for item in elements if re.search(r"\$\w+|\$\(|%[^%]+%|![^!]+!", item)]
         if command_like and dynamic:
             edges.append(_edge(path, language, parser, _source_location(path, record["line"]), "LAUNCHER_DYNAMIC_TARGET", "LAUNCH_CLOSURE", " ".join(dynamic), None, "UNRESOLVED", "INCLUDE", [f"PARSER:{parser}:{path}:{record['line']}"]))
@@ -580,6 +619,17 @@ def _launch_edges(root: Path, path: str, path_set: set[str]) -> list[dict[str, A
             candidate = _resolve_path_edge(path, record["line"], literal, "LAUNCHER_TARGET", "LAUNCH_CLOSURE", parser, language, path_set)
             if candidate:
                 edges.append(candidate)
+    return edges
+
+
+def derive_batch_dependency_edges(root: Path, path: str, path_set: set[str]) -> list[dict[str, Any]]:
+    """Public fail-closed R3 batch surface used by selection and real fixtures."""
+
+    require(PurePosixPath(path).suffix.casefold() in {".bat", ".cmd"}, "BATCH_SOURCE_REQUIRED", path)
+    edges = _launch_edges(root, path, path_set)
+    unresolved = [edge for edge in edges if edge.get("resolution_status") == "UNRESOLVED"]
+    require(not unresolved, "LAUNCHER_TARGET_UNRESOLVED", repr(unresolved))
+    require(bool(edges), "LAUNCHER_DEPENDENCY_EDGE_REQUIRED", path)
     return edges
 
 
@@ -1011,12 +1061,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         result = derive_repository_selection(
             args.fixture_root,
-            json.loads(args.include_registry.read_text(encoding="utf-8")),
-            json.loads(args.exclusion_registry.read_text(encoding="utf-8")),
-            json.loads(args.rule_registry.read_text(encoding="utf-8")),
-            json.loads(args.configuration.read_text(encoding="utf-8")),
-            authority_universe=json.loads(args.authority_universe.read_text(encoding="utf-8")),
-            registry_bindings=json.loads(args.registry_bindings.read_text(encoding="utf-8")),
+            json.loads(governed_read_binary(args.include_registry).data),
+            json.loads(governed_read_binary(args.exclusion_registry).data),
+            json.loads(governed_read_binary(args.rule_registry).data),
+            json.loads(governed_read_binary(args.configuration).data),
+            authority_universe=json.loads(governed_read_binary(args.authority_universe).data),
+            registry_bindings=json.loads(governed_read_binary(args.registry_bindings).data),
         )
     except (BoundaryError, OSError, json.JSONDecodeError) as exc:
         print(str(exc), file=sys.stderr)

@@ -24,6 +24,10 @@ from boundary_verifier_DRAFT import (
     stored_json_bytes,
     validate_path_set,
 )
+from governed_file_access_DRAFT import GovernedAccessError
+from governed_file_access_DRAFT import extended_length_path as governed_extended_length_path
+from governed_file_access_DRAFT import read_binary as governed_read_binary
+from governed_file_access_DRAFT import read_named_stream
 
 
 DRAFT_SCRIPT_VERSION = "3.0.0-DRAFT"
@@ -48,12 +52,7 @@ class InventoryError(BoundaryError):
 
 
 def extended_length_path(path: Path) -> str:
-    absolute = str(path.resolve(strict=False))
-    if os.name != "nt" or absolute.startswith("\\\\?\\"):
-        return absolute
-    if absolute.startswith("\\\\"):
-        return "\\\\?\\UNC\\" + absolute[2:]
-    return "\\\\?\\" + absolute
+    return governed_extended_length_path(path)
 
 
 def _same_root(root: Path, forbidden: Path) -> bool:
@@ -177,9 +176,8 @@ def _ads_content_identities(path: Path, stream_names: list[str]) -> list[dict[st
     for stream_name in stream_names:
         suffix = stream_name[:-6] if stream_name.endswith(":$DATA") else stream_name
         try:
-            with open(extended_length_path(path) + suffix, "rb") as handle:
-                payload = handle.read()
-        except (OSError, PermissionError) as exc:
+            payload = read_named_stream(path, suffix)
+        except (GovernedAccessError, OSError, PermissionError) as exc:
             raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:{stream_name}:{exc}") from exc
         identities.append({"stream_name": stream_name, "byte_size": len(payload), "sha256": sha256_bytes(payload)})
     return identities
@@ -198,18 +196,16 @@ def stable_read(
     streams_before = ads_probe(path)
     stream_identities_before = _ads_content_identities(path, streams_before)
     try:
-        with open(extended_length_path(path), "rb") as handle:
-            first_data = handle.read()
-    except PermissionError as exc:
+        first_data = governed_read_binary(path).data
+    except (PermissionError, GovernedAccessError) as exc:
         raise InventoryError("PERMISSION_DENIED", str(path)) from exc
     if mutation_hook is not None:
         mutation_hook(path)
     streams_after = ads_probe(path)
     stream_identities_after = _ads_content_identities(path, streams_after)
     try:
-        with open(extended_length_path(path), "rb") as handle:
-            second_data = handle.read()
-    except PermissionError as exc:
+        second_data = governed_read_binary(path).data
+    except (PermissionError, GovernedAccessError) as exc:
         raise InventoryError("PERMISSION_DENIED", str(path)) from exc
     if streams_before != streams_after or stream_identities_before != stream_identities_after:
         raise InventoryError("ADS_MUTATED_DURING_SCAN", f"{path}:{streams_before}->{streams_after}")
@@ -499,7 +495,12 @@ def enumerate_inventory(
     git_worktree = _is_git_worktree(root)
     object_format = _run_git(root, ["rev-parse", "--show-object-format"]).stdout.decode("ascii").strip() if git_worktree else "sha1"
     attributes_file = root / ".gitattributes"
-    attributes_bytes = attributes_file.read_bytes() if attributes_file.is_file() else b""
+    try:
+        attributes_bytes = governed_read_binary(attributes_file).data
+    except GovernedAccessError as exc:
+        if exc.code != "FILE_MISSING":
+            raise InventoryError("GIT_ATTRIBUTES_ACCESS", str(exc)) from exc
+        attributes_bytes = b""
     attributes_sha256 = sha256_bytes(attributes_bytes)
     attributes_parent_blob = _parent_entry(root, ".gitattributes")[1] if git_worktree else None
     attributes_computed_blob = _raw_blob_identity(attributes_bytes, object_format) if attributes_bytes else None

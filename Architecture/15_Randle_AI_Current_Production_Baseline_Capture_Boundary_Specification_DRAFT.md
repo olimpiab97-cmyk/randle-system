@@ -145,3 +145,71 @@ The case count emerges from coverage. The package records positive, mutation, re
 ## 18. Continuing state
 
 This document is a draft boundary specification only. Baseline capture is not authorized. Operational capture-script work is not authorized. Merge and canonical incorporation are not authorized. Production implementation, deployment, service restart, runtime migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, and Phase 3C1-R11 acceptance are not authorized. Bucket 0 remains incomplete. Bucket 1 remains blocked.
+
+## 19. R3 independent-authority clauses
+
+The following explicit clause IDs are the stable normative anchors consumed from this specification's immutable Git blob. The R2 controls remain historical draft context and are not acceptance authority where an R3 clause supersedes them.
+
+Clause ID: CPB-R3-01
+
+Every authority-package, schema, policy, fixture, expectation, observation, traceability, report, role-map, and reconciliation read shall pass through the governed extended-length access layer. The layer shall canonicalize absolute, UNC, and relative-to-root paths; reject unauthorized reparses and non-regular files; distinguish binary and strict text reads; expose stable file identity; and fail closed on inaccessible, missing, renamed, or mutated paths.
+
+Clause ID: CPB-R3-02
+
+Every accepted specification artifact shall derive authoritative bytes from the immutable Git object selected by external review authority. Worktree bytes are environmental evidence only; expected line-ending transformation shall not change the observation-semantic identity, while a changed authoritative Git blob shall change it.
+
+Clause ID: CPB-R3-03
+
+Review mode shall succeed only for the terminal reconciliation value MATCHED. NOT_YET_RECORDED, MISMATCH, MISSING_COMMITTED_RESULT, INVALID_COMMITTED_RESULT, COMPARATOR_NOT_AUTHORIZED, incomplete cases, invalid receipts, changed enforcement, changed schemas, or failed cleanup shall terminate verification.
+
+Clause ID: CPB-R3-04
+
+The bounded batch grammar shall derive dependency edges for start, call, direct invocation, cmd, PowerShell, pwsh, and Python launcher forms, including quoted, relative, variable-expanded, and extensionless literal targets. Missing literals, unresolved variables, malformed quoting, and unsupported compound grammar shall fail closed.
+
+Clause ID: CPB-R3-05
+
+A SEPARATE_AND_BIND disposition shall be derived from an immutable committed policy and role map defining authorized classes, authorities, evidence roles and classes, cardinality, immutability, recovery, external roots, capture forms, review, and semantic purpose. Rebuilt instance roots shall not authorize changed obligations.
+
+Clause ID: CPB-R3-06
+
+Draft 2020-12 validation shall use the pinned validator lock and FormatChecker, including independently pinned RFC 3339 and URI dependencies. Attempt, freeze, authorization, review, evidence, and ledger timestamps shall also pass semantic RFC 3339 and chronology validation against frozen timestamp authority, with zero schema/semantic disagreement.
+
+Clause ID: CPB-R3-07
+
+Freeze verification shall compare receipt claims with separately bound attempt authorization, issuance timestamp, sequence, specification, inventory, observer, evidence-policy, and prefix authority. Receipt fields and a rebuilt receipt hash shall never select their own authority.
+
+Clause ID: CPB-R3-08
+
+Attempt-prefix validation shall load immutable authority bytes and reconcile raw SHA-256, Git blob, canonical semantic identity, role-map binding, schema identity, accepted prefix count, attempt IDs, prior ledger root, and authority ID before accepting any ledger claim.
+
+Clause ID: CPB-R3-09
+
+Required-evidence validation shall load immutable policy bytes and reconcile raw SHA-256, Git blob, semantic identity, policy ID, roles, classes, cardinality, conditions, purpose, recovery, source-attempt, capture-pass, and immutability rules. Evidence instances shall not redefine policy.
+
+Clause ID: CPB-R3-10
+
+Historical evidence shall be governed by an external binding of logical ID, exact physical path, normalization, size, hash, provenance root, capture attempt, evidence role, and external root. The parser shall read that exact file and reconcile parser events and source locations; a classification path claim shall not select the file.
+
+Clause ID: CPB-R3-11
+
+Observer events shall come from an independently frozen source binding its ID, exact path, type, schema, initial and append-only roots, sequence, source and reader implementation, attempt, and freeze role. Caller substitution, removal, reordering, truncation, or rebuilt roots shall terminate verification.
+
+Clause ID: CPB-R3-12
+
+Comparison authority shall be external to the comparator receipt and bind comparator code, raw hash, interface, expectations, observations, result schema, policy, issuer, and terminal rules. Disabled, replaced, self-generated, discrepant, or unauthorized comparison shall terminate verification.
+
+Clause ID: CPB-R3-13
+
+Authorization shall combine complete structured state with conservative fail-closed free-text grammar. Every protected domain shall resolve only to unambiguous withholding; positive, unknown, conditional-positive, double-negative, contradictory, or structurally hidden authorization statements shall fail.
+
+Clause ID: CPB-R3-14
+
+Traceability shall resolve clause IDs and semantic clause hashes from immutable specification bytes and shall verify schema pointers, rules, existing and invoked functions, positive and mutation cases, expectations, fresh observations, observed code and surface, reverse mappings, and future obligations.
+
+Clause ID: CPB-R3-15
+
+A future operational-package interface shall load actual immutable manifest and review-receipt bytes and verify their hashes, schemas, package commit, tree and parent, script and support blobs, reviewer authority, decision, reviewed package, issue time, compatibility, accepted specification, and interface version. Hash strings without authorized bytes are insufficient.
+
+Clause ID: CPB-R3-16
+
+The Architecture Impact Assessment and Canonical Delta shall distinguish demonstrated R3 enforcement, rejected R2 claims, remaining draft controls, later operational-package work, later capture authorization, and continuing prohibitions. This remediation does not perform canonical incorporation or grant operational authority.
