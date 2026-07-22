@@ -1,5 +1,3 @@
-# Traceability narrative — baseline capture remains withheld
+# R5 semantic traceability narrative
 
-The authoritative machine matrix is `semantic_traceability_R4_DRAFT.json`. Each CPB-R4 clause binds a closed schema, immutable rule, invoked enforcement function, positive case, mutation case, independent expectation, current-run observation, reverse mapping, and future obligation. The matrix bytes, Git blob, raw hash, and semantic identity are fixed by the accepted R4 Git authority.
-
-This narrative is descriptive. Caller-selected matrices are not authority. Prior-run observations are not current evidence. Canonical incorporation remains withheld. Deployment remains withheld.
+The canonical machine matrix is `semantic_traceability_R5_DRAFT.json`. The validator loads it internally from accepted Git bytes, resolves CPB-R5-01 through CPB-R5-10 against the specification blob, and requires current-run events, observations, expectations, functions, codes, reverse mappings, and future obligations.

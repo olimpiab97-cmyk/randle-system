@@ -303,6 +303,21 @@ def read_text(
         raise GovernedAccessError("TEXT_DECODE_FAILED", observation.canonical_path) from exc
 
 
+def write_disposable_binary(path: os.PathLike[str] | str, data: bytes, *, exclusive: bool = True) -> FileIdentity:
+    """Write a disposable fixture file; this operation never confers authority."""
+    canonical = canonical_absolute_path(path)
+    flags = os.O_WRONLY | os.O_CREAT | getattr(os, "O_BINARY", 0)
+    flags |= os.O_EXCL if exclusive else os.O_TRUNC
+    descriptor = os.open(extended_length_path(canonical), flags, 0o600)
+    try:
+        offset = 0
+        while offset < len(data):
+            offset += os.write(descriptor, data[offset:])
+    finally:
+        os.close(descriptor)
+    return stat_regular_file(canonical, allow_reparse=False)
+
+
 def read_named_stream(path: os.PathLike[str] | str, stream_name: str) -> bytes:
     """Read one enumerated NTFS named stream through the governed handle path."""
 

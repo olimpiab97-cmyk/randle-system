@@ -79,3 +79,47 @@ Review mode succeeds only after all cases complete, the immutable committed resu
 ## Continuing state
 
 Baseline capture remains pending independent review. Deployment is not authorized. Live-money trading is not authorized. Merge remains withheld.
+
+## R5 executable and issuance authority addendum
+
+This draft addendum is specification authority only. It grants no capture, operational, merge, deployment, restart, migration, cutover, trading, Phase 3C2, acceptance, Bucket 0, or Bucket 1 authority.
+
+### [CPB-R5-01] Resolved and runtime-guarded authority access
+
+All authority access is resolved statically and guarded at runtime; unmanaged dynamic calls fail closed.
+
+### [CPB-R5-02] Isolated measured historical parser execution
+
+The historical parser executes from Git-bound bytes in a sanitized isolated process and returns a measured execution receipt.
+
+### [CPB-R5-03] Isolated measured comparator execution
+
+The comparator executes from Git-bound bytes in a sanitized isolated process; wrappers and fabricated receipts have no authority.
+
+### [CPB-R5-04] Append-only enforcement-event observation authority
+
+Enforcing functions emit chained events; observations are reconstructed from the current append-only source.
+
+### [CPB-R5-05] Observed enforcing surfaces derive only from events
+
+Observed functions and result codes come from emitted events, never from cases, expectations, or runner labels.
+
+### [CPB-R5-06] Strict plain-data authority boundary
+
+Authority validators recursively require exact built-in canonical data and reject polymorphic behavior before comparison.
+
+### [CPB-R5-07] Internally loaded immutable trace authority
+
+Trace verification internally loads accepted Git bytes and requires current-run events and observations.
+
+### [CPB-R5-08] Immutable future-review trust and issuance
+
+Reviewer identity, persona, capability, independence, and issue time derive from separate trust and issuance objects.
+
+### [CPB-R5-09] Trusted compatibility issuance and evidence
+
+Compatibility requires a capable trusted issuer and immutable verifier evidence; package self-claims are insufficient.
+
+### [CPB-R5-10] Evidence-bound architecture claims
+
+Architecture claims require linked positive, mutation, event, expectation, observation, and comparison evidence.

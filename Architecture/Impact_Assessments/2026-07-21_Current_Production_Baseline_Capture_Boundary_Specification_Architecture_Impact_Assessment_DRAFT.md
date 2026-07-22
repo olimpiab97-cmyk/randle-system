@@ -1,29 +1,19 @@
-# Impact assessment — baseline capture remains withheld
+# Architecture Impact Assessment — R5 draft boundary remediation
 
-Status: draft R4 evidence; no canonical incorporation.
+Status: draft; canonical incorporation pending.
 
-## Proven and retained from R3
+The R3 and R4 four-way checkout, ADS-selector, NFC, timestamp, observer/freeze, five-test, authorization, prefix, and evidence-policy controls remain specification inputs. R4 independent review rejected executable and issuance trust surfaces; those rejected R4 claims are not carried forward as proof.
 
-Four-way long/short execution, checkout-independent Git-object authority, NOT_YET_RECORDED rejection, bounded launcher closure, exact historical arithmetic, NTFS ADS enumeration, and two-read stability remain enforced and are rerun by R4.
+- [CLAIM:R5-ACCESS] R5 resolved-call and runtime access controls are demonstrated by current positive and mutation events.
+- [CLAIM:R5-PARSER] R5 isolated parser execution is demonstrated by a measured subprocess receipt and mutation rejection.
+- [CLAIM:R5-COMPARATOR] R5 isolated comparator execution is demonstrated by a measured subprocess receipt and wrapper rejection.
+- [CLAIM:R5-EVENTS] R5 event-only observation provenance is demonstrated by fresh chained events and no-event rejection.
+- [CLAIM:R5-SURFACE] R5 event-derived enforcing surfaces are demonstrated by wrong-function rejection.
+- [CLAIM:R5-PLAIN] R5 plain-data authority is demonstrated by polymorphic-object rejection.
+- [CLAIM:R5-TRACE] R5 immutable internal trace loading is demonstrated by alternate-matrix rejection.
+- [CLAIM:R5-REVIEW] R5 reviewer issuance trust is demonstrated by persona and issue-time mutation rejection.
+- [CLAIM:R5-COMPAT] R5 compatibility trust is demonstrated by issuer and capability mutation rejection.
 
-## Corrected and demonstrated by R4
+Future canonical work must assess Architecture/README.md, Architecture/06_Randle_AI_Modernization_Charter.md, Architecture/07_Randle_AI_Modernization_Roadmap.md, Architecture/10_Randle_AI_Architecture_Traceability_Specification.md, Architecture/12_Randle_AI_Development_Process_Specification.md, Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md, the eventual canonical successor to this boundary specification, CODEX_TASK_TEMPLATE.md, and .gitattributes or an equivalent byte-authority policy.
 
-Primary-stream-only authority access, centralized enumeration, immutable separate-review derivation, closed family schemas, NFC rejection, timestamp issuer trust, immutable parser execution, observer/freeze identity, complete comparison receipts, expectation/observation provenance separation, withholding-only authorization parsing, immutable trace bytes, and future compatibility review are demonstrated only by the final R4 matrix.
-
-## Controls still draft
-
-All controls remain draft specification controls pending another independent review. Canonical incorporation remains withheld. Future operational-package work remains withheld. Future capture authorization remains withheld.
-
-## Future canonical impacts
-
-- `Architecture/README.md`: later index the accepted successor.
-- `Architecture/06_Randle_AI_Modernization_Charter.md`: later align governance authority boundaries.
-- `Architecture/07_Randle_AI_Modernization_Roadmap.md`: later sequence package review and capture authorization.
-- `Architecture/10_Randle_AI_Architecture_Traceability_Specification.md`: later incorporate immutable matrix authority.
-- `Architecture/12_Randle_AI_Development_Process_Specification.md`: later incorporate provenance separation.
-- `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`: later align freeze and observer authority.
-- The eventual canonical successor: later absorb independently accepted clauses.
-- `CODEX_TASK_TEMPLATE.md`: later expose authority-source and receipt requirements.
-- `.gitattributes` or equivalent byte-authority policy: later make Git-object byte authority explicit.
-
-Deployment remains withheld. Automated paper trading remains withheld. Live-money trading remains withheld. Bucket 0 remains incomplete. Bucket 1 remains blocked.
+Operational capture-package work, baseline capture, canonical incorporation, production implementation, merge, deployment, restart, migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, Phase 3C1-R11 acceptance, Bucket 0 completion, and Bucket 1 work remain withheld.

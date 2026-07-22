@@ -1,19 +1,21 @@
-# Canonical delta — baseline capture remains withheld
+# Canonical Delta — R5 draft
 
-No canonical incorporation is claimed.
+No canonical document is amended by this remediation.
 
-## Retained demonstrated controls
+Retained inputs: R3/R4 deterministic checkout, ADS-selector, canonical JSON, timestamp, observer/freeze, mandatory-test, authorization, prefix, and evidence controls remain draft inputs where not contradicted by independent rejection.
 
-R3 controls retained and rerun: long-path completion, checkout-independent semantic identity, reconciliation failure closure, launcher dependency closure, actual historical evidence arithmetic, actual NTFS ADS enumeration, and two-read stability.
+Corrected R5 controls:
 
-## R4 corrected controls
+- [CLAIM:R5-ACCESS] Resolved call and runtime access enforcement is demonstrated by current events.
+- [CLAIM:R5-PARSER] Isolated measured parser execution is demonstrated by current receipts.
+- [CLAIM:R5-COMPARATOR] Isolated measured comparator execution is demonstrated by current receipts.
+- [CLAIM:R5-EVENTS] Event-derived observations are demonstrated by the current append-only source.
+- [CLAIM:R5-SURFACE] Event-derived enforcing surfaces are demonstrated by wrong-surface mutations.
+- [CLAIM:R5-PLAIN] Exact plain-data validation is demonstrated by polymorphic mutations.
+- [CLAIM:R5-TRACE] Internal immutable trace loading is demonstrated by current trace reconciliation.
+- [CLAIM:R5-REVIEW] Reviewer trust and issuance binding is demonstrated by current mutations.
+- [CLAIM:R5-COMPAT] Compatibility issuer capability and evidence are demonstrated by current mutations.
 
-The final R4 result may demonstrate primary-stream authority, centralized enumeration, separate-review policy, closed NFC schemas, issuer-bound timestamps, parser-bound history, freeze-bound observers, full external comparison receipts, separated fixture provenance, withholding-only authorization, immutable trace matrices, and compatibility-enforced future review.
+Still draft: every boundary control in this package. Deferred: operational-package authoring and review, freeze-package authorization, baseline-capture authorization, and canonical incorporation. R4 parser/comparator/provenance/trace/reviewer/compatibility practices rejected by independent review have no continuing authority.
 
-## Draft and deferred work
-
-All specification controls remain draft. Future operational-package work remains withheld. Future capture authorization remains withheld. Canonical incorporation remains withheld. Production implementation remains withheld. Deployment remains withheld. Production restart remains withheld. NQ cutover remains withheld. Automated paper trading remains withheld. Live-money trading remains withheld.
-
-## Rejected practices
-
-ADS-selected authority, self-review, generic schemas, caller parser selection, unbound freeze identity, incomplete receipts, copied fixture provenance, unknown authorization verbs, caller trace matrices, and incompatible future packages are rejected.
+Merge, production implementation, deployment, restart, migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, Phase 3C1-R11 acceptance, Bucket 0 completion, and Bucket 1 work remain withheld.

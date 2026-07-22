@@ -1,0 +1,1 @@
+{"allowed_status":["MATCHED"],"not_yet_recorded_success":false,"policy_id":"R5-STRICT-EXPECTATION-EVENT-COMPARISON","require_cleanup_pass":true,"require_execution_receipt":true,"require_zero_discrepancies":true,"schema_version":"7.0.0-DRAFT"}
