@@ -1,51 +1,86 @@
-# Draft Package Index — Current Production Baseline Capture Boundary
+# R2 Package Index
 
-Status: **REMEDIATED DRAFT — NOT CANONICAL — PENDING NEW INDEPENDENT REVIEW**
+Status: governed draft; pending independent review.
 
-This directory contains specification-verification evidence only. The Python files are draft synthetic-fixture utilities, not production capture code. They require or construct disposable fixture roots and confer no capture authority.
+## Accepted-specification input roles
 
-## Machine-readable specification artifacts
+`package_role_authority_DRAFT.json` is the only role-to-path authority. Its entries are read from the accepted Git commit, and every named blob is independently derived. The accepted input root deliberately excludes `fixture_results_DRAFT.json` and `REMEDIATION_REPORT_DRAFT.md`; those are derived review evidence whose contents cannot define the input identity they report. The final commit still preserves both files.
 
-| File | Role |
-|---|---|
-| `capture_boundary_schema_DRAFT.json` | Schema for canonical configuration |
-| `boundary_config_DRAFT.json` | Draft canonical path, discovery, external-root, and freeze policy |
-| `include_registry_schema_DRAFT.json` | Governed include-registry schema |
-| `include_registry_DRAFT.json` | Seed entries, five mandatory B5 dispositions, and B1 sentinels |
-| `exclusion_registry_schema_DRAFT.json` | Governed exclusion-registry schema |
-| `exclusion_registry_DRAFT.json` | Narrow exclusion and separate-inventory entries |
-| `selection_rule_registry_DRAFT.json` | Stable machine rule identifiers and predicates |
-| `selection_rule_registry_schema_DRAFT.json` | Complete Draft 2020-12 schema for selection rules |
-| `terminal_disposition_schema_DRAFT.json` | Schema for exhaustive `INCLUDE`/`EXCLUDE`/`SEPARATE_AND_BIND` output |
-| `freeze_receipt_schema_DRAFT.json` | Pre-Pass-A freeze receipt schema |
-| `attempt_ledger_schema_DRAFT.json` | Append-only attempt-ledger schema |
-| `durable_manifest_schema_DRAFT.json` | Long-path-safe durable-manifest schema |
-| `durable_evidence_binding_registry_schema_DRAFT.json` | Complete external/internal evidence binding schema |
-| `test_classification_schema_DRAFT.json` | Complete test-outcome classification schema |
-| `traceability_matrix_DRAFT.json` | B1–B5 and BR-01–BR-13 to clause/rule/function/case/result/obligation mapping |
-
-## Draft verification implementation and evidence
-
-| File | Role |
-|---|---|
-| `inventory_generator_DRAFT.py` | Real ADS, extended-path, no-follow, stable-read, raw/Git-clean identity fixture utility; production roots refused |
-| `selection_engine_DRAFT.py` | Parser-backed Python/launcher/configuration/test fixed-point selector and terminal-disposition emitter; production roots refused |
-| `boundary_verifier_DRAFT.py` | Semantic authority for registries, package Git blobs, inventories, freezes, attempts, evidence, outcomes, stability, traceability, and governance language |
-| `schema_validation_DRAFT.py` | Pinned `jsonschema` 4.25.1 Draft 2020-12 schema/instance validation adapter |
-| `fixture_runner_DRAFT.py` | Disposable real-filesystem/Git fixture and mutation harness |
-| `expected_case_vectors_DRAFT.json` | Positive expected-behavior vectors |
-| `mutation_case_vectors_DRAFT.json` | Fail-closed mutation vectors |
-| `independent_expectations_DRAFT.json` | Independently stated complete case set and invariants |
-| `fixture_results_DRAFT.json` | Bound 188/188 fresh result: 44 positive, 144 mutations, zero discrepancies |
-| `CANONICAL_DELTA_DRAFT.md` | Proposed concepts, enforced controls, rejected practices, draft limits, and future incorporation targets |
-| `REMEDIATION_REPORT_DRAFT.md` | BR-01 through BR-13 remediation evidence and continuing authority limits |
-
-## Supporting governed documents outside this directory
+### Normative and assessment documents
 
 - `Architecture/15_Randle_AI_Current_Production_Baseline_Capture_Boundary_Specification_DRAFT.md`
-- `Architecture/Impact_Assessments/2026-07-21_Current_Production_Baseline_Capture_Boundary_Specification_Architecture_Impact_Assessment_DRAFT.md`
-- `Architecture/Traceability/2026-07-21_Current_Production_Baseline_Capture_Boundary_Specification_Traceability_Matrix_DRAFT.md`
+- `CANONICAL_DELTA_DRAFT.md`
+- this package index
+- the Architecture Impact Assessment
+- the Architecture traceability narrative
 
-## Authority statement
+### Immutable authority artifacts
 
-This package does not run or authorize a baseline capture. It does not authorize merge, canonical incorporation, implementation, deployment, restart, migration, NQ cutover, any trading, Bucket 0 completion, Bucket 1, Phase 3C2, or Phase 3C1-R11 acceptance.
+- `package_role_authority_DRAFT.json`
+- `governed_authority_universe_DRAFT.json`
+- `.gitattributes`
+- `authorization_state_DRAFT.json`
+- `attempt_prefix_authority_DRAFT.json`
+- `required_evidence_policy_DRAFT.json`
+- `operational_package_interface_DRAFT.json`
+- include, exclusion, selection-rule, and boundary-configuration registries
+
+### Schemas
+
+- capture boundary
+- include registry
+- exclusion registry
+- selection-rule registry
+- terminal disposition
+- freeze receipt
+- attempt ledger
+- attempt-prefix authority
+- durable manifest
+- durable-evidence binding
+- required-evidence policy
+- test classification
+- authorization state
+- operational-package interface
+- case definition
+- independent expectations
+- semantic traceability
+
+Every schema file ends in `_schema_DRAFT.json` and is included in the independently derived schema-set identity.
+
+### Draft enforcing code
+
+- `selection_engine_DRAFT.py`
+- `inventory_generator_DRAFT.py`
+- `boundary_verifier_DRAFT.py`
+- `historical_log_parser_DRAFT.py`
+- `schema_validation_DRAFT.py`
+- `fixture_runner_DRAFT.py`
+
+These are review fixtures and interfaces. They are not an operational capture script.
+
+### Static cases, expectations, and traceability
+
+- `case_definitions_DRAFT.json`
+- `independent_expectations_DRAFT.json`
+- `expected_case_vectors_DRAFT.json`
+- `mutation_case_vectors_DRAFT.json`
+- `historical_classification_DRAFT.json`
+- `semantic_traceability_DRAFT.json`
+- `traceability_matrix_DRAFT.json`, retained only as an explicit disposition of the rejected v2 trace artifact
+
+### Derived review evidence
+
+- `fixture_results_DRAFT.json`
+- `REMEDIATION_REPORT_DRAFT.md`
+
+## External immutable evidence
+
+The historical classification binds the external log at SHA-256 `6F1B876C814B25D27F5EF8B4CFE3A66C4B0E847263FEC784C56896DC8FF3194A`. The log is not copied into the repository.
+
+## Serialization
+
+All committed JSON uses `RANDLE-CAPTURE-CJSON-1`: UTF-8, no BOM, NFC strings, sorted keys, compact separators, no duplicate keys, no CR, and exactly one terminal LF. Canonical verification reads committed Git blob bytes.
+
+## Boundary
+
+No production source, production test, launcher, deployment file, production configuration, runtime data, runtime database, cache, operational capture script, or temporary fixture artifact belongs in this package.

@@ -9,12 +9,23 @@ from __future__ import annotations
 
 import argparse
 import ast
+import configparser
+import hashlib
 import json
+import os
 import re
+import shlex
+import subprocess
 import sys
+import tomllib
 from collections import defaultdict
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Sequence
+
+try:
+    import yaml
+except ImportError:  # fail closed when YAML is governed but the pinned parser is absent
+    yaml = None
 
 from boundary_verifier_DRAFT import (
     QUESTIONED_TESTS,
@@ -25,27 +36,47 @@ from boundary_verifier_DRAFT import (
     is_test_candidate,
     require,
     semantic_identity,
+    strict_json_loads,
     stored_json_bytes,
     validate_registries,
+    validate_boundary_configuration,
+    validate_questioned_test_authority,
     validate_rule_registry,
     validate_terminal_dispositions,
+    validate_terminal_result,
 )
-from inventory_generator_DRAFT import assert_synthetic_root, enumerate_inventory, extended_length_path
+from inventory_generator_DRAFT import assert_governed_read_only_root, assert_synthetic_root, enumerate_inventory, extended_length_path
 
 
-DRAFT_SELECTION_VERSION = "2.0.0-DRAFT"
-PYTHON_PARSER = "python-ast-closure-2.0.0-DRAFT"
-POWERSHELL_PARSER = "powershell-literal-reference-1.0.0-DRAFT"
-SHELL_PARSER = "shell-launch-reference-1.0.0-DRAFT"
-JSON_CONFIG_PARSER = "json-config-reference-1.0.0-DRAFT"
-YAML_CONFIG_PARSER = "yaml-config-reference-1.0.0-DRAFT"
-TOML_CONFIG_PARSER = "toml-config-reference-1.0.0-DRAFT"
-INI_CONFIG_PARSER = "ini-config-reference-1.0.0-DRAFT"
+DRAFT_SELECTION_VERSION = "4.0.0-DRAFT"
+PYTHON_PARSER = "python-ast-closure/4.0.0-DRAFT"
+POWERSHELL_PARSER = "System.Management.Automation.Language.Parser/5.1"
+CMD_PARSER = "randle-cmd-bounded-grammar/1.0.0-DRAFT"
+SHELL_PARSER = "randle-posix-shell-bounded-grammar/1.0.0-DRAFT"
+JSON_CONFIG_PARSER = "python-json/3.12"
+YAML_CONFIG_PARSER = "PyYAML-SafeLoader/6.0.2"
+TOML_CONFIG_PARSER = "python-tomllib/3.12"
+INI_CONFIG_PARSER = "python-configparser/3.12"
+
+
+def _git_blob_identity(data: bytes, object_format: str) -> str:
+    header = f"blob {len(data)}\0".encode("ascii")
+    if object_format == "sha1":
+        return hashlib.sha1(header + data).hexdigest()
+    if object_format == "sha256":
+        return hashlib.sha256(header + data).hexdigest()
+    raise BoundaryError("UNSUPPORTED_GIT_OBJECT_FORMAT", object_format)
 
 DYNAMIC_IMPORT_NAMES = {"__import__", "importlib.import_module"}
 SUBPROCESS_NAMES = {"subprocess.call", "subprocess.check_call", "subprocess.check_output", "subprocess.Popen", "subprocess.run", "os.system"}
 FILE_CALL_NAMES = {"open", "Path", "pathlib.Path", "io.open"}
-STATIC_CALLS = {"render_template", "flask.render_template", "send_static_file", "pkgutil.get_data", "load_resource", "load_template", "load_asset"}
+STATIC_CALLS = {
+    "render_template", "flask.render_template", "send_static_file", "pkgutil.get_data",
+    "pkg_resources.resource_filename", "pkg_resources.resource_stream",
+    "importlib.resources.files", "importlib.resources.open_binary", "importlib.resources.open_text",
+    "importlib.resources.read_binary", "importlib.resources.read_text",
+    "load_resource", "load_template", "load_asset",
+}
 REPLAY_CALLS = {"load_replay", "open_replay", "register_replay", "register_scenario", "load_scenario"}
 MODULE_REGISTRATION_CALLS = {"load_plugin", "register_plugin", "register_handler", "register_factory", "load_factory", "load_handler", "registry.load"}
 ROUTE_CALL_SUFFIXES = {"route", "add_url_rule", "register_route"}
@@ -100,26 +131,42 @@ def _resolve_import_names(current_path: str, node: ast.ImportFrom) -> list[str]:
     if node.module:
         base.extend(node.module.split("."))
     prefix = ".".join(base)
-    results = [prefix] if prefix else []
-    for alias in node.names:
-        if alias.name != "*":
-            results.append(".".join(part for part in (prefix, alias.name) if part))
-    return results
+    # ``from package import symbol`` always executes the package/module named
+    # by ``node.module``.  The imported name may be a symbol rather than a
+    # submodule and therefore must not be fabricated as a module dependency.
+    return [prefix] if prefix else []
 
 
-def _literal_strings(node: ast.AST) -> list[str]:
+def _literal_strings(node: ast.AST, constants: Mapping[str, list[str]] | None = None) -> list[str]:
+    constants = constants or {}
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return [node.value]
+    if isinstance(node, ast.Name):
+        return list(constants.get(node.id, ()))
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        return [value for item in node.elts for value in _literal_strings(item)]
+        return [value for item in node.elts for value in _literal_strings(item, constants)]
+    if isinstance(node, ast.JoinedStr):
+        pieces: list[list[str]] = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                pieces.append([value.value])
+            elif isinstance(value, ast.FormattedValue):
+                resolved = _literal_strings(value.value, constants)
+                if not resolved:
+                    return []
+                pieces.append(resolved)
+        combined = [""]
+        for choices in pieces:
+            combined = [prefix + choice for prefix in combined for choice in choices]
+        return combined
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        left, right = _literal_strings(node.left), _literal_strings(node.right)
+        left, right = _literal_strings(node.left, constants), _literal_strings(node.right, constants)
         return [a + b for a in left for b in right]
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        left, right = _literal_strings(node.left), _literal_strings(node.right)
+        left, right = _literal_strings(node.left, constants), _literal_strings(node.right, constants)
         return [a.rstrip("/\\") + "/" + b.lstrip("/\\") for a in left for b in right]
     if isinstance(node, ast.Call) and _call_name(node.func) in {"os.path.join", "posixpath.join", "ntpath.join", "Path", "pathlib.Path"}:
-        parts = [_literal_strings(arg) for arg in node.args]
+        parts = [_literal_strings(arg, constants) for arg in node.args]
         if parts and all(part for part in parts):
             values = [""]
             for choices in parts:
@@ -129,7 +176,40 @@ def _literal_strings(node: ast.AST) -> list[str]:
                         joined.append((prefix.rstrip("/\\") + "/" + choice.lstrip("/\\")).strip("/"))
                 values = joined
             return values
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "joinpath":
+        base = _literal_strings(node.func.value, constants)
+        parts = [base, *(_literal_strings(arg, constants) for arg in node.args)]
+        if parts and all(parts):
+            values = [""]
+            for choices in parts:
+                values = [(prefix.rstrip("/\\") + "/" + choice.lstrip("/\\")).strip("/") for prefix in values for choice in choices]
+            return values
     return []
+
+
+def _constant_bindings(tree: ast.Module) -> dict[str, list[str]]:
+    constants: dict[str, list[str]] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            value = _literal_strings(node.value, constants)
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    if value:
+                        constants[target.id] = value
+                    else:
+                        constants.pop(target.id, None)
+    return constants
+
+
+def _call_path_literals(node: ast.Call, constants: Mapping[str, list[str]]) -> list[str]:
+    values: list[str] = []
+    if node.args:
+        values.extend(_literal_strings(node.args[0], constants))
+    for keyword in node.keywords:
+        if keyword.arg in {"file", "filename", "path", "target", "executable", "cwd"}:
+            values.extend(_literal_strings(keyword.value, constants))
+    return list(dict.fromkeys(values))
 
 
 def _read_text(path: Path, relative: str) -> str:
@@ -156,18 +236,27 @@ def _edge(
     disposition: str,
     evidence: Sequence[str],
 ) -> dict[str, Any]:
+    parser_name, _, parser_version = parser.partition("/")
     return {
         "source_path": source,
         "source_language_or_format": language,
         "parser": parser,
+        "parser_name": parser_name,
+        "parser_version": parser_version or "GOVERNED_EMBEDDED_VERSION",
         "source_location": location,
         "edge_type": edge_type,
         "rule_id": rule_id,
         "literal_or_declared_target": declared,
+        "target_expression": declared,
         "canonical_resolved_target": target,
         "resolution_status": resolution,
         "evidence": list(evidence),
         "terminal_disposition": disposition,
+        "disposition_obligation": {
+            "INCLUDE": "CAPTURE_RAW_AND_GIT_IDENTITIES",
+            "EXCLUDE": "PRESERVE_EXCLUSION_RECORD",
+            "SEPARATE_AND_BIND": "BIND_EXTERNAL_EVIDENCE",
+        }[disposition],
     }
 
 
@@ -194,13 +283,13 @@ def _looks_like_path(value: str) -> bool:
     return "/" in normalized or normalized.casefold().endswith(PATH_SUFFIXES)
 
 
-def _dynamic_declaration(configuration: Mapping[str, Any], source: str, call: str) -> Mapping[str, Any] | None:
+def _dynamic_declaration(configuration: Mapping[str, Any], source: str, call: str, line: int, column: int) -> Mapping[str, Any] | None:
     matches = [
         item
         for item in configuration["discovery_policy"]["governed_dynamic_dependencies"]
-        if item["source_path"] == source and item["call_name"] == call
+        if item["source_path"] == source and item["call_name"] == call and item["line"] == line and item["column"] == column
     ]
-    require(len(matches) <= 1, "AMBIGUOUS_DYNAMIC_DECLARATION", f"{source}:{call}")
+    require(len(matches) <= 1, "AMBIGUOUS_DYNAMIC_DECLARATION", f"{source}:{line}:{column}:{call}")
     return matches[0] if matches else None
 
 
@@ -239,7 +328,7 @@ def _resolve_path_edge(
     *,
     required: bool = True,
 ) -> dict[str, Any] | None:
-    if not _looks_like_path(literal):
+    if not isinstance(literal, str) or not literal.strip():
         return None
     target = _repo_candidate(source, literal, path_set)
     if target:
@@ -259,6 +348,12 @@ def _python_edges(
         tree = ast.parse(source, filename=path)
     except SyntaxError as exc:
         raise BoundaryError("SOURCE_PARSE_ERROR", f"{path}:{exc.lineno}") from exc
+    constants = _constant_bindings(tree)
+    defined_symbols = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
     edges: list[dict[str, Any]] = []
     fixture_names: set[str] = set()
     used_fixtures: set[str] = set()
@@ -272,8 +367,13 @@ def _python_edges(
             for alias in node.names:
                 edges.append(_resolve_module_edge(path, node.lineno, alias.name, "PYTHON_ABSOLUTE_IMPORT", PYTHON_PARSER, module_to_path, configuration))
         elif isinstance(node, ast.ImportFrom):
-            for module in _resolve_import_names(path, node):
+            bases = _resolve_import_names(path, node)
+            for module in bases:
                 edges.append(_resolve_module_edge(path, node.lineno, module, "PYTHON_RELATIVE_IMPORT" if node.level else "PYTHON_ABSOLUTE_IMPORT", PYTHON_PARSER, module_to_path, configuration))
+                for alias in node.names:
+                    candidate = f"{module}.{alias.name}" if alias.name != "*" else ""
+                    if candidate in module_to_path:
+                        edges.append(_resolve_module_edge(path, node.lineno, candidate, "PYTHON_IMPORTED_SUBMODULE", PYTHON_PARSER, module_to_path, configuration))
         if isinstance(node, ast.ClassDef) and any((_call_name(base) or "").endswith("TestCase") for base in node.bases):
             unittest_relationship = True
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -290,19 +390,28 @@ def _python_edges(
                 if name and name.endswith("parametrize"):
                     parameterized += 1
                     if isinstance(item, ast.Call) and item.args:
-                        for raw_names in _literal_strings(item.args[0]):
+                        for raw_names in _literal_strings(item.args[0], constants):
                             parameter_names.update(name.strip() for name in raw_names.split(",") if name.strip())
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             if any(isinstance(target, ast.Name) and target.id == "pytest_plugins" for target in targets):
                 value = node.value
-                for module in _literal_strings(value):
+                for module in _literal_strings(value, constants):
                     edges.append(_resolve_module_edge(path, node.lineno, module, "PYTEST_PLUGIN", PYTHON_PARSER, module_to_path, configuration))
         if not isinstance(node, ast.Call):
             continue
         name = _call_name(node.func) or ""
+        if isinstance(node.func, ast.Attribute) and node.func.attr in {"read_text", "read_bytes", "write_text", "write_bytes", "open"}:
+            literals = _literal_strings(node.func.value, constants)
+            if not literals:
+                edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "PATH_RESOURCE_TARGET", "RUNTIME_CLOSURE", node.func.attr, None, "UNRESOLVED", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
+            for literal in literals:
+                candidate = _resolve_path_edge(path, node.lineno, literal, "PATH_RESOURCE_TARGET", "RUNTIME_CLOSURE", PYTHON_PARSER, "python", path_set)
+                if candidate:
+                    edges.append(candidate)
+            continue
         if name in DYNAMIC_IMPORT_NAMES:
-            literals = _literal_strings(node.args[0]) if node.args else []
+            literals = _literal_strings(node.args[0], constants) if node.args else []
             if literals:
                 for module in literals:
                     edge = _resolve_module_edge(path, node.lineno, module, "PYTHON_DYNAMIC_IMPORT", PYTHON_PARSER, module_to_path, configuration)
@@ -310,7 +419,7 @@ def _python_edges(
                         edge["rule_id"] = "DYNAMIC_DECLARATION_REQUIRED"
                     edges.append(edge)
             else:
-                declaration = _dynamic_declaration(configuration, path, name)
+                declaration = _dynamic_declaration(configuration, path, name, node.lineno, node.col_offset)
                 if declaration:
                     edge = _resolve_module_edge(path, node.lineno, declaration["target_module"], "GOVERNED_DYNAMIC_IMPORT", PYTHON_PARSER, module_to_path, configuration)
                     edge["evidence"] = declaration["evidence"]
@@ -318,23 +427,32 @@ def _python_edges(
                 else:
                     edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "PYTHON_DYNAMIC_IMPORT", "DYNAMIC_DECLARATION_REQUIRED", name, None, "UNRESOLVED", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
         elif name in SUBPROCESS_NAMES:
-            literals = [value for arg in node.args for value in _literal_strings(arg)]
+            literals = _call_path_literals(node, constants)
+            if len(literals) == 1 and any(character.isspace() for character in literals[0]):
+                try:
+                    literals = shlex.split(literals[0], posix=os.name != "nt")
+                except ValueError:
+                    literals = []
+            if literals and PurePosixPath(literals[0].replace("\\", "/")).name.casefold() in {"python", "python.exe", "py", "py.exe", "powershell", "powershell.exe", "pwsh", "bash", "sh"}:
+                literals = literals[1:2]
+            elif len(literals) > 1:
+                literals = literals[:1]
             if not literals:
                 edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "SUBPROCESS_TARGET", "RUNTIME_CLOSURE", name, None, "UNRESOLVED", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
             for literal in literals:
                 candidate = _resolve_path_edge(path, node.lineno, literal, "SUBPROCESS_TARGET", "RUNTIME_CLOSURE", PYTHON_PARSER, "python", path_set)
                 if candidate:
                     edges.append(candidate)
-        elif name in FILE_CALL_NAMES and node.args:
-            literals = _literal_strings(node.args[0])
-            if not literals and name in {"open", "io.open"}:
+        elif name in FILE_CALL_NAMES and (node.args or node.keywords):
+            literals = _call_path_literals(node, constants)
+            if not literals:
                 edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "FILE_OPEN_TARGET", "RUNTIME_CLOSURE", name, None, "UNRESOLVED", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
             for literal in literals:
                 candidate = _resolve_path_edge(path, node.lineno, literal, "FILE_OPEN_TARGET", "RUNTIME_CLOSURE", PYTHON_PARSER, "python", path_set)
                 if candidate:
                     edges.append(candidate)
         elif name in STATIC_CALLS | REPLAY_CALLS:
-            literals = [value for arg in node.args for value in _literal_strings(arg)]
+            literals = [value for arg in node.args for value in _literal_strings(arg, constants)]
             if not literals:
                 edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "STATIC_OR_REPLAY_TARGET", "TEST_SUPPORT_CLOSURE" if name in REPLAY_CALLS else "RUNTIME_CLOSURE", name, None, "UNRESOLVED", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
             for literal in literals:
@@ -342,7 +460,7 @@ def _python_edges(
                 if candidate:
                     edges.append(candidate)
         elif name in MODULE_REGISTRATION_CALLS:
-            literals = [value for arg in node.args for value in _literal_strings(arg)]
+            literals = [value for arg in node.args for value in _literal_strings(arg, constants)]
             if not literals:
                 edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "PLUGIN_HANDLER_FACTORY", "RUNTIME_CLOSURE", name, None, "UNRESOLVED", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
             else:
@@ -354,15 +472,21 @@ def _python_edges(
                         edge = path_edge
                 edges.append(edge)
         elif any(name.endswith("." + suffix) or name == suffix for suffix in ROUTE_CALL_SUFFIXES):
-            handler_literals = [value for arg in node.args[1:] for value in _literal_strings(arg)]
+            handler_nodes = list(node.args[2:3] if name.endswith("add_url_rule") else node.args[1:])
+            handler_literals = [value for arg in handler_nodes for value in _literal_strings(arg, constants)]
             handler_literals = [value for value in handler_literals if not value.startswith("/")]
             if handler_literals:
                 for handler in handler_literals:
                     edges.append(_resolve_module_edge(path, node.lineno, handler, "ROUTE_TARGET", PYTHON_PARSER, module_to_path, configuration))
             else:
-                edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "ROUTE_REGISTRATION", "RUNTIME_CLOSURE", name, path, "RESOLVED_SELF", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
+                named_handlers = [item.id for item in handler_nodes if isinstance(item, ast.Name)]
+                if named_handlers:
+                    for handler in named_handlers:
+                        edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "ROUTE_HANDLER_TARGET", "RUNTIME_CLOSURE", handler, path if handler in defined_symbols else None, "RESOLVED_SELF" if handler in defined_symbols else "UNRESOLVED", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
+                else:
+                    edges.append(_edge(path, "python", PYTHON_PARSER, _source_location(path, node.lineno), "ROUTE_REGISTRATION", "RUNTIME_CLOSURE", name, path, "RESOLVED_SELF", "INCLUDE", [f"AST:{path}:{node.lineno}"]))
         elif name.endswith("usefixtures"):
-            used_fixtures.update(value for arg in node.args for value in _literal_strings(arg))
+            used_fixtures.update(value for arg in node.args for value in _literal_strings(arg, constants))
     for fixture in sorted(used_fixtures - parameter_names):
         status = "RESOLVED_SELF" if fixture in fixture_names else "DECLARED_FIXTURE_REFERENCE"
         edges.append(_edge(path, "python", PYTHON_PARSER, f"{path}:fixture:{fixture}", "PYTEST_FIXTURE_RELATIONSHIP", "TEST_SUPPORT_CLOSURE", fixture, path if fixture in fixture_names else f"fixture::{fixture}", status, "INCLUDE", [f"PYTEST_FIXTURE:{path}:{fixture}"]))
@@ -380,22 +504,80 @@ def _python_edges(
     return edges, metadata
 
 
-def _launch_edges(root: Path, path: str, path_set: set[str]) -> list[dict[str, Any]]:
-    text = _read_text(root.joinpath(*path.split("/")), path)
-    suffix = PurePosixPath(path).suffix.casefold()
-    parser, language = (POWERSHELL_PARSER, "powershell") if suffix == ".ps1" else (SHELL_PARSER, "batch" if suffix in {".bat", ".cmd"} else "shell")
-    edges: list[dict[str, Any]] = []
-    quote_pattern = re.compile(r"(?i)(?:^|\s)(?:python(?:\.exe)?\s+|py\s+|-file\s+|call\s+|bash\s+|sh\s+|\.\s+|&\s*)[\"']?([^\"'\s;|]+\.(?:py|ps1|bat|cmd|sh|json|yaml|yml|toml|ini|cfg))[\"']?")
+def _powershell_commands(source_path: Path, governed_path: str) -> list[dict[str, Any]]:
+    script = r'''$tokens=$null;$errors=$null;$ast=[System.Management.Automation.Language.Parser]::ParseFile($env:RANDLE_PS_PARSE_PATH,[ref]$tokens,[ref]$errors);if($errors.Count){$errors|ForEach-Object{$_.ToString()}|Write-Error;exit 3};@($ast.FindAll({param($n)$n -is [System.Management.Automation.Language.CommandAst]},$true)|ForEach-Object{[pscustomobject]@{line=$_.Extent.StartLineNumber;text=$_.Extent.Text;elements=@($_.CommandElements|ForEach-Object{$_.Extent.Text})}})|ConvertTo-Json -Compress -Depth 6'''
+    env = os.environ.copy()
+    env["RANDLE_PS_PARSE_PATH"] = extended_length_path(source_path)
+    process = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, env=env, check=False)
+    require(process.returncode == 0, "SOURCE_PARSE_ERROR", f"{governed_path}:{process.stderr.strip()}")
+    if not process.stdout.strip():
+        return []
+    parsed = json.loads(process.stdout)
+    return parsed if isinstance(parsed, list) else [parsed]
+
+
+def _lex_launch_lines(text: str, governed_path: str, *, posix: bool) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     for number, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
-        if not stripped or stripped.startswith(("#", "REM ", "::")):
+        if not stripped or stripped.casefold().startswith(("#", "rem ", "::")):
             continue
-        matches = quote_pattern.findall(line)
-        command_like = bool(re.search(r"(?i)\b(?:python|py|powershell|pwsh|bash|sh|call|-file)\b|(?:^|\s)[.&]\s+", line))
-        if command_like and not matches and ("$" in line or "%" in line or "$(" in line):
-            edges.append(_edge(path, language, parser, _source_location(path, number), "LAUNCHER_DYNAMIC_TARGET", "LAUNCH_CLOSURE", stripped, None, "UNRESOLVED", "INCLUDE", [f"LAUNCH:{path}:{number}"]))
-        for literal in matches:
-            candidate = _resolve_path_edge(path, number, literal, "LAUNCHER_TARGET", "LAUNCH_CLOSURE", parser, language, path_set)
+        unsupported = r"\$\(|`|\|\||&&|(?<!\|)\|(?!\|)|[<>]|\b(?:if|for|while|until|case|function|goto)\b"
+        require(re.search(unsupported, stripped, flags=re.IGNORECASE) is None, "UNSUPPORTED_LAUNCHER_GRAMMAR", f"{governed_path}:{number}")
+        try:
+            elements = shlex.split(line, posix=posix)
+        except ValueError as exc:
+            raise BoundaryError("SOURCE_PARSE_ERROR", f"{governed_path}:{number}:{exc}") from exc
+        records.append({"line": number, "text": stripped, "elements": elements})
+    return records
+
+
+def _launch_edges(root: Path, path: str, path_set: set[str]) -> list[dict[str, Any]]:
+    source_path = root.joinpath(*path.split("/"))
+    text = _read_text(source_path, path)
+    suffix = PurePosixPath(path).suffix.casefold()
+    if suffix == ".ps1":
+        parser, language, records = POWERSHELL_PARSER, "powershell", _powershell_commands(source_path, path)
+    elif suffix in {".bat", ".cmd"}:
+        parser, language, records = CMD_PARSER, "batch", _lex_launch_lines(text, path, posix=False)
+    else:
+        parser, language, records = SHELL_PARSER, "shell", _lex_launch_lines(text, path, posix=True)
+    edges: list[dict[str, Any]] = []
+    command_names = {"python", "python.exe", "py", "py.exe", "powershell", "powershell.exe", "pwsh", "bash", "sh", "call", ".", "&"}
+    powershell_path_commands = {"start-process", "import-module", "get-content", "set-content", "test-path", "invoke-expression"}
+    for record in records:
+        elements = [str(item).strip("\"'") for item in record["elements"]]
+        command_text = str(record.get("text", "")).lstrip()
+        invocation_operator = bool(re.match(r"^[&.]\s+", command_text))
+        command_like = invocation_operator or any(item.casefold() in command_names or item.casefold() == "-file" for item in elements)
+        candidates = [item for item in elements if _looks_like_path(item)]
+        if elements:
+            command = elements[0].casefold()
+            if command in {".", "&", "call"} and len(elements) > 1:
+                candidates.append(elements[1])
+            elif command in powershell_path_commands:
+                parameter_names = {"-filepath", "-literalpath", "-path", "-name"}
+                selected = None
+                for index, item in enumerate(elements[:-1]):
+                    if item.casefold() in parameter_names:
+                        selected = elements[index + 1]
+                        break
+                if selected is None and len(elements) > 1:
+                    selected = elements[1]
+                if selected:
+                    candidates.append(selected)
+            elif command in command_names:
+                offset = 2 if len(elements) > 2 and elements[1].casefold() in {"-file", "-command"} else 1
+                if len(elements) > offset:
+                    candidates.append(elements[offset])
+        candidates = list(dict.fromkeys(item for item in candidates if item and not item.startswith("-")))
+        dynamic = [item for item in elements if re.search(r"\$\w+|\$\(|%[^%]+%|![^!]+!", item)]
+        if command_like and dynamic:
+            edges.append(_edge(path, language, parser, _source_location(path, record["line"]), "LAUNCHER_DYNAMIC_TARGET", "LAUNCH_CLOSURE", " ".join(dynamic), None, "UNRESOLVED", "INCLUDE", [f"PARSER:{parser}:{path}:{record['line']}"]))
+        for literal in candidates:
+            if literal in dynamic:
+                continue
+            candidate = _resolve_path_edge(path, record["line"], literal, "LAUNCHER_TARGET", "LAUNCH_CLOSURE", parser, language, path_set)
             if candidate:
                 edges.append(candidate)
     return edges
@@ -412,33 +594,40 @@ def _walk_config_values(value: Any, location: str = "$") -> Iterable[tuple[str, 
         yield location, location.rsplit(".", 1)[-1].casefold(), value
 
 
-def _parse_simple_config(text: str, path: str, suffix: str) -> list[tuple[str, str, str]]:
-    results: list[tuple[str, str, str]] = []
-    for number, line in enumerate(text.splitlines(), 1):
-        stripped = line.strip()
-        if not stripped or stripped.startswith(("#", ";", "[")):
-            continue
-        separator = ":" if suffix in {".yaml", ".yml"} else "="
-        if separator not in stripped:
-            raise BoundaryError("CONFIG_PARSE_ERROR", f"{path}:{number}")
-        key, value = stripped.split(separator, 1)
-        value = value.strip().strip("\"'")
-        results.append((f"{path}:{number}", key.strip().casefold(), value))
-    return results
-
-
 def _config_edges(root: Path, path: str, path_set: set[str], module_to_path: Mapping[str, str], configuration: Mapping[str, Any]) -> list[dict[str, Any]]:
     text = _read_text(root.joinpath(*path.split("/")), path)
     suffix = PurePosixPath(path).suffix.casefold()
     if suffix == ".json":
         try:
-            values = list(_walk_config_values(json.loads(text)))
-        except json.JSONDecodeError as exc:
-            raise BoundaryError("CONFIG_PARSE_ERROR", f"{path}:{exc.lineno}") from exc
+            values = list(_walk_config_values(strict_json_loads(text.encode("utf-8"))))
+        except BoundaryError as exc:
+            raise BoundaryError("CONFIG_PARSE_ERROR", f"{path}:{exc}") from exc
         parser = JSON_CONFIG_PARSER
+    elif suffix in {".yaml", ".yml"}:
+        require(yaml is not None, "CONFIG_PARSER_UNAVAILABLE", f"{path}:PyYAML==6.0.2")
+        try:
+            parsed_yaml = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            raise BoundaryError("CONFIG_PARSE_ERROR", f"{path}:{exc}") from exc
+        values = list(_walk_config_values(parsed_yaml))
+        parser = YAML_CONFIG_PARSER
+    elif suffix == ".toml":
+        try:
+            values = list(_walk_config_values(tomllib.loads(text)))
+        except tomllib.TOMLDecodeError as exc:
+            raise BoundaryError("CONFIG_PARSE_ERROR", f"{path}:{exc}") from exc
+        parser = TOML_CONFIG_PARSER
     else:
-        values = _parse_simple_config(text, path, suffix)
-        parser = YAML_CONFIG_PARSER if suffix in {".yaml", ".yml"} else TOML_CONFIG_PARSER if suffix == ".toml" else INI_CONFIG_PARSER
+        parser_config = configparser.ConfigParser(interpolation=None, strict=True)
+        try:
+            parser_config.read_string(text)
+        except configparser.Error as exc:
+            raise BoundaryError("CONFIG_PARSE_ERROR", f"{path}:{exc}") from exc
+        values = []
+        for section in parser_config.sections():
+            for key, value in parser_config.items(section):
+                values.append((f"{path}:[{section}].{key}", key.casefold(), value))
+        parser = INI_CONFIG_PARSER
     edges: list[dict[str, Any]] = []
     for location, key, value in values:
         if any(token in key for token in ("module", "plugin", "handler", "factory")):
@@ -506,28 +695,70 @@ def derive_repository_selection(
     rule_registry: Mapping[str, Any],
     configuration: Mapping[str, Any],
     *,
+    authority_universe: Mapping[str, Any],
     capture_mode: bool = False,
     accepted_review_binding: Mapping[str, Any] | None = None,
+    registry_bindings: Mapping[str, str] | None = None,
+    governed_repository_commit: str | None = None,
 ) -> dict[str, Any]:
-    assert_synthetic_root(root)
+    fixture_mode = (root / ".boundary_fixture_root").is_file()
+    if fixture_mode:
+        assert_synthetic_root(root)
+    else:
+        require(governed_repository_commit is not None, "GOVERNED_REPOSITORY_COMMIT_REQUIRED", str(root))
+        assert_governed_read_only_root(root, governed_repository_commit)
+    validate_boundary_configuration(configuration, authority_universe)
     rules = validate_rule_registry(rule_registry)
     includes, exclusions = validate_registries(
         include_registry,
         exclusion_registry,
         rules,
+        authority_universe=authority_universe,
         capture_mode=capture_mode,
         accepted_review_binding=accepted_review_binding,
     )
-    inventory = enumerate_inventory(root)
+    inventory = enumerate_inventory(root, require_fixture_marker=fixture_mode)
+    require(isinstance(registry_bindings, Mapping), "MISSING_REGISTRY_BLOB_AUTHORITY", "selection")
+    required_registry_bindings = {
+        "include_registry_blob",
+        "exclusion_registry_blob",
+        "selection_rule_registry_blob",
+        "boundary_configuration_blob",
+    }
+    require(set(registry_bindings) == required_registry_bindings, "REGISTRY_BLOB_AUTHORITY_SET", repr(sorted(set(registry_bindings) ^ required_registry_bindings)))
+    for binding_name, binding_value in registry_bindings.items():
+        require(re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", binding_value or "") is not None, "INVALID_REGISTRY_BLOB", binding_name)
+    object_formats = {"sha1" if len(value) == 40 else "sha256" for value in registry_bindings.values()}
+    require(len(object_formats) == 1, "REGISTRY_BLOB_OBJECT_FORMAT", repr(sorted(object_formats)))
+    object_format = next(iter(object_formats))
+    registry_documents = {
+        "include_registry_blob": include_registry,
+        "exclusion_registry_blob": exclusion_registry,
+        "selection_rule_registry_blob": rule_registry,
+        "boundary_configuration_blob": configuration,
+    }
+    for binding_name, document in registry_documents.items():
+        require(_git_blob_identity(stored_json_bytes(document), object_format) == registry_bindings[binding_name], "REGISTRY_DOCUMENT_BLOB_MISMATCH", binding_name)
     paths = [item["canonical_path"] for item in inventory["artifacts"]]
+    inventory_by_path = {item["canonical_path"]: item for item in inventory["artifacts"]}
     path_set = set(paths)
     repository_includes = {key: entry for key, entry in includes.items() if entry["path_kind"] == "repository-relative"}
     missing = sorted(path for path in repository_includes if path not in path_set)
     require(not missing, "MISSING_REQUIRED_PATH", repr(missing))
+    required_tombstones = sorted(path for path in repository_includes if inventory_by_path[path].get("existence_state") == "TOMBSTONE" and repository_includes[path]["expected_existence_state"] == "MUST_EXIST_AT_FREEZE")
+    require(not required_tombstones, "REQUIRED_PATH_DELETED", repr(required_tombstones))
+    validate_questioned_test_authority(
+        repository_includes,
+        exclusions,
+        authority_universe,
+        frozen_content_identities={path: inventory_by_path[path] for path in QUESTIONED_TESTS if path in inventory_by_path},
+    )
     module_to_path = _module_map(paths)
     edges_by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
     test_metadata: dict[str, dict[str, Any]] = {}
     for path in paths:
+        if inventory_by_path[path].get("existence_state") == "TOMBSTONE":
+            continue
         suffix = PurePosixPath(path).suffix.casefold()
         if suffix == ".py":
             edges, metadata = _python_edges(root, path, path_set, module_to_path, configuration)
@@ -648,9 +879,20 @@ def derive_repository_selection(
             "artifact_class": path_class,
             "terminal_disposition": disposition,
             "governing_rule": rule_id,
+            "rule_registry_blob": registry_bindings["selection_rule_registry_blob"],
             "authority": authority,
+            "authority_identity": semantic_identity(authority),
             "rationale": rationale,
             "evidence": evidence,
+            "evidence_identities": [semantic_identity(item) for item in evidence],
+            "source_identity": semantic_identity({
+                "canonical_path": path,
+                "existence_state": inventory_by_path[path].get("existence_state", "PRESENT"),
+                "raw_sha256": inventory_by_path[path].get("raw_sha256"),
+                "parent_git_blob": inventory_by_path[path].get("parent_git_blob"),
+                "index_git_blob": inventory_by_path[path].get("index_git_blob"),
+                "computed_git_blob": inventory_by_path[path].get("computed_git_blob"),
+            }),
             "capture_form": capture_form,
             "existence_state": existence,
             "external_root_id": None,
@@ -702,9 +944,13 @@ def derive_repository_selection(
             "artifact_class": entry["class"] if entry else "external-runtime-dependency",
             "terminal_disposition": disposition,
             "governing_rule": rule_id,
+            "rule_registry_blob": registry_bindings["selection_rule_registry_blob"],
             "authority": authority,
+            "authority_identity": semantic_identity(authority),
             "rationale": rationale,
             "evidence": evidence,
+            "evidence_identities": [semantic_identity(item) for item in evidence],
+            "source_identity": semantic_identity(entry if entry is not None else {"artifact_key": key, "dependency": "external"}),
             "capture_form": capture_form,
             "existence_state": existence,
             "external_root_id": root_id,
@@ -718,14 +964,18 @@ def derive_repository_selection(
     obligations.sort(key=lambda item: item["obligation_id"])
     sets = validate_terminal_dispositions(universe, dispositions, obligations)
     ensure_all_questioned_tests(sets["INCLUDE"])
+    for mandatory_path in QUESTIONED_TESTS:
+        metadata = test_metadata.get(mandatory_path, {})
+        require(metadata.get("is_test") is True and bool(metadata.get("test_functions")), "QUESTIONED_TEST_RELEVANCE_SIGNAL", mandatory_path)
     relevant_edges = sorted(
         [edge for source in selected for edge in edges_by_source.get(source, [])],
         key=lambda item: (item["source_path"], item["source_location"], item["edge_type"], item["literal_or_declared_target"]),
     )
-    return {
+    result = {
         "schema_version": "2.0.0-DRAFT",
         "canonical_serialization": "RANDLE-CAPTURE-CJSON-1",
         "draft_selection_version": DRAFT_SELECTION_VERSION,
+        "inventory": inventory,
         "enumeration_universe": universe,
         "dependency_edges": relevant_edges,
         "terminal_dispositions": dispositions,
@@ -737,7 +987,15 @@ def derive_repository_selection(
         "excluded_set_sha256": semantic_identity(sets["EXCLUDE"]),
         "separately_bound_set_sha256": semantic_identity(sets["SEPARATE_AND_BIND"]),
         "disposition_set_sha256": semantic_identity(dispositions),
+        "enumeration_universe_sha256": semantic_identity(universe),
+        "binding_obligation_set_sha256": semantic_identity(obligations),
+        "include_registry_blob": registry_bindings["include_registry_blob"],
+        "exclusion_registry_blob": registry_bindings["exclusion_registry_blob"],
+        "selection_rule_registry_blob": registry_bindings["selection_rule_registry_blob"],
+        "boundary_configuration_blob": registry_bindings["boundary_configuration_blob"],
     }
+    validate_terminal_result(result)
+    return result
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -747,6 +1005,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--exclusion-registry", type=Path, required=True)
     parser.add_argument("--rule-registry", type=Path, required=True)
     parser.add_argument("--configuration", type=Path, required=True)
+    parser.add_argument("--authority-universe", type=Path, required=True)
+    parser.add_argument("--registry-bindings", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         result = derive_repository_selection(
@@ -755,6 +1015,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.loads(args.exclusion_registry.read_text(encoding="utf-8")),
             json.loads(args.rule_registry.read_text(encoding="utf-8")),
             json.loads(args.configuration.read_text(encoding="utf-8")),
+            authority_universe=json.loads(args.authority_universe.read_text(encoding="utf-8")),
+            registry_bindings=json.loads(args.registry_bindings.read_text(encoding="utf-8")),
         )
     except (BoundaryError, OSError, json.JSONDecodeError) as exc:
         print(str(exc), file=sys.stderr)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Long-path/ADS/Git-aware draft inventory generator for synthetic roots only."""
+"""Long-path/ADS/Git-aware draft inventory for fixtures and accepted read-only worktrees."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import argparse
 import ctypes
 import hashlib
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -18,13 +19,14 @@ from boundary_verifier_DRAFT import (
     BoundaryError,
     canonical_repository_path,
     semantic_identity,
+    require,
     sha256_bytes,
     stored_json_bytes,
     validate_path_set,
 )
 
 
-DRAFT_SCRIPT_VERSION = "2.0.0-DRAFT"
+DRAFT_SCRIPT_VERSION = "3.0.0-DRAFT"
 FORBIDDEN_ROOTS = (
     Path(r"C:\Webhook\RandleSystem"),
     Path(r"C:\Users\Trader\OneDrive\RandleRuntimeData"),
@@ -32,6 +34,13 @@ FORBIDDEN_ROOTS = (
 FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
 ERROR_HANDLE_EOF = 38
 INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+FILE_READ_EA = 0x0008
+FILE_READ_ATTRIBUTES = 0x0080
+FILE_SHARE_READ = 0x00000001
+FILE_SHARE_WRITE = 0x00000002
+FILE_SHARE_DELETE = 0x00000004
+OPEN_EXISTING = 3
+FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 
 
 class InventoryError(BoundaryError):
@@ -64,6 +73,25 @@ def assert_synthetic_root(root: Path) -> None:
         raise InventoryError("FIXTURE_MARKER_REQUIRED", str(marker))
 
 
+def assert_governed_read_only_root(root: Path, accepted_commit: str) -> None:
+    """Permit an exact, clean, non-production worktree for read-only derivation."""
+
+    resolved = root.resolve(strict=True)
+    for forbidden in FORBIDDEN_ROOTS:
+        if _same_root(resolved, forbidden):
+            raise InventoryError("PRODUCTION_ROOT_REFUSED", str(resolved))
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", accepted_commit or ""):
+        raise InventoryError("GOVERNED_REPOSITORY_COMMIT", accepted_commit)
+    if not _is_git_worktree(resolved):
+        raise InventoryError("GOVERNED_REPOSITORY_REQUIRED", str(resolved))
+    head = _run_git(resolved, ["rev-parse", "HEAD"]).stdout.decode("ascii").strip().lower()
+    if head != accepted_commit:
+        raise InventoryError("GOVERNED_REPOSITORY_HEAD", f"{head}!={accepted_commit}")
+    status = _run_git(resolved, ["status", "--porcelain=v2", "-z", "--untracked-files=all"]).stdout
+    if status:
+        raise InventoryError("GOVERNED_REPOSITORY_DIRTY", status.hex().upper())
+
+
 def _is_reparse(stat_result: os.stat_result) -> bool:
     return bool(getattr(stat_result, "st_file_attributes", 0) & FILE_ATTRIBUTE_REPARSE_POINT)
 
@@ -78,6 +106,12 @@ def alternate_data_streams(path: Path) -> list[str]:
         _fields_ = [("StreamSize", ctypes.c_longlong), ("cStreamName", ctypes.c_wchar * 296)]
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p]
+    create_file.restype = ctypes.c_void_p
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [ctypes.c_void_p]
+    close_handle.restype = ctypes.c_bool
     find_first = kernel32.FindFirstStreamW
     find_first.argtypes = [ctypes.c_wchar_p, ctypes.c_int, ctypes.POINTER(WIN32_FIND_STREAM_DATA), ctypes.c_uint]
     find_first.restype = ctypes.c_void_p
@@ -88,8 +122,23 @@ def alternate_data_streams(path: Path) -> list[str]:
     find_close.argtypes = [ctypes.c_void_p]
     find_close.restype = ctypes.c_bool
 
+    governed_path = extended_length_path(path)
+    access_handle = create_file(
+        governed_path,
+        FILE_READ_EA | FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        None,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS,
+        None,
+    )
+    if access_handle == INVALID_HANDLE_VALUE:
+        raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:access-not-proven:winerror={ctypes.get_last_error()}")
+    if not close_handle(access_handle):
+        raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:access-handle-close:winerror={ctypes.get_last_error()}")
+
     data = WIN32_FIND_STREAM_DATA()
-    handle = find_first(extended_length_path(path), 0, ctypes.byref(data), 0)
+    handle = find_first(governed_path, 0, ctypes.byref(data), 0)
     if handle == INVALID_HANDLE_VALUE:
         error = ctypes.get_last_error()
         if error == ERROR_HANDLE_EOF:
@@ -123,26 +172,46 @@ def _stat_identity(value: os.stat_result) -> dict[str, Any]:
     }
 
 
+def _ads_content_identities(path: Path, stream_names: list[str]) -> list[dict[str, Any]]:
+    identities: list[dict[str, Any]] = []
+    for stream_name in stream_names:
+        suffix = stream_name[:-6] if stream_name.endswith(":$DATA") else stream_name
+        try:
+            with open(extended_length_path(path) + suffix, "rb") as handle:
+                payload = handle.read()
+        except (OSError, PermissionError) as exc:
+            raise InventoryError("ADS_ENUMERATION_FAILED", f"{path}:{stream_name}:{exc}") from exc
+        identities.append({"stream_name": stream_name, "byte_size": len(payload), "sha256": sha256_bytes(payload)})
+    return identities
+
+
 def stable_read(
     path: Path,
     mutation_hook: Callable[[Path], None] | None = None,
     ads_probe: Callable[[Path], list[str]] = alternate_data_streams,
-) -> tuple[bytes, os.stat_result, os.stat_result, list[str]]:
+) -> dict[str, Any]:
     before = os.lstat(extended_length_path(path))
     if stat.S_ISLNK(before.st_mode) or _is_reparse(before):
         raise InventoryError("REPARSE_POINT_AMBIGUITY", str(path))
     if not stat.S_ISREG(before.st_mode):
         raise InventoryError("UNSUPPORTED_FILE_TYPE", str(path))
     streams_before = ads_probe(path)
+    stream_identities_before = _ads_content_identities(path, streams_before)
     try:
         with open(extended_length_path(path), "rb") as handle:
-            data = handle.read()
+            first_data = handle.read()
     except PermissionError as exc:
         raise InventoryError("PERMISSION_DENIED", str(path)) from exc
     if mutation_hook is not None:
         mutation_hook(path)
     streams_after = ads_probe(path)
-    if streams_before != streams_after:
+    stream_identities_after = _ads_content_identities(path, streams_after)
+    try:
+        with open(extended_length_path(path), "rb") as handle:
+            second_data = handle.read()
+    except PermissionError as exc:
+        raise InventoryError("PERMISSION_DENIED", str(path)) from exc
+    if streams_before != streams_after or stream_identities_before != stream_identities_after:
         raise InventoryError("ADS_MUTATED_DURING_SCAN", f"{path}:{streams_before}->{streams_after}")
     if streams_after:
         raise InventoryError("ALTERNATE_DATA_STREAM", f"{path}:{streams_after}")
@@ -150,9 +219,20 @@ def stable_read(
     stable_fields = ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns")
     if any(getattr(before, field, None) != getattr(after, field, None) for field in stable_fields):
         raise InventoryError("FILE_MUTATED_DURING_SCAN", str(path))
-    if len(data) != before.st_size:
+    if len(first_data) != before.st_size or len(second_data) != after.st_size:
         raise InventoryError("SHORT_READ", str(path))
-    return data, before, after, streams_after
+    if sha256_bytes(first_data) != sha256_bytes(second_data):
+        raise InventoryError("FILE_CONTENT_MUTATED_DURING_SCAN", str(path))
+    return {
+        "first_data": first_data,
+        "second_data": second_data,
+        "first_stat": before,
+        "second_stat": after,
+        "streams_first": streams_before,
+        "streams_second": streams_after,
+        "stream_identities_first": stream_identities_before,
+        "stream_identities_second": stream_identities_after,
+    }
 
 
 def _walk(root: Path, relative: tuple[str, ...] = ()) -> Iterator[tuple[Path, str]]:
@@ -183,7 +263,7 @@ def _walk(root: Path, relative: tuple[str, ...] = ()) -> Iterator[tuple[Path, st
 
 
 def _run_git(root: Path, args: list[str], *, input_bytes: bytes | None = None, env: Mapping[str, str] | None = None, check: bool = True) -> subprocess.CompletedProcess[bytes]:
-    command = ["git", "-c", "core.longpaths=true", "-C", str(root), *args]
+    command = ["git", "-c", "core.longpaths=true", "-c", f"safe.directory={root.as_posix()}", "-C", str(root), *args]
     merged = os.environ.copy()
     if env:
         merged.update(env)
@@ -225,14 +305,137 @@ def _git_status(root: Path, relative: str) -> dict[str, Any]:
     return {"porcelain_v2_hex": raw.hex().upper(), "state": state, "tracked": tracked}
 
 
-def _index_blob(root: Path, relative: str) -> str | None:
+def _index_entry(root: Path, relative: str) -> tuple[str | None, str | None]:
     raw = _run_git(root, ["ls-files", "--stage", "--", relative]).stdout.decode("utf-8", "replace").strip()
-    return raw.split()[1] if raw else None
+    return (raw.split()[0], raw.split()[1]) if raw else (None, None)
 
 
-def _parent_blob(root: Path, relative: str) -> str | None:
-    process = _run_git(root, ["rev-parse", "--verify", f"HEAD:{relative}"], check=False)
-    return process.stdout.decode("ascii").strip() if process.returncode == 0 else None
+def _parent_entry(root: Path, relative: str) -> tuple[str | None, str | None]:
+    process = _run_git(root, ["ls-tree", "HEAD", "--", relative], check=False)
+    raw = process.stdout.decode("utf-8", "replace").strip()
+    if process.returncode != 0 or not raw:
+        return None, None
+    header = raw.split("\t", 1)[0].split()
+    return header[0], header[2]
+
+
+def _git_tree_entries(root: Path) -> dict[str, tuple[str, str]]:
+    process = _run_git(root, ["ls-tree", "-rz", "--full-tree", "HEAD"], check=False)
+    if process.returncode != 0:
+        return {}
+    result: dict[str, tuple[str, str]] = {}
+    for record in process.stdout.split(b"\0"):
+        if not record:
+            continue
+        header, raw_path = record.split(b"\t", 1)
+        mode, kind, oid = header.decode("ascii").split()
+        if kind == "blob":
+            result[raw_path.decode("utf-8", "surrogateescape")] = (mode, oid)
+    return result
+
+
+def _effective_clean_filter_identity(root: Path, attributes: Mapping[str, str]) -> dict[str, Any]:
+    """Bind every repository configuration value capable of changing clean bytes."""
+    keys = ["core.autocrlf", "core.eol", "core.safecrlf"]
+    driver = attributes.get("filter")
+    if driver and driver not in {"set", "unset", "unspecified"}:
+        keys.extend(
+            [
+                f"filter.{driver}.clean",
+                f"filter.{driver}.process",
+                f"filter.{driver}.required",
+            ]
+        )
+    values: dict[str, str | None] = {}
+    for key in keys:
+        process = _run_git(root, ["config", "--get", key], check=False)
+        values[key] = process.stdout.decode("utf-8", errors="strict").rstrip("\r\n") if process.returncode == 0 else None
+    material = {
+        "attributes": {key: attributes[key] for key in sorted(attributes) if key in {"text", "eol", "working-tree-encoding", "filter"}},
+        "configuration": values,
+    }
+    return {"material": material, "sha256": semantic_identity(material)}
+
+
+def _git_index_entries(root: Path) -> dict[str, tuple[str, str]]:
+    result: dict[str, tuple[str, str]] = {}
+    for record in _run_git(root, ["ls-files", "-s", "-z"]).stdout.split(b"\0"):
+        if not record:
+            continue
+        header, raw_path = record.split(b"\t", 1)
+        mode, oid, stage = header.decode("ascii").split()
+        if stage == "0":
+            result[raw_path.decode("utf-8", "surrogateescape")] = (mode, oid)
+    return result
+
+
+def _git_rename_pairs(root: Path) -> dict[str, str]:
+    raw = _run_git(root, ["diff", "HEAD", "--name-status", "-z", "-M"], check=False).stdout
+    parts = [item for item in raw.split(b"\0") if item]
+    result: dict[str, str] = {}
+    index = 0
+    while index < len(parts):
+        status = parts[index].decode("ascii", "replace")
+        index += 1
+        if status.startswith("R") or status.startswith("C"):
+            require(index + 1 < len(parts), "GIT_RENAME_PARSE", status)
+            source = parts[index].decode("utf-8", "surrogateescape")
+            destination = parts[index + 1].decode("utf-8", "surrogateescape")
+            result[source] = destination
+            index += 2
+        else:
+            index += 1
+    return result
+
+
+def _tombstone_record(
+    relative: str,
+    object_format: str,
+    attributes_sha256: str,
+    parent: tuple[str, str] | None,
+    index: tuple[str, str] | None,
+    rename_destination: str | None,
+) -> dict[str, Any]:
+    staged_deleted = parent is not None and index is None
+    unstaged_deleted = index is not None
+    state = "RENAME_SOURCE_TOMBSTONE" if rename_destination else "STAGED_DELETION_TOMBSTONE" if staged_deleted else "UNSTAGED_DELETION_TOMBSTONE"
+    return {
+        "canonical_path": relative,
+        "path_sha256": sha256_bytes(relative.encode("utf-8")),
+        "raw_byte_size": None,
+        "raw_sha256": None,
+        "first_raw_byte_size": None,
+        "first_raw_sha256": None,
+        "second_raw_byte_size": None,
+        "second_raw_sha256": None,
+        "pre_read_identity": None,
+        "post_read_identity": None,
+        "file_mode": int((index or parent or ("0", ""))[0], 8),
+        "filesystem_attributes": None,
+        "git_status": {"porcelain_v2_hex": "", "state": state, "tracked": True, "staged_deleted": staged_deleted, "unstaged_deleted": unstaged_deleted},
+        "parent_git_blob": parent[1] if parent else None,
+        "parent_git_mode": parent[0] if parent else None,
+        "index_git_blob": index[1] if index else None,
+        "index_git_mode": index[0] if index else None,
+        "working_tree_git_cleaned_sha256": None,
+        "working_tree_git_cleaned_size": None,
+        "computed_git_blob": None,
+        "repository_object_format": object_format,
+        "line_ending_profile": None,
+        "encoding_profile": None,
+        "gitattributes_sha256": attributes_sha256,
+        "git_attribute_results": {},
+        "symlink": False,
+        "reparse_point": False,
+        "external_root_id": None,
+        "alternate_data_streams": [],
+        "alternate_data_stream_identities_first": [],
+        "alternate_data_stream_identities_second": [],
+        "accessible": True,
+        "stable_read": True,
+        "existence_state": "TOMBSTONE",
+        "rename_destination": rename_destination,
+    }
 
 
 def _clean_git_identity(root: Path, relative: str, raw_bytes: bytes, object_format: str) -> tuple[bytes, str]:
@@ -298,37 +501,55 @@ def enumerate_inventory(
     attributes_file = root / ".gitattributes"
     attributes_bytes = attributes_file.read_bytes() if attributes_file.is_file() else b""
     attributes_sha256 = sha256_bytes(attributes_bytes)
+    attributes_parent_blob = _parent_entry(root, ".gitattributes")[1] if git_worktree else None
+    attributes_computed_blob = _raw_blob_identity(attributes_bytes, object_format) if attributes_bytes else None
+    clean_filter_cache: dict[tuple[tuple[str, str], ...], dict[str, Any]] = {}
     artifacts: list[dict[str, Any]] = []
     for path, relative in _walk(root):
         if relative == ".boundary_fixture_root":
             continue
         if relative in denied:
             raise InventoryError("PERMISSION_DENIED", relative)
-        data, before, after, streams = stable_read(path, hooks.get(relative), ads_probe)
+        stable = stable_read(path, hooks.get(relative), ads_probe)
+        data = stable["second_data"]
+        before = stable["first_stat"]
+        after = stable["second_stat"]
+        streams = stable["streams_second"]
         if git_worktree:
             cleaned, blob = _clean_git_identity(root, relative, data, object_format)
             status_identity = _git_status(root, relative)
-            parent_blob = _parent_blob(root, relative)
-            index_blob = _index_blob(root, relative)
+            parent_mode, parent_blob = _parent_entry(root, relative)
+            index_mode, index_blob = _index_entry(root, relative)
             attributes = _git_attributes(root, relative)
+            clean_key = tuple(sorted((key, value) for key, value in attributes.items() if key in {"text", "eol", "working-tree-encoding", "filter"}))
+            if clean_key not in clean_filter_cache:
+                clean_filter_cache[clean_key] = _effective_clean_filter_identity(root, attributes)
+            clean_filter_identity = clean_filter_cache[clean_key]
         else:
             cleaned, blob = data, _raw_blob_identity(data, object_format)
             status_identity = {"porcelain_v2_hex": "", "state": "UNTRACKED_SYNTHETIC", "tracked": False}
-            parent_blob = index_blob = None
+            parent_mode = index_mode = parent_blob = index_blob = None
             attributes = {}
+            clean_filter_identity = {"material": {"attributes": {}, "configuration": {}}, "sha256": semantic_identity({"attributes": {}, "configuration": {}})}
         artifacts.append(
             {
                 "canonical_path": relative,
                 "path_sha256": sha256_bytes(relative.encode("utf-8")),
                 "raw_byte_size": len(data),
                 "raw_sha256": sha256_bytes(data),
+                "first_raw_byte_size": len(stable["first_data"]),
+                "first_raw_sha256": sha256_bytes(stable["first_data"]),
+                "second_raw_byte_size": len(stable["second_data"]),
+                "second_raw_sha256": sha256_bytes(stable["second_data"]),
                 "pre_read_identity": _stat_identity(before),
                 "post_read_identity": _stat_identity(after),
                 "file_mode": stat.S_IMODE(after.st_mode),
                 "filesystem_attributes": int(getattr(after, "st_file_attributes", 0)),
                 "git_status": status_identity,
                 "parent_git_blob": parent_blob,
+                "parent_git_mode": parent_mode,
                 "index_git_blob": index_blob,
+                "index_git_mode": index_mode,
                 "working_tree_git_cleaned_sha256": sha256_bytes(cleaned),
                 "working_tree_git_cleaned_size": len(cleaned),
                 "computed_git_blob": blob,
@@ -336,15 +557,31 @@ def enumerate_inventory(
                 "line_ending_profile": _line_profile(data),
                 "encoding_profile": _encoding_profile(data),
                 "gitattributes_sha256": attributes_sha256,
+                "gitattributes_git_blob": attributes_parent_blob,
+                "gitattributes_computed_git_blob": attributes_computed_blob,
                 "git_attribute_results": attributes,
+                "effective_clean_filter_identity": clean_filter_identity,
                 "symlink": False,
                 "reparse_point": False,
                 "external_root_id": None,
                 "alternate_data_streams": streams,
+                "alternate_data_stream_identities_first": stable["stream_identities_first"],
+                "alternate_data_stream_identities_second": stable["stream_identities_second"],
                 "accessible": True,
                 "stable_read": True,
+                "existence_state": "PRESENT",
+                "rename_destination": None,
             }
         )
+    if git_worktree:
+        parent_entries = _git_tree_entries(root)
+        index_entries = _git_index_entries(root)
+        rename_pairs = _git_rename_pairs(root)
+        present = {item["canonical_path"] for item in artifacts}
+        governed_missing = sorted((set(parent_entries) | set(index_entries) | set(rename_pairs)) - present, key=lambda item: item.encode("utf-8"))
+        for relative in governed_missing:
+            canonical_repository_path(relative)
+            artifacts.append(_tombstone_record(relative, object_format, attributes_sha256, parent_entries.get(relative), index_entries.get(relative), rename_pairs.get(relative)))
     ordered = sorted(artifacts, key=lambda item: item["canonical_path"].encode("utf-8"))
     validate_path_set(item["canonical_path"] for item in ordered)
     identity_records = [
@@ -352,15 +589,15 @@ def enumerate_inventory(
         for item in ordered
     ]
     return {
-        "schema_version": "2.0.0-DRAFT",
+        "schema_version": "3.0.0-DRAFT",
         "canonical_serialization": "RANDLE-CAPTURE-CJSON-1",
         "draft_script_version": DRAFT_SCRIPT_VERSION,
-        "enumeration_method": "Python os.scandir over extended-length paths; lstat/no-follow; real FindFirstStreamW/FindNextStreamW; stable pre/post stat and ADS reads",
+        "enumeration_method": "Python os.scandir over extended-length paths; lstat/no-follow; real FindFirstStreamW/FindNextStreamW; two raw content reads and two ADS name/content scans",
         "artifacts": ordered,
         "inventory_sha256": semantic_identity(identity_records),
         "artifact_path_set_sha256": semantic_identity([item["canonical_path"] for item in ordered]),
         "total_artifact_count": len(ordered),
-        "total_bytes": sum(item["raw_byte_size"] for item in ordered),
+        "total_bytes": sum(item["raw_byte_size"] or 0 for item in ordered),
         "repository_object_format": object_format,
         "gitattributes_sha256": attributes_sha256,
     }

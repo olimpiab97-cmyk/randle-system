@@ -1,58 +1,68 @@
-# Canonical Delta — Current Production Baseline Capture Boundary
+# Canonical Delta: Current Production Baseline Capture Boundary R2
 
-Status: **REMEDIATED DRAFT — NOT CANONICAL — PENDING NEW INDEPENDENT REVIEW**
+Status: proposed draft delta; no canonical incorporation.
 
-## Proposed new normative concepts
+## Proposed normative authority
 
-1. A capture boundary is a deterministic fixed point over entrypoints, imports, runtime references, launch references, tests, fixtures, governed registries, and external dependencies.
-2. Git status state is orthogonal to production relevance; tracked, modified, untracked, and ignored paths use the same relevance rules.
-3. Every enumerated path receives exactly one terminal disposition, with conflicts and unknowns stopping the attempt.
-4. The specification, scripts, registries, environment, repository state, generated inventory, and external evidence are frozen before Pass A.
-5. Raw disk identity and Git-cleaned/blob identity are distinct and both are preserved.
-6. Attempt history is append-only and distinguishes no-artifact, pre-Pass-A, unstable, aborted, rejected, successful, superseded, and reviewed attempts.
-7. Durable evidence is enumerated with extended-length Windows paths and bound by complete content identities.
-8. Every test outcome—including `SUBFAILED`, `XFAIL`, and `XPASS`—is individually preserved and source-reconciled.
-9. Every enumerated artifact remains visible in a terminal-disposition inventory whose three disjoint sets reconcile to the enumeration universe.
-10. Package authority derives registries, configuration, selector, inventory generator, and verifier identities from committed Git objects plus current raw bytes.
-11. Attempt and evidence completeness depend on independently frozen universes, not self-reported mutable counts.
-12. Positive or ambiguous authority language anywhere in the governed package is a semantic verification failure.
+The draft proposes an accepted-specification identity made from committed Git-object bytes, package-local LF attributes, complete schemas, registries, parser policy, terminal dispositions, evidence policy, preserved attempt-prefix policy, authorization state, verifier interface, and semantic traceability.
 
-## Machine-enforced controls in this remediation
+It also proposes a separate later operational-package identity and a compatibility receipt linking that package to the unchanged accepted specification.
 
-- Python AST, PowerShell, batch/shell, JSON, YAML, TOML, and INI parser fixtures emit resolved dependency edges or fail closed.
-- Pytest fixtures, markers, parameterization, unittest discovery, route/handler/factory/plugin loading, subprocess targets, static resources, replay/scenario data, and configuration targets are exercised.
-- All paths receive `INCLUDE`, `EXCLUDE`, or `SEPARATE_AND_BIND`; exclusions and separate bindings cannot disappear.
-- The five questioned tests remain exact normative inclusions even when relevance signals, registry entries, path case, names, or proposed exclusions are mutated.
-- Real NTFS stream enumeration, extended-length paths, long-path sentinels, reparse points, inaccessible paths, and stable reads are tested on disposable roots.
-- Draft 2020-12 schemas and complete instances are independently validated with pinned `jsonschema` 4.25.1 and then semantically validated.
-- Every freeze and multi-pass field is mutation-tested; the historical 753-outcome classification is complete and source-bound.
-- Static independent expectations and observation roots detect expectation, observation, and enforcing-code drift.
+## Demonstrated machine controls
 
-## Clarified existing concepts
+- checkout-independent canonical bytes with actual `core.autocrlf` true and false reconciliation;
+- command-scoped long-path Git access and an actual long-path checkout;
+- Python and PowerShell AST parsing, actual JSON/YAML/TOML/INI parsing, and bounded fail-closed launcher grammars;
+- complete independently regenerated dispositions;
+- mandatory-test policy derived from actual committed package blobs in an exact clean accepted-commit worktree and applied to a separately governed physical inventory root;
+- one schema/semantic/authority pipeline with object-format-conditioned Git identifiers;
+- actual Windows ADS enumeration and two-read content stability;
+- independent freeze reconstruction;
+- preserved-prefix ledger ancestry;
+- independently committed required-evidence policy;
+- actual historical-log classification;
+- controlled-repository multi-pass observation;
+- helper-free raw observations compared with static expectations;
+- structured authorization state and governed-package text scan;
+- field, rule, function, case, expectation, and observation traceability; and
+- distinct accepted-specification and later operational-package interfaces.
 
-- A capture proves disk state and provenance, not implementation quality or deployment/trading readiness.
-- Tests and failures are evidence; classification never converts a failure to a pass.
-- External runtime/evidence dependencies remain external authority but must be content-bound when required for recovery.
-- Governance documents are not production implementation; capture-critical governance records are separately bound.
-- Multi-pass stability includes specification, scripts, status, index, branch, external evidence, raw bytes, and clean bytes.
+## Controls still deferred
 
-## Rejected prior practices
+The future operational capture script and supporting modules do not exist in this package. A real freeze package, future attempt ledger extension, production inventory, production dispositions, durable capture evidence, and actual capture passes are deferred. Their work remains withheld.
 
-- Hard-coded final allowlists as the sole proof of capture completeness.
-- Undocumented manual removal of paths selected by preliminary discovery.
-- Predetermining an inventory count and selecting toward it.
-- Omitting untracked or ignored files solely because of Git status.
-- Unbound preliminary/final scripts or helper logic.
-- Filename-only references to durable evidence.
-- Non-long-path-aware enumeration that silently skips artifacts.
-- Recording only ordinary `FAILED` nodes while omitting `SUBFAILED` outcomes.
-- Collapsing a no-artifact attempt into an unstable artifact-producing attempt.
-- Reusing attempt IDs or overwriting evidence after instability.
+## Rejected historical practices
 
-## Future incorporation set
+The following practices have no authority:
 
-If independently accepted, a later governed task must incorporate the accepted specification into `Architecture/README.md`, `Architecture/06_Randle_AI_Modernization_Charter.md`, `Architecture/07_Randle_AI_Modernization_Roadmap.md`, `CODEX_TASK_TEMPLATE.md`, and the accepted successor of `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md`. That task must preserve the independent review identity and must not retroactively accept the rejected capture.
+- transformed checkout bytes treated as committed package bytes;
+- regex or line splitting represented as full parser support;
+- silent omission of extensionless literal targets;
+- caller-supplied dispositions, inventories, evidence roots, ledger universes, or pass states treated as authority;
+- one-read content stability;
+- self-rebuilt evidence and ledger roots;
+- fabricated historical outcome arithmetic;
+- a negative-assertion helper capable of being disabled without changing PASS;
+- observation labels substituted for actual status, code, surface, evidence, and authority;
+- blacklist-only authorization scanning;
+- identifier-set equality substituted for semantic traceability; and
+- one self-referential identity used for both the specification and later operational package.
 
-## Remaining draft matters
+## Future canonical targets
 
-The specification text, schemas, registries, rule registry, parser expectations, fixture scripts, and verification results remain draft pending new independent review. The fixture scripts are enforcement evidence, not the future operational capture script; that operational script remains intentionally absent and must later be separately committed or content-addressed and frozen. No repository-specific future inventory exists, no capture has run, and no architecture, merge, deployment, restart, migration, cutover, trading, Bucket, Phase 3C2, or R11 acceptance authority is created.
+Any later canonical-incorporation task would need to assess and explicitly update or dispose of:
+
+- `Architecture/README.md`
+- `Architecture/06_Randle_AI_Modernization_Charter.md`
+- `Architecture/07_Randle_AI_Modernization_Roadmap.md`
+- `Architecture/10_Randle_AI_Architecture_Traceability_Specification.md`
+- `Architecture/12_Randle_AI_Development_Process_Specification.md`
+- `CODEX_TASK_TEMPLATE.md`
+- the accepted successor to the Runtime Recovery Verification Specification
+- `.gitattributes` or an equivalent checkout-independent byte-authority policy
+
+No target is amended by this remediation.
+
+## Authorization boundary
+
+Baseline capture and operational capture-script work remain withheld. Merge and canonical incorporation remain withheld. Production implementation, deployment, service restart, runtime migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, and Phase 3C1-R11 acceptance remain withheld. Bucket 0 remains incomplete. Bucket 1 remains blocked.

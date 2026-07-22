@@ -1,51 +1,55 @@
-# Traceability Matrix — Current Production Baseline Capture Boundary Specification
+# Traceability Narrative: Current Production Baseline Capture Boundary R2
 
-Status: **REMEDIATED DRAFT — NOT CANONICAL — PENDING NEW INDEPENDENT REVIEW**
+Status: draft narrative; machine authority is `semantic_traceability_DRAFT.json`.
 
-The machine-readable authority is `Architecture/Audits/2026-07-21_Current_Production_Baseline_Capture_Boundary_Specification_DRAFT/traceability_matrix_DRAFT.json`. It maps B1–B5, BR-01–BR-13, clauses 1–18, schemas, machine rules, enforcing functions, static expectations, fresh observations, and future capture obligations. Prefix routing is deterministic: the verifier expands every declared case prefix against the exact fixture case set and rejects missing or orphan cases.
+## Trace chain
 
-## Historical finding prevention
+Every R2 row binds:
 
-| Finding | Normative prevention | Executable evidence | Future obligation |
+1. normative requirement and specification clause;
+2. schema family and exact JSON Pointer for every property or conditional;
+3. selection-rule registry entry;
+4. source file and exact function symbol;
+5. invoked positive and mutation cases;
+6. static expectation, including exact terminal disposition, status, code, surface, evidence, and authority result;
+7. fresh raw observation; and
+8. future operational obligation.
+
+Reverse checks require every schema pointer, selection-rule ID, and expected enforcing surface to have authority. The verifier parses source files with the Python AST, proves each mapped symbol exists, and proves every mapped symbol is invoked by a case expecting that exact surface. No `ALL_DECLARED_FIELDS` placeholder is valid.
+
+## R2 mapping summary
+
+| Requirement | Primary schema families | Primary enforcing symbols | Real-surface proof |
 |---|---|---|---|
-| B1 — incomplete durable manifest | Clauses 8 and 12; real extended-path enumeration and two exact Pine sentinels | `POS-INVENTORY-LONG-*`, `MUT-LONG-*`, inaccessible and changed-file cases | Select the evidence root only with complete sentinel and manifest reconciliation |
-| B2 — missing immutable evidence binding | Clauses 9, 10, and 13; complete frozen evidence universe and package Git-blob authority | `POS-EVIDENCE-*`, `MUT-EVIDENCE-*`, `POS-PACKAGE-*`, `MUT-PACKAGE-*` | Freeze every recovery dependency and bind it in committed provenance |
-| B3 — incomplete failure classification | Clause 14; nonempty source-bound classification for all governed failure kinds | `POS-CLASSIFICATION-571-156-23-3`, `MUT-CLASSIFICATION-*` | Preserve the actual future outcomes, including every `SUBFAILED` |
-| B4 — unreconciled attempt provenance | Clause 11; independently frozen append-only attempt universe | `POS-ATTEMPT-*`, `MUT-ATTEMPT-*` | Append every initiated attempt and retain truthful incident facts |
-| B5 — nonreproducible boundary | Clauses 3–10; parser closure, exact dispositions, five-test authority, package binding, and freeze | `POS-SELECTION-*`, `POS-CLOSURE-*`, `MUT-CLOSURE-*`, `POS-FIVE-*`, `MUT-FIVE-*` | Derive the future count from the accepted frozen rules and disk state |
+| R2-01 | case, expectation, package JSON families | `derive_committed_package_authority`, `validate_package_checkout`, `verify_stored_canonical_json` | fresh autocrlf variants, long-path checkout, object/worktree mutations |
+| R2-02 | boundary configuration and rule registry | `derive_repository_selection`, `_config_edges`, `_lex_launch_lines` | AST/config parses and missing literal dependencies |
+| R2-03 | terminal disposition | `validate_terminal_dispositions`, `validate_terminal_against_authority` | independent universe and registry blobs |
+| R2-04 | include, exclusion, rule, boundary configuration | `assert_governed_read_only_root`, `derive_selection_from_accepted_specification`, `validate_questioned_test_authority` | exact accepted-commit policy worktree, separately governed inventory root, actual role blobs, and five files |
+| R2-05 | all 17 schema families | `validate_schema_and_instance`, `validate_governed_artifact` | paired schema and semantic invalid vectors |
+| R2-06 | boundary configuration | `alternate_data_streams`, `stable_read` | actual NTFS streams and transitions |
+| R2-07 | durable manifest and boundary | `stable_read`, `enumerate_inventory`, `verify_inventory` | actual two reads and Git clean filters |
+| R2-08 | freeze receipt and operational interface | `reconstruct_freeze_authority_v4`, `verify_freeze_claim_v4` | accepted and later disposable repositories |
+| R2-09 | attempt ledger and prefix authority | `validate_attempt_ledger_v4`, `validate_attempt_capture_authority_v4` | externally frozen prefix and chained roots |
+| R2-10 | evidence binding and policy | `validate_required_evidence_policy`, `validate_evidence_bindings_v4` | policy-vs-instance semantic mutations |
+| R2-11 | test classification | `parse_historical_log`, `validate_historical_record`, `validate_test_classification` | actual immutable 2,226,181-byte log |
+| R2-12 | freeze, boundary, manifest | `observe_controlled_repository_state`, `validate_multi_pass` | actual repositories and append-only observer |
+| R2-13 | case and expectation | `execute_raw`, `compare_observations`, `require_comparison_receipt` | force-success and comparison meta-mutations |
+| R2-14 | authorization state | `validate_authorization_state`, `validate_governance_package` | complete package scan and structured/text mutations |
+| R2-15 | semantic traceability | `validate_traceability_v4` | field, rule, symbol, case, expectation, observation mutations |
+| R2-16 | operational-package interface and freeze | `validate_operational_package_authority` | distinct later commit and compatibility mutations |
 
-## Independent-review remediation
+## BR-01 through BR-13 relationship
 
-| Finding | Clause(s) | Enforcing surface | Principal cases |
-|---|---:|---|---|
-| BR-01 closure incomplete | 4–5 | parser-backed selection fixed point | `POS-CLOSURE-*`, `POS-PARSER-*`, `POS-TEST-RELATION-*`, `MUT-CLOSURE-*` |
-| BR-02 dispositions absent | 3, 7 | terminal-disposition reconciliation | `POS-TERMINAL-*`, `MUT-DISPOSITION-*` |
-| BR-03 five-test bypass | 6, 7, 9 | exact registry authority plus committed package bindings | `POS-FIVE-*`, `MUT-FIVE-*`, `MUT-PACKAGE-*` |
-| BR-04 shallow schemas | 7, 9, 18 | pinned Draft 2020-12 plus semantic validation | `POS-SCHEMA-*`, `MUT-SCHEMA-*`, `MUT-REGISTRY-*` |
-| BR-05 ADS disabled | 2, 8, 12 | real `FindFirstStreamW`/`FindNextStreamW` | `MUT-ADS-*` |
-| BR-06 identity incomplete | 2, 8, 12 | full inventory/Git clean-filter model | `POS-INVENTORY-GIT-*`, `MUT-IDENTITY-*` |
-| BR-07 freeze incomplete | 9–10 | complete derived freeze receipt | `POS-FREEZE`, `MUT-FREEZE-*` |
-| BR-08 attempt completeness | 11 | frozen universe, predecessor chain, incident authority | `POS-ATTEMPT-*`, `MUT-ATTEMPT-*` |
-| BR-09 evidence omission | 13 | frozen path/role/class/count/root registry | `POS-EVIDENCE-*`, `MUT-EVIDENCE-*` |
-| BR-10 empty classification | 14, 18 | schema plus source/log semantic reconciliation | `POS-CLASSIFICATION-*`, `MUT-CLASSIFICATION-*` |
-| BR-11 stability incomplete | 15–16 | equality over every governed field | `POS-MULTIPASS`, `MUT-MULTIPASS-*` |
-| BR-12 overclaimed fixtures | 18 | static expectations, observation root, function/schema/case reverse trace | `POS-INDEPENDENCE-*`, `POS-TRACEABILITY-*`, code-binding mutations |
-| BR-13 authority leakage | 1, 17, 18 | semantic package-language scanner | `POS-GOVERNANCE-*`, `MUT-GOVERNANCE-*` |
+The R2 rows refine and supersede the earlier BR repair claims:
 
-## Reverse coverage
+- BR-01 through BR-04 are strengthened by R2-02 through R2-05.
+- BR-05 through BR-07 are strengthened by R2-06 through R2-08.
+- BR-08 through BR-10 are strengthened by R2-09 through R2-11.
+- BR-11 through BR-13 are strengthened by R2-12 through R2-14.
+- R2-01, R2-13, R2-15, and R2-16 address cross-cutting byte authority, observation independence, semantic trace, and future-package separation.
 
-The verifier independently requires:
+Exact field mappings, rule mappings, function mappings, and invoked case IDs are intentionally kept in the machine artifact so this narrative cannot silently redefine them.
 
-1. exactly findings BR-01 through BR-13;
-2. exactly normative clauses 1 through 18;
-3. expansion of requirement case IDs and prefixes to the complete fixture case set;
-4. equality between traced enforcing functions and the callable enforcement catalog;
-5. governance of every field in every one of the ten schema files through an `ALL_DECLARED_FIELDS` schema mapping;
-6. nonempty machine rules, expected result, observed result, and future obligation for every clause and finding; and
-7. no descriptive-only claim presented as enforcement.
+## Boundary
 
-The static expectation file enumerates each case individually. The positive and mutation vector files route those cases independently by explicit ID or bounded prefix. The result file binds the case set, expectation bytes, and observation semantics by SHA-256. Any missing reverse edge, altered expectation, altered observation, missing function, schema orphan, or untraced case is a blocking discrepancy.
-
-## Authority boundary
-
-This traceability record supplies draft review evidence only. It grants no permission for a baseline capture, merge, canonical incorporation, production implementation, deployment, service restart, runtime migration, NQ cutover, paper or live-money trading, Phase 3C2, Phase 3C1-R11 acceptance, Bucket 0 completion, or Bucket 1 work.
+This trace demonstrates draft enforcement only. It does not establish execution authority. Baseline capture and operational capture-script work remain withheld.

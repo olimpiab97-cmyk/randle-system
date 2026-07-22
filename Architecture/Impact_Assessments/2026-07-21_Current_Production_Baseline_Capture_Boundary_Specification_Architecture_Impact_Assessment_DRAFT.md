@@ -1,60 +1,72 @@
-# Architecture Impact Assessment — Current Production Baseline Capture Boundary Specification
+# Architecture Impact Assessment: Current Production Baseline Capture Boundary R2
 
-Status: **REMEDIATED DRAFT — NOT CANONICAL — PENDING NEW INDEPENDENT REVIEW**
-Assessment date: 2026-07-21
-Implementation, capture, deployment, restart, and trading authority: **None**
+Status: draft assessment; no canonical change.
 
-## Decision summary
+## Scope
 
-The proposed specification replaces operator-selected capture scope with a frozen, rule-derived, bidirectionally verified boundary. Its architectural effect is governance and provenance only: it defines what a later authorized capture must bind and how ambiguity stops that attempt. It does not change runtime architecture, production behavior, service topology, test authority, or deployment authority.
+This assessment covers specification, schema, draft verifier, fixtures, traceability, and provenance only. Production source, production tests, launchers, deployment files, configuration, runtime databases, runtime data, and operational capture scripting are outside the change set.
 
-## Impact by authority domain
+## Demonstrated impacts
 
-| Domain | Proposed impact | Authority effect | Principal risk and control |
-|---|---|---|---|
-| Governance | Introduces a draft boundary specification, governed registries, freeze gate, semantic authorization scanner, and attempt ledger | Draft only; new independent review required | False elevation to approval; machine scanning rejects positive or ambiguous authority language |
-| Repository provenance | Represents root, common directory, worktree, HEAD, index, status, raw bytes, real Git-clean-filter bytes, trees, modes, attributes, and blobs | Makes later capture claims reproducible | Identity gaps; schemas and full-field equality mutations stop on omission or change |
-| Production recovery | Makes the selected file/dependency set reproducible and prevents silent omitted active bytes | Improves future recovery evidence, not recovery authorization | Over- or under-capture; controlled by closure plus unknown-class stop |
-| Test authority | Parser-backed rules select production-relevant tests and preserve every governed outcome kind | Tests remain evidence, not approval | Manual test omission; exact five-test authority, content discovery, fixture ownership, and unknown-test stops are executable |
-| Runtime authority | Separates repository bytes from mutable runtime databases/data and external runtime dependencies | No runtime read or mutation authority is created | Accidental runtime access; controlled by separate authorization and stop behavior |
-| Deployment authority | Captures launcher/config dependencies when relevant but grants no deployment right | No deployment, restart, migration, or cutover authority | Conflating captured launcher with approval; controlled by purpose/authorization clauses |
-| Evidence durability | Requires long-path-safe manifests and a frozen complete evidence universe | Evidence becomes independently auditable in a later separately authorized capture | Real extended-path, sentinel, entry/class deletion, count, and semantic-root mutations are enforced |
-| Traceability | Links B1–B5 and BR-01–BR-13 to clauses, schemas, functions, independent expectations, observations, and future obligations | Enables independent review | Prose-only claims; reverse coverage rejects orphan clauses, fields, functions, and cases |
-| Operational safety | Requires writer-free, stable, isolated, multi-pass operation with zero runtime/deployment/restart indicators | No present operational authority | Full-field freeze and multi-pass mutation matrices, truthful incident facts, and authority failure are executable |
-| Future reproducibility | Defines canonical paths, serialization, inventories, environments, and mutation detection | Enables later exact reconstruction of capture decisions | Environment drift; controlled by frozen versions and identities |
+### Governance
 
-## Data and control-flow impact
+The package separates accepted-specification authority from later operational-package, freeze, and execution authorities. A machine-readable withholding artifact covers fifteen protected domains. A fail-closed scanner observes every accepted package role plus the derived fixture result and remediation report.
 
-The proposed future flow is:
+### Repository provenance
 
-`independently accepted specification prerequisite → separately authorized attempt ledger entry → complete disk/Git enumeration → relevance fixed point → exact classification → frozen inventory and receipt → Pass A → Pass B → final reconciliation → durable manifest → provenance commit → independent capture review`
+Committed Git blobs are the authoritative package bytes. The local attribute policy pins package text to LF. Actual Git-object access, clean-filter behavior, object format, branch, HEAD, parent, index, status, and attributes are observed with long-path-safe commands. Derived review results are excluded from the accepted-specification input root to prevent self-reference, while the eventual commit still preserves them as provenance.
 
-Every transition is gated by immutable identities. A failed gate records a terminal attempt and does not reuse its artifact directory.
+Accepted-specification Git-object derivation and physical inventory selection are separate authorities. Non-fixture inventory selection is read-only and is admitted only from an isolated non-production worktree that is clean and exactly at the separately frozen inventory commit. The active production root, a moved `HEAD`, and any dirty state are refused before inventory.
 
-## Compatibility and migration
+### Production recovery
 
-No production migration is required. Existing rejected capture commits `28a4faa8e6abf3c8b4e642c20ca6dc31c4991fc6` and `37c30269ce8fdc9cb0e62fe879058d8279e74799` remain historical evidence only. Recapture-report commit `8633a233480a76d76899d7d7e90ab72574f20c52` remains the provenance base for this draft branch. A future accepted specification can be bound by object identity from a separately based capture branch; it need not make the rejected capture canonical.
+The selection interface performs parser-backed dependency closure, complete terminal reconciliation, independent freeze reconstruction, and distinct external bindings. It makes no assertion about the correctness or operational fitness of production code.
 
-## Security and privacy
+### Test authority
 
-The boundary scanner can encounter secrets, browser profiles, runtime databases, and machine-specific paths. The specification therefore requires classification before content preservation, exact external-root authority, no runtime-data access without separate authorization, and evidence records that bind machine-specific locations only where necessary. A future implementation must define secret-redaction policy without weakening raw-byte identity; if raw bytes cannot be durably preserved under policy, capture stops.
+The five questioned tests are bound by exact authority and evidence tuples, physical paths, content identities, and committed rule/configuration/verifier blobs. The historical regression artifact is parsed from the actual immutable log rather than synthesized.
 
-## Canonical documents requiring future amendment if accepted
+### Runtime and deployment authority
 
-No canonical document is amended in this task. If the draft is independently accepted, the minimum future governed incorporation set is:
+The draft performs no runtime access and no production mutation. Runtime, deployment, restart, migration, cutover, and trading states remain withheld. Truthful future incident fields remain recordable and disqualify capture authority when true.
 
-1. `Architecture/README.md` — add the accepted specification to the authority/status index and point to its review record.
-2. `Architecture/06_Randle_AI_Modernization_Charter.md` — incorporate the frozen-boundary, complete-external-binding, and fail-closed evidence requirements into the charter’s evidence standard.
-3. `CODEX_TASK_TEMPLATE.md` — add the mandatory boundary-freeze, writer scan, attempt ledger, and independent-review gates for future baseline captures.
-4. The accepted successor of `Architecture/14_Randle_AI_Runtime_Recovery_Verification_Specification_DRAFT.md` — cross-reference complete outcome preservation and clarify that verification evidence does not approve captured implementation.
-5. `Architecture/07_Randle_AI_Modernization_Roadmap.md` — insert the independently accepted pre-capture boundary specification and freeze gate into recovery sequencing before any new baseline capture.
+### Evidence durability
 
-The Constitution, lifecycle, interface, decision, observability, and state-boundary specifications do not require semantic amendment because this proposal does not change runtime behavior or authority. They may receive nonnormative cross-references only if a later architecture owner finds them useful. The Roadmap is an incorporation target because the prerequisite and freeze gate change governed recovery sequencing, not runtime design.
+Required roles, classes, cardinalities, purposes, capture-pass relationships, immutability, and recovery flags exist in an independent evidence policy. Evidence instances reconcile to the policy and preserved attempt authority.
 
-## Remediation enforcement status
+### Traceability
 
-The earlier draft overstated fixture enforcement. This remediation limits the assessment to controls exercised by the package: parser-backed Python, launcher, configuration, fixture, route, plugin, subprocess, resource, and test closure; explicit three-way dispositions; exact Git-blob/raw-byte package authority; real NTFS stream detection; full raw/Git identity records; complete freezes; independently frozen attempt/evidence universes; source-bound nonempty classification; full multi-pass equality; independent expectations; and semantic governance scanning. The draft scripts still refuse production roots and are not an operational capture implementation.
+Machine traceability enumerates every schema property and conditional pointer and maps rules and source symbols to invoked cases, static expectations, fresh observations, and future obligations. The old `ALL_DECLARED_FIELDS` placeholder architecture is removed from enforcing code.
 
-## Assessment conclusion
+### Operational safety
 
-The draft has a positive governance and provenance impact and no authorized runtime impact. Its material cost is stricter stop behavior and broader evidence enumeration; that cost is intentional because a baseline that cannot prove its boundary is not recoverable governance evidence. Independent review remains mandatory before incorporation or use.
+All real-surface repository and filesystem mutations occur in disposable temporary roots. The suite uses actual NTFS streams, actual clean filters, actual controlled Git repositories, and an append-only test observer. It does not read runtime databases or invoke services.
+
+### Reproducibility
+
+The verification environment pins `jsonschema==4.25.1` and `PyYAML==6.0.2`. Fresh checkout tests cover `core.autocrlf=true`, `core.autocrlf=false`, long paths, object/worktree divergence, policy change, blob-only change, and worktree-only change. Canonical JSON is checked from Git objects.
+
+## Canonical documents affected in a later task
+
+| Canonical target | Future impact requiring explicit review |
+|---|---|
+| `Architecture/README.md` | Index the accepted boundary and authority separation. |
+| `Architecture/06_Randle_AI_Modernization_Charter.md` | Reconcile recovery governance, execution boundaries, and trading separation. |
+| `Architecture/07_Randle_AI_Modernization_Roadmap.md` | Place specification review, later operational-package review, freeze review, and capture as distinct gates. |
+| `Architecture/10_Randle_AI_Architecture_Traceability_Specification.md` | Incorporate field/rule/function/case bidirectional trace requirements. |
+| `Architecture/12_Randle_AI_Development_Process_Specification.md` | Incorporate checkout-byte policy, independent expectations, and comparison receipt requirements. |
+| `CODEX_TASK_TEMPLATE.md` | Add preserved-prefix, external evidence, structured withholding, and separate-package checks. |
+| Accepted successor to the Runtime Recovery Verification Specification | Integrate freeze reconstruction, attempt/evidence authority, and multi-pass observers. |
+| `.gitattributes` or equivalent byte policy | Decide whether the narrowly scoped package policy should become a reusable canonical policy. |
+
+Additional affected canonical material: any canonical evidence-retention or incident-ledger specification that later becomes the source of preserved-prefix or required-evidence authority.
+
+No canonical target is changed here.
+
+## Risk assessment
+
+The primary residual risk is that this remains draft fixture code, not the future operational capture implementation. Independent review must reproduce the meta-mutations, actual historical parse, real ADS transitions, fresh checkouts, freeze reconstruction, and semantic trace before this draft can serve as an accepted specification.
+
+## Continuing boundary
+
+Baseline capture and operational capture-script work remain withheld. Merge, canonical incorporation, production implementation, deployment, restart, migration, NQ cutover, automated paper trading, live-money trading, Phase 3C2, and Phase 3C1-R11 acceptance remain withheld. Bucket 0 remains incomplete. Bucket 1 remains blocked.
