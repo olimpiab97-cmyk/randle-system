@@ -1,6 +1,6 @@
 # Draft boundary authority — baseline capture remains withheld
 
-Status: R4 remediation candidate pending independent review.
+Status: R6 remediation candidate pending independent review.
 
 This draft specifies authority separation and deterministic verification only. Baseline capture is not authorized. Operational capture-script work is not authorized. Merge is not authorized. Canonical incorporation is not authorized. Production implementation is not authorized. Deployment remains withheld. Production restart remains withheld. Runtime migration remains withheld. NQ cutover remains withheld. Automated paper trading remains withheld. Live-money trading remains withheld. Phase 3C2 remains withheld. Phase 3C1-R11 acceptance remains withheld. Bucket 0 remains incomplete. Bucket 1 remains blocked.
 
@@ -123,3 +123,65 @@ Compatibility requires a capable trusted issuer and immutable verifier evidence;
 ### [CPB-R5-10] Evidence-bound architecture claims
 
 Architecture claims require linked positive, mutation, event, expectation, observation, and comparison evidence.
+
+## R6 fresh execution and boundary authority addendum
+
+### [CPB-R6-01] R6-01
+
+Authority-file access is accepted only from committed source bytes whose raw hash, Git blob, code-object fingerprint, module role, package commit, and measured call origin all match. Constant-folded and unknown dynamic access is fail-closed, and a runtime audit hook authorizes code origin rather than mutable module labels.
+
+### [CPB-R6-02] R6-02
+
+Parser, comparator, recorder, and access-probe processes launch only through the separately measured process boundary. Every receipt binds a fresh process nonce, PID, parent, start and completion times, executable, flags, sanitized environment, command, worker and subject bytes, inputs, outputs, streams, and issuance proof; a callable launcher is never an input.
+
+### [CPB-R6-03] R6-03
+
+Every candidate and fresh execution receives a unique externally issued run authority containing a random nonce, one-time-use state, validity interval, specification commit, case set, expectations, enforcing code, schemas, recorder, comparator, and mandatory-test authority. Deterministic case identities are not run identities.
+
+### [CPB-R6-04] R6-04
+
+All cases execute inside the measured external recorder worker. The caller submits no observed function, status, code, authority, evidence, timestamp, process receipt, or event hash. The recorder derives those fields, appends a monotonic hash chain, and issues a one-time finalized source receipt for the current run.
+
+### [CPB-R6-05] R6-05
+
+Observations are reconstructed only from the current run's finalized external event bytes after validating run authority, recorder process, chain, freshness, cardinality, code, authority, and evidence. Committed or prior-run events are historical regression material and never current evidence.
+
+### [CPB-R6-06] R6-06
+
+Observed enforcing surfaces derive from the executing function's measured code object, symbol, source span, module blob, runtime process, and recorder attestation. Caller text, expected labels, wrappers, and replay adapters have no observed-surface authority.
+
+### [CPB-R6-07] R6-07
+
+Every decision reparses immutable Git-object or content-addressed bytes, validates raw and object identities, canonical form, schema, and semantics, and then deep-freezes the value. Mutable cached mappings are neither returned nor used for authority decisions.
+
+### [CPB-R6-08] R6-08
+
+Every trace row independently binds clause bytes and hash, schema family and pointer, rule, source and symbol, code blob, invocation, positive and mutation cases, expectations, current events and observations, expected and observed codes and measured surfaces, future obligation, and reverse mapping.
+
+### [CPB-R6-09] R6-09
+
+Reviewer persona, capability, independence, decision, exact issue time, package, manifest, script, specification, compatibility, boundaries, issuer, and issuance event resolve from immutable trust and issuance bytes at validation time. A receipt cannot redefine issuance evidence.
+
+### [CPB-R6-10] R6-10
+
+Compatibility requires actual immutable evidence bytes issued by an authorized capability. The evidence binds specification, package, manifest, script, support modules, interfaces, schema and authority sets, verifier code, findings, attachments, state, issuer, issue time, and validity; an unresolved hash is rejected.
+
+### [CPB-R6-11] R6-11
+
+Schema validation cannot begin until installed distribution metadata exactly matches the committed lock and FormatChecker proves date-time, time, URI, hostname, IDN hostname, IPv4, IPv6, email, regex, and UUID capabilities. Missing packages or capabilities terminate verification.
+
+### [CPB-R6-12] R6-12
+
+The real execution path loads immutable include, exclusion, rule, universe, mandatory-test, evidence, and physical-inventory authority before fixtures. Each of the five named tests must exist with exact case and content, be included, remain unexcluded, resolve the authoritative rule, and appear in the governed physical root.
+
+### [CPB-R6-13] R6-13
+
+Candidate and fresh execution rejects prior run authorities, event sources, parser or comparator receipts, public caller-authored event fields, event-replay enforcers, observation copying, skipped environment or five-test preflight, mutated cached authority, and comparison replay. Semantic reconciliation requires distinct run provenance.
+
+### [CPB-R6-14] R6-14
+
+Document claims use a closed proof vocabulary and fail-closed protected-domain authorization grammar. A proof or completion claim requires a tagged clause, implementation, positive case, rejected mutation, immutable expectation, fresh event, fresh observation, comparison result, and trace row.
+
+### [CPB-R6-15] R6-15
+
+The Architecture Impact Assessment and Canonical Delta distinguish retained inputs, R5 claims rejected by independent review, R6 evidence-backed corrections, remaining draft controls, deferred operational work and capture, future canonical incorporation, and all continuing deployment and trading restrictions.
