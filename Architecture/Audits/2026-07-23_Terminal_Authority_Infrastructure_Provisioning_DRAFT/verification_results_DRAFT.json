@@ -1,0 +1,82 @@
+{
+  "artifact_type": "TERMINAL_AUTHORITY_PROVISIONING_VERIFICATION_RESULTS",
+  "disposition": "PROVISIONED_READY_FOR_R7_CONTINUATION",
+  "host_public_verifier": {
+    "attestation_identity": "63494d8840af241b7916e8ef75e5eae350ea31d8bafbcd0dc1a790f8945e7697",
+    "attestation_status": "VERIFIED",
+    "checkpoint_identity": "f3eeee9f6563428660bb1a3b793e0000cd7207f1059e0095c1ae8140a4994eb8",
+    "genesis_identity": "666e54345c43a8b5d83391f9d37c34537f4291a7839c068aa4734fcb810a91e5",
+    "host_status": "VERIFIED",
+    "ledger_root_hash": "9ee913cfea86b71739b894308bbe48c154c4f6abbf4e949cc2f2172aedb97e6a",
+    "ledger_sequence": 5,
+    "ledger_status": "VERIFIED",
+    "policy_sha256": "675a9fa9c761b2738e6b7115366eaf8bb001f6f9ff1f3fb598db2f68ad57fc19",
+    "provisioning_attestation_resolved": true,
+    "public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+    "service_binary_sha256": "632afaeeaf15c26ac057b34692ac672e03bc02f60fbb35177c378736b5e316ba",
+    "status": "VERIFIED"
+  },
+  "host_survey": {
+    "filtered_token_is_administrator": false,
+    "hsm_or_remote_signer_available_before_task": false,
+    "interactive_account": "FALCONXTREME\\Trader",
+    "interactive_account_local_administrators_member": true,
+    "interactive_account_sid": "S-1-5-21-4259795780-3461844753-1172372902-1001",
+    "operating_system": "Windows 11 Pro build 22000.2538",
+    "tpm_present": false,
+    "volume_file_system": "NTFS",
+    "volume_serial": "70093b3e"
+  },
+  "package_verifier": {
+    "canonical_receipts": 7,
+    "ledger_entries": 5,
+    "negative_probes": 43,
+    "schema_instances": 10,
+    "secret_findings": 0,
+    "source_identities": 4,
+    "status": "PASS",
+    "surviving_bypasses": 0,
+    "validator_environment": {
+      "jsonschema": "4.25.1",
+      "python": "3.12.2"
+    }
+  },
+  "preflight": {
+    "active_root_branch": "laptop_saved_work",
+    "active_root_head": "e84774e8b3681ae0aeb8390390dafea8a4b8cfd4",
+    "git_lock_count": 0,
+    "protected_ref_ancestry_tests": 64,
+    "protected_ref_merges": 0,
+    "status_stderr_bytes": 6358,
+    "status_stderr_identical": true,
+    "status_stderr_sha256": "6785fe51ed5b0258744cfe310a7a87ad4da103b9a4c15596bdcdb96d309f0ddb",
+    "status_stderr_warning_count": 60,
+    "status_stdout_bytes": 84230,
+    "status_stdout_identical": true,
+    "status_stdout_record_count": 1022,
+    "status_stdout_sha256": "45dab4e1b8e26a0cd5941e4d0a50aabeeeedde5996e7e5e6a8e854b1d7794b2c",
+    "writer_watch_seconds": 10,
+    "writer_watch_write_events": 0
+  },
+  "probes": {
+    "failed": 0,
+    "passed": 43,
+    "surviving_bypasses": 0,
+    "total": 43
+  },
+  "schema_version": "1.0.0",
+  "service_final_state": {
+    "repository_write_access": false,
+    "service_sid_type": "RESTRICTED",
+    "state": "RUNNING"
+  },
+  "source_to_binary_reproduction": {
+    "client_normalized_il_sha256": "430360bbfea8ff973be0dce31b1937329a391e294cfddb157cbac19b795e1c29",
+    "normalized_il_equal_for_all_binaries": true,
+    "rebuilt_sizes_equal_installed_sizes": true,
+    "service_normalized_il_sha256": "ea726ba073d8180350536bb740be4c8fecb6378c5bc3e2987040f9db8d2e66a1",
+    "status": "PASS",
+    "verifier_normalized_il_sha256": "74804a7a5e0a7088263f8388fe37d708561eec527eb8d618c682673a217f108b"
+  },
+  "threat_model": "FILTERED_INTERACTIVE_USER_HOSTILE_ELEVATED_ADMIN_AND_KERNEL_OUT_OF_SCOPE"
+}

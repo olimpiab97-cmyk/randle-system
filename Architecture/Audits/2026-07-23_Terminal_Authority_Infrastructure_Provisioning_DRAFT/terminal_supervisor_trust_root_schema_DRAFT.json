@@ -1,0 +1,88 @@
+{
+  "$id": "https://randle.local/schemas/terminal-supervisor-trust-root/1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "hex40": {"pattern":"^[0-9a-f]{40}$","type":"string"},
+    "hex64": {"pattern":"^[0-9a-f]{64}$","type":"string"},
+    "string_array": {"items":{"minLength":1,"type":"string"},"minItems":1,"type":"array","uniqueItems":true}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "architecture_base_commit": {"const":"87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94"},
+    "artifact_type": {"const":"TERMINAL_SUPERVISOR_PUBLIC_TRUST_ROOT"},
+    "blocker_commit": {"const":"8ec5697b3c6fd9d93b972113b7e79d033b4cb1f6"},
+    "certificate": {
+      "additionalProperties": false,
+      "properties": {
+        "der_base64": {"contentEncoding":"base64","minLength":1000,"type":"string"},
+        "der_sha256": {"$ref":"#/$defs/hex64"},
+        "issuer": {"const":"CN=Randle AI Terminal Authority Infrastructure v1"},
+        "not_after": {"format":"date-time","type":"string"},
+        "not_before": {"format":"date-time","type":"string"},
+        "serial_number": {"pattern":"^[0-9a-f]+$","type":"string"},
+        "subject": {"const":"CN=Randle AI Terminal Authority Infrastructure v1"},
+        "thumbprint_sha1": {"$ref":"#/$defs/hex40"}
+      },
+      "required": ["der_base64","der_sha256","issuer","not_after","not_before","serial_number","subject","thumbprint_sha1"],
+      "type": "object"
+    },
+    "incomplete_result_commit": {"const":"06c6805ed52a0d539a73088c097c60dec335462a"},
+    "key_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"const":"RSA-3072-PSS-SHA256"},
+        "container_unique_name": {"pattern":"^[0-9a-f]{32}_[0-9a-f-]{36}$","type":"string"},
+        "export_policy": {"const":"NONEXPORTABLE"},
+        "machine_scoped": {"const":true},
+        "private_authority_in_repository": {"const":false},
+        "provider": {"const":"Microsoft Software Key Storage Provider"},
+        "service_private_key_use_only": {"const":true},
+        "size_bits": {"const":3072}
+      },
+      "required": ["algorithm","container_unique_name","export_policy","machine_scoped","private_authority_in_repository","provider","service_private_key_use_only","size_bits"],
+      "type": "object"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_operations": {"items":{"type":"string"},"maxItems":6,"minItems":6,"type":"array","uniqueItems":true},
+        "generic_signing_forbidden": {"const":true},
+        "host_policy_sha256": {"$ref":"#/$defs/hex64"},
+        "interface_version": {"const":"1.0.0"},
+        "ledger_id": {"$ref":"#/$defs/hex64"},
+        "pipe_name": {"const":"RandleAI.TerminalAuthority.v1"},
+        "service_name": {"const":"RandleTerminalAuthority"}
+      },
+      "required": ["allowed_operations","generic_signing_forbidden","host_policy_sha256","interface_version","ledger_id","pipe_name","service_name"],
+      "type": "object"
+    },
+    "revocation_status": {"enum":["NOT_REVOKED_AS_OF_PROVISIONING","REVOKED"]},
+    "schema_version": {"const":"1.0.0"},
+    "service_principal": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {"const":"NT SERVICE\\RandleTerminalAuthority"},
+        "repository_write_access": {"const":false},
+        "service_sid": {"const":"S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948"},
+        "service_sid_type": {"const":"RESTRICTED"}
+      },
+      "required": ["account","repository_write_access","service_sid","service_sid_type"],
+      "type": "object"
+    },
+    "threat_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "excluded": {"$ref":"#/$defs/string_array"},
+        "resisted": {"$ref":"#/$defs/string_array"},
+        "threat_model": {"const":"FILTERED_INTERACTIVE_USER_HOSTILE_ELEVATED_ADMIN_AND_KERNEL_OUT_OF_SCOPE"}
+      },
+      "required": ["excluded","resisted","threat_model"],
+      "type": "object"
+    },
+    "valid_from": {"format":"date-time","type":"string"},
+    "valid_until": {"format":"date-time","type":"string"}
+  },
+  "required": ["architecture_base_commit","artifact_type","blocker_commit","certificate","incomplete_result_commit","key_authority","policy","revocation_status","schema_version","service_principal","threat_boundary","valid_from","valid_until"],
+  "title": "Randle Terminal Supervisor Public Trust Root",
+  "type": "object"
+}

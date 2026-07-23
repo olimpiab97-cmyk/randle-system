@@ -1,0 +1,91 @@
+{
+  "artifact_type": "TERMINAL_AUTHORITY_SOURCE_TO_BINARY_BUILD_RECEIPT",
+  "binaries": [
+    {
+      "build_output_name": "RandleTerminalAuthority.restricted.exe",
+      "installed_path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthority.exe",
+      "name": "RandleTerminalAuthority.exe",
+      "normalized_il_line_count": 5190,
+      "normalized_il_sha256": "ea726ba073d8180350536bb740be4c8fecb6378c5bc3e2987040f9db8d2e66a1",
+      "sha256": "632afaeeaf15c26ac057b34692ac672e03bc02f60fbb35177c378736b5e316ba",
+      "size_bytes": 40960
+    },
+    {
+      "build_output_name": "RandleTerminalAuthorityClient.restricted.exe",
+      "installed_path": "C:\\ProgramData\\RandleAI\\TerminalAuthority\\Trust\\RandleTerminalAuthorityClient.exe",
+      "name": "RandleTerminalAuthorityClient.exe",
+      "normalized_il_line_count": 1627,
+      "normalized_il_sha256": "430360bbfea8ff973be0dce31b1937329a391e294cfddb157cbac19b795e1c29",
+      "sha256": "d2d5abf70c9b8dbe744b52daacd79b76246eb069dab96258c10c055020667ce3",
+      "size_bytes": 17408
+    },
+    {
+      "build_output_name": "RandleTerminalAuthorityVerifier.restricted.exe",
+      "installed_path": "C:\\ProgramData\\RandleAI\\TerminalAuthority\\Trust\\RandleTerminalAuthorityVerifier.exe",
+      "name": "RandleTerminalAuthorityVerifier.exe",
+      "normalized_il_line_count": 2742,
+      "normalized_il_sha256": "74804a7a5e0a7088263f8388fe37d708561eec527eb8d618c682673a217f108b",
+      "sha256": "9a29b8cd592da5c983a12882c5da79b021329cfa07548803f56ab1832494f315",
+      "size_bytes": 25088
+    }
+  ],
+  "build_mode": {
+    "language": "C# 5",
+    "optimization": true,
+    "platform": "x64",
+    "target": "exe"
+  },
+  "compiler": {
+    "file_version": "4.8.4161.0 built by: NET48REL1",
+    "path": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe",
+    "sha256": "adeda78a951529462f9411e016c1a1b87ddfd94c55912cbd2957817f39929af1"
+  },
+  "framework_references": [
+    "System.Core.dll",
+    "System.Security.dll",
+    "System.ServiceProcess.dll",
+    "System.Web.Extensions.dll"
+  ],
+  "reproduction": {
+    "installed_and_rebuilt_sizes_equal": true,
+    "normalized_il_equal_for_all_binaries": true,
+    "normalization_exclusions": [
+      "compiler-generated module MVID",
+      "loader-reported image base",
+      "ildasm output-path warning",
+      "MVID-derived PrivateImplementationDetails type suffix"
+    ],
+    "status": "SOURCE_TO_BINARY_IL_MATCH"
+  },
+  "schema_version": "1.0.0",
+  "sources": [
+    {
+      "git_blob": "b8e5f1dee2383e50f8bc614d902f883747202f0e",
+      "path": "Architecture/Audits/2026-07-23_Terminal_Authority_Infrastructure_Provisioning_DRAFT/TerminalAuthorityClient_DRAFT.cs",
+      "raw_sha256": "090eaba07ee38b07e655429dab2c0b51574a2f0a0e459450e2ee297502f552c5",
+      "role": "NARROW_PROVISIONING_CLIENT",
+      "size_bytes": 3779
+    },
+    {
+      "git_blob": "cbf226ea7ab88d87ea8d75e59be68c315f39a9b1",
+      "path": "Architecture/Audits/2026-07-23_Terminal_Authority_Infrastructure_Provisioning_DRAFT/TerminalAuthorityCommon_DRAFT.cs",
+      "raw_sha256": "77855180c8758b75966983dbf1d77be141f113b5d8cd96d4bad1ae0dbebcc9a5",
+      "role": "CANONICAL_AND_CRYPTOGRAPHIC_COMMON",
+      "size_bytes": 14922
+    },
+    {
+      "git_blob": "35a7116805cf7327b1b767f744ba77adf5e636e9",
+      "path": "Architecture/Audits/2026-07-23_Terminal_Authority_Infrastructure_Provisioning_DRAFT/TerminalAuthorityPublicVerifier_DRAFT.cs",
+      "raw_sha256": "e59accf284fd541360a0a91b187bb994bc5d7a60d436f54e76b1490a88fb1393",
+      "role": "PUBLIC_ONLY_VERIFIER",
+      "size_bytes": 16581
+    },
+    {
+      "git_blob": "d41f7eeee76cd644e08cfeb325ca679d07829902",
+      "path": "Architecture/Audits/2026-07-23_Terminal_Authority_Infrastructure_Provisioning_DRAFT/TerminalAuthorityService_DRAFT.cs",
+      "raw_sha256": "9b0b06207bc140bd732905b4e71821bd24f3856b724c3f3ea8a6692ad6e0f039",
+      "role": "EXTERNAL_PROVISIONING_AUTHORITY_SERVICE",
+      "size_bytes": 43524
+    }
+  ]
+}

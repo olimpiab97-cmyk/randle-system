@@ -1,0 +1,66 @@
+{
+  "$id": "https://randle.local/schemas/terminal-authority-durable-ledger-receipt/1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "checkpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "issue_time": {"format":"date-time","type":"string"},
+            "ledger_id": {"$ref":"#/$defs/hex64"},
+            "public_key_identity": {"$ref":"#/$defs/hex64"},
+            "root_hash": {"$ref":"#/$defs/hex64"},
+            "schema_version": {"const":"1.0.0"},
+            "sequence": {"minimum":1,"type":"integer"},
+            "service_sid": {"const":"S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948"}
+          },
+          "required": ["issue_time","ledger_id","public_key_identity","root_hash","schema_version","sequence","service_sid"],
+          "type": "object"
+        },
+        "public_key_identity": {"$ref":"#/$defs/hex64"},
+        "signature": {"$ref":"#/$defs/signature"},
+        "signature_algorithm": {"const":"RSA-PSS-SHA256"}
+      },
+      "required": ["payload","public_key_identity","signature","signature_algorithm"],
+      "type": "object"
+    },
+    "entry": {
+      "additionalProperties": false,
+      "properties": {
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "content_address": {"$ref":"#/$defs/hex64"},
+            "entry_hash": {"$ref":"#/$defs/hex64"},
+            "issue_time": {"format":"date-time","type":"string"},
+            "ledger_id": {"$ref":"#/$defs/hex64"},
+            "operation": {"enum":["LEDGER_GENESIS","PROVISIONING_NONCE_ISSUED","PROVISIONING_ATTESTATION_ISSUED"]},
+            "prior_entry_hash": {"$ref":"#/$defs/hex64"},
+            "public_key_identity": {"$ref":"#/$defs/hex64"},
+            "request_nonce": {"oneOf":[{"const":""},{"format":"uuid","type":"string"}]},
+            "schema_version": {"const":"1.0.0"},
+            "sequence": {"minimum":1,"type":"integer"},
+            "service_sid": {"const":"S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948"},
+            "subject_id": {"$ref":"#/$defs/hex64"}
+          },
+          "required": ["content_address","entry_hash","issue_time","ledger_id","operation","prior_entry_hash","public_key_identity","request_nonce","schema_version","sequence","service_sid","subject_id"],
+          "type": "object"
+        },
+        "public_key_identity": {"$ref":"#/$defs/hex64"},
+        "signature": {"$ref":"#/$defs/signature"},
+        "signature_algorithm": {"const":"RSA-PSS-SHA256"}
+      },
+      "required": ["payload","public_key_identity","signature","signature_algorithm"],
+      "type": "object"
+    },
+    "hex64": {"pattern":"^[0-9a-f]{64}$","type":"string"},
+    "signature": {"contentEncoding":"base64","minLength":512,"type":"string"}
+  },
+  "oneOf": [
+    {"$ref":"#/$defs/entry"},
+    {"$ref":"#/$defs/checkpoint"}
+  ],
+  "title": "Randle Terminal Authority Durable Ledger Entry or Checkpoint"
+}

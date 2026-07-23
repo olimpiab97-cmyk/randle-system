@@ -1,0 +1,84 @@
+{
+  "$id": "https://randle.local/schemas/terminal-authority-provisioning-attestation/1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "hex40": {"pattern":"^[0-9a-f]{40}$","type":"string"},
+    "hex64": {"pattern":"^[0-9a-f]{64}$","type":"string"},
+    "signature": {"contentEncoding":"base64","minLength":512,"type":"string"}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "payload": {
+      "additionalProperties": false,
+      "properties": {
+        "acl_identities": {
+          "additionalProperties": false,
+          "properties": {
+            "config_root": {"$ref":"#/$defs/hex64"},
+            "executable": {"$ref":"#/$defs/hex64"},
+            "install_root": {"$ref":"#/$defs/hex64"},
+            "ledger_root": {"$ref":"#/$defs/hex64"},
+            "private_key_file": {"$ref":"#/$defs/hex64"},
+            "state_root": {"$ref":"#/$defs/hex64"},
+            "trust_root": {"$ref":"#/$defs/hex64"}
+          },
+          "required": ["config_root","executable","install_root","ledger_root","private_key_file","state_root","trust_root"],
+          "type": "object"
+        },
+        "architecture_base_commit": {"const":"87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94"},
+        "attestation_schema_version": {"const":"1.0.0"},
+        "certificate_der_sha256": {"$ref":"#/$defs/hex64"},
+        "certificate_issuer": {"const":"CN=Randle AI Terminal Authority Infrastructure v1"},
+        "certificate_not_after": {"format":"date-time","type":"string"},
+        "certificate_not_before": {"format":"date-time","type":"string"},
+        "certificate_serial_number": {"pattern":"^[0-9a-f]+$","type":"string"},
+        "certificate_subject": {"const":"CN=Randle AI Terminal Authority Infrastructure v1"},
+        "certificate_thumbprint": {"$ref":"#/$defs/hex40"},
+        "executable_file_identity": {"pattern":"^[0-9a-f]{8}:[0-9a-f]{16}$","type":"string"},
+        "executable_path": {"const":"C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthority.exe"},
+        "executable_sha256": {"$ref":"#/$defs/hex64"},
+        "fixed_host_paths": {
+          "items": {"enum":["C:\\Program Files\\RandleAI\\TerminalAuthority","C:\\ProgramData\\RandleAI\\TerminalAuthority\\Config","C:\\ProgramData\\RandleAI\\TerminalAuthority\\Ledger","C:\\ProgramData\\RandleAI\\TerminalAuthority\\Trust"]},
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "incomplete_result_commit": {"const":"06c6805ed52a0d539a73088c097c60dec335462a"},
+        "interface_version": {"const":"1.0.0"},
+        "ipc_identity": {"$ref":"#/$defs/hex64"},
+        "issue_time": {"format":"date-time","type":"string"},
+        "key_algorithm": {"const":"RSA-PSS-SHA256"},
+        "key_container_unique_name": {"pattern":"^[0-9a-f]{32}_[0-9a-f-]{36}$","type":"string"},
+        "key_export_policy": {"const":"NONEXPORTABLE"},
+        "key_provider": {"const":"Microsoft Software Key Storage Provider"},
+        "key_size": {"const":3072},
+        "ledger_checkpoint_identity": {"$ref":"#/$defs/hex64"},
+        "ledger_genesis_identity": {"$ref":"#/$defs/hex64"},
+        "ledger_id": {"$ref":"#/$defs/hex64"},
+        "policy_sha256": {"$ref":"#/$defs/hex64"},
+        "private_key_present_in_repository": {"const":false},
+        "provisioning_nonce": {"$ref":"#/$defs/hex64"},
+        "provisioning_nonce_identity": {"$ref":"#/$defs/hex64"},
+        "provisioning_task_identity": {"const":"TERMINAL_AUTHORITY_INFRASTRUCTURE_PROVISIONING_20260723"},
+        "public_key_identity": {"$ref":"#/$defs/hex64"},
+        "r7_blocker_commit": {"const":"8ec5697b3c6fd9d93b972113b7e79d033b4cb1f6"},
+        "repository_write_access": {"const":false},
+        "service_account": {"const":"NT SERVICE\\RandleTerminalAuthority"},
+        "service_configuration_identity": {"$ref":"#/$defs/hex64"},
+        "service_name": {"const":"RandleTerminalAuthority"},
+        "service_sid": {"const":"S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948"},
+        "service_sid_type": {"const":"RESTRICTED"},
+        "threat_model": {"const":"FILTERED_INTERACTIVE_USER_HOSTILE_ELEVATED_ADMIN_AND_KERNEL_OUT_OF_SCOPE"}
+      },
+      "required": ["acl_identities","architecture_base_commit","attestation_schema_version","certificate_der_sha256","certificate_issuer","certificate_not_after","certificate_not_before","certificate_serial_number","certificate_subject","certificate_thumbprint","executable_file_identity","executable_path","executable_sha256","fixed_host_paths","incomplete_result_commit","interface_version","ipc_identity","issue_time","key_algorithm","key_container_unique_name","key_export_policy","key_provider","key_size","ledger_checkpoint_identity","ledger_genesis_identity","ledger_id","policy_sha256","private_key_present_in_repository","provisioning_nonce","provisioning_nonce_identity","provisioning_task_identity","public_key_identity","r7_blocker_commit","repository_write_access","service_account","service_configuration_identity","service_name","service_sid","service_sid_type","threat_model"],
+      "type": "object"
+    },
+    "public_key_identity": {"$ref":"#/$defs/hex64"},
+    "signature": {"$ref":"#/$defs/signature"},
+    "signature_algorithm": {"const":"RSA-PSS-SHA256"}
+  },
+  "required": ["payload","public_key_identity","signature","signature_algorithm"],
+  "title": "Randle Terminal Authority Provisioning Attestation",
+  "type": "object"
+}

@@ -1,0 +1,54 @@
+{
+  "artifact_type": "TERMINAL_AUTHORITY_SERVICE_IDENTITY_RECEIPT",
+  "binary": {
+    "file_identity": "70093b3e:001a0000000b3058",
+    "installed_path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthority.exe",
+    "last_write_utc": "2026-07-23T14:14:17.5309864Z",
+    "sha256": "632afaeeaf15c26ac057b34692ac672e03bc02f60fbb35177c378736b5e316ba",
+    "size_bytes": 40960
+  },
+  "health": {
+    "is_administrator": false,
+    "ledger_sequence": 5,
+    "pipe_acl_identity": "51343f0d0289f9255a05442a4d88f6de3aa6d898fb1168b3513dd6af001bae07",
+    "private_key_export_policy": "NONE",
+    "repository_write_access": false,
+    "status": "HEALTHY"
+  },
+  "interface_version": "1.0.0",
+  "ipc": {
+    "allowed_client_sids": [
+      "S-1-5-18",
+      "S-1-5-21-4259795780-3461844753-1172372902-1001"
+    ],
+    "identity": "2acddda4672b78a6217dbcfb2b809514d5f292e42f9d8a7d49a23ed043985ba2",
+    "maximum_message_bytes": 65536,
+    "name": "RandleAI.TerminalAuthority.v1",
+    "protocol_version": "1.0.0"
+  },
+  "observed_at": "2026-07-23T14:24:36.4265573Z",
+  "process_observation": {
+    "path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthority.exe",
+    "process_id": 6576,
+    "start_time": "2026-07-23T14:17:25.6506137Z",
+    "state": "RUNNING"
+  },
+  "schema_version": "1.0.0",
+  "service": {
+    "account": "NT SERVICE\\RandleTerminalAuthority",
+    "configuration_identity": "a548aee49672ea6156bd86eb65214356270341b9ad227ba091177db513ab1f06",
+    "description": "Narrow external provisioning authority; no generic signing interface.",
+    "display_name": "Randle AI Terminal Authority",
+    "error_control": "NORMAL",
+    "name": "RandleTerminalAuthority",
+    "required_privileges": [
+      "SeChangeNotifyPrivilege",
+      "SeImpersonatePrivilege"
+    ],
+    "service_acl_sddl": "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)",
+    "service_sid": "S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948",
+    "service_sid_type": "RESTRICTED",
+    "start_type": "DEMAND_START",
+    "type": "WIN32_OWN_PROCESS"
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "artifact_type": "TERMINAL_AUTHORITY_INFRASTRUCTURE_TRACEABILITY",
+  "authorities": {
+    "architecture_base_commit": "87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94",
+    "blocked_continuation_commit": "8ec5697b3c6fd9d93b972113b7e79d033b4cb1f6",
+    "incomplete_result_commit": "06c6805ed52a0d539a73088c097c60dec335462a"
+  },
+  "authorization_boundary": {
+    "authorized_next_action": "CONSIDER_A_NEW_R7_CONTINUATION_DIRECTLY_FROM_R6_USING_THIS_PROVISIONED_AUTHORITY",
+    "withheld": [
+      "R7 acceptance",
+      "operational capture-script work",
+      "operational capture-package work",
+      "production baseline capture",
+      "merge",
+      "canonical incorporation",
+      "production implementation",
+      "deployment",
+      "production service restart",
+      "runtime migration",
+      "NQ cutover",
+      "automated paper trading",
+      "live-money trading",
+      "Phase 3C2",
+      "Phase 3C1-R11 acceptance",
+      "Bucket 0 completion",
+      "Bucket 1 work"
+    ]
+  },
+  "requirements": [
+    {
+      "artifacts": ["terminal_supervisor_trust_root_DRAFT.json","service_identity_receipt_DRAFT.json","host_acl_evidence_DRAFT.json"],
+      "blocker": "No separate supervisor principal or service existed.",
+      "host_authority": "NT SERVICE\\RandleTerminalAuthority with RESTRICTED service SID and no repository write access",
+      "probe_ids": ["P01","P02","P03","P04","P05","P06"],
+      "requirement_id": "TAI-01-SEPARATE-PRINCIPAL",
+      "status": "PROVISIONED"
+    },
+    {
+      "artifacts": ["terminal_supervisor_trust_root_DRAFT.json","terminal_authority_provisioning_attestation_DRAFT.json","host_acl_evidence_DRAFT.json"],
+      "blocker": "No noncaller-forgeable signing mechanism existed.",
+      "host_authority": "LocalMachine Microsoft Software KSP RSA-3072 nonexportable key readable only by the restricted service SID and SYSTEM",
+      "probe_ids": ["K01","K02","K03","K04","K05","K06","K07","K08","K09","K10","K11"],
+      "requirement_id": "TAI-02-NONEXPORTABLE-ASYMMETRIC-KEY",
+      "status": "PROVISIONED"
+    },
+    {
+      "artifacts": ["TerminalAuthorityService_DRAFT.cs","TerminalAuthorityCommon_DRAFT.cs","source_to_binary_build_receipt_DRAFT.json","service_identity_receipt_DRAFT.json"],
+      "blocker": "Python objects and cloned code could fabricate terminal authority.",
+      "host_authority": "Compiled SCM-hosted service at a fixed SYSTEM-owned path with signed measured identity",
+      "probe_ids": ["S01","S02","S03","S04","S05","S06","S07"],
+      "requirement_id": "TAI-03-MEASURED-EXTERNAL-SERVICE",
+      "status": "PROVISIONED"
+    },
+    {
+      "artifacts": ["TerminalAuthorityClient_DRAFT.cs","TerminalAuthorityService_DRAFT.cs","service_identity_receipt_DRAFT.json","terminal_authority_host_policy_DRAFT.json"],
+      "blocker": "No authenticated narrow external request boundary existed.",
+      "host_authority": "Fixed named pipe with explicit ACL, client SID impersonation, canonical request schema, replay set, size bound, and closed operation allowlist",
+      "probe_ids": ["I01","I02","I03","I04","I05","I06","I07","I08"],
+      "requirement_id": "TAI-04-AUTHENTICATED-NARROW-IPC",
+      "status": "PROVISIONED"
+    },
+    {
+      "artifacts": ["durable_ledger_public_snapshot_DRAFT/00000000000000000001.entry.json","durable_ledger_public_snapshot_DRAFT/00000000000000000002.entry.json","durable_ledger_public_snapshot_DRAFT/00000000000000000003.entry.json","durable_ledger_public_snapshot_DRAFT/00000000000000000004.entry.json","durable_ledger_public_snapshot_DRAFT/00000000000000000005.entry.json","durable_ledger_public_snapshot_DRAFT/checkpoint.json","host_acl_evidence_DRAFT.json"],
+      "blocker": "No fixed authenticated durable-ledger service existed.",
+      "host_authority": "Single fixed service-written NTFS ledger with signed hash chain, checkpoint, write-through flush, service serialization, and caller read-only ACL",
+      "probe_ids": ["L01","L02","L03","L04","L05","L06","L07","L08","L09","L10","L11"],
+      "requirement_id": "TAI-05-FIXED-DURABLE-LEDGER",
+      "status": "PROVISIONED"
+    },
+    {
+      "artifacts": ["terminal_authority_provisioning_attestation_DRAFT.json","terminal_supervisor_trust_root_DRAFT.json","TerminalAuthorityPublicVerifier_DRAFT.cs"],
+      "blocker": "No durable signed provisioning evidence could be checked after issuer exit.",
+      "host_authority": "Canonical RSA-PSS signed attestation with public DER trust and fresh-process offline verification",
+      "probe_ids": ["K05","K06","K07","K08"],
+      "requirement_id": "TAI-06-SIGNED-PROVISIONING-ATTESTATION",
+      "status": "PROVISIONED"
+    },
+    {
+      "artifacts": ["negative_probe_results_DRAFT.json","TerminalAuthorityPublicVerifier_DRAFT.cs","terminal_authority_public_evidence_schema_DRAFT.json"],
+      "blocker": "Deletion, modification, alternate-root, replay, and unauthorized-signing behavior was unproven.",
+      "host_authority": "Direct normal-token, service-process, IPC, signature, and ledger probes bound to the final key and chain",
+      "probe_ids": ["K09","K10","S06","S07","I04","I06","I07","L04","L05","L06","L07","L08","L09","L10","L11"],
+      "requirement_id": "TAI-07-NEGATIVE-AND-RESTART-PROOF",
+      "status": "PROVISIONED"
+    },
+    {
+      "artifacts": ["TERMINAL_AUTHORITY_PROVISIONING_REPORT_DRAFT.md","CANONICAL_DELTA_DRAFT.md","Architecture/Impact_Assessments/2026-07-23_Terminal_Authority_Infrastructure_Provisioning_Architecture_Impact_Assessment_DRAFT.md"],
+      "blocker": "The threat boundary and future integration authorization were not governed.",
+      "host_authority": "Explicit filtered-interactive-user threat boundary and narrow continuation-only authorization",
+      "probe_ids": ["P02","K10","L07"],
+      "requirement_id": "TAI-08-GOVERNANCE-BOUNDARY",
+      "status": "PROVISIONED"
+    }
+  ],
+  "reverse_mapping": [
+    {"artifact":"terminal_supervisor_trust_root_DRAFT.json","requirement_ids":["TAI-01-SEPARATE-PRINCIPAL","TAI-02-NONEXPORTABLE-ASYMMETRIC-KEY","TAI-06-SIGNED-PROVISIONING-ATTESTATION"]},
+    {"artifact":"service_identity_receipt_DRAFT.json","requirement_ids":["TAI-01-SEPARATE-PRINCIPAL","TAI-03-MEASURED-EXTERNAL-SERVICE","TAI-04-AUTHENTICATED-NARROW-IPC"]},
+    {"artifact":"source_to_binary_build_receipt_DRAFT.json","requirement_ids":["TAI-03-MEASURED-EXTERNAL-SERVICE"]},
+    {"artifact":"host_acl_evidence_DRAFT.json","requirement_ids":["TAI-01-SEPARATE-PRINCIPAL","TAI-02-NONEXPORTABLE-ASYMMETRIC-KEY","TAI-05-FIXED-DURABLE-LEDGER"]},
+    {"artifact":"terminal_authority_provisioning_attestation_DRAFT.json","requirement_ids":["TAI-02-NONEXPORTABLE-ASYMMETRIC-KEY","TAI-06-SIGNED-PROVISIONING-ATTESTATION"]},
+    {"artifact":"durable_ledger_public_snapshot_DRAFT","requirement_ids":["TAI-05-FIXED-DURABLE-LEDGER"]},
+    {"artifact":"negative_probe_results_DRAFT.json","requirement_ids":["TAI-01-SEPARATE-PRINCIPAL","TAI-02-NONEXPORTABLE-ASYMMETRIC-KEY","TAI-03-MEASURED-EXTERNAL-SERVICE","TAI-04-AUTHENTICATED-NARROW-IPC","TAI-05-FIXED-DURABLE-LEDGER","TAI-06-SIGNED-PROVISIONING-ATTESTATION","TAI-07-NEGATIVE-AND-RESTART-PROOF"]},
+    {"artifact":"TERMINAL_AUTHORITY_PROVISIONING_REPORT_DRAFT.md","requirement_ids":["TAI-08-GOVERNANCE-BOUNDARY"]}
+  ],
+  "schema_version": "1.0.0"
+}

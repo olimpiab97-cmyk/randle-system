@@ -1,0 +1,85 @@
+{
+  "$id": "https://randle.local/schemas/terminal-authority-service-identity-receipt/1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "hex64": {"pattern":"^[0-9a-f]{64}$","type":"string"},
+    "sid": {"pattern":"^S-[0-9-]+$","type":"string"}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {"const":"TERMINAL_AUTHORITY_SERVICE_IDENTITY_RECEIPT"},
+    "binary": {
+      "additionalProperties": false,
+      "properties": {
+        "file_identity": {"pattern":"^[0-9a-f]{8}:[0-9a-f]{16}$","type":"string"},
+        "installed_path": {"const":"C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthority.exe"},
+        "last_write_utc": {"format":"date-time","type":"string"},
+        "sha256": {"$ref":"#/$defs/hex64"},
+        "size_bytes": {"minimum":1,"type":"integer"}
+      },
+      "required": ["file_identity","installed_path","last_write_utc","sha256","size_bytes"],
+      "type": "object"
+    },
+    "health": {
+      "additionalProperties": false,
+      "properties": {
+        "is_administrator": {"const":false},
+        "ledger_sequence": {"minimum":3,"type":"integer"},
+        "pipe_acl_identity": {"$ref":"#/$defs/hex64"},
+        "private_key_export_policy": {"const":"NONE"},
+        "repository_write_access": {"const":false},
+        "status": {"const":"HEALTHY"}
+      },
+      "required": ["is_administrator","ledger_sequence","pipe_acl_identity","private_key_export_policy","repository_write_access","status"],
+      "type": "object"
+    },
+    "interface_version": {"const":"1.0.0"},
+    "ipc": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_client_sids": {"items":{"$ref":"#/$defs/sid"},"minItems":2,"type":"array","uniqueItems":true},
+        "identity": {"$ref":"#/$defs/hex64"},
+        "maximum_message_bytes": {"const":65536},
+        "name": {"const":"RandleAI.TerminalAuthority.v1"},
+        "protocol_version": {"const":"1.0.0"}
+      },
+      "required": ["allowed_client_sids","identity","maximum_message_bytes","name","protocol_version"],
+      "type": "object"
+    },
+    "observed_at": {"format":"date-time","type":"string"},
+    "process_observation": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {"const":"C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthority.exe"},
+        "process_id": {"minimum":1,"type":"integer"},
+        "start_time": {"format":"date-time","type":"string"},
+        "state": {"const":"RUNNING"}
+      },
+      "required": ["path","process_id","start_time","state"],
+      "type": "object"
+    },
+    "schema_version": {"const":"1.0.0"},
+    "service": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {"const":"NT SERVICE\\RandleTerminalAuthority"},
+        "configuration_identity": {"$ref":"#/$defs/hex64"},
+        "description": {"const":"Narrow external provisioning authority; no generic signing interface."},
+        "display_name": {"const":"Randle AI Terminal Authority"},
+        "error_control": {"const":"NORMAL"},
+        "name": {"const":"RandleTerminalAuthority"},
+        "required_privileges": {"items":{"enum":["SeChangeNotifyPrivilege","SeImpersonatePrivilege"]},"maxItems":2,"minItems":2,"type":"array","uniqueItems":true},
+        "service_acl_sddl": {"minLength":1,"type":"string"},
+        "service_sid": {"const":"S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948"},
+        "service_sid_type": {"const":"RESTRICTED"},
+        "start_type": {"const":"DEMAND_START"},
+        "type": {"const":"WIN32_OWN_PROCESS"}
+      },
+      "required": ["account","configuration_identity","description","display_name","error_control","name","required_privileges","service_acl_sddl","service_sid","service_sid_type","start_type","type"],
+      "type": "object"
+    }
+  },
+  "required": ["artifact_type","binary","health","interface_version","ipc","observed_at","process_observation","schema_version","service"],
+  "title": "Randle Terminal Authority Service Identity Receipt",
+  "type": "object"
+}
