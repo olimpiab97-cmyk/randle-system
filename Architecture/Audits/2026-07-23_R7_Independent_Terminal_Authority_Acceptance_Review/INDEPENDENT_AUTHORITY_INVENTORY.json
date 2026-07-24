@@ -1,0 +1,99 @@
+{
+  "artifact_type": "R7_INDEPENDENT_AUTHORITY_INVENTORY",
+  "candidate": {
+    "commit": "35add65e8900ce9a48c3a7175e5e61e5e0868a84",
+    "parent": "03b13846d1edcdac327a8959587f89152fc20e84",
+    "subject": "fix(governance): report the enforced R7 IPC limit",
+    "tree": "fe0825d5834bbb95c07a10843697abe32661f723"
+  },
+  "case_artifact": {
+    "git_blob": "dae357d801cabdde7ca8a314c83380984161e687",
+    "mode": "100644",
+    "raw_sha256": "58d6c043b857b6950d375724ef1f05b695028a3778ee47067284148c477b9214",
+    "size": 995804
+  },
+  "expectation_artifact": {
+    "git_blob": "c21ea8f5ab4b54fc0d0638e9bb20df83c8a88f1d",
+    "mode": "100644",
+    "raw_sha256": "7563a8b8af74f15ad226d61015d0946867fa1d18495143e8206600f1c3c81005",
+    "size": 285399
+  },
+  "implementation_ancestry": [
+    {
+      "commit": "bb04ac54fb328516d0c785f4e6551e6a20d73759",
+      "parent": "87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94",
+      "subject": "docs(governance): provision terminal authority infrastructure",
+      "tree": "b25b41d9cfb5a0dbfdb271e4519734f60a11ad80"
+    },
+    {
+      "commit": "98a394f2954cebdbef5f2d164c8801697c6d1ed5",
+      "parent": "bb04ac54fb328516d0c785f4e6551e6a20d73759",
+      "subject": "feat(governance): bind R7 receipts to real control execution",
+      "tree": "32bf263985025ecb95bce4fbc786d87701a929bd"
+    },
+    {
+      "commit": "03b13846d1edcdac327a8959587f89152fc20e84",
+      "parent": "98a394f2954cebdbef5f2d164c8801697c6d1ed5",
+      "subject": "fix(governance): verify inherited sources as Git objects",
+      "tree": "b6fb480440a21ef1b610f7d8c3d292038c2e35e6"
+    },
+    {
+      "commit": "35add65e8900ce9a48c3a7175e5e61e5e0868a84",
+      "parent": "03b13846d1edcdac327a8959587f89152fc20e84",
+      "subject": "fix(governance): report the enforced R7 IPC limit",
+      "tree": "fe0825d5834bbb95c07a10843697abe32661f723"
+    }
+  ],
+  "prohibited_ancestry": {
+    "06c6805ed52a0d539a73088c097c60dec335462a_is_ancestor": false,
+    "8ec5697b3c6fd9d93b972113b7e79d033b4cb1f6_is_ancestor": false
+  },
+  "r6": {
+    "commit": "87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94",
+    "parent": "c211870a8183e8f3e9ea9bf17fa34288b2c3000e",
+    "specification": {
+      "git_blob": "343622743668d7ddc524513307e726f20d1db9fc",
+      "mode": "100644",
+      "path": "Architecture/15_Randle_AI_Current_Production_Baseline_Capture_Boundary_Specification_DRAFT.md",
+      "raw_sha256": "7c5fc26a75dff3fe3d23167424d6d4c12ac04e9fda21fc20cce63e04000399b6",
+      "size": 11248
+    },
+    "subject": "docs(recovery): bind fresh execution and boundary authorities",
+    "tree": "f9891562ea09d011d4d9803d9cf64b88ff1f2dbf"
+  },
+  "r7_records": [
+    {
+      "commit": "06c6805ed52a0d539a73088c097c60dec335462a",
+      "parent": "87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94",
+      "report_git_blob": "1be3b0b5f15ac8e68b88202e0e9d3787b69d1856",
+      "report_mode": "100644",
+      "report_path": "Architecture/Audits/2026-07-22_Current_Production_Baseline_Boundary_R7_Remediation_87d066e_INCOMPLETE.md",
+      "report_raw_sha256": "344c29dc3594d702cf6f959347f579b5a17aa04c722b02ad264b8f866a64e5bf",
+      "report_size": 9817,
+      "subject": "docs(recovery): record incomplete R7 authority remediation",
+      "tree": "8e25f3c908706e3cfbcde34f5074f98164658a12"
+    },
+    {
+      "commit": "8ec5697b3c6fd9d93b972113b7e79d033b4cb1f6",
+      "parent": "87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94",
+      "report_git_blob": "dfa98a89049b9596387143c002252d91d608fbfc",
+      "report_mode": "100644",
+      "report_path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Continuation_87d066e_TASK_BLOCKED.md",
+      "report_raw_sha256": "f5b03f5820f29bdbe60595b1ec89696ca4aac75eddf76dad6cd0e58da5b74412",
+      "report_size": 8927,
+      "subject": "docs(recovery): record blocked R7 terminal authority continuation",
+      "tree": "5f422b5e845fce0466adb3193f79195e6c1338a2"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "subject_source_claim": {
+    "authoritative": false,
+    "commit": "f0cfbce97e913a133530dd66a70326b1e03a0fb6",
+    "candidate_ancestor": false,
+    "candidate_ref_reachable": false,
+    "governance_classification": "DISCARDED_DIAGNOSTIC_SIBLING",
+    "parent": "87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94",
+    "subject": "docs(recovery): externalize authority and close real interfaces",
+    "tree": "02324c2b2dc3415fa2dbe21144e12ab667bf40d9"
+  }
+}

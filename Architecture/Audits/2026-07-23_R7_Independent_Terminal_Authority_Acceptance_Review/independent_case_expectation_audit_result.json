@@ -1,0 +1,69 @@
+{
+  "artifact_type": "R7_INDEPENDENT_CASE_EXPECTATION_AUDIT_RESULT",
+  "authority_mapping": {
+    "cases_claiming_r7_requirement": 178,
+    "r6_cpb_r6_clause_count": 15,
+    "r6_cpb_r7_clause_count": 0,
+    "r6_spec_blob": "343622743668d7ddc524513307e726f20d1db9fc"
+  },
+  "blocking_findings": [
+    "All source cases and expectation semantics are imported from discarded sibling commit f0cfbce.",
+    "The R6 blob cited for R7-01 through R7-15 contains no CPB-R7 clauses.",
+    "The separate expectation file is not substantively independent from case construction or discarded implementation output.",
+    "All cases use execute_case under a restricted service child; no case exercises the outer terminal/reconciliation protocol.",
+    "Declared evidence, side-effect, durability, replay, and reconciliation obligations are not consumed by runtime verifier code."
+  ],
+  "candidate_commit": "35add65e8900ce9a48c3a7175e5e61e5e0868a84",
+  "case_artifact": {
+    "count": 178,
+    "git_blob": "dae357d801cabdde7ca8a314c83380984161e687",
+    "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/r7_real_case_definitions_DRAFT.json",
+    "sha256": "58d6c043b857b6950d375724ef1f05b695028a3778ee47067284148c477b9214",
+    "size": 995804
+  },
+  "coverage": {
+    "caller_class_counts": {
+      "RESTRICTED_TERMINAL_AUTHORITY_SERVICE_CHILD": 178
+    },
+    "expected_acceptance_counts": {
+      "ACCEPTED": 20,
+      "REJECTED": 158
+    },
+    "meta_verification_count": 158,
+    "operation_counts": {
+      "execute_case": 178
+    },
+    "outer_terminal_operation_case_count": 0
+  },
+  "discarded_source": {
+    "case_blob": "e7919987dc0518f6eb5978bb9bf57989898a2c51",
+    "commit": "f0cfbce97e913a133530dd66a70326b1e03a0fb6",
+    "expectation_blob": "da11fc852e63e7f30a6265d04d8978d93aa359fd",
+    "expectation_semantics_copied": 178,
+    "source_cases_copied_exactly": 178
+  },
+  "expectation_artifact": {
+    "count": 178,
+    "git_blob": "c21ea8f5ab4b54fc0d0638e9bb20df83c8a88f1d",
+    "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/r7_independent_expectations_DRAFT.json",
+    "sha256": "7563a8b8af74f15ad226d61015d0946867fa1d18495143e8206600f1c3c81005",
+    "size": 285399
+  },
+  "independence": {
+    "case_expectation_semantics_equal": 178,
+    "expected_authority_values": [
+      "acc05f91bda066fe818494179d43b366d2dfa6ed3012ca2d52ce6db957710898"
+    ],
+    "unique_expected_authority_sources": 1
+  },
+  "runtime_obligation_field_reference_counts": {
+    "expected_evidence_obligation": 0,
+    "expected_ledger_delta": 0,
+    "forbidden_outcomes": 0,
+    "forbidden_side_effects": 0,
+    "required_evidence": 0,
+    "required_side_effects": 0
+  },
+  "schema_version": "1.0.0",
+  "status": "FAIL"
+}

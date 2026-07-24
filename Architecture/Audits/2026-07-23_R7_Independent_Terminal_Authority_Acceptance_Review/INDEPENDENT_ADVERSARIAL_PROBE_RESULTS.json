@@ -1,0 +1,522 @@
+{
+  "artifact_type": "R7_INDEPENDENT_ADVERSARIAL_PROBE_RESULTS",
+  "candidate_commit": "35add65e8900ce9a48c3a7175e5e61e5e0868a84",
+  "count": 63,
+  "disposition": "FAIL_BLOCKING_BYPASSES_SURVIVE",
+  "results": [
+    {
+      "attack": "Missing child evidence hidden behind a signed parent",
+      "category": "semantic_graph",
+      "classification": "CONFIRMED_STATIC_BYPASS",
+      "evidence": "Service checks child-reported inner hashes/receipt IDs but does not resolve inner receipt body/signature/token/subject-ledger membership.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-001"
+    },
+    {
+      "attack": "Valid evidence attached to the wrong case",
+      "category": "semantic_graph",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Outer request, response and event case_id equality is checked; no live mutation was needed.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-002"
+    },
+    {
+      "attack": "Valid event attached to the wrong expectation",
+      "category": "semantic_graph",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "case_id-indexed expectation comparison rejects direct cross-attachment.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-003"
+    },
+    {
+      "attack": "Two cases share one process invocation when isolation is required",
+      "category": "semantic_graph",
+      "classification": "CONFIRMED_DESIGN_BYPASS",
+      "evidence": "All 178 execute_case exchanges intentionally share one Python subject process; case definitions' isolation rules are not consumed.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-004"
+    },
+    {
+      "attack": "Correct response with wrong side effects",
+      "category": "semantic_graph",
+      "classification": "CONFIRMED_STATIC_BYPASS",
+      "evidence": "Required/forbidden side-effect fields have zero verifier references; outer delta is hard-constrained to zero and subject delta only to >=1.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-005"
+    },
+    {
+      "attack": "Correct side effects with wrong response",
+      "category": "semantic_graph",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Expected status/classification comparison rejects a directly wrong response.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-006"
+    },
+    {
+      "attack": "Unknown extra child evidence ignored",
+      "category": "semantic_graph",
+      "classification": "CONFIRMED_STATIC_BYPASS",
+      "evidence": "Raw-evidence locator content and unreferenced files are not closed against semantic extras; only selected locators are resolved.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-007"
+    },
+    {
+      "attack": "Conflicting duplicate event with favorable ordering",
+      "category": "semantic_graph",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Duplicate case IDs and required count are checked in current source.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-008"
+    },
+    {
+      "attack": "Reordered events change semantics",
+      "category": "semantic_graph",
+      "classification": "UNRESOLVED_STATIC_GAP",
+      "evidence": "Hash-chain integrity is checked, but no independently governed per-case ordering semantics is enforced.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-009"
+    },
+    {
+      "attack": "Stale but later-signed observation",
+      "category": "semantic_graph",
+      "classification": "CONFIRMED_AUTHORITY_BYPASS",
+      "evidence": "Same-SID hostile child can use the signing key and stores; observation semantics are copied from events.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-010"
+    },
+    {
+      "attack": "Correct individual cases with invalid aggregate terminal conclusion",
+      "category": "semantic_graph",
+      "classification": "CONFIRMED_STATIC_BYPASS",
+      "evidence": "Aggregate accepts expectation-conditioned case rows and does not independently prove declared side-effect/evidence obligations.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-011"
+    },
+    {
+      "attack": "Circular trace mappings",
+      "category": "semantic_graph",
+      "classification": "CONFIRMED_STATIC_BYPASS",
+      "evidence": "Service checks selected trace fields but no complete reverse resolution or acyclic mapping.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-012"
+    },
+    {
+      "attack": "Duplicate JSON keys",
+      "category": "parser",
+      "classification": "CONFIRMED_LIVE_BYPASS",
+      "evidence": "Live duplicate operation UNKNOWN then GET_HEALTH returned COMPLETE; JavaScriptSerializer collapses to last value; checkpoint unchanged.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-013"
+    },
+    {
+      "attack": "Differing canonical JSON representation",
+      "category": "parser",
+      "classification": "CONFIRMED_STATIC_BYPASS",
+      "evidence": "Outer IPC parser does not canonical-roundtrip request bytes; whitespace/noncanonical outer JSON is accepted before semantic extraction.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-014"
+    },
+    {
+      "attack": "Unicode-normalized identifiers",
+      "category": "parser",
+      "classification": "UNRESOLVED_STATIC_GAP",
+      "evidence": "Outer parser applies no NFC normalization/equality guard.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-015"
+    },
+    {
+      "attack": "Case-folded path collisions",
+      "category": "parser",
+      "classification": "CONFIRMED_PATH_CONTROL_GAP",
+      "evidence": "Windows-insensitive lexical path checks lack final handle/path identity.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-016"
+    },
+    {
+      "attack": "Integer/string coercion",
+      "category": "parser",
+      "classification": "CONFIRMED_LOCAL_AND_STATIC_BYPASS",
+      "evidence": "Independent .NET reproduction converted string \"1\" with the exact Convert.ToInt64 pattern used by RequireLong.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-017"
+    },
+    {
+      "attack": "Null versus absent fields",
+      "category": "parser",
+      "classification": "MIXED_STATIC_RESULT",
+      "evidence": "Exact top-level keys reject many forms; nested schema/default semantics are not uniformly runtime enforced.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-018"
+    },
+    {
+      "attack": "Unknown-field smuggling",
+      "category": "parser",
+      "classification": "MIXED_STATIC_RESULT",
+      "evidence": "Top-level request key sets are generally exact, while committed schemas and nested exact-key rules are not uniformly loaded/enforced.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-019"
+    },
+    {
+      "attack": "Oversized nested object below frame limit",
+      "category": "parser",
+      "classification": "NOT_EXECUTED_AUTHORIZATION_LIMIT",
+      "evidence": "Would consume live service parser resources; authored result was not treated as independent evidence.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-020"
+    },
+    {
+      "attack": "Truncated multibyte data",
+      "category": "parser",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Strict UTF-8 decoder is configured; no live state was changed.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-021"
+    },
+    {
+      "attack": "Multiple objects in one frame",
+      "category": "parser",
+      "classification": "CONFIRMED_STATIC_FRAMING_GAP",
+      "evidence": "ReadRequest stops at first LF and does not require end-of-frame/pipe completion; live compound attempt broke the pipe and was not counted as acceptance.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-022"
+    },
+    {
+      "attack": "Trailing data after first object",
+      "category": "parser",
+      "classification": "CONFIRMED_STATIC_FRAMING_GAP",
+      "evidence": "Bytes following the first LF are not bound to the parsed request.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-023"
+    },
+    {
+      "attack": "Line-ending transformation",
+      "category": "parser",
+      "classification": "UNRESOLVED_STATIC_GAP",
+      "evidence": "Outer requests are not bound to canonical LF-only representation.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-024"
+    },
+    {
+      "attack": "Locale-dependent parsing",
+      "category": "parser",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "GUID and invariant numeric conversions avoid the identified locale path.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-025"
+    },
+    {
+      "attack": "Junction or symlink substitution",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_CONTROL_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "Path-based lexical prefix/read/hash lacks final no-follow handle validation; one retained junction exists.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-026"
+    },
+    {
+      "attack": "Hard-link substitution",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_CONTROL_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "No link-count/file-ID enforcement; current critical paths have link count one.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-027"
+    },
+    {
+      "attack": "Alternate data streams",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_CONTROL_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "No stream enumeration/rejection; current scan found zero ADS.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-028"
+    },
+    {
+      "attack": "8.3 path alias",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_CONTROL_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "8.3 creation is enabled and aliases exist; no final-path alias rejection.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-029"
+    },
+    {
+      "attack": "Rename race",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_TOCTOU_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "Hash/check and later path use are not protected by an immutable held handle.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-030"
+    },
+    {
+      "attack": "Read-after-hash replacement",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_TOCTOU_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "No before/after file ID or held handle across governed use.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-031"
+    },
+    {
+      "attack": "Mutable ProgramData case or expectation copy",
+      "category": "filesystem_identity",
+      "classification": "HOST_CLEAN_BUT_ARCHITECTURE_BROKEN",
+      "evidence": "Current hashes match; same-SID hostile children have authority in service-owned roots and path reader lacks handle closure.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-032"
+    },
+    {
+      "attack": "Evidence-root copy with valid internal hashes",
+      "category": "filesystem_identity",
+      "classification": "UNRESOLVED_STATIC_GAP",
+      "evidence": "Content identity survives copying and service does not independently derive all semantic freshness.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-033"
+    },
+    {
+      "attack": "Worker replacement between measurement and launch",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_TOCTOU_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "Worker is fully measured at startup; launch later uses a path and trusts child self-report.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-034"
+    },
+    {
+      "attack": "Comparator replacement between measurement and launch",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_TOCTOU_AND_SAME_ROLE_GAP",
+      "evidence": "Comparator is a mode of the same worker and has the same path/token/authority exposure.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-035"
+    },
+    {
+      "attack": "Dependency or Python import substitution",
+      "category": "filesystem_identity",
+      "classification": "CONFIRMED_DEPENDENCY_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "Git is unbound; full Python runtime checked only at service start; user-site is appended.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-036"
+    },
+    {
+      "attack": "Wrong executable with copied version metadata",
+      "category": "filesystem_identity",
+      "classification": "STATIC_HASH_REJECTION_WITH_SELF_REPORT_GAP",
+      "evidence": "Pinned image hashes reject simple copying; process/token evidence is partly child-reported and same-SID authority remains.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-037"
+    },
+    {
+      "attack": "Old client against new service",
+      "category": "service_protocol",
+      "classification": "REJECTED_LIVE",
+      "evidence": "Retained v1 client returned INTERFACE_VERSION_REJECTED; checkpoint unchanged.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-038"
+    },
+    {
+      "attack": "New client against old interface",
+      "category": "service_protocol",
+      "classification": "NOT_EXECUTED_AUTHORIZATION_LIMIT",
+      "evidence": "Would require replacing/stopping current service, not authorized.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-039"
+    },
+    {
+      "attack": "Operation downgrade",
+      "category": "service_protocol",
+      "classification": "CONFIRMED_LIVE_DUPLICATE_KEY_BYPASS",
+      "evidence": "Duplicate operation keys select last value and bypass first operation semantics.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-040"
+    },
+    {
+      "attack": "Policy downgrade",
+      "category": "service_protocol",
+      "classification": "CONFIRMED_GOVERNANCE_GAP_NOT_LIVE_EXPLOITED",
+      "evidence": "No externally authorized active-version/anti-rollback state.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-041"
+    },
+    {
+      "attack": "Valid signature for wrong operation",
+      "category": "service_protocol",
+      "classification": "CONFIRMED_SAME_PRINCIPAL_CAPABILITY",
+      "evidence": "Hostile children can open the same key and modify stores; no per-operation key capability.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-042"
+    },
+    {
+      "attack": "Valid receipt from superseded binary or policy",
+      "category": "service_protocol",
+      "classification": "CONFIRMED_TRUST_LIFECYCLE_BYPASS",
+      "evidence": "v1 attestation does not govern v3 and no supersession/anti-downgrade receipt exists.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-043"
+    },
+    {
+      "attack": "Nonce reuse across operation types",
+      "category": "service_protocol",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Stored request identity conflict is intended to reject cross-operation reuse; no independent concurrency live test.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-044"
+    },
+    {
+      "attack": "Concurrent conflicting candidate/fresh requests",
+      "category": "service_protocol",
+      "classification": "NOT_EXECUTED_AUTHORIZATION_LIMIT",
+      "evidence": "State-changing concurrent live requests were not authorized.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-045"
+    },
+    {
+      "attack": "Reconciliation before both inputs durably committed",
+      "category": "service_protocol",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Current reconciler resolves terminal ledger membership before commit.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-046"
+    },
+    {
+      "attack": "Reconciliation against superseded receipt",
+      "category": "service_protocol",
+      "classification": "CONFIRMED_LIFECYCLE_GAP",
+      "evidence": "There is no governed supersession/terminal-state model.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-047"
+    },
+    {
+      "attack": "Response replay after service restart",
+      "category": "service_protocol",
+      "classification": "NOT_EXECUTED_AUTHORIZATION_LIMIT",
+      "evidence": "Service restart was not authorized; response durability defect is independently established.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-048"
+    },
+    {
+      "attack": "Disconnect immediately after commit",
+      "category": "service_protocol",
+      "classification": "CONFIRMED_EXISTING_EVIDENCE",
+      "evidence": "Seq 678 appended usable attempt, response store failed and client saw REQUEST_REJECTED.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-049"
+    },
+    {
+      "attack": "Exact 65,536-byte frame",
+      "category": "service_protocol",
+      "classification": "NOT_EXECUTED_INDEPENDENTLY",
+      "evidence": "Static limit is 65,536; authored boundary result was not promoted to independent PASS.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-050"
+    },
+    {
+      "attack": "65,537-byte frame",
+      "category": "service_protocol",
+      "classification": "NOT_EXECUTED_INDEPENDENTLY",
+      "evidence": "Static code intends rejection; no independent live request was made.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-051"
+    },
+    {
+      "attack": "Stale checkpoint with later entries",
+      "category": "ledger_reconciliation",
+      "classification": "CONFIRMED_FATAL_RECOVERY_GAP",
+      "evidence": "Restart verifier requires checkpoint == final entry and has no forward recovery.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-052"
+    },
+    {
+      "attack": "Later checkpoint with missing entries",
+      "category": "ledger_reconciliation",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Strict checkpoint/chain equality rejects this state.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-053"
+    },
+    {
+      "attack": "Detached valid receipt",
+      "category": "ledger_reconciliation",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Public/service verifier checks authoritative ledger membership for terminal/reconciliation receipts.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-054"
+    },
+    {
+      "attack": "Correct receipt under copied ledger",
+      "category": "ledger_reconciliation",
+      "classification": "STATIC_FIXED_ROOT_REJECTION_PRESENT",
+      "evidence": "Runtime paths are fixed, though a public offline copied-root threat was not exhaustively executed.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-055"
+    },
+    {
+      "attack": "Candidate/fresh semantic equality with partial evidence inequality",
+      "category": "ledger_reconciliation",
+      "classification": "CONFIRMED_SEMANTIC_GAP",
+      "evidence": "Unconsumed required/forbidden evidence can differ while compared summaries remain equal.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-056"
+    },
+    {
+      "attack": "Candidate/fresh share one child process",
+      "category": "ledger_reconciliation",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Current runs launch distinct process IDs and reconciliation checks selected provenance fields.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-057"
+    },
+    {
+      "attack": "Candidate/fresh share one event subtree",
+      "category": "ledger_reconciliation",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Run IDs/event roots and current locators are compared for disjointness.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-058"
+    },
+    {
+      "attack": "Two invalid graphs reconcile to same summary",
+      "category": "ledger_reconciliation",
+      "classification": "CONFIRMED_ARCHITECTURE_BYPASS",
+      "evidence": "Both expectation-conditioned graphs can pass the same shallow terminal verifier and reconcile.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-059"
+    },
+    {
+      "attack": "Valid old reconciliation replayed against new terminal receipts",
+      "category": "ledger_reconciliation",
+      "classification": "STATIC_REJECTION_PRESENT",
+      "evidence": "Reconciliation receipt binds exact terminal locators/claims.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-060"
+    },
+    {
+      "attack": "Conflicting later terminal state",
+      "category": "ledger_reconciliation",
+      "classification": "CONFIRMED_LIFECYCLE_GAP",
+      "evidence": "No supersession/conflict state machine defines authoritative latest terminality.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-061"
+    },
+    {
+      "attack": "Reservation without completion",
+      "category": "ledger_reconciliation",
+      "classification": "NOT_LIVE_PRESENT_BUT_CRASH_WINDOW_UNVERIFIED",
+      "evidence": "Current ledger pairs 64/64 terminal and 31/31 reconciliation; crash injection was not authorized.",
+      "host_mutation_required_for_live_exploit": false,
+      "id": "IAP-062"
+    },
+    {
+      "attack": "Duplicate completion",
+      "category": "ledger_reconciliation",
+      "classification": "STATIC_SERVICE_REJECTION_BUT_SAME_SID_DIRECT_CAPABILITY",
+      "evidence": "Normal idempotency should reject; same-SID hostile child can sign/append directly.",
+      "host_mutation_required_for_live_exploit": true,
+      "id": "IAP-063"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "summary": {
+    "CONFIRMED": 32,
+    "HOST": 1,
+    "MIXED": 2,
+    "NOT": 7,
+    "REJECTED": 1,
+    "STATIC": 16,
+    "UNRESOLVED": 4
+  }
+}

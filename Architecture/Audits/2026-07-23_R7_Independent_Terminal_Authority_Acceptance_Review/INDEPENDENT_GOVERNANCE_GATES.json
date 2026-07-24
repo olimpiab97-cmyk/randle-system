@@ -1,0 +1,12 @@
+{
+  "artifact_type": "R7_INDEPENDENT_GOVERNANCE_GATES",
+  "disposition": "REJECT — R7 REMEDIATION REQUIRED",
+  "gates": [
+    {"gate": 1, "name": "Authority and ancestry", "status": "FAIL", "reason": "Git ancestry is structurally valid, but discarded ungoverned f0 objects provide substantive case, expectation and executable authority."},
+    {"gate": 2, "name": "Architecture and canonical consistency", "status": "FAIL", "reason": "Same-principal children, synthetic/fixture semantics, self-authorized DRAFT upgrade and overstated AIA/Canonical claims violate authority separation."},
+    {"gate": 3, "name": "Implementation and evidence", "status": "FAIL", "reason": "False case roots, expectation-conditioned actuals, shallow semantic verification, response/checkpoint recovery defects and unbound dependencies remain."},
+    {"gate": 4, "name": "Adversarial boundary", "status": "FAIL", "reason": "Live duplicate-key bypass and static same-SID signing/store, semantic graph, trust-downgrade, parser, TOCTOU, crash and reconciliation bypasses survive."},
+    {"gate": 5, "name": "Acceptance and authorization boundary", "status": "FAIL", "reason": "Blocking findings remain and required new matrix/service-stopped evidence is absent; no incorporation, merge or deployment is authorized."}
+  ],
+  "schema_version": "1.0.0"
+}
