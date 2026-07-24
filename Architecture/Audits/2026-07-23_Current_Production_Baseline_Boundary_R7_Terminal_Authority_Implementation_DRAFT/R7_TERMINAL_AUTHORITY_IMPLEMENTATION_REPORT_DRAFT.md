@@ -95,7 +95,7 @@ The retained structural suite passed:
 
 - restricted SID and repository denial;
 - caller key-open and private-export denial; public certificate has no private key;
-- authenticated pipe ACL, 1 MiB request limit, partial/disconnected handling, and 20 malformed/unauthorized request probes;
+- authenticated pipe ACL, 64 KiB request limit, partial/disconnected handling, and 20 malformed/unauthorized request probes;
 - no generic sign or caller-selected root/status/payload authority;
 - fixed ledger identity and retained history;
 - same-receipt candidate/fresh rejection;

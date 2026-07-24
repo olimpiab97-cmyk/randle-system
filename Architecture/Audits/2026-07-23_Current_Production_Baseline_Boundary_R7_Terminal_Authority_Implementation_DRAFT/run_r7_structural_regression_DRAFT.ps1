@@ -213,7 +213,7 @@ $results.ipc_integrity = [ordered]@{
     disconnected_partial = $disconnected
     pipe_acl_probe = $pipeAcl
     pipe_acl_source_identity = [string]$healthJson.ipc_identity
-    request_limit = 1048576
+    request_limit = 65536
 }
 Require ($pipeAcl.exit_code -eq 0 -or $pipeAcl.stderr_text -match 'UnauthorizedAccessException|access.*denied') 'PIPE_ACL_PROBE_UNEXPECTED_FAILURE'
 

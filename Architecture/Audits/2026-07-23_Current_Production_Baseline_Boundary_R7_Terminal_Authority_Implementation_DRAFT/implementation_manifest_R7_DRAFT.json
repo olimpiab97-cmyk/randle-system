@@ -133,20 +133,20 @@
       "size": 12353
     },
     {
-      "git_blob": "606ac1f898e50de0aa712a2b45f4d74c27eb36fb",
+      "git_blob": "24a23d182d00f23a8f7c68a9074aa83f03bf2a2f",
       "mode": "100644",
       "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/r7_structural_boundary_regression_result_DRAFT.json",
-      "raw_sha256": "d1d7743a825f46e528c4e82c72b52fe2ea16cb1831296e15d0e8572610042e36",
+      "raw_sha256": "1c9eb960904c25d908d53dca1850ee7872d52815906c8d7985d03928952008c1",
       "role": "PRECOMMIT_STRUCTURAL_RESULTS",
-      "size": 11798
+      "size": 11805
     },
     {
-      "git_blob": "3e58853985b08ce08cd8e5c8ffdf6960a3063bed",
+      "git_blob": "9b8de64cc52ad509b4a95df7d4261d5186711c0b",
       "mode": "100644",
       "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/R7_TERMINAL_AUTHORITY_IMPLEMENTATION_REPORT_DRAFT.md",
-      "raw_sha256": "4b513545db927698603a7321cee24c9a8c89c458c1cb7dd124f6769a4dfb77fc",
+      "raw_sha256": "302b03f960b6b4445d702c5091d8ddbf3f8057113d22bbb3ab06b6329cd4d40e",
       "role": "IMPLEMENTATION_EVIDENCE_REPORT",
-      "size": 23611
+      "size": 23612
     },
     {
       "git_blob": "1368fc8ff9df6665fc28ee61b3061029e383b543",
@@ -205,20 +205,20 @@
       "size": 2385
     },
     {
-      "git_blob": "af453639a62ce121aea17ce81124e434e421da6b",
+      "git_blob": "1b45dd432bde41af68a9cae7793e412153bae040",
       "mode": "100644",
       "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/R7_TERMINAL_REQUIREMENT_MATRIX_DRAFT.md",
-      "raw_sha256": "29d5b154d40bea40106e3fbb5e4c31f546c0ff565d08cac5a1bf7f574229c623",
+      "raw_sha256": "5f733b95287f168722369bafa33b24f48958732ef3e3e1e65608fbf053b65d28",
       "role": "BIDIRECTIONAL_TRACEABILITY",
-      "size": 13844
+      "size": 13845
     },
     {
-      "git_blob": "918ab9f6a17b8f96c531caea5a213e77f4530daa",
+      "git_blob": "84329e447689a087f6698062fdbe3d0e7099776a",
       "mode": "100644",
       "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/r7_terminal_verification_results_DRAFT.json",
-      "raw_sha256": "6f1b5f536627fe833149d0d1f395cece3becf24bb771cb8a82437476c24aa396",
+      "raw_sha256": "af483a3280f566cb98bf1b2d72fd66a54582b15e41c22e695a51981d041239a9",
       "role": "PUBLIC_IMPLEMENTATION_ARTIFACT",
-      "size": 1652
+      "size": 1661
     },
     {
       "git_blob": "4694125882526d5bd9abb14b394d17d463d32564",
@@ -261,12 +261,12 @@
       "size": 27580
     },
     {
-      "git_blob": "0d384770d1c86177d153cdc43c5046c3df53f002",
+      "git_blob": "822c963f55b0eb44033d7652f89eb39d07eeabf0",
       "mode": "100644",
       "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/run_r7_structural_regression_DRAFT.ps1",
-      "raw_sha256": "32d7ae8aafac4aac0846c6feb3bfa29665d996813dd5df7a7858d1c37a1c7b80",
+      "raw_sha256": "75f4c65081e75f5033f3a1a9e42d4bc3344adff0cf08b0cb2721ce0937fcb2de",
       "role": "SOURCE",
-      "size": 22669
+      "size": 22667
     },
     {
       "git_blob": "842f1d413d47e9139228da4f99c5f57c743186c7",

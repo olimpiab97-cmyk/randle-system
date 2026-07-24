@@ -1,9 +1,9 @@
 {
   "append_before_response": {
-    "checkpoint_sequence": 381,
+    "checkpoint_sequence": 547,
     "commit_after_reservation": true,
-    "commit_sequence": 363,
-    "receipt_reservation_sequence": 362
+    "commit_sequence": 532,
+    "receipt_reservation_sequence": 531
   },
   "artifact_type": "R7_STRUCTURAL_BOUNDARY_PRECOMMIT_RESULT",
   "candidate_fresh_replay": {
@@ -11,8 +11,8 @@
     "probe": {
       "arguments": [
         "same-receipt",
-        "35c8c5eef7f4a57c8e345a196604558e5cbb9102154100bff9565a8909195654",
-        "randle-terminal://sha256/f4271aa36f34331e3e63397a9b3d223134e47f0beb41582577f6ee1342fc81a4"
+        "a0ef2b365b0e9cdc256a64e467bb2f028ebbb583eb9d632dbb7e327b26d6377b",
+        "randle-terminal://sha256/62c6101db2363a48aacd7522326ea3150afef843f95a5328f5260a132da5415a"
       ],
       "exit_code": 0,
       "stderr_length": 0,
@@ -184,7 +184,7 @@
     ],
     "partial_request_exit_code": 0,
     "pipe_acl_exit_code": 0,
-    "request_limit": 1048576
+    "request_limit": 65536
   },
   "key_isolation": {
     "caller_error": "System.Management.Automation.MethodInvocationException: Exception calling \"Open\" with \"3\" argument(s): \"Keyset does not exist\r\n\"",
@@ -196,9 +196,9 @@
   },
   "ledger_integrity": {
     "final_checkpoint": {
-      "identity": "4c75a9bbba4c1664b39f46effc91216419dc15c824a66f3d4cd2a474d223b720",
-      "root_hash": "3c8077163b5ad26db522eb2d8f6aa1c244ad6690b3652c9fc30a2dbc6995d55c",
-      "sequence": 381
+      "identity": "40324bc9aedaa1a0a2dc42b6970837e91c7e13a69db8dd61119793777418c0d0",
+      "root_hash": "d8e649ca19344879913e2d3eb0b41cdebb390699c50e6d87ecc2b2f1be6c8200",
+      "sequence": 547
     },
     "final_public_verification": {
       "arguments": [
@@ -209,14 +209,14 @@
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_text": "",
       "stdout_length": 246,
-      "stdout_sha256": "bcebfc41414df8137680ad7cc5468a9e3f10fb172a8f5be9dcac4e01f446a402",
-      "stdout_text": "{\"identity\":\"4c75a9bbba4c1664b39f46effc91216419dc15c824a66f3d4cd2a474d223b720\",\"ledger_root\":\"3c8077163b5ad26db522eb2d8f6aa1c244ad6690b3652c9fc30a2dbc6995d55c\",\"ledger_sequence\":381,\"result_code\":\"R7_PUBLIC_LEDGER_VERIFIED\",\"status\":\"VERIFIED\"}\r\n",
+      "stdout_sha256": "7e8f5e566c0c205870e9c98ca25fc53f3a5e7c722fe88efbb1bb573387f220da",
+      "stdout_text": "{\"identity\":\"40324bc9aedaa1a0a2dc42b6970837e91c7e13a69db8dd61119793777418c0d0\",\"ledger_root\":\"d8e649ca19344879913e2d3eb0b41cdebb390699c50e6d87ecc2b2f1be6c8200\",\"ledger_sequence\":547,\"result_code\":\"R7_PUBLIC_LEDGER_VERIFIED\",\"status\":\"VERIFIED\"}\r\n",
       "timed_out": false
     },
     "initial_checkpoint": {
-      "identity": "96e3f7b4be463bbd16a1c97f439b0609c0b01878feadd7da46a2e58a08b34e6a",
-      "root_hash": "7fed9c820f86bf48ed634140271f30d0d4619998787156df05ffaf5613760282",
-      "sequence": 378
+      "identity": "102890c42724d0d2f35f80f9d896b191202a4cf5dd6144e8a3d6906eb6415dfa",
+      "root_hash": "08d2200b7241f263568406c3e54b93abeffe7a6436c6aa71cb4dcc680711da92",
+      "sequence": 544
     },
     "ledger_id": "899e4db2b5c0f4ad58a09c682324a2ee9e5d7e2f180822ce9300922e56741d52",
     "retained_history": true
@@ -229,12 +229,12 @@
   },
   "replay_retry_idempotency": {
     "concurrent_ledger_delta": 1,
-    "concurrent_nonce": "c86fa73f-4312-4fe2-91b9-c870b2216657",
-    "concurrent_response_identity": "33f6c1eeebd9cded08f3e790594be77504374fb1bc5c523ad253640a4f9bf997",
+    "concurrent_nonce": "451441f1-5cb6-4db5-acfd-d4ee9e30d1c9",
+    "concurrent_response_identity": "ee4fde17da867c7392f990e6e1f51b3a14bbf913c1420787c79a4196e42cd354",
     "conflict_error": "REQUEST_NONCE_REPLAY_CONFLICT",
-    "first_response_sha256": "efbbbeec3f39e8e3fdd7a6464c8146637de0373727a137968cab90d73ab6a035",
-    "replay_nonce": "de9f9572-d03f-48fc-b404-95fb0696849a",
-    "second_response_sha256": "efbbbeec3f39e8e3fdd7a6464c8146637de0373727a137968cab90d73ab6a035",
+    "first_response_sha256": "24fa44ba4cbacbcc04ae9a0d47f519fc9f55dcad682e807f1edf024c9412982d",
+    "replay_nonce": "0b6db80a-0ae6-486b-a89e-c49d1b7c8343",
+    "second_response_sha256": "24fa44ba4cbacbcc04ae9a0d47f519fc9f55dcad682e807f1edf024c9412982d",
     "sequential_ledger_delta": 1
   },
   "schema_version": "7.1.0-DRAFT",
@@ -244,21 +244,21 @@
     "offline_ledger_exit_code": 0,
     "offline_reconciliation_exit_code": 0,
     "post_restart_checkpoint": {
-      "identity": "4c75a9bbba4c1664b39f46effc91216419dc15c824a66f3d4cd2a474d223b720",
-      "root_hash": "3c8077163b5ad26db522eb2d8f6aa1c244ad6690b3652c9fc30a2dbc6995d55c",
-      "sequence": 381
+      "identity": "40324bc9aedaa1a0a2dc42b6970837e91c7e13a69db8dd61119793777418c0d0",
+      "root_hash": "d8e649ca19344879913e2d3eb0b41cdebb390699c50e6d87ecc2b2f1be6c8200",
+      "sequence": 547
     },
     "pre_stop_checkpoint": {
-      "identity": "4c75a9bbba4c1664b39f46effc91216419dc15c824a66f3d4cd2a474d223b720",
-      "root_hash": "3c8077163b5ad26db522eb2d8f6aa1c244ad6690b3652c9fc30a2dbc6995d55c",
-      "sequence": 381
+      "identity": "40324bc9aedaa1a0a2dc42b6970837e91c7e13a69db8dd61119793777418c0d0",
+      "root_hash": "d8e649ca19344879913e2d3eb0b41cdebb390699c50e6d87ecc2b2f1be6c8200",
+      "sequence": 547
     },
     "stopped_client_exit_code": 70
   },
   "source_evidence": {
-    "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_structural_complete.json",
-    "raw_sha256": "20592f39c99b138c2525a3abb30d0aa82516a43bb8c06eb4e79c27975f58b2fc",
-    "size": 19571
+    "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_structural_request_limit_fix.json",
+    "raw_sha256": "91e7ef1974c669e533613f77c5fc99490dfd76b0780588d3d65960c62af9d17e",
+    "size": 19587
   },
   "status": "PASS",
   "substitution_controls": {

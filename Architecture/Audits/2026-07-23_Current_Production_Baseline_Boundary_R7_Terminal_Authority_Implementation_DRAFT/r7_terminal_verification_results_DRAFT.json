@@ -35,9 +35,9 @@
   "structural": {
     "negative_ipc_probe_count": 20,
     "source": {
-      "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_structural_complete.json",
-      "raw_sha256": "20592f39c99b138c2525a3abb30d0aa82516a43bb8c06eb4e79c27975f58b2fc",
-      "size": 19571
+      "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_structural_request_limit_fix.json",
+      "raw_sha256": "91e7ef1974c669e533613f77c5fc99490dfd76b0780588d3d65960c62af9d17e",
+      "size": 19587
     },
     "status": "PASS"
   }
