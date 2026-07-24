@@ -207,6 +207,7 @@ Development diagnostics are retained rather than concealed:
 - An early structural PowerShell harness exposed unreliable `Start-Process` exit-code handling; the harness was corrected to use .NET `Process`, and raw failure evidence remains.
 - The first matrix attempt completed two short variants, then failed closed because the long clone had not enabled `core.longpaths` before clone. Those four terminal and two reconciliation receipts remain durable diagnostic history and are not counted in the completed matrix.
 - The environment compiler rejected a deterministic-build switch and produces varying MVID/PE metadata; exact normalized IL plus installed/reference raw hashes are used, with no stronger claim.
+- The first immutable correction commit, `98a394f2954cebdbef5f2d164c8801697c6d1ed5`, failed its fresh-checkout package audit because the verifier compared an inherited provisioning source to `autocrlf=true` working-tree bytes instead of its committed Git blob. The commit is retained unchanged. Root-cause correction resolves inherited sources through `HEAD:<path>` and verifies the exact blob bytes; implementation-package sources remain checked against exact LF working bytes. No receipt, service, trust, key, or ledger verification failed in that diagnostic.
 
 These are nonblocking only if the complete immutable post-commit rerun independently passes. Any post-commit failure becomes blocking and must be corrected by a new commit, never by rewriting this package's commit.
 

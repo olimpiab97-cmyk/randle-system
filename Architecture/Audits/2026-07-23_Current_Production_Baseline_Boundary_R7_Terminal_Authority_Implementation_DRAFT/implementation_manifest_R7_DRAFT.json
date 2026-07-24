@@ -141,12 +141,12 @@
       "size": 11798
     },
     {
-      "git_blob": "98042dae4562bec1bc4beed85ea13103d8f7d7f2",
+      "git_blob": "3e58853985b08ce08cd8e5c8ffdf6960a3063bed",
       "mode": "100644",
       "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/R7_TERMINAL_AUTHORITY_IMPLEMENTATION_REPORT_DRAFT.md",
-      "raw_sha256": "17e4709aea22cbe6bbe1763fb31345e3ddf04369572230b9f29cb332aaee2b6f",
+      "raw_sha256": "4b513545db927698603a7321cee24c9a8c89c458c1cb7dd124f6769a4dfb77fc",
       "role": "IMPLEMENTATION_EVIDENCE_REPORT",
-      "size": 23049
+      "size": 23611
     },
     {
       "git_blob": "1368fc8ff9df6665fc28ee61b3061029e383b543",
@@ -397,12 +397,12 @@
       "size": 6341
     },
     {
-      "git_blob": "9ce61c6172f441f04687451ef8c470360b0fd6f4",
+      "git_blob": "34eaf837c37a89a42ade6a0ae66f1b6a64e187ea",
       "mode": "100644",
       "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/verify_r7_terminal_authority_package_DRAFT.py",
-      "raw_sha256": "a1d9389fd5af7d3db406f3e076f6baf0859d0a4ecf41c4b3526bcc5d062c0f31",
+      "raw_sha256": "90f1814d4814423ccef8f2b1c2b338bb73d815c8787411b8f4209aaab50d7add",
       "role": "SOURCE",
-      "size": 21679
+      "size": 22596
     }
   ],
   "schema_version": "7.1.0-DRAFT",

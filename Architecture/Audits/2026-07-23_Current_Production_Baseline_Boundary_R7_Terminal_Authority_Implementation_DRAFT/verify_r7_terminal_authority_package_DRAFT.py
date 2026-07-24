@@ -215,8 +215,15 @@ def main() -> int:
     require(package.is_dir(), "PACKAGE_MISSING")
 
     head = run_git(root, "rev-parse", "HEAD").stdout.decode("ascii").strip()
-    parent = run_git(root, "show", "-s", "--format=%P", "HEAD").stdout.decode("ascii").strip().split()
-    require(head == BASE or (len(parent) == 1 and parent[0] == BASE), "HEAD_PARENT_AUTHORITY")
+    base_ancestry = run_git(root, "merge-base", "--is-ancestor", BASE, "HEAD", allowed=(0, 1))
+    require(base_ancestry.returncode == 0, "BASE_ANCESTRY")
+    linear_commits = run_git(root, "rev-list", "--reverse", "--first-parent", f"{BASE}..HEAD").stdout.decode("ascii").split()
+    prior = BASE
+    for commit in linear_commits:
+        parents = run_git(root, "show", "-s", "--format=%P", commit).stdout.decode("ascii").strip().split()
+        require(len(parents) == 1 and parents[0] == prior, f"LINEAR_PARENT_AUTHORITY:{commit}")
+        prior = commit
+    require(prior == head, "LINEAR_HEAD_AUTHORITY")
     require(run_git(root, "rev-parse", f"{R6}^{{commit}}").stdout.decode("ascii").strip() == R6, "R6_RESOLUTION")
     require(run_git(root, "show", "-s", "--format=%T", R6).stdout.decode("ascii").strip() == "f9891562ea09d011d4d9803d9cf64b88ff1f2dbf", "R6_TREE")
     require(run_git(root, "show", "-s", "--format=%P", R6).stdout.decode("ascii").strip() == "c211870a8183e8f3e9ea9bf17fa34288b2c3000e", "R6_PARENT")
@@ -322,7 +329,14 @@ def main() -> int:
     require(build["status"] == "BUILT_INSTALLED_SEMANTICALLY_REBUILT_NOT_ACCEPTED" and len(build["outputs"]) == 7, "BUILD_STATUS")
     for source in build["sources"]:
         path = root / source["path"]
-        require(path.is_file() and sha256(path) == source["raw_sha256"] and git_blob_bytes(path.read_bytes()) == source["git_blob"] and path.stat().st_size == source["size"], f"BUILD_SOURCE:{source['path']}")
+        require(path.is_file(), f"BUILD_SOURCE_PATH:{source['path']}")
+        if source["path"].startswith(PACKAGE_REL.as_posix() + "/"):
+            source_bytes = path.read_bytes()
+        else:
+            committed_blob = run_git(root, "rev-parse", f"HEAD:{source['path']}").stdout.decode("ascii").strip()
+            require(committed_blob == source["git_blob"], f"BUILD_INHERITED_SOURCE_BLOB:{source['path']}")
+            source_bytes = run_git(root, "cat-file", "blob", committed_blob).stdout
+        require(hashlib.sha256(source_bytes).hexdigest() == source["raw_sha256"] and git_blob_bytes(source_bytes) == source["git_blob"] and len(source_bytes) == source["size"], f"BUILD_SOURCE:{source['path']}")
     for output in build["outputs"]:
         require(output["semantic_equality"] is True and output["normalized_il_sha256"], f"BUILD_SEMANTICS:{output['name']}")
         if output["installed_path"] is not None:
