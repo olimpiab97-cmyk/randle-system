@@ -1,0 +1,60 @@
+{
+  "$id": "https://randle.ai/schemas/r7i-b01-adversarial-probes-7.1.0-draft.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {
+      "const": "R7I_B01_ADVERSARIAL_PROBE_DEFINITIONS"
+    },
+    "governing_requirement": {
+      "const": "R7I-B01"
+    },
+    "probe_count": {
+      "const": 25
+    },
+    "probes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "attack": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "expected_terminal_behavior": {
+            "const": "REJECT_BEFORE_TERMINAL_OR_RECONCILIATION_AUTHORITY"
+          },
+          "probe_id": {
+            "pattern": "^R7I-B01-A(?:0[1-9]|1[0-9]|2[0-5])$",
+            "type": "string"
+          },
+          "required_evidence": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "attack",
+          "expected_terminal_behavior",
+          "probe_id",
+          "required_evidence"
+        ],
+        "type": "object"
+      },
+      "maxItems": 25,
+      "minItems": 25,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "7.1.0-DRAFT"
+    }
+  },
+  "required": [
+    "artifact_type",
+    "governing_requirement",
+    "probe_count",
+    "probes",
+    "schema_version"
+  ],
+  "title": "R7I-B01 synthetic-provenance adversarial definitions",
+  "type": "object"
+}

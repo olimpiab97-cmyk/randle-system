@@ -1,0 +1,1819 @@
+{
+  "$defs": {
+    "comparison": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_INDEPENDENT_COMPARATOR_RESULT"
+        },
+        "case_decisions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "case_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "decision": {
+                "const": "CONFORMANT"
+              },
+              "event_hash": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "case_id",
+              "decision",
+              "event_hash"
+            ],
+            "type": "object"
+          },
+          "maxItems": 178,
+          "minItems": 178,
+          "type": "array"
+        },
+        "case_definition_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "comparator_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "comparator_process_nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "conformity": {
+          "const": "CONFORMANT"
+        },
+        "discrepancies": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "case_id": {
+                "type": "string"
+              },
+              "code": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "detail": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "case_id",
+              "code",
+              "detail"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "discrepancy_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "event_source_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "expectation_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "observation_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "resolved_case_count": {
+          "const": 178
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "traceability_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "case_decisions",
+        "case_definition_git_blob",
+        "comparator_binary_sha256",
+        "comparator_process_nonce",
+        "conformity",
+        "discrepancies",
+        "discrepancy_count",
+        "event_source_locator",
+        "expectation_git_blob",
+        "observation_locator",
+        "resolved_case_count",
+        "run_id",
+        "schema_version",
+        "traceability_locator"
+      ],
+      "type": "object"
+    },
+    "event": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_authority_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "actual_outcome": {
+          "enum": [
+            "ACCEPTED",
+            "REJECTED"
+          ]
+        },
+        "case_definition_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "case_id": {
+          "pattern": "^R7-[0-9]{2}-(?:P|M)[0-9]{3}$",
+          "type": "string"
+        },
+        "enforcing_function": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "event_constructor_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "event_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "event_schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "event_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "expectation_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "fixture_body_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_helper_file_identity": {
+          "type": "string"
+        },
+        "fixture_helper_invoked": {
+          "type": "boolean"
+        },
+        "fixture_helper_process_id": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fixture_process_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_process_receipt_locator": {
+          "pattern": "^(?:|randle-evidence://sha256/[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "fixture_reparse_snapshot_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_reparse_snapshot_locator": {
+          "pattern": "^(?:|randle-evidence://sha256/[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "forbidden_side_effect_absent": {
+          "type": "boolean"
+        },
+        "inner_event_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "inner_execution_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "interface_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "interface_invoked": {
+          "const": true
+        },
+        "interface_operation": {
+          "const": "execute_case"
+        },
+        "invoking_process_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "outer_post_ledger_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "outer_post_ledger_sequence": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "outer_pre_ledger_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "outer_pre_ledger_sequence": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "prior_event_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "public_interface": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "public_interface_end_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "public_interface_start_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "public_request_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "public_response_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "raw_evidence_locators": {
+          "items": {
+            "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "minItems": 3,
+          "type": "array"
+        },
+        "request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "response_classification": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "response_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_case_token_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "subject_event_ledger_delta": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_launcher_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_service_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "suite_process_receipt_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "target_process_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actual_authority_identity",
+        "actual_outcome",
+        "case_definition_git_blob",
+        "case_id",
+        "enforcing_function",
+        "event_constructor_binary_sha256",
+        "event_hash",
+        "event_schema_version",
+        "event_time",
+        "expectation_git_blob",
+        "fixture_body_identity",
+        "fixture_helper_file_identity",
+        "fixture_helper_invoked",
+        "fixture_helper_process_id",
+        "fixture_process_receipt_identity",
+        "fixture_process_receipt_locator",
+        "fixture_reparse_snapshot_identity",
+        "fixture_reparse_snapshot_locator",
+        "forbidden_side_effect_absent",
+        "inner_event_hash",
+        "inner_execution_receipt_identity",
+        "interface_identity",
+        "interface_invoked",
+        "interface_operation",
+        "invoking_process_receipt_identity",
+        "outer_post_ledger_root",
+        "outer_post_ledger_sequence",
+        "outer_pre_ledger_root",
+        "outer_pre_ledger_sequence",
+        "prior_event_hash",
+        "public_interface",
+        "public_interface_end_time",
+        "public_interface_start_time",
+        "public_request_locator",
+        "public_response_locator",
+        "raw_evidence_locators",
+        "request_sha256",
+        "response_classification",
+        "response_sha256",
+        "run_id",
+        "sequence",
+        "subject_case_token_identity",
+        "subject_event_ledger_delta",
+        "subject_launcher_process_id",
+        "subject_process_id",
+        "subject_service_sha256",
+        "suite_process_receipt_locator",
+        "target_process_binary_sha256"
+      ],
+      "type": "object"
+    },
+    "eventSource": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_CURRENT_EXECUTION_EVENTS"
+        },
+        "case_definition_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "event_count": {
+          "const": 178
+        },
+        "event_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/event"
+          },
+          "maxItems": 178,
+          "minItems": 178,
+          "type": "array"
+        },
+        "expectation_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "subject_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "suite_process_receipt_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "case_definition_git_blob",
+        "event_count",
+        "event_root",
+        "events",
+        "expectation_git_blob",
+        "run_id",
+        "schema_version",
+        "subject_run_id",
+        "suite_process_receipt_locator"
+      ],
+      "type": "object"
+    },
+    "fixtureProcessReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_MEASURED_JUNCTION_FIXTURE_PROCESS"
+        },
+        "authentication_type": {
+          "type": "string"
+        },
+        "body_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "command": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "command_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "end_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "exit_code": {
+          "const": 0
+        },
+        "fixture_nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "group_sids": {
+          "items": {
+            "pattern": "^S-[0-9]+(?:-[0-9]+)+$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "helper_binary_file_identity": {
+          "type": "string"
+        },
+        "helper_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "helper_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "is_administrator": {
+          "const": false
+        },
+        "junction_path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "junction_path_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "operation": {
+          "const": "CREATE_DIRECTORY_JUNCTION_FIXTURE"
+        },
+        "outer_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "parent_binary_file_identity": {
+          "type": "string"
+        },
+        "parent_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "parent_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "parent_start_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "reparse_tag": {
+          "const": "a0000003"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "start_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "target_path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "target_path_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "token_inheritance": {
+          "const": "CREATEPROCESS_DEFAULT_CALLER_TOKEN"
+        },
+        "user_sid": {
+          "pattern": "^S-[0-9]+(?:-[0-9]+)+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "authentication_type",
+        "body_identity",
+        "command",
+        "command_sha256",
+        "end_time",
+        "exit_code",
+        "fixture_nonce",
+        "group_sids",
+        "helper_binary_file_identity",
+        "helper_binary_sha256",
+        "helper_process_id",
+        "is_administrator",
+        "junction_path",
+        "junction_path_sha256",
+        "operation",
+        "outer_run_id",
+        "parent_binary_file_identity",
+        "parent_binary_sha256",
+        "parent_process_id",
+        "parent_start_time",
+        "reparse_tag",
+        "schema_version",
+        "start_time",
+        "target_path",
+        "target_path_sha256",
+        "token_inheritance",
+        "user_sid"
+      ],
+      "type": "object"
+    },
+    "observation": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_authority_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "actual_outcome": {
+          "enum": [
+            "ACCEPTED",
+            "REJECTED"
+          ]
+        },
+        "case_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "derived_at": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "enforcing_function": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "event_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "event_sequence": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "evidence_citations": {
+          "items": {
+            "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "minItems": 4,
+          "type": "array"
+        },
+        "fixture_body_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_helper_file_identity": {
+          "type": "string"
+        },
+        "fixture_helper_invoked": {
+          "type": "boolean"
+        },
+        "fixture_helper_process_id": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fixture_process_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_process_receipt_locator": {
+          "pattern": "^(?:|randle-evidence://sha256/[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "fixture_reparse_snapshot_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_reparse_snapshot_locator": {
+          "pattern": "^(?:|randle-evidence://sha256/[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "forbidden_side_effect_absent": {
+          "type": "boolean"
+        },
+        "inner_event_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "inner_execution_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "interface_invoked": {
+          "const": true
+        },
+        "outer_ledger_delta": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "response_classification": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "subject_case_token_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "subject_event_ledger_delta": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "actual_authority_identity",
+        "actual_outcome",
+        "case_id",
+        "derived_at",
+        "enforcing_function",
+        "event_hash",
+        "event_sequence",
+        "evidence_citations",
+        "fixture_body_identity",
+        "fixture_helper_file_identity",
+        "fixture_helper_invoked",
+        "fixture_helper_process_id",
+        "fixture_process_receipt_identity",
+        "fixture_process_receipt_locator",
+        "fixture_reparse_snapshot_identity",
+        "fixture_reparse_snapshot_locator",
+        "forbidden_side_effect_absent",
+        "inner_event_hash",
+        "inner_execution_receipt_identity",
+        "interface_invoked",
+        "outer_ledger_delta",
+        "response_classification",
+        "subject_case_token_identity",
+        "subject_event_ledger_delta",
+        "subject_process_id"
+      ],
+      "type": "object"
+    },
+    "observations": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_DERIVED_CURRENT_OBSERVATIONS"
+        },
+        "event_source_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "observation_count": {
+          "const": 178
+        },
+        "observations": {
+          "items": {
+            "$ref": "#/$defs/observation"
+          },
+          "maxItems": 178,
+          "minItems": 178,
+          "type": "array"
+        },
+        "observer_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "observer_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "observer_process_nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "event_source_locator",
+        "observation_count",
+        "observations",
+        "observer_binary_sha256",
+        "observer_process_id",
+        "observer_process_nonce",
+        "run_id",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "processIndex": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_CURRENT_PROCESS_RECEIPT_INDEX"
+        },
+        "comparator_process_receipt_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "observation_process_receipt_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "process_count": {
+          "const": 3
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "suite_process_receipt_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "comparator_process_receipt_locator",
+        "observation_process_receipt_locator",
+        "process_count",
+        "run_id",
+        "schema_version",
+        "suite_process_receipt_locator"
+      ],
+      "type": "object"
+    },
+    "rawCase": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_authority_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "actual_outcome": {
+          "enum": [
+            "ACCEPTED",
+            "REJECTED"
+          ]
+        },
+        "case_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "enforcing_function": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "fixture_body_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_helper_file_identity": {
+          "type": "string"
+        },
+        "fixture_helper_invoked": {
+          "type": "boolean"
+        },
+        "fixture_helper_process_id": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fixture_process_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_process_receipt_locator": {
+          "pattern": "^(?:|randle-evidence://sha256/[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "fixture_reparse_snapshot_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_reparse_snapshot_locator": {
+          "pattern": "^(?:|randle-evidence://sha256/[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "inner_event_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "inner_execution_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "outer_post_ledger_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "outer_post_ledger_sequence": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "outer_pre_ledger_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "outer_pre_ledger_sequence": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "public_interface": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "public_interface_end_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "public_interface_start_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "public_request_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "public_response_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "response_classification": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "response_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "subject_case_token_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "subject_event_ledger_delta": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_launcher_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "actual_authority_identity",
+        "actual_outcome",
+        "case_id",
+        "enforcing_function",
+        "fixture_body_identity",
+        "fixture_helper_file_identity",
+        "fixture_helper_invoked",
+        "fixture_helper_process_id",
+        "fixture_process_receipt_identity",
+        "fixture_process_receipt_locator",
+        "fixture_reparse_snapshot_identity",
+        "fixture_reparse_snapshot_locator",
+        "inner_event_hash",
+        "inner_execution_receipt_identity",
+        "outer_post_ledger_root",
+        "outer_post_ledger_sequence",
+        "outer_pre_ledger_root",
+        "outer_pre_ledger_sequence",
+        "public_interface",
+        "public_interface_end_time",
+        "public_interface_start_time",
+        "public_request_locator",
+        "public_response_locator",
+        "request_sha256",
+        "response_classification",
+        "response_sha256",
+        "subject_case_token_identity",
+        "subject_event_ledger_delta",
+        "subject_launcher_process_id",
+        "subject_process_id"
+      ],
+      "type": "object"
+    },
+    "rawCaseIndex": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_REAL_SUITE_RAW_CASE_INDEX"
+        },
+        "case_count": {
+          "const": 178
+        },
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/rawCase"
+          },
+          "maxItems": 178,
+          "minItems": 178,
+          "type": "array"
+        },
+        "final_source_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "outer_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "setup_and_shutdown_locators": {
+          "items": {
+            "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "minItems": 8,
+          "type": "array"
+        },
+        "subject_ledger_snapshot_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "subject_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "case_count",
+        "cases",
+        "final_source_locator",
+        "outer_run_id",
+        "schema_version",
+        "setup_and_shutdown_locators",
+        "subject_ledger_snapshot_locator",
+        "subject_run_id"
+      ],
+      "type": "object"
+    },
+    "reconciliationEvaluator": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_INDEPENDENT_EXTERNAL_RECONCILIATION_RESULT"
+        },
+        "attempt_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "candidate_event_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "candidate_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "candidate_receipt_locator": {
+          "pattern": "^randle-terminal://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "candidate_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "case_definition_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "discrepancies": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "case_id": {
+                "type": "string"
+              },
+              "code": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "detail": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "case_id",
+              "code",
+              "detail"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "discrepancy_count": {
+          "const": 0
+        },
+        "expectation_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "fresh_event_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fresh_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fresh_receipt_locator": {
+          "pattern": "^randle-terminal://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fresh_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reconciliation_process_nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reconciliation_result": {
+          "const": "RECONCILED_REAL_EXECUTIONS"
+        },
+        "resolved_terminal_count": {
+          "const": 2
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "service_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "synthetic_result_class_absent": {
+          "const": true
+        },
+        "worker_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "attempt_id",
+        "candidate_event_root",
+        "candidate_receipt_identity",
+        "candidate_receipt_locator",
+        "candidate_run_id",
+        "case_definition_git_blob",
+        "discrepancies",
+        "discrepancy_count",
+        "expectation_git_blob",
+        "fresh_event_root",
+        "fresh_receipt_identity",
+        "fresh_receipt_locator",
+        "fresh_run_id",
+        "policy_sha256",
+        "reconciliation_process_nonce",
+        "reconciliation_result",
+        "resolved_terminal_count",
+        "run_id",
+        "schema_version",
+        "service_binary_sha256",
+        "synthetic_result_class_absent",
+        "worker_binary_sha256"
+      ],
+      "type": "object"
+    },
+    "reparseSideEffect": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_SERVICE_REPARSE_SIDE_EFFECT_EVIDENCE"
+        },
+        "body_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "capture_model": {
+          "const": "FSCTL_GET_REPARSE_POINT"
+        },
+        "capture_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "case_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "fixture_process_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "junction_attributes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "junction_path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "reparse_data_base64": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "reparse_data_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "service_binary_file_identity": {
+          "type": "string"
+        },
+        "service_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "service_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "service_sid": {
+          "pattern": "^S-[0-9]+(?:-[0-9]+)+$",
+          "type": "string"
+        },
+        "target_attributes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target_path": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "body_identity",
+        "capture_model",
+        "capture_time",
+        "case_id",
+        "fixture_process_receipt_identity",
+        "junction_attributes",
+        "junction_path",
+        "reparse_data_base64",
+        "reparse_data_sha256",
+        "run_id",
+        "schema_version",
+        "service_binary_file_identity",
+        "service_binary_sha256",
+        "service_process_id",
+        "service_sid",
+        "target_attributes",
+        "target_path"
+      ],
+      "type": "object"
+    },
+    "signedSuiteProcessReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_type": {
+              "const": "R7_REAL_SUITE_PROCESS_RECEIPT"
+            },
+            "case_count": {
+              "const": 178
+            },
+            "command_identity": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "completion_state": {
+              "const": "COMPLETE"
+            },
+            "completion_time": {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+              "type": "string"
+            },
+            "fixture_host_file_identity": {
+              "type": "string"
+            },
+            "fixture_host_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "fixture_process_receipt_count": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "interface_version": {
+              "const": "3.0.0-DRAFT"
+            },
+            "launch_receipt_locator": {
+              "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "launcher_file_identity": {
+              "type": "string"
+            },
+            "launcher_process_id": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "launcher_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "mode": {
+              "const": "execute-real-suite"
+            },
+            "parent_service_binary_file_identity": {
+              "type": "string"
+            },
+            "parent_service_binary_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "parent_service_process_id": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "python_file_identity": {
+              "type": "string"
+            },
+            "python_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "raw_case_index_locator": {
+              "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "run_id": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "7.1.0-DRAFT"
+            },
+            "stderr_locator": {
+              "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "subject_commit": {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            "subject_process_id": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "subject_ready_locator": {
+              "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "subject_run_id": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "subject_service_file_identity": {
+              "type": "string"
+            },
+            "subject_service_git_blob": {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            "subject_service_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "subject_token_evidence": {
+              "minProperties": 4,
+              "type": "object"
+            },
+            "subject_token_evidence_identity": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifact_type",
+            "case_count",
+            "command_identity",
+            "completion_state",
+            "completion_time",
+            "interface_version",
+            "fixture_host_file_identity",
+            "fixture_host_sha256",
+            "fixture_process_receipt_count",
+            "launch_receipt_locator",
+            "launcher_file_identity",
+            "launcher_process_id",
+            "launcher_sha256",
+            "mode",
+            "parent_service_process_id",
+            "parent_service_binary_sha256",
+            "parent_service_binary_file_identity",
+            "python_file_identity",
+            "python_sha256",
+            "raw_case_index_locator",
+            "run_id",
+            "schema_version",
+            "stderr_locator",
+            "subject_commit",
+            "subject_process_id",
+            "subject_ready_locator",
+            "subject_run_id",
+            "subject_service_file_identity",
+            "subject_service_git_blob",
+            "subject_service_sha256",
+            "subject_token_evidence",
+            "subject_token_evidence_identity"
+          ],
+          "type": "object"
+        },
+        "public_key_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "signature": {
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        "signature_algorithm": {
+          "const": "RSA-PSS-SHA256"
+        }
+      },
+      "required": [
+        "payload",
+        "public_key_identity",
+        "signature",
+        "signature_algorithm"
+      ],
+      "type": "object"
+    },
+    "signedWorkerProcessReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_type": {
+              "const": "R7_PROCESS_EXECUTION_RECEIPT"
+            },
+            "command_identity": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "completion_state": {
+              "const": "COMPLETE"
+            },
+            "completion_time": {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+              "type": "string"
+            },
+            "environment_identity": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "exit_code": {
+              "const": 0
+            },
+            "input_identity": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "input_locator": {
+              "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "interface_version": {
+              "const": "3.0.0-DRAFT"
+            },
+            "launcher_authority_identity": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "launcher_pid": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "mode": {
+              "enum": [
+                "derive-observations",
+                "compare",
+                "reconcile"
+              ]
+            },
+            "parent_service_binary_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "process_id": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "process_nonce": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "result": {
+              "minProperties": 8,
+              "type": "object"
+            },
+            "run_id": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "7.1.0-DRAFT"
+            },
+            "start_time": {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+              "type": "string"
+            },
+            "stderr_identity": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "stderr_length": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stderr_locator": {
+              "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "stdout_identity": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "stdout_length": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "stdout_locator": {
+              "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "worker_file_identity": {
+              "type": "string"
+            },
+            "worker_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifact_type",
+            "command_identity",
+            "completion_state",
+            "completion_time",
+            "environment_identity",
+            "exit_code",
+            "input_identity",
+            "input_locator",
+            "interface_version",
+            "launcher_authority_identity",
+            "launcher_pid",
+            "mode",
+            "parent_service_binary_sha256",
+            "process_id",
+            "process_nonce",
+            "result",
+            "run_id",
+            "schema_version",
+            "start_time",
+            "stderr_identity",
+            "stderr_length",
+            "stderr_locator",
+            "stdout_identity",
+            "stdout_length",
+            "stdout_locator",
+            "worker_file_identity",
+            "worker_sha256"
+          ],
+          "type": "object"
+        },
+        "public_key_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "signature": {
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        "signature_algorithm": {
+          "const": "RSA-PSS-SHA256"
+        }
+      },
+      "required": [
+        "payload",
+        "public_key_identity",
+        "signature",
+        "signature_algorithm"
+      ],
+      "type": "object"
+    },
+    "subjectLaunchReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_MEASURED_SUBJECT_LAUNCH"
+        },
+        "authentication_type": {
+          "type": "string"
+        },
+        "group_sids": {
+          "items": {
+            "pattern": "^S-[0-9]+(?:-[0-9]+)+$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "is_administrator": {
+          "const": false
+        },
+        "launch_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "launcher_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "launcher_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "python_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "subject_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "token_inheritance": {
+          "const": "CREATEPROCESS_DEFAULT_CALLER_TOKEN"
+        },
+        "user_sid": {
+          "pattern": "^S-[0-9]+(?:-[0-9]+)+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "authentication_type",
+        "group_sids",
+        "is_administrator",
+        "launch_time",
+        "launcher_binary_sha256",
+        "launcher_process_id",
+        "python_binary_sha256",
+        "subject_process_id",
+        "subject_source_sha256",
+        "token_inheritance",
+        "user_sid"
+      ],
+      "type": "object"
+    },
+    "traceability": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_BIDIRECTIONAL_CURRENT_EXECUTION_TRACE"
+        },
+        "case_definition_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "expectation_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "row_count": {
+          "const": 178
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "case_definition_git_blob": {
+                "pattern": "^[0-9a-f]{40}$",
+                "type": "string"
+              },
+              "case_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "comparator_stage": {
+                "const": "R7MeasuredWorker.compare"
+              },
+              "event_hash": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "event_source_locator": {
+                "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expectation_git_blob": {
+                "pattern": "^[0-9a-f]{40}$",
+                "type": "string"
+              },
+              "governing_requirement_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "observation_stage": {
+                "const": "R7MeasuredWorker.derive-observations"
+              },
+              "process_receipt_locator": {
+                "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "public_interface": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "request_locator": {
+                "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "response_locator": {
+                "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "reverse_mapping_required": {
+                "const": true
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "case_definition_git_blob",
+              "case_id",
+              "comparator_stage",
+              "event_hash",
+              "event_source_locator",
+              "expectation_git_blob",
+              "governing_requirement_id",
+              "observation_stage",
+              "process_receipt_locator",
+              "public_interface",
+              "request_locator",
+              "response_locator",
+              "reverse_mapping_required",
+              "run_id"
+            ],
+            "type": "object"
+          },
+          "maxItems": 178,
+          "minItems": 178,
+          "type": "array"
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "case_definition_git_blob",
+        "expectation_git_blob",
+        "row_count",
+        "rows",
+        "run_id",
+        "schema_version"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://randle.ai/schemas/terminal-authority-evidence-package-r7-7.1.0-draft.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/eventSource"
+    },
+    {
+      "$ref": "#/$defs/observations"
+    },
+    {
+      "$ref": "#/$defs/comparison"
+    },
+    {
+      "$ref": "#/$defs/processIndex"
+    },
+    {
+      "$ref": "#/$defs/traceability"
+    },
+    {
+      "$ref": "#/$defs/rawCaseIndex"
+    },
+    {
+      "$ref": "#/$defs/signedSuiteProcessReceipt"
+    },
+    {
+      "$ref": "#/$defs/signedWorkerProcessReceipt"
+    },
+    {
+      "$ref": "#/$defs/subjectLaunchReceipt"
+    },
+    {
+      "$ref": "#/$defs/fixtureProcessReceipt"
+    },
+    {
+      "$ref": "#/$defs/reparseSideEffect"
+    },
+    {
+      "$ref": "#/$defs/reconciliationEvaluator"
+    }
+  ],
+  "title": "R7 current-run evidence graph objects"
+}

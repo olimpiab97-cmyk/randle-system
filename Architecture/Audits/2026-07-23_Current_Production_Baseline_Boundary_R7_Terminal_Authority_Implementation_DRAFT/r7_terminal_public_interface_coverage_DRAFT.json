@@ -1,0 +1,53 @@
+{
+  "artifact_type": "R7_REAL_PUBLIC_INTERFACE_COVERAGE",
+  "authority_status": "IMPLEMENTATION_EVIDENCE_NOT_ACCEPTANCE",
+  "case_count": 178,
+  "case_definition_git_blob": "dae357d801cabdde7ca8a314c83380984161e687",
+  "case_definition_sha256": "58d6c043b857b6950d375724ef1f05b695028a3778ee47067284148c477b9214",
+  "case_execution_count": 1424,
+  "expectation_git_blob": "c21ea8f5ab4b54fc0d0638e9bb20df83c8a88f1d",
+  "expectation_sha256": "7563a8b8af74f15ad226d61015d0946867fa1d18495143e8206600f1c3c81005",
+  "expected_acceptance_counts": {
+    "ACCEPTED": 20,
+    "REJECTED": 158
+  },
+  "interface_counts": {
+    "access_capability": 11,
+    "closed_authorization": 25,
+    "compatibility_resolution": 10,
+    "complete_trace": 24,
+    "durable_ledger": 11,
+    "external_issuance": 8,
+    "external_launch": 11,
+    "immutable_dispatch": 8,
+    "internal_repository": 10,
+    "observation_evidence": 11,
+    "physical_filename": 20,
+    "real_classification": 3,
+    "recorder_session": 12,
+    "retained_controls": 5,
+    "review_resolution": 9
+  },
+  "matrix_execution_count": 8,
+  "r7i_b01_attack_count": 25,
+  "reconciliation_count": 4,
+  "requirement_counts": {
+    "R7-01": 11,
+    "R7-02": 8,
+    "R7-03": 11,
+    "R7-04": 11,
+    "R7-05": 12,
+    "R7-06": 11,
+    "R7-07": 8,
+    "R7-08": 8,
+    "R7-09": 26,
+    "R7-10": 9,
+    "R7-11": 10,
+    "R7-12": 20,
+    "R7-13": 23,
+    "R7-14": 8,
+    "R7-15": 2
+  },
+  "schema_version": "7.1.0-DRAFT",
+  "status": "PASS"
+}

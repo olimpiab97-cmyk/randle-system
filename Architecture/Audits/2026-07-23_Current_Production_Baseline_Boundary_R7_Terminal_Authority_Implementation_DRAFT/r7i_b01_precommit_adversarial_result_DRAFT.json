@@ -1,0 +1,386 @@
+{
+  "artifact_type": "R7I_B01_PRECOMMIT_ADVERSARIAL_RESULT",
+  "authority_status": "IMPLEMENTATION_EVIDENCE_NOT_ACCEPTANCE",
+  "case_authority_sha256": "58d6c043b857b6950d375724ef1f05b695028a3778ee47067284148c477b9214",
+  "cleanup_complete": true,
+  "cleanup_count": 64,
+  "control": {
+    "discrepancy_codes": [],
+    "exit_code": 0,
+    "input_sha256": "83bf7aee313fbf94db1e3251b85ac6202410dbf00a504ffbc8eef9a13110cb2c",
+    "process_nonce": "34a6b91386f8264ab6ef58022ae4170ff8a35e1c686d82d1e192a112cb67bff1",
+    "rejected": false,
+    "stderr_excerpt": "",
+    "stderr_length": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_length": 24579,
+    "stdout_sha256": "9e5f10b41a9e050d1d6b234fb0d661716c90065aee7b1c02dc6f93f47cee8a0c",
+    "worker_sha256": "b2971b85de73d999bfa801d047b22c2ec6fc3d6bc5cb5923ea4a9ab240ed4401"
+  },
+  "expectation_authority_sha256": "7563a8b8af74f15ad226d61015d0946867fa1d18495143e8206600f1c3c81005",
+  "final_ledger": {
+    "identity": "bd271593fab9f2a15cba471e4a6c1de04e5887e627f8c6b09126a4f2794dc684",
+    "root_hash": "4c4daab02e5e38b69e3b6a4b677e280114b86d917b13880c1f6af0e6e8f9a61a",
+    "sequence": 372
+  },
+  "initial_ledger": {
+    "identity": "bd271593fab9f2a15cba471e4a6c1de04e5887e627f8c6b09126a4f2794dc684",
+    "root_hash": "4c4daab02e5e38b69e3b6a4b677e280114b86d917b13880c1f6af0e6e8f9a61a",
+    "sequence": 372
+  },
+  "outer_ledger_unchanged": true,
+  "probe_count": 25,
+  "probe_results": [
+    {
+      "attack": "predetermined PASS events without interface invocation",
+      "discrepancy_codes": [
+        "CLASSIFICATION",
+        "INTERFACE_NOT_INVOKED",
+        "OUTCOME",
+        "RAW_CODE",
+        "RAW_OUTCOME"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / synthetic event mutation",
+      "probe_id": "R7I-B01-A01",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e028fb605432745c7e0f46387895b57c87b50785008d6d79e30cb9432ff68d53"
+    },
+    {
+      "attack": "policy identities echoed as enforcement results",
+      "discrepancy_codes": [
+        "AUTHORITY_IDENTITY",
+        "ENFORCING_FUNCTION",
+        "RAW_AUTHORITY",
+        "RAW_FUNCTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / policy echo mutation",
+      "probe_id": "R7I-B01-A02",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "66496bd10b15ff44eb67a0e06d6ae4558eede26eb10742e75c14fb989df7acad"
+    },
+    {
+      "attack": "expectations copied into observations",
+      "discrepancy_codes": [
+        "STRUCTURAL_EXCEPTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / expectation-to-observation copy",
+      "probe_id": "R7I-B01-A03",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "7d6020a37f2fca4cb4f12cb27e0e83048ad6e9b6d5d06759a923eea04f0acd3b",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "constructed expected and observed OK values",
+      "discrepancy_codes": [
+        "OUTCOME",
+        "RAW_OUTCOME"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / constructed matching text",
+      "probe_id": "R7I-B01-A04",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "747cf764c12a8a911f5adb8727e0b46e5c72750a4dd49bf1b5d30cee0185ac9a"
+    },
+    {
+      "attack": "zero discrepancies without case definitions",
+      "discrepancy_codes": [
+        "STRICT_INPUT_REJECTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / caller-authored zero discrepancies",
+      "probe_id": "R7I-B01-A05",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "18c7bacce5a8e723c5c8c7b108350e80bf6ea79679f88d0c8954d0ae618ebaa3",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "unresolved case-set identity",
+      "discrepancy_codes": [
+        "STRUCTURAL_EXCEPTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / unresolved case identity",
+      "probe_id": "R7I-B01-A06",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "ae4fcc6625468d148afc7a038af7d865c462dd4eb1630fdc0f1af71564285e0e",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "case bytes changed after identity calculation",
+      "discrepancy_codes": [
+        "STRICT_INPUT_REJECTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / post-identity changed case bytes",
+      "probe_id": "R7I-B01-A07",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "f2f8d3586dfde4a14eb0e02db61c66c3d5a83cf7e3b9b4799d3cfa9fcc611bdd",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "caller-selected alternate case definitions",
+      "discrepancy_codes": [
+        "STRICT_INPUT_REJECTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / caller-selected case path",
+      "probe_id": "R7I-B01-A08",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "f2f8d3586dfde4a14eb0e02db61c66c3d5a83cf7e3b9b4799d3cfa9fcc611bdd",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "caller-selected alternate expectations",
+      "discrepancy_codes": [
+        "STRICT_INPUT_REJECTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / caller-selected expectation path",
+      "probe_id": "R7I-B01-A09",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "f2f8d3586dfde4a14eb0e02db61c66c3d5a83cf7e3b9b4799d3cfa9fcc611bdd",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "required case skipped",
+      "discrepancy_codes": [
+        "STRUCTURAL_EXCEPTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / omitted required case",
+      "probe_id": "R7I-B01-A10",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "ae4fcc6625468d148afc7a038af7d865c462dd4eb1630fdc0f1af71564285e0e",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "case duplicated",
+      "discrepancy_codes": [
+        "STRUCTURAL_EXCEPTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / duplicate case",
+      "probe_id": "R7I-B01-A11",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "ae4fcc6625468d148afc7a038af7d865c462dd4eb1630fdc0f1af71564285e0e",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "unknown extra case inserted",
+      "discrepancy_codes": [
+        "STRUCTURAL_EXCEPTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / unknown extra case",
+      "probe_id": "R7I-B01-A12",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "ae4fcc6625468d148afc7a038af7d865c462dd4eb1630fdc0f1af71564285e0e",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "prior-run event evidence reused",
+      "discrepancy_codes": [
+        "EVENT_RUN",
+        "PROCESS_RUN"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / prior-run event substitution",
+      "probe_id": "R7I-B01-A13",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "defc26883de771c22f9fbea3992fe8ddcd13e1735d4c15405a3ae9161ef7f152"
+    },
+    {
+      "attack": "prior-run process receipt reused",
+      "discrepancy_codes": [
+        "PROCESS_RUN",
+        "SUBJECT_LAUNCH_EVIDENCE",
+        "SUBJECT_PROCESS"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / prior-run signed process receipt",
+      "probe_id": "R7I-B01-A14",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "26e29107cb8744cad9da1f66fb6673278c64d1f1dbb29006ce70443b41fbfd23"
+    },
+    {
+      "attack": "request or response evidence fabricated",
+      "discrepancy_codes": [
+        "STRUCTURAL_EXCEPTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / fabricated request locator",
+      "probe_id": "R7I-B01-A15",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "41d6188b2cecccc80bf9038e6ab96e16c6f2c0e49b7e8c6c09555f06292ee8ad",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "process receipt without public-interface invocation",
+      "discrepancy_codes": [
+        "INTERFACE_NOT_INVOKED"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / process receipt without invocation",
+      "probe_id": "R7I-B01-A16",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "0ab03c5f08010bb145cd99111d6d1af336f0f8f24171da7729b74c96d56627ed"
+    },
+    {
+      "attack": "wrong binary or caller invokes interface",
+      "discrepancy_codes": [
+        "TARGET_PROCESS_BINARY"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / wrong target binary",
+      "probe_id": "R7I-B01-A17",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "585d00e3477e7e469df024e4816a174feb7a2623144cee6465dbd56ee2377c20"
+    },
+    {
+      "attack": "rejection accompanied by unauthorized authority append",
+      "discrepancy_codes": [
+        "FORBIDDEN_SIDE_EFFECT",
+        "OUTER_LEDGER_DELTA"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / rejected case with authority delta",
+      "probe_id": "R7I-B01-A18",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "22bbf087caf9f2a7155a70d05e5286e77b9101cfa3d228eb94ff49c2ccf75d6c"
+    },
+    {
+      "attack": "success response without durable terminal append",
+      "discrepancy_codes": [
+        "SUBJECT_LEDGER_DELTA"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / success without durable subject append",
+      "probe_id": "R7I-B01-A19",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "9147e454297144bbe6f18c14e48b304f6e72754c1608bda208f4a3a19978f105"
+    },
+    {
+      "attack": "candidate and fresh runs share synthetic evidence",
+      "discrepancy_codes": [
+        "EVENT_ROOT_REUSE",
+        "FRESH_PHASE",
+        "PROCESS_RECEIPT_REUSE",
+        "RECEIPT_IDENTITY_REUSE",
+        "RECEIPT_LOCATOR_REUSE",
+        "RUN_ID_REUSE",
+        "RUN_NONCE_REUSE"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured reconciler / candidate-fresh evidence reuse",
+      "probe_id": "R7I-B01-A20",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "a972f8f9cf3903d1d748967d0323a583fdba989a96cf0cfc932898930be10caa"
+    },
+    {
+      "attack": "two synthetic receipts reconcile structurally",
+      "discrepancy_codes": [
+        "CANDIDATE_TERMINAL_REJECTED",
+        "FRESH_TERMINAL_REJECTED"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured reconciler / two synthetic receipt locators",
+      "probe_id": "R7I-B01-A21",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e71f271a1ecd8f1ca641dcd07e0665acd8c520e60a759413f0ca852fe51c14cb"
+    },
+    {
+      "attack": "trace row points to an event that did not occur",
+      "discrepancy_codes": [
+        "TRACE_EVENT"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / false trace row",
+      "probe_id": "R7I-B01-A22",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "072a070879734624859d31498f2d6d28adf61909e7153fba19f17a65bf54ac03"
+    },
+    {
+      "attack": "valid signature covers unresolved child evidence",
+      "discrepancy_codes": [
+        "PUBLIC_VERIFIER_REJECTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "public verifier / valid signature with semantically unresolved synthetic children",
+      "probe_id": "R7I-B01-A23",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "538f45bae6a6c1f3e4786a658816065c2fd19002554a25dc4f760d377309115d",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "valid receipt detached from authoritative ledger",
+      "discrepancy_codes": [
+        "PUBLIC_VERIFIER_REJECTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "public verifier / valid signed process receipt detached from terminal ledger/root",
+      "probe_id": "R7I-B01-A24",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "0d6f1668be80f59e4566a28f35ac238f5e6b93c737b7e352e2fd067bbd05c3af",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "attack": "copied internally consistent evidence root substituted",
+      "discrepancy_codes": [
+        "STRICT_INPUT_REJECTION"
+      ],
+      "ledger_unchanged": true,
+      "method": "measured comparator / caller-selected copied evidence root",
+      "probe_id": "R7I-B01-A25",
+      "rejected": true,
+      "status": "REJECTED_AS_REQUIRED",
+      "stderr_sha256": "f2f8d3586dfde4a14eb0e02db61c66c3d5a83cf7e3b9b4799d3cfa9fcc611bdd",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "schema_version": "7.1.0-DRAFT",
+  "source_evidence": {
+    "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_adversarial.json",
+    "raw_sha256": "f05cf73ced9df8ab3a73d85bdc34390d1967a2a1f7c6b32b90a6cd4adb420ae4",
+    "size": 42504
+  },
+  "status": "PASS"
+}

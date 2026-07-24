@@ -1,0 +1,431 @@
+{
+  "artifact_type": "R7_REAL_EXECUTION_PRECOMMIT_MATRIX_RESULT",
+  "authority_status": "IMPLEMENTATION_EVIDENCE_NOT_ACCEPTANCE",
+  "case_definition": {
+    "count": 178,
+    "git_blob": "dae357d801cabdde7ca8a314c83380984161e687",
+    "path": "C:/ProgramData/RandleAI/TerminalAuthority/Config/R7Authorities/r7_real_case_definitions.json",
+    "raw_sha256": "58d6c043b857b6950d375724ef1f05b695028a3778ee47067284148c477b9214",
+    "size": 995804
+  },
+  "checkout_commit": "bb04ac54fb328516d0c785f4e6551e6a20d73759",
+  "checkout_count": 4,
+  "execution_count": 8,
+  "expectation": {
+    "count": 178,
+    "git_blob": "c21ea8f5ab4b54fc0d0638e9bb20df83c8a88f1d",
+    "path": "C:/ProgramData/RandleAI/TerminalAuthority/Config/R7Authorities/r7_independent_expectations.json",
+    "raw_sha256": "7563a8b8af74f15ad226d61015d0946867fa1d18495143e8206600f1c3c81005",
+    "size": 285399
+  },
+  "final_ledger": {
+    "identity": "fc5f681512e3af037e8570790d15d7f12904b641adace9fd3be8f5c650370735",
+    "ledger_root": "05e42c2e6428dfd55cadbc10117f4be35e5bd297df06215a69a4b472f0e4789e",
+    "ledger_sequence": 477,
+    "result_code": "R7_PUBLIC_LEDGER_VERIFIED",
+    "status": "VERIFIED"
+  },
+  "initial_ledger": {
+    "identity": "4fd08e79d710baec111aadaaa02e407e2ecee1853d2b547203eb05da64f5aba7",
+    "ledger_root": "2669e89efbde07f6dacf688156ce8ae03e49924939a51e08248ad4f71b78b7a3",
+    "ledger_sequence": 413,
+    "result_code": "R7_PUBLIC_LEDGER_VERIFIED",
+    "status": "VERIFIED"
+  },
+  "policy_sha256": "76eb2900b2000aa0b41e6040335cc323f7443728aad21cd871d5b6b8e17bcd8b",
+  "reconciliation_count": 4,
+  "rows": [
+    {
+      "attempt_id": "0670b5257d6f0d421dfe9f65edc674088b15e8fe9a306e90e4409ee39793292d",
+      "checkout": {
+        "autocrlf": "true",
+        "eol_stdout_sha256": "674f278e8359f9bee62ca6da9c02ca0fb57916f3bd4c18fc19aed060e7d1ef08",
+        "head": "bb04ac54fb328516d0c785f4e6551e6a20d73759",
+        "path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7mr\\short_autocrlf_true",
+        "path_class": "SHORT",
+        "path_length": 59,
+        "status_after_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "status_before_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "configuration": "SHORT_AUTOCRLF_TRUE",
+      "phases": {
+        "CANDIDATE": {
+          "comparator_result_locator": "randle-evidence://sha256/68dc74c9f81c0640dc43e51e7b8b9a8a3ef43d8c4f705b6312777412c59f9bd6",
+          "event_root": "509d697af56c43d7464ae294a37bcfea8c6f39f3003e032b7330471852c7de77",
+          "event_source_locator": "randle-evidence://sha256/8680ec222681dd9233bfb7593e89a5562f2b5d78104daed0ce9cf290abbb22e4",
+          "observation_locator": "randle-evidence://sha256/e484872617ea42a43f33ac73a0b084536d219c1ccc7a292ed918fcd4ba174a3f",
+          "process_index_locator": "randle-evidence://sha256/96e197d11471fc932432fdfd88778c7b9b435a4c98a58a8da68f09f7620420aa",
+          "process_receipt_locators": [
+            "randle-evidence://sha256/1f458b2a02272e03e24090532518f019c036b28d053e984f2c2cf9899bb8189a",
+            "randle-evidence://sha256/68fc81a5d3a3509bb73b5131eb07c7e9b1e42711e96059c8b1f09c1f56aafef0",
+            "randle-evidence://sha256/81f39f6b0ba2e97b11167488eb5627030474ec502b6f1bf4f25d6cf9e6a628fd"
+          ],
+          "process_receipt_nonces": [
+            "15637129b7aa2775ed8ac36f5df3235a3fa4de2278c2bb9bdf07f16e5c6cf157",
+            "9074189a418e930c2f05db69798c443012c27bb9b83334e4c0138ba39c0ab445",
+            "d0c758b5898f15fc2046b89cd2002e7fa8b8af5023016794c0f47b928fd96d94"
+          ],
+          "public_verification": {
+            "identity": "93ec247ce2fdc4be9ed43aac3b86da33c4ef29b18d7cc6dd5ea4749b6c41838f",
+            "ledger_root": "838f44d26293f62b9157632ae7a8f4dd816ebba80f498f65db06b191815a17bd",
+            "ledger_sequence": 420,
+            "result_code": "R7_PUBLIC_TERMINAL_VERIFIED",
+            "status": "VERIFIED"
+          },
+          "receipt_identity": "93ec247ce2fdc4be9ed43aac3b86da33c4ef29b18d7cc6dd5ea4749b6c41838f",
+          "receipt_locator": "randle-terminal://sha256/93ec247ce2fdc4be9ed43aac3b86da33c4ef29b18d7cc6dd5ea4749b6c41838f",
+          "run_id": "ff65c19afeec46fc353edf770b7a6539d52725c64c761234bf5a67914ed5375e",
+          "run_nonce": "069d654c684646122c823ecfe73d0e0a94268134a3aa5ef822dfb03efdbce4e3",
+          "subject_process_id": 16076,
+          "subject_run_id": "15637129b7aa2775ed8ac36f5df3235a3fa4de2278c2bb9bdf07f16e5c6cf157",
+          "traceability_locator": "randle-evidence://sha256/be941927e28a6af3aaa15dfdc4ae3760006daba052a7ec69b9892031d72d9b36"
+        },
+        "FRESH": {
+          "comparator_result_locator": "randle-evidence://sha256/0f047fa460096236e48a8f96ce3c9fe58e48e056346545dcede54092a422dfbf",
+          "event_root": "6751fb6dcb38a7100d22dfe45122455fa1647fed0bf570b755c97921ec723cec",
+          "event_source_locator": "randle-evidence://sha256/ade0530cd925e33a2478b34c4ff2ec6827f405901b43a4eeff283ea61a7f4a73",
+          "observation_locator": "randle-evidence://sha256/fb2ef0d2b90dd94a02c10c3e55ef1b93594f3299bfb270d5ecba9f94b5bc284d",
+          "process_index_locator": "randle-evidence://sha256/39f66eff7d18eaf84ce5dd8211a191545f940673ebec3d2d3ad4cfa37fca0c2a",
+          "process_receipt_locators": [
+            "randle-evidence://sha256/6496d4fa72103793fa806394f5ec5aa70a3af521fb57e4524ed7223b01c999cc",
+            "randle-evidence://sha256/e6bd48cbcaeecc3588cd36ed6cc7bd8b9222437ea49d2b6d6a4f74293c56a75e",
+            "randle-evidence://sha256/f40780b064f28e740f656fd24d162b88bb2cc0fe385fdb7863c5789ac95a18e2"
+          ],
+          "process_receipt_nonces": [
+            "11dfb9eb8761b4a8d233187f5c99b5318790b32e985c345d0fd5b32c047993c1",
+            "6ef5935897e0d544d9a661214e3cb34b33a31f0c07e4fe76f17e6c485c1f4f6e",
+            "c3848a1fce7db9934a50b759893a6fe4fdba7f5b9c7b1373398bdecd79ec0bcc"
+          ],
+          "public_verification": {
+            "identity": "d1d1427f84b6a1a741f127629728b98beafddb757c42751f5be463856c7f256d",
+            "ledger_root": "8f7da00dc6fcd6bb500cc8c6b555d683f5f73a2e0516065f25ee0973ad9ee00f",
+            "ledger_sequence": 426,
+            "result_code": "R7_PUBLIC_TERMINAL_VERIFIED",
+            "status": "VERIFIED"
+          },
+          "receipt_identity": "d1d1427f84b6a1a741f127629728b98beafddb757c42751f5be463856c7f256d",
+          "receipt_locator": "randle-terminal://sha256/d1d1427f84b6a1a741f127629728b98beafddb757c42751f5be463856c7f256d",
+          "run_id": "8cb1ba3c51727297dafd191a9667793063fc65add323aa275fa0062ec085ed04",
+          "run_nonce": "af6817323aabfeb8cd9a5161a9a0328557dfe41d0ca4280f73e8ce396409409a",
+          "subject_process_id": 12052,
+          "subject_run_id": "6ef5935897e0d544d9a661214e3cb34b33a31f0c07e4fe76f17e6c485c1f4f6e",
+          "traceability_locator": "randle-evidence://sha256/a688a0479b347270c8926bbb56a446511688bf3bf1aae03943f83ae8012651bb"
+        }
+      },
+      "reconciliation": {
+        "identity": "2fba467f0e97bbb8f51a07651dedc8c703263c001bb0d571bde7946a7b906081",
+        "locator": "randle-reconciliation://sha256/2fba467f0e97bbb8f51a07651dedc8c703263c001bb0d571bde7946a7b906081",
+        "process_nonce": "0a64aeed6fac01666e7d2865fe4753eb5b02577147be7cba3efce3d42f2c09d1",
+        "process_receipt_locator": "randle-evidence://sha256/5488555c55e5520375fe47b03b9a6a0f042aa8f7eb944d2530d40c62d672df5b",
+        "public_verification": {
+          "identity": "2fba467f0e97bbb8f51a07651dedc8c703263c001bb0d571bde7946a7b906081",
+          "ledger_root": "b71d77b7a3087be513c31efafe16c44ec49e6671b82456dfa271a859acb0a557",
+          "ledger_sequence": 429,
+          "result_code": "R7_PUBLIC_RECONCILIATION_VERIFIED",
+          "status": "VERIFIED"
+        },
+        "result": "SEMANTICALLY_EQUIVALENT_REAL_EXECUTIONS"
+      }
+    },
+    {
+      "attempt_id": "a996d0d5497094c94487c6aef7b72f38489b8e6bda82602b2870b655604c84e0",
+      "checkout": {
+        "autocrlf": "false",
+        "eol_stdout_sha256": "c66ffbaa1d023920a972bd0e9ded92f06b6ce11b53b030e419a30755b8f6c782",
+        "head": "bb04ac54fb328516d0c785f4e6551e6a20d73759",
+        "path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7mr\\short_autocrlf_false",
+        "path_class": "SHORT",
+        "path_length": 60,
+        "status_after_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "status_before_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "configuration": "SHORT_AUTOCRLF_FALSE",
+      "phases": {
+        "CANDIDATE": {
+          "comparator_result_locator": "randle-evidence://sha256/e349dd81b8ff4bd5847587f6f33b627d2433e464b00dd8aa1c116dd029e17f7a",
+          "event_root": "5c3ba5761802a3740af90a38c7e41e8a2d466f89ed35009690de9dd6db924e97",
+          "event_source_locator": "randle-evidence://sha256/a88db957c2669c87f2bf14f4f26f466a2618c326d33ee973230f0eabe57cf466",
+          "observation_locator": "randle-evidence://sha256/c9fda9c3a005f91c9ad55679bc3ea3cce8e59ceb15ead3328fac3a55fbef3f94",
+          "process_index_locator": "randle-evidence://sha256/988622a500686d676ea1eec026a08a949344377edb493cf23f4b8ec8011311ca",
+          "process_receipt_locators": [
+            "randle-evidence://sha256/2456cb4d00dc858592c4cc2c4f80754d67389d174168f6ac3feda699b0c963d8",
+            "randle-evidence://sha256/443fb4098a546f695ceff45d5011f285057f2d698284be93b41a8922f90aca90",
+            "randle-evidence://sha256/898f6b9e44621f9de5c705d2d371a4cd15719642ce780ca09699c524638a21d9"
+          ],
+          "process_receipt_nonces": [
+            "07d4b8ee34d14ecec128b3698d1317601f92b169dfa4b89c87f80311d6cb05c4",
+            "4f6c8c95bcf71770d93e7cb6a96c2084d9575735d7a769f2891670491272cf53",
+            "d13755ffb61fb36a2253011a45bc64403b58415b6b075d4ea1ac9eb38b91114a"
+          ],
+          "public_verification": {
+            "identity": "340df0d6d219a18de578f0127ba6f1aa39669362fa8d4463428b8b67c1feb71f",
+            "ledger_root": "552f10e9bba12a75a5e50cff9826d40663d66f58235c1afccdf9f88c44208cec",
+            "ledger_sequence": 436,
+            "result_code": "R7_PUBLIC_TERMINAL_VERIFIED",
+            "status": "VERIFIED"
+          },
+          "receipt_identity": "340df0d6d219a18de578f0127ba6f1aa39669362fa8d4463428b8b67c1feb71f",
+          "receipt_locator": "randle-terminal://sha256/340df0d6d219a18de578f0127ba6f1aa39669362fa8d4463428b8b67c1feb71f",
+          "run_id": "b9dcc24b704b2be0cb18bee941f1feb0a83b79be4a3e706cd73baa391d13310a",
+          "run_nonce": "a883b63f6d2ea42b610c9c653e083f7df2940d18ccc4dd680ddc1d0eb5efc4e7",
+          "subject_process_id": 17744,
+          "subject_run_id": "4f6c8c95bcf71770d93e7cb6a96c2084d9575735d7a769f2891670491272cf53",
+          "traceability_locator": "randle-evidence://sha256/731357334e92c4ccfa0affb4e0be7404c86b77d47840d08e93f5d6ae26afcf82"
+        },
+        "FRESH": {
+          "comparator_result_locator": "randle-evidence://sha256/aa5acb001bc22dfe265088342dc8f2cd758eaad03a974e03d006965b8108da62",
+          "event_root": "73eb970a671d7acdf2f01703dc398abf33cd058fd4907f7e29e1988101a1169a",
+          "event_source_locator": "randle-evidence://sha256/f30a31bb466ef1c4351c0fe1e1a81346efa080be3a551743262d789dc5c4ef5c",
+          "observation_locator": "randle-evidence://sha256/c31ca3ee2d74920f26c2c564b3c70b21664fb0363a8957052a60d99c762b3a4f",
+          "process_index_locator": "randle-evidence://sha256/4672e44043fe3d566320f2e2083946716f3b440dd1258842e05ca5b17565ed45",
+          "process_receipt_locators": [
+            "randle-evidence://sha256/5a6fef91568bd41ed8eebbcd938f1a3949b62c7032605d9a04c368dbf38643bc",
+            "randle-evidence://sha256/64a3f03d87584867b6048887bb26749d591678ab1889ccbe7606872fec408944",
+            "randle-evidence://sha256/c74c3830e1e0e7a7321169930781f3aa7aa442faf1b746b5693cb5dc82b265c7"
+          ],
+          "process_receipt_nonces": [
+            "0747aed0a6a2fa7fdc8cdb1abbd18c79f19180ed89772cb7b997c1971bacefbb",
+            "ab4d752b858cb1f794ca3cde2f80617b3017b8c79264d8bb57b869974b4e640a",
+            "abfc5444f225cf3376b8944c32931ce50b15be7583ae2cc081ce4018db580fb8"
+          ],
+          "public_verification": {
+            "identity": "4c596af20471f8ef2b1c19993ad31980c4b3a2033a02d1cad83409d8fef23179",
+            "ledger_root": "aa0296186e4e75a194b939d13a4945eb8a561377e859a533eef10fed594ccc33",
+            "ledger_sequence": 442,
+            "result_code": "R7_PUBLIC_TERMINAL_VERIFIED",
+            "status": "VERIFIED"
+          },
+          "receipt_identity": "4c596af20471f8ef2b1c19993ad31980c4b3a2033a02d1cad83409d8fef23179",
+          "receipt_locator": "randle-terminal://sha256/4c596af20471f8ef2b1c19993ad31980c4b3a2033a02d1cad83409d8fef23179",
+          "run_id": "a7e1302d64f475036b8766d300563b90534cbce806f4d4991cfb55e4886a3beb",
+          "run_nonce": "a6468ec9404221fc9025e7eca5813b54a7e700339de420a88a3f4ad5a1063541",
+          "subject_process_id": 14160,
+          "subject_run_id": "abfc5444f225cf3376b8944c32931ce50b15be7583ae2cc081ce4018db580fb8",
+          "traceability_locator": "randle-evidence://sha256/88e22ec85f04392352d73ded7182a62835ba492710d8cdfce3e861343dc572ae"
+        }
+      },
+      "reconciliation": {
+        "identity": "7469c3dbf29bbacd021ffe0f6c2d2504e693c3a60cd760709a6eb71aafab1a16",
+        "locator": "randle-reconciliation://sha256/7469c3dbf29bbacd021ffe0f6c2d2504e693c3a60cd760709a6eb71aafab1a16",
+        "process_nonce": "ba677876267c2634133bd72c1455e7aeb23ee52bf8748f2318f816ed5dd1b404",
+        "process_receipt_locator": "randle-evidence://sha256/65e6e213c8f6b1bf44c11164411dd015a107636303947d1b727aa53a9a46ab83",
+        "public_verification": {
+          "identity": "7469c3dbf29bbacd021ffe0f6c2d2504e693c3a60cd760709a6eb71aafab1a16",
+          "ledger_root": "700681e8749dc7653042add9ccdd3d63b962ae13302f9c0815cbab6ba2722c75",
+          "ledger_sequence": 445,
+          "result_code": "R7_PUBLIC_RECONCILIATION_VERIFIED",
+          "status": "VERIFIED"
+        },
+        "result": "SEMANTICALLY_EQUIVALENT_REAL_EXECUTIONS"
+      }
+    },
+    {
+      "attempt_id": "2b2b717350ea7b7a80babd4bb990b7d7dae1d51c1ba3b0a83bb8b87171858750",
+      "checkout": {
+        "autocrlf": "true",
+        "eol_stdout_sha256": "674f278e8359f9bee62ca6da9c02ca0fb57916f3bd4c18fc19aed060e7d1ef08",
+        "head": "bb04ac54fb328516d0c785f4e6551e6a20d73759",
+        "path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_matrix_precommit_retry_long\\segment_01_governed\\segment_02_measured\\segment_03_autocrlf\\segment_04_terminal\\segment_05_public\\long_autocrlf_true",
+        "path_class": "LONG",
+        "path_length": 187,
+        "status_after_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "status_before_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "configuration": "LONG_AUTOCRLF_TRUE",
+      "phases": {
+        "CANDIDATE": {
+          "comparator_result_locator": "randle-evidence://sha256/66e9dc4e93d03e8e7e039ab4e045f8e751a1ba44be99c7b265639d050e3dbd27",
+          "event_root": "0b7676c1fd68ba33d8327734a4857bd44cb2e3e4c1b7b9360f8d2a88e14cb502",
+          "event_source_locator": "randle-evidence://sha256/14b1aba4d155353d4ed6d1035c3d0ed13867d827931a5317bcb0f4ad26b9bc16",
+          "observation_locator": "randle-evidence://sha256/665b437e06b7261a6be5ea6ed6e009ed3310d3e8e78360dddaa8fa3f9dfd25c6",
+          "process_index_locator": "randle-evidence://sha256/9bad9f190e5d0d91063b8ee63ff6ecd01f0eea9a0bbed6c9b46ca057d8d04ebf",
+          "process_receipt_locators": [
+            "randle-evidence://sha256/6361a1983521c4ae1698b49d5335bdf33a31222354e66f7039b6a9c9cd9585be",
+            "randle-evidence://sha256/6b26435944a7895f2b4c0d50fdb8d8a90233f6fcc98c509ea500c924d03d9ab1",
+            "randle-evidence://sha256/c21bc9a001a7d03d772e652dbbaac0b2e1a6f91c35ea6e8e4ff1df49104731a7"
+          ],
+          "process_receipt_nonces": [
+            "50878950fab877257d6ba7299c7214c85b41f179181cc15965f27852f3328bd1",
+            "5be1eeb9ebbb6780fb583a9f0b78898c81c46676c07198b3b6a831e386a88c1b",
+            "9e8d6c37e6e2ce236efd8d5a9cf5d62b79315ac347d415bef942f875024b0a58"
+          ],
+          "public_verification": {
+            "identity": "6d1104d12ab9301cd1c3a5caa43f6bac27d6ae080aad9b7c5d90e67f07c380cc",
+            "ledger_root": "b496948b7d7df397f47304df079e39a088a918988eb7e2ce0718fe1a38dbfba4",
+            "ledger_sequence": 452,
+            "result_code": "R7_PUBLIC_TERMINAL_VERIFIED",
+            "status": "VERIFIED"
+          },
+          "receipt_identity": "6d1104d12ab9301cd1c3a5caa43f6bac27d6ae080aad9b7c5d90e67f07c380cc",
+          "receipt_locator": "randle-terminal://sha256/6d1104d12ab9301cd1c3a5caa43f6bac27d6ae080aad9b7c5d90e67f07c380cc",
+          "run_id": "366c61fb579815c0ee21da9ea1536f23d5fc66312c2225d93a7dbf37715ad375",
+          "run_nonce": "457f4783f2ecfad7492f07bbb6452680756c1d7d7294838b8037686b260f13da",
+          "subject_process_id": 12568,
+          "subject_run_id": "9e8d6c37e6e2ce236efd8d5a9cf5d62b79315ac347d415bef942f875024b0a58",
+          "traceability_locator": "randle-evidence://sha256/76bca79cdfaa0bf7bb8af577e3a22ea0d3fe224783769ec9463c92336182438c"
+        },
+        "FRESH": {
+          "comparator_result_locator": "randle-evidence://sha256/ace695daf70f831fb883a4f5ac1dfcdcb4d0423dc060a31e3b6a765d5df40de1",
+          "event_root": "3fd0f5da2a0c95623262b3c0d8eb6409f2ba728efb52a3467b2b4b09c6e0abd2",
+          "event_source_locator": "randle-evidence://sha256/4ed2451e8702178a20f4c66cd576bafb849d52d3d38746d90874dc88b9357f74",
+          "observation_locator": "randle-evidence://sha256/4c7ca258b1e749c730a76f1c8a4e9eab86fdbaf7259a5eb69e1a3de66ee9ff64",
+          "process_index_locator": "randle-evidence://sha256/87cf6dbca677e5ad6ebb4f2798947ec902c543376996af56688d55acb02891a3",
+          "process_receipt_locators": [
+            "randle-evidence://sha256/416fc1ae87d9e6c960666b0cbd0605da6d5d89770320ab2843d9ff3a15a180de",
+            "randle-evidence://sha256/47dd96e093c29f48e12f3db0ea8d88b3b0693cc43a07c9088fc90bdc38224178",
+            "randle-evidence://sha256/83bd5fcf54862fd3526d4e1b040f1ed897a467b2a713e494fa07bbe6cb0298cd"
+          ],
+          "process_receipt_nonces": [
+            "4ec6661d6276623edba18b238329fdea257502a45a230025a46f34be25fe5c86",
+            "84c942ff9a3c3366db13e3a2097a91a4c881db97ea5ca2663557811ebc593676",
+            "febe7e7861fc521cdd68bf3db57037e03e2ca8d8d56b97c69cb9df50df6dcabe"
+          ],
+          "public_verification": {
+            "identity": "f4e2b50977f7ff3cae12e88813f2d28898ccf529e3ee313bc6c558b671267e21",
+            "ledger_root": "87d64f58bbf7089626a8c82666314fda4d6c177a58c1445c23aa547f7f93cff1",
+            "ledger_sequence": 458,
+            "result_code": "R7_PUBLIC_TERMINAL_VERIFIED",
+            "status": "VERIFIED"
+          },
+          "receipt_identity": "f4e2b50977f7ff3cae12e88813f2d28898ccf529e3ee313bc6c558b671267e21",
+          "receipt_locator": "randle-terminal://sha256/f4e2b50977f7ff3cae12e88813f2d28898ccf529e3ee313bc6c558b671267e21",
+          "run_id": "3c6c17486b1db82b7ee8d1760b14b06efc52ae3f911e7a9c2b70c92817911872",
+          "run_nonce": "325ce5055500443b73f32b1d6b70d9dbaab13a4dfaae9ba32d9a2d4f70b90142",
+          "subject_process_id": 7456,
+          "subject_run_id": "4ec6661d6276623edba18b238329fdea257502a45a230025a46f34be25fe5c86",
+          "traceability_locator": "randle-evidence://sha256/f065c13a599a51a593e9b4bba87a12d3ed3af934cb9e1a5ce50ce22986f5ec7e"
+        }
+      },
+      "reconciliation": {
+        "identity": "7d2554759b57c523fac9e309550ec57aa6a6d045441d3d00bc9c89d5cc2537ac",
+        "locator": "randle-reconciliation://sha256/7d2554759b57c523fac9e309550ec57aa6a6d045441d3d00bc9c89d5cc2537ac",
+        "process_nonce": "d291a5acc34a98d0b98feff848e9ff43572b18715454ebb55a98305d6af9601a",
+        "process_receipt_locator": "randle-evidence://sha256/a4f5b7fab24c15c2e4c5a5b7dafc5625aab78b4c59008663b686b6f00483f101",
+        "public_verification": {
+          "identity": "7d2554759b57c523fac9e309550ec57aa6a6d045441d3d00bc9c89d5cc2537ac",
+          "ledger_root": "c49b8e87fb7b39a2cbea5e5a442b8f3fecb0483e66d53afa1546c7ab6c504a96",
+          "ledger_sequence": 461,
+          "result_code": "R7_PUBLIC_RECONCILIATION_VERIFIED",
+          "status": "VERIFIED"
+        },
+        "result": "SEMANTICALLY_EQUIVALENT_REAL_EXECUTIONS"
+      }
+    },
+    {
+      "attempt_id": "afbfe88e4d5ee456f3f0ceec372ac0576674513357672d759f179f4b5b495b61",
+      "checkout": {
+        "autocrlf": "false",
+        "eol_stdout_sha256": "c66ffbaa1d023920a972bd0e9ded92f06b6ce11b53b030e419a30755b8f6c782",
+        "head": "bb04ac54fb328516d0c785f4e6551e6a20d73759",
+        "path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_matrix_precommit_retry_long\\segment_01_governed\\segment_02_measured\\segment_03_autocrlf\\segment_04_terminal\\segment_05_public\\long_autocrlf_false",
+        "path_class": "LONG",
+        "path_length": 188,
+        "status_after_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "status_before_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "configuration": "LONG_AUTOCRLF_FALSE",
+      "phases": {
+        "CANDIDATE": {
+          "comparator_result_locator": "randle-evidence://sha256/821b8545588119916da3221fbf1be0a9d80f499b1ddcd0e6fa19472f7f44b705",
+          "event_root": "6f9a85b6c2a6e13b7a53378b9d148e321e1805210860d8e8382f533aad614376",
+          "event_source_locator": "randle-evidence://sha256/1ef2f38f25fee83d5ebe20aaf509c8b2c54ae6b580569f595fac7997410d1806",
+          "observation_locator": "randle-evidence://sha256/e93c4e93da3154f65a0ab1893ebed261e83fc48462a6e11503ffa999b8265a70",
+          "process_index_locator": "randle-evidence://sha256/92041e40e2a56e35a5f677df5b4d65607a0f0a37e3cb742d57cf0019b6af7619",
+          "process_receipt_locators": [
+            "randle-evidence://sha256/915bd4e5bd094929c54bd7dc20467036c8459919534cb77bfe7d69a8012b2916",
+            "randle-evidence://sha256/c698ae30837e71c78ff67b3ba694cd81dd70d1a65de4b3550a628b4179e615ec",
+            "randle-evidence://sha256/d03ab57261988f5c79e36297cc1c40c0feeea76dcd062e79c5ae5e90e499b016"
+          ],
+          "process_receipt_nonces": [
+            "3287646db88b6eb35e251f7eddc0e2b02db24446d9bfb5d9880d00834d68d59b",
+            "4667bafd4a4ff6b679d4d83bdd7fb7c4724a2e5a3041e9648a0884040bfbf2d4",
+            "828a1a80099dd64000ce21722eac4e60f95dd82101dd30d74b9775ea51f5c304"
+          ],
+          "public_verification": {
+            "identity": "47dc13c58540400154a145b7f4d7a3d3e1d921abf16caddf79275e51d34d5238",
+            "ledger_root": "5c14e0ce0548a9f7e11d4a96294ad804adbe1ca038cccc502abebd7eec50fdd4",
+            "ledger_sequence": 468,
+            "result_code": "R7_PUBLIC_TERMINAL_VERIFIED",
+            "status": "VERIFIED"
+          },
+          "receipt_identity": "47dc13c58540400154a145b7f4d7a3d3e1d921abf16caddf79275e51d34d5238",
+          "receipt_locator": "randle-terminal://sha256/47dc13c58540400154a145b7f4d7a3d3e1d921abf16caddf79275e51d34d5238",
+          "run_id": "52a32254198492b737c0fb4e2193d27bb9223702309fe4d74f1bc2fab0f14eaf",
+          "run_nonce": "844982639dc9b00a1aa9bb0b432eb36bbe7fc48a69669fa93cd852235a31d12b",
+          "subject_process_id": 18820,
+          "subject_run_id": "828a1a80099dd64000ce21722eac4e60f95dd82101dd30d74b9775ea51f5c304",
+          "traceability_locator": "randle-evidence://sha256/04d74f7c5eb3df6be96955933e19a0c641ea000b1234e01e33e9e325eb830635"
+        },
+        "FRESH": {
+          "comparator_result_locator": "randle-evidence://sha256/b78fef90b0cde416a6011658685a71c162db3ba270f78f1e98b750a126f281bf",
+          "event_root": "68fbdbd48b0faa1c6790c06f0d955e9d97b92b3bba15ec53a23e3bd69d845930",
+          "event_source_locator": "randle-evidence://sha256/d47d5004cdd0e383c1be8dd1a126d73c7102e616f804f60040f05b9ad34db97a",
+          "observation_locator": "randle-evidence://sha256/9c8d8fcfd3baf559defa98d14369aa0423a11c25b3888993285ca719ad242f6b",
+          "process_index_locator": "randle-evidence://sha256/0ef890c7c8ce06ae48f3d7c956123924dce5aec22eb8a17ffa694a31184b98c3",
+          "process_receipt_locators": [
+            "randle-evidence://sha256/f3b4539185ff5ca0a351f0a0e2a1d89780624ce4b41f7eb9d1f7b6203dd288a3",
+            "randle-evidence://sha256/f6fdd8281a7c6a6f4a9a7bfaffb71b54fef628080dabda3b3ff24f26e929c323",
+            "randle-evidence://sha256/facddde0102cdc7527c6a3352ffb2d22cb16ff2cf6f19f4ca24b9a8dc1dd8f90"
+          ],
+          "process_receipt_nonces": [
+            "0341079998a29c355d58d39fe2a4e9112601e92483c30c05612c7720d22de523",
+            "2b022f74a5c727516fb67091c7e47a0e666430d1e51c37ef7a495be18ad8788c",
+            "d797d7e3d50ae4e70766d219aad2a7d2167ea817f21757de5a55823aa229b228"
+          ],
+          "public_verification": {
+            "identity": "d285cb12867cba50528cb5d9c5bd4b8c48d987825f9dcf34fbc65b39c638466d",
+            "ledger_root": "1c014a3274b448db77e20bb77de9688d57b646854bc692ab4da7c6393f4bb3fb",
+            "ledger_sequence": 474,
+            "result_code": "R7_PUBLIC_TERMINAL_VERIFIED",
+            "status": "VERIFIED"
+          },
+          "receipt_identity": "d285cb12867cba50528cb5d9c5bd4b8c48d987825f9dcf34fbc65b39c638466d",
+          "receipt_locator": "randle-terminal://sha256/d285cb12867cba50528cb5d9c5bd4b8c48d987825f9dcf34fbc65b39c638466d",
+          "run_id": "dc50a4e61bb84f47b8e817b655738e299b7b6e060cb2e2bcf1aca2030ca74e0c",
+          "run_nonce": "7608dd94bd55cf2516c24be79ae71bab1010b236f1d72a2572f92260d931d42b",
+          "subject_process_id": 2864,
+          "subject_run_id": "d797d7e3d50ae4e70766d219aad2a7d2167ea817f21757de5a55823aa229b228",
+          "traceability_locator": "randle-evidence://sha256/1857c2ef23914912d278431d91bbd9e20421193a528e308e3d6e8c9db5a0deb7"
+        }
+      },
+      "reconciliation": {
+        "identity": "f66fd19525171b2620a6a09b5840936a85c2af5edb46f3ce2410141eea081ad2",
+        "locator": "randle-reconciliation://sha256/f66fd19525171b2620a6a09b5840936a85c2af5edb46f3ce2410141eea081ad2",
+        "process_nonce": "acc80d99dfbe302b6db493ef4cd4d098aac7670023d5b387a2ba9a2666d0c1ee",
+        "process_receipt_locator": "randle-evidence://sha256/8346c08699c8977104e2f0444468cd870acf5ad4e14c21147d5e2e44d8998265",
+        "public_verification": {
+          "identity": "f66fd19525171b2620a6a09b5840936a85c2af5edb46f3ce2410141eea081ad2",
+          "ledger_root": "05e42c2e6428dfd55cadbc10117f4be35e5bd297df06215a69a4b472f0e4789e",
+          "ledger_sequence": 477,
+          "result_code": "R7_PUBLIC_RECONCILIATION_VERIFIED",
+          "status": "VERIFIED"
+        },
+        "result": "SEMANTICALLY_EQUIVALENT_REAL_EXECUTIONS"
+      }
+    }
+  ],
+  "schema_version": "7.1.0-DRAFT",
+  "source_evidence": {
+    "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_real_matrix_complete.json",
+    "raw_sha256": "161a37c5fad8544e46f420ce7a70b9f03ae1ea214834fc882cf68a593805bd3e",
+    "size": 56715
+  },
+  "status": "PASS",
+  "uniqueness": {
+    "comparator_result_locator": 8,
+    "event_root": 8,
+    "event_source_locator": 8,
+    "observation_locator": 8,
+    "process_index_locator": 8,
+    "process_receipt_locators": 24,
+    "process_receipt_nonces": 24,
+    "reconciliation_process_receipts": 4,
+    "reconciliations": 4,
+    "run_id": 8,
+    "run_nonce": 8,
+    "subject_run_id": 8,
+    "suite_process_receipt_locator": 8,
+    "terminal_receipts": 8,
+    "traceability_locator": 8
+  }
+}

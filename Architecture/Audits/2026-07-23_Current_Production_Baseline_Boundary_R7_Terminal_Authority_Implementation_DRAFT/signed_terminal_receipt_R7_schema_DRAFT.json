@@ -1,0 +1,243 @@
+{
+  "$id": "https://randle.ai/schemas/signed-terminal-receipt-r7-7.1.0-draft.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "payload": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_SIGNED_TERMINAL_RECEIPT"
+        },
+        "attempt_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "attempt_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "case_count": {
+          "const": 178
+        },
+        "case_definition_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "case_definition_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "case_definition_size": {
+          "const": 995804
+        },
+        "comparator_result_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "configuration": {
+          "enum": [
+            "SHORT_AUTOCRLF_TRUE",
+            "SHORT_AUTOCRLF_FALSE",
+            "LONG_AUTOCRLF_TRUE",
+            "LONG_AUTOCRLF_FALSE"
+          ]
+        },
+        "event_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "event_source_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "expectation_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "expectation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "expectation_size": {
+          "const": 285399
+        },
+        "interface_version": {
+          "const": "3.0.0-DRAFT"
+        },
+        "ipc_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "issue_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "ledger_genesis_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "ledger_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "ledger_reservation_entry_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "ledger_reservation_prior_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "ledger_reservation_sequence": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "observation_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "CANDIDATE",
+            "FRESH"
+          ]
+        },
+        "policy_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "process_index_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "public_key_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run_issuance_ledger_entry_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run_nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "service_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "service_sid": {
+          "pattern": "^S-[0-9]+(?:-[0-9]+)+$",
+          "type": "string"
+        },
+        "subject_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_process_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "suite_process_receipt_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "terminal_claim_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "terminal_verifier_result": {
+          "const": "SEMANTICALLY_VERIFIED"
+        },
+        "traceability_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "worker_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "attempt_id",
+        "attempt_locator",
+        "case_count",
+        "case_definition_git_blob",
+        "case_definition_sha256",
+        "case_definition_size",
+        "comparator_result_locator",
+        "configuration",
+        "event_root",
+        "event_source_locator",
+        "expectation_git_blob",
+        "expectation_sha256",
+        "expectation_size",
+        "interface_version",
+        "ipc_identity",
+        "issue_time",
+        "ledger_genesis_identity",
+        "ledger_id",
+        "ledger_reservation_entry_identity",
+        "ledger_reservation_prior_root",
+        "ledger_reservation_sequence",
+        "observation_locator",
+        "phase",
+        "policy_sha256",
+        "process_index_locator",
+        "public_key_identity",
+        "run_id",
+        "run_issuance_ledger_entry_identity",
+        "run_locator",
+        "run_nonce",
+        "schema_version",
+        "service_binary_sha256",
+        "service_sid",
+        "subject_commit",
+        "subject_process_id",
+        "subject_run_id",
+        "suite_process_receipt_locator",
+        "terminal_claim_identity",
+        "terminal_verifier_result",
+        "traceability_locator",
+        "worker_sha256"
+      ],
+      "type": "object"
+    },
+    "public_key_identity": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "signature": {
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "type": "string"
+    },
+    "signature_algorithm": {
+      "const": "RSA-PSS-SHA256"
+    }
+  },
+  "required": [
+    "payload",
+    "public_key_identity",
+    "signature",
+    "signature_algorithm"
+  ],
+  "title": "R7 signed real-execution terminal receipt",
+  "type": "object"
+}

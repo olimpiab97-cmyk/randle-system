@@ -1,0 +1,44 @@
+{
+  "adversarial": {
+    "probe_count": 25,
+    "source": {
+      "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_adversarial.json",
+      "raw_sha256": "f05cf73ced9df8ab3a73d85bdc34390d1967a2a1f7c6b32b90a6cd4adb420ae4",
+      "size": 42504
+    },
+    "status": "PASS"
+  },
+  "artifact_type": "R7_TERMINAL_AUTHORITY_PRECOMMIT_VERIFICATION_RESULTS",
+  "authority_status": "IMPLEMENTATION_EVIDENCE_NOT_ACCEPTANCE",
+  "case_count": 178,
+  "matrix": {
+    "execution_count": 8,
+    "reconciliation_count": 4,
+    "source": {
+      "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_real_matrix_complete.json",
+      "raw_sha256": "161a37c5fad8544e46f420ce7a70b9f03ae1ea214834fc882cf68a593805bd3e",
+      "size": 56715
+    },
+    "status": "PASS"
+  },
+  "schema_version": "7.1.0-DRAFT",
+  "source_to_binary": {
+    "binary_count": 7,
+    "source": {
+      "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_source_binary_semantic.json",
+      "raw_sha256": "ef8c2ff2d651d0a48648ae8660e8d3a2cc6344cbeb9a638ba939f933c5b5e28b",
+      "size": 4370
+    },
+    "status": "PASS"
+  },
+  "status": "PASS_PRECOMMIT_NOT_ACCEPTANCE",
+  "structural": {
+    "negative_ipc_probe_count": 20,
+    "source": {
+      "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_structural_complete.json",
+      "raw_sha256": "20592f39c99b138c2525a3abb30d0aa82516a43bb8c06eb4e79c27975f58b2fc",
+      "size": 19571
+    },
+    "status": "PASS"
+  }
+}

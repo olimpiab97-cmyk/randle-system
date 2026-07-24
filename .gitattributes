@@ -1,2 +1,5 @@
 /REPLACE_ENTRY_AGENT_WEBHOOK_OVERLAPPING_FINALIZED_TABLE_STATE.pine text eol=lf
 /TradingView/indicators/Randle_AI_Level_Map_Helper.pine text eol=lf
+/.gitattributes text eol=lf
+/Architecture/Impact_Assessments/2026-07-23_R7_Terminal_Authority_Implementation_Architecture_Impact_Assessment_DRAFT.md text eol=lf
+/Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/** text eol=lf

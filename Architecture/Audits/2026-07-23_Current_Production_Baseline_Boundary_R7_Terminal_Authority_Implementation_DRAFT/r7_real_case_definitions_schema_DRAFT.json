@@ -1,0 +1,435 @@
+{
+  "$id": "https://randle.ai/schemas/r7-real-case-definitions-7.1.0-draft.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {
+      "const": "R7_REAL_PUBLIC_INTERFACE_CASE_DEFINITIONS"
+    },
+    "authority_model": {
+      "const": "178_REQUIREMENT_DERIVED_DIRECT_PUBLIC_INTERFACE_CASES"
+    },
+    "case_count": {
+      "const": 178
+    },
+    "cases": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "caller_class": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "caller_identity_rule": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "case_id": {
+            "pattern": "^R7-[0-9]{2}-(?:P|M)[0-9]{3}$",
+            "type": "string"
+          },
+          "comparator_rule": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "expected_acceptance": {
+            "enum": [
+              "ACCEPTED",
+              "REJECTED"
+            ]
+          },
+          "expected_ledger_delta": {
+            "additionalProperties": false,
+            "properties": {
+              "outer_authority_entries_during_case": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "subject_event_entries_at_least": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "outer_authority_entries_during_case",
+              "subject_event_entries_at_least"
+            ],
+            "type": "object"
+          },
+          "expected_receipt_behavior": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "expected_response_semantics": {
+            "additionalProperties": false,
+            "properties": {
+              "classification": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "outcome": {
+                "enum": [
+                  "ACCEPTED",
+                  "REJECTED"
+                ]
+              }
+            },
+            "required": [
+              "classification",
+              "outcome"
+            ],
+            "type": "object"
+          },
+          "expected_restart_retry_replay_behavior": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "forbidden_side_effects": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "governing_authorities": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "commit": {
+                  "pattern": "^[0-9a-f]{40}$",
+                  "type": "string"
+                },
+                "git_blob": {
+                  "pattern": "^[0-9a-f]{40}$",
+                  "type": "string"
+                },
+                "git_object_type": {
+                  "const": "blob"
+                },
+                "path": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "requirement_id": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "git_blob",
+                "path",
+                "requirement_id"
+              ],
+              "type": "object"
+            },
+            "minItems": 5,
+            "type": "array"
+          },
+          "governing_requirement_id": {
+            "pattern": "^R7-[0-9]{2}$",
+            "type": "string"
+          },
+          "initial_state": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "input_construction_rule": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation": {
+            "const": "execute_case"
+          },
+          "prerequisites": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "public_interface": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "required_authoritative_side_effects": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "required_execution_isolation": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "required_observation_derivation": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "required_raw_evidence": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "source_case": {
+            "additionalProperties": false,
+            "properties": {
+              "case_id": {
+                "pattern": "^R7-[0-9]{2}-(?:P|M)[0-9]{3}$",
+                "type": "string"
+              },
+              "expected_authority_source": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_evidence_obligation": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "immutable_input_identity": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "positive",
+                  "mutation"
+                ]
+              },
+              "meta_verification": {
+                "type": "boolean"
+              },
+              "mutation": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "mutation_identity": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "normative_clause": {
+                "pattern": "^CPB-R7-[0-9]{2}$",
+                "type": "string"
+              },
+              "public_interface": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "r7_requirement": {
+                "pattern": "^R7-[0-9]{2}$",
+                "type": "string"
+              },
+              "surface": {
+                "const": "real_surface"
+              },
+              "vector_handler": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "case_id",
+              "expected_authority_source",
+              "expected_evidence_obligation",
+              "immutable_input_identity",
+              "kind",
+              "meta_verification",
+              "mutation",
+              "mutation_identity",
+              "normative_clause",
+              "public_interface",
+              "r7_requirement",
+              "surface",
+              "vector_handler"
+            ],
+            "type": "object"
+          },
+          "subject_component": {
+            "additionalProperties": false,
+            "properties": {
+              "authority": {
+                "const": "NONAUTHORITATIVE_MEASURED_EXECUTION_SUBJECT"
+              },
+              "commit": {
+                "pattern": "^[0-9a-f]{40}$",
+                "type": "string"
+              },
+              "direct_interface_git_blob": {
+                "pattern": "^[0-9a-f]{40}$",
+                "type": "string"
+              },
+              "fixture_host_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "launcher_binary_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "service_git_blob": {
+                "pattern": "^[0-9a-f]{40}$",
+                "type": "string"
+              },
+              "verifier_git_blob": {
+                "pattern": "^[0-9a-f]{40}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "authority",
+              "commit",
+              "direct_interface_git_blob",
+              "fixture_host_sha256",
+              "launcher_binary_sha256",
+              "service_git_blob",
+              "verifier_git_blob"
+            ],
+            "type": "object"
+          },
+          "traceability_mapping": {
+            "additionalProperties": false,
+            "properties": {
+              "forward": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "reverse_required": {
+                "const": true
+              }
+            },
+            "required": [
+              "forward",
+              "reverse_required"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "caller_class",
+          "caller_identity_rule",
+          "case_id",
+          "comparator_rule",
+          "expected_acceptance",
+          "expected_ledger_delta",
+          "expected_receipt_behavior",
+          "expected_response_semantics",
+          "expected_restart_retry_replay_behavior",
+          "forbidden_side_effects",
+          "governing_authorities",
+          "governing_requirement_id",
+          "initial_state",
+          "input_construction_rule",
+          "operation",
+          "prerequisites",
+          "public_interface",
+          "required_authoritative_side_effects",
+          "required_execution_isolation",
+          "required_observation_derivation",
+          "required_raw_evidence",
+          "source_case",
+          "subject_component",
+          "traceability_mapping"
+        ],
+        "type": "object"
+      },
+      "maxItems": 178,
+      "minItems": 178,
+      "type": "array"
+    },
+    "governing_sources": {
+      "additionalProperties": false,
+      "properties": {
+        "correction_requirements_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "correction_requirements_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "provisioning_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r6_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r6_tree": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r7_blocked_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r7_blocked_report_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r7_incomplete_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r7_incomplete_report_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_case_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_parent": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_tree": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "correction_requirements_git_blob",
+        "correction_requirements_sha256",
+        "provisioning_commit",
+        "r6_commit",
+        "r6_tree",
+        "r7_blocked_commit",
+        "r7_blocked_report_git_blob",
+        "r7_incomplete_commit",
+        "r7_incomplete_report_git_blob",
+        "subject_case_git_blob",
+        "subject_commit",
+        "subject_parent",
+        "subject_tree"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "7.1.0-DRAFT"
+    }
+  },
+  "required": [
+    "artifact_type",
+    "authority_model",
+    "case_count",
+    "cases",
+    "governing_sources",
+    "schema_version"
+  ],
+  "title": "R7 immutable real public-interface case definitions",
+  "type": "object"
+}

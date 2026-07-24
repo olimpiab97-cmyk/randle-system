@@ -1,0 +1,174 @@
+{
+  "artifact_type": "R7_TERMINAL_AUTHORITY_SOURCE_TO_BINARY_BUILD_RECEIPT",
+  "build_driver": {
+    "git_blob": "daf87eada4236903e1e097cc5f0d5b5c74814992",
+    "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/build_r7_binaries_DRAFT.ps1",
+    "raw_sha256": "7dd6cfbb91029d2c61e363f247b47a19ae6bb282eb35cc7105fa069f237b4ac9",
+    "size": 4374
+  },
+  "compiler_options": [
+    "/nologo",
+    "/target:exe",
+    "/optimize+",
+    "/platform:anycpu-or-x64-per-output"
+  ],
+  "compiler_path": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe",
+  "compiler_sha256": "adeda78a951529462f9411e016c1a1b87ddfd94c55912cbd2957817f39929af1",
+  "nondeterminism_control": {
+    "excluded_fields": [
+      "MVID",
+      "runtime load image base"
+    ],
+    "method": "ILDASM_TEXT_TOKENS_BYTES_WITH_MVID_AND_LOAD_IMAGE_BASE_REMOVED",
+    "note": "Legacy compiler lacks /deterministic; exact installation bytes equal captured reference bytes and normalized token/byte IL equals a fresh rebuild."
+  },
+  "outputs": [
+    {
+      "installed_path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthority.exe",
+      "installed_sha256": "9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526",
+      "name": "RandleTerminalAuthority.exe",
+      "normalized_il_sha256": "ca7edf17a15a8798ad36185629201dc30151521f704007e5128bab1a83b58ea5",
+      "platform": "anycpu",
+      "rebuild_sha256": "5363af6f489edf289b9670bdd27b6c8c31c756a13460f867c03172e204c50668",
+      "reference_sha256": "9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526",
+      "role": "RESTRICTED_EXTERNAL_TERMINAL_AUTHORITY",
+      "semantic_equality": true,
+      "size": 123392
+    },
+    {
+      "installed_path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthorityR7Worker.exe",
+      "installed_sha256": "b2971b85de73d999bfa801d047b22c2ec6fc3d6bc5cb5923ea4a9ab240ed4401",
+      "name": "RandleTerminalAuthorityR7Worker.exe",
+      "normalized_il_sha256": "aef1589dc610a5903dc259ac97752c7a4c33ee7877c4d97797033b0e7aed5c14",
+      "platform": "anycpu",
+      "rebuild_sha256": "83d63971dda2bd90139752f871ff8639d3d474c88836a969755d6ff66011ad8e",
+      "reference_sha256": "b2971b85de73d999bfa801d047b22c2ec6fc3d6bc5cb5923ea4a9ab240ed4401",
+      "role": "MEASURED_OBSERVER_COMPARATOR_RECONCILER",
+      "semantic_equality": true,
+      "size": 79360
+    },
+    {
+      "installed_path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthorityR7Client.exe",
+      "installed_sha256": "8d5a5e803c9b7c17f06a488ef815b138d9de1dcd666ab1d4c333414801d4b6e9",
+      "name": "RandleTerminalAuthorityR7Client.exe",
+      "normalized_il_sha256": "116679b5f6deeba3ba743d3a9492fa2cb103a1fdf72fac7ff9cf14b6d8bf2cff",
+      "platform": "anycpu",
+      "rebuild_sha256": "bb2ad5b2a5e587cc3221b95faf4a56f3b269a4343b6117887287f0e9e385464d",
+      "reference_sha256": "8d5a5e803c9b7c17f06a488ef815b138d9de1dcd666ab1d4c333414801d4b6e9",
+      "role": "NONAUTHORITATIVE_PUBLIC_CLIENT",
+      "semantic_equality": true,
+      "size": 45568
+    },
+    {
+      "installed_path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthorityR7PublicVerifier.exe",
+      "installed_sha256": "88c4e631035af0c7ec366256c78f4d1f21994554a30201b30b4d6bf775314a3d",
+      "name": "RandleTerminalAuthorityR7PublicVerifier.exe",
+      "normalized_il_sha256": "97076345c0452eb0c3a2483d657b8bd52718d8c425e6e888f5673e6dc493c214",
+      "platform": "anycpu",
+      "rebuild_sha256": "8a9e043875f608d76dbe5b6dc4c57978f02170c3a3862dde39507195bb171d41",
+      "reference_sha256": "88c4e631035af0c7ec366256c78f4d1f21994554a30201b30b4d6bf775314a3d",
+      "role": "PUBLIC_ONLY_GRAPH_AND_LEDGER_VERIFIER",
+      "semantic_equality": true,
+      "size": 68608
+    },
+    {
+      "installed_path": null,
+      "installed_sha256": null,
+      "name": "RandleTerminalAuthorityR7AdversarialProbe.exe",
+      "normalized_il_sha256": "2439f28cc2883b246d69576bbd421ab2c37b90e31ea29de940318602f9fd5173",
+      "platform": "anycpu",
+      "rebuild_sha256": "dd10fcc65b510869ae93e250e542c251bafac23eb26d3c6787c52f138faad00d",
+      "reference_sha256": "c6c143fc528fd2c8a709547b8dcdfcb1ba307898ebc882149de06c671a0e4e5f",
+      "role": "NONAUTHORITATIVE_STRUCTURAL_PROBE",
+      "semantic_equality": true,
+      "size": 49664
+    },
+    {
+      "installed_path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\R7ExecutionSubject\\powershell.exe",
+      "installed_sha256": "7a82bab5acfa36555d0e3b9cf29084101f8276b4ceba93cd48cc1e85fadf1454",
+      "name": "RandleTerminalAuthorityR7FixtureHost.exe",
+      "normalized_il_sha256": "9db65647b46fb70388073eb30d5392ae56340223b0691ee3d4b89460d6b81529",
+      "platform": "x64",
+      "rebuild_sha256": "d2f01119cc93ccdca3527d22b165c70cb2ad62e0d4ea5518303e786dde927584",
+      "reference_sha256": "7a82bab5acfa36555d0e3b9cf29084101f8276b4ceba93cd48cc1e85fadf1454",
+      "role": "CLOSED_MEASURED_JUNCTION_FIXTURE",
+      "semantic_equality": true,
+      "size": 26624
+    },
+    {
+      "installed_path": "C:\\Program Files\\RandleAI\\TerminalAuthority\\RandleTerminalAuthorityR7SubjectLauncher.exe",
+      "installed_sha256": "3445e5effd6398b648afa6898391f4e2b5de34f696dd91bfedc2dc29be4e3877",
+      "name": "RandleTerminalAuthorityR7SubjectLauncher.exe",
+      "normalized_il_sha256": "d978f43c296041f932ceadfe5b085ea4497f245377d56ad5199cfad7e1e513ce",
+      "platform": "x64",
+      "rebuild_sha256": "fb88b381f1329048d5c0035c0dbe558eda9a8b65cb2d619a67e4f918a75ad22c",
+      "reference_sha256": "3445e5effd6398b648afa6898391f4e2b5de34f696dd91bfedc2dc29be4e3877",
+      "role": "MEASURED_SUBJECT_LAUNCHER",
+      "semantic_equality": true,
+      "size": 22016
+    }
+  ],
+  "schema_version": "7.1.0-DRAFT",
+  "semantic_verification_source": {
+    "diagnostic_path": "C:\\Users\\Trader\\AppData\\Local\\Temp\\r7i_b01_correction_20260723_execution\\precommit_source_binary_semantic.json",
+    "raw_sha256": "ef8c2ff2d651d0a48648ae8660e8d3a2cc6344cbeb9a638ba939f933c5b5e28b",
+    "size": 4370
+  },
+  "sources": [
+    {
+      "git_blob": "cbf226ea7ab88d87ea8d75e59be68c315f39a9b1",
+      "path": "Architecture/Audits/2026-07-23_Terminal_Authority_Infrastructure_Provisioning_DRAFT/TerminalAuthorityCommon_DRAFT.cs",
+      "raw_sha256": "77855180c8758b75966983dbf1d77be141f113b5d8cd96d4bad1ae0dbebcc9a5",
+      "size": 14922
+    },
+    {
+      "git_blob": "3dbc6307175c351f1ba3a28fbd62e28d220da182",
+      "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/TerminalAuthorityR7Common_DRAFT.cs",
+      "raw_sha256": "4319dfd1d4314eb0ef799c4a378878b43f16d7c12461e0606ae6f07d2fcabf77",
+      "size": 35074
+    },
+    {
+      "git_blob": "39804b900ef728c512d50bfb52539d84a20d43f1",
+      "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/TerminalAuthorityR7Service_DRAFT.cs",
+      "raw_sha256": "6fb415c4972153388d4ea37c3a9d9ae668380f13810e716f41c7666949332dcd",
+      "size": 173979
+    },
+    {
+      "git_blob": "2083b15179340c041e27dcf63575f16900ca37ff",
+      "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/TerminalAuthorityR7Worker_DRAFT.cs",
+      "raw_sha256": "f157bd1c979ea509ec016913902d8b38e6b376418a0902b8b50a1ff4348fce74",
+      "size": 83216
+    },
+    {
+      "git_blob": "36c1e2b863c95e1cf854f6a031e6ae2271b50363",
+      "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/TerminalAuthorityR7Client_DRAFT.cs",
+      "raw_sha256": "fd8b0b4a49731d7b001b665d17bf54e00495d27a88faf12c91591e6897dd9052",
+      "size": 6587
+    },
+    {
+      "git_blob": "0e710fcb3df8d0f2a65b15c86b6372622c6d939c",
+      "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/TerminalAuthorityR7PublicVerifier_DRAFT.cs",
+      "raw_sha256": "3d4cec7e8734c131db8b51278254ff1aeca6f296251335136875544e835a4986",
+      "size": 54902
+    },
+    {
+      "git_blob": "e57d28378d007c637bae14602b1606564e402cec",
+      "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/TerminalAuthorityR7AdversarialProbe_DRAFT.cs",
+      "raw_sha256": "1f9556c4f2556cab2e65e7c8c77b4ba19386d5c6c8756968fde130a32bf5afe6",
+      "size": 15662
+    },
+    {
+      "git_blob": "f698c30d6d39b76af8e24a7674d6b45ec0251246",
+      "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/TerminalAuthorityR7FixtureHost_DRAFT.cs",
+      "raw_sha256": "e3491143f55e1cf9cc356f592175261d7ef40a7a17f4a938b33698789c3577d0",
+      "size": 19533
+    },
+    {
+      "git_blob": "fe47df7263178df7e9548aa5f1612b2c09dd44a7",
+      "path": "Architecture/Audits/2026-07-23_Current_Production_Baseline_Boundary_R7_Terminal_Authority_Implementation_DRAFT/TerminalAuthorityR7SubjectLauncher_DRAFT.cs",
+      "raw_sha256": "a5be3d3835fc88489a2d58c7379a4257a015eeeb40ac6acd692a677f076794bd",
+      "size": 7088
+    }
+  ],
+  "status": "BUILT_INSTALLED_SEMANTICALLY_REBUILT_NOT_ACCEPTED"
+}

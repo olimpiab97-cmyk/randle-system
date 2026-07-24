@@ -1,0 +1,405 @@
+{
+  "$id": "https://randle.ai/schemas/r7-terminal-authority-policy-7.1.0-draft.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adversarial_probe_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/Config/R7Authorities/",
+          "type": "string"
+        },
+        "raw_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "count",
+        "git_blob",
+        "path",
+        "raw_sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "allowed_configurations": {
+      "items": false,
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "const": "SHORT_AUTOCRLF_TRUE"
+        },
+        {
+          "const": "SHORT_AUTOCRLF_FALSE"
+        },
+        {
+          "const": "LONG_AUTOCRLF_TRUE"
+        },
+        {
+          "const": "LONG_AUTOCRLF_FALSE"
+        }
+      ],
+      "type": "array",
+      "uniqueItems": true
+    },
+    "allowed_operations": {
+      "items": {
+        "enum": [
+          "EXECUTE_R7_RUN",
+          "GET_HEALTH",
+          "GET_LEDGER_STATUS",
+          "GET_PUBLIC_TRUST",
+          "GET_R7_RECEIPT",
+          "GET_R7_RECONCILIATION",
+          "ISSUE_R7_ATTEMPT",
+          "RECONCILE_R7_TERMINAL_RECEIPTS"
+        ]
+      },
+      "maxItems": 8,
+      "minItems": 8,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "artifact_type": {
+      "const": "R7_REAL_EXECUTION_TERMINAL_AUTHORITY_POLICY"
+    },
+    "case_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/Config/R7Authorities/",
+          "type": "string"
+        },
+        "raw_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "count",
+        "git_blob",
+        "path",
+        "raw_sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "correction_requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "raw_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "git_blob",
+        "path",
+        "raw_sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "expectation_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/Config/R7Authorities/",
+          "type": "string"
+        },
+        "raw_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "count",
+        "git_blob",
+        "path",
+        "raw_sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "fixed_roots": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/",
+          "type": "string"
+        },
+        "fixture_process_receipts": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/",
+          "type": "string"
+        },
+        "ledger": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/",
+          "type": "string"
+        },
+        "receipts": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/",
+          "type": "string"
+        },
+        "reconciliations": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/",
+          "type": "string"
+        },
+        "responses": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/",
+          "type": "string"
+        },
+        "sessions": {
+          "pattern": "^C:/ProgramData/RandleAI/TerminalAuthority/",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence",
+        "fixture_process_receipts",
+        "ledger",
+        "receipts",
+        "reconciliations",
+        "responses",
+        "sessions"
+      ],
+      "type": "object"
+    },
+    "interface_version": {
+      "const": "3.0.0-DRAFT"
+    },
+    "ledger_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "provisioning_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "public_key_identity": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "python_runtime_manifest": {
+      "additionalProperties": false,
+      "properties": {
+        "file_count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "raw_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "runtime_root_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file_count",
+        "git_blob",
+        "raw_sha256",
+        "runtime_root_identity",
+        "size"
+      ],
+      "type": "object"
+    },
+    "r6_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "r7_records": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "commit": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "report_git_blob": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commit",
+          "report_git_blob"
+        ],
+        "type": "object"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "7.1.0-DRAFT"
+    },
+    "service_sid": {
+      "pattern": "^S-[0-9]+(?:-[0-9]+)+$",
+      "type": "string"
+    },
+    "subject": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "direct_interface_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fixture_host_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "governed_access_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "launcher_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "ledger_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "python_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "service_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "tree": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "verifier_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit",
+        "direct_interface_sha256",
+        "fixture_host_sha256",
+        "governed_access_sha256",
+        "launcher_sha256",
+        "ledger_sha256",
+        "python_sha256",
+        "repository",
+        "service_sha256",
+        "tree",
+        "verifier_sha256"
+      ],
+      "type": "object"
+    },
+    "synthetic_authority_prohibitions": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 7,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "threat_model": {
+      "const": "FILTERED_INTERACTIVE_USER_HOSTILE_ELEVATED_ADMIN_AND_KERNEL_OUT_OF_SCOPE"
+    },
+    "worker_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "adversarial_probe_authority",
+    "allowed_configurations",
+    "allowed_operations",
+    "artifact_type",
+    "case_authority",
+    "correction_requirements",
+    "expectation_authority",
+    "fixed_roots",
+    "interface_version",
+    "ledger_id",
+    "provisioning_commit",
+    "public_key_identity",
+    "python_runtime_manifest",
+    "r6_commit",
+    "r7_records",
+    "schema_version",
+    "service_sid",
+    "subject",
+    "synthetic_authority_prohibitions",
+    "threat_model",
+    "worker_sha256"
+  ],
+  "title": "R7 real-execution terminal-authority policy",
+  "type": "object"
+}

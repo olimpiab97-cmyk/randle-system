@@ -1,0 +1,239 @@
+{
+  "$id": "https://randle.ai/schemas/r7-independent-expectations-7.1.0-draft.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {
+      "const": "R7_INDEPENDENT_EXPECTATIONS"
+    },
+    "authoring_authority": {
+      "const": "PRE_EXECUTION_GOVERNING_REQUIREMENT_DERIVATION"
+    },
+    "case_count": {
+      "const": 178
+    },
+    "expectations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {
+            "pattern": "^R7-[0-9]{2}-(?:P|M)[0-9]{3}$",
+            "type": "string"
+          },
+          "expected_authority_source": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "expected_enforcing_function": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "expected_evidence_obligation": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "expected_interface": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "expected_ledger_delta": {
+            "additionalProperties": false,
+            "properties": {
+              "outer_authority_entries_during_case": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "subject_event_entries_at_least": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "outer_authority_entries_during_case",
+              "subject_event_entries_at_least"
+            ],
+            "type": "object"
+          },
+          "expected_outcome": {
+            "enum": [
+              "ACCEPTED",
+              "REJECTED"
+            ]
+          },
+          "expected_response_classification": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "forbidden_outcomes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "forbidden_side_effects": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "governing_expectation": {
+            "additionalProperties": false,
+            "properties": {
+              "diagnostic_source_git_blob": {
+                "pattern": "^[0-9a-f]{40}$",
+                "type": "string"
+              },
+              "normative_clause": {
+                "pattern": "^CPB-R7-[0-9]{2}$",
+                "type": "string"
+              },
+              "r7_requirement": {
+                "pattern": "^R7-[0-9]{2}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "diagnostic_source_git_blob",
+              "normative_clause",
+              "r7_requirement"
+            ],
+            "type": "object"
+          },
+          "provenance": {
+            "const": "PRE_EXECUTION_INDEPENDENT_STATIC_EXPECTATION_NO_EVENT_OBSERVATION_RECEIPT_OR_COMPARATOR_INPUT"
+          },
+          "required_evidence": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "required_side_effects": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "expected_authority_source",
+          "expected_enforcing_function",
+          "expected_evidence_obligation",
+          "expected_interface",
+          "expected_ledger_delta",
+          "expected_outcome",
+          "expected_response_classification",
+          "forbidden_outcomes",
+          "forbidden_side_effects",
+          "governing_expectation",
+          "provenance",
+          "required_evidence",
+          "required_side_effects"
+        ],
+        "type": "object"
+      },
+      "maxItems": 178,
+      "minItems": 178,
+      "type": "array"
+    },
+    "provenance_policy": {
+      "const": "NO_EXECUTION_EVENT_OBSERVATION_RECEIPT_COMPARATOR_OR_PRIOR_RESULT_INPUT"
+    },
+    "schema_version": {
+      "const": "7.1.0-DRAFT"
+    },
+    "source_authorities": {
+      "additionalProperties": false,
+      "properties": {
+        "correction_requirements_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "correction_requirements_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "provisioning_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r6_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r6_tree": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r7_blocked_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r7_blocked_report_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r7_incomplete_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "r7_incomplete_report_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_case_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_parent": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_tree": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "correction_requirements_git_blob",
+        "correction_requirements_sha256",
+        "provisioning_commit",
+        "r6_commit",
+        "r6_tree",
+        "r7_blocked_commit",
+        "r7_blocked_report_git_blob",
+        "r7_incomplete_commit",
+        "r7_incomplete_report_git_blob",
+        "subject_case_git_blob",
+        "subject_commit",
+        "subject_parent",
+        "subject_tree"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "artifact_type",
+    "authoring_authority",
+    "case_count",
+    "expectations",
+    "provenance_policy",
+    "schema_version",
+    "source_authorities"
+  ],
+  "title": "R7 immutable independent expectations",
+  "type": "object"
+}

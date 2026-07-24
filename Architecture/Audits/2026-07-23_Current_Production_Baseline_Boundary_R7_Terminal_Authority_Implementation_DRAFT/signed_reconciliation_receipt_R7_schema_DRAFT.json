@@ -1,0 +1,197 @@
+{
+  "$id": "https://randle.ai/schemas/signed-reconciliation-receipt-r7-7.1.0-draft.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "payload": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "R7_SIGNED_EXTERNAL_RECONCILIATION_RECEIPT"
+        },
+        "attempt_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "candidate_event_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "candidate_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "candidate_receipt_locator": {
+          "pattern": "^randle-terminal://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "candidate_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "case_definition_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "configuration": {
+          "enum": [
+            "SHORT_AUTOCRLF_TRUE",
+            "SHORT_AUTOCRLF_FALSE",
+            "LONG_AUTOCRLF_TRUE",
+            "LONG_AUTOCRLF_FALSE"
+          ]
+        },
+        "expectation_git_blob": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "fresh_event_root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fresh_receipt_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fresh_receipt_locator": {
+          "pattern": "^randle-terminal://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fresh_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "interface_version": {
+          "const": "3.0.0-DRAFT"
+        },
+        "issue_time": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{7}Z$",
+          "type": "string"
+        },
+        "ledger_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "ledger_reservation_entry_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "ledger_reservation_sequence": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "policy_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "provenance_disjoint": {
+          "const": true
+        },
+        "public_key_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reconciliation_claim_identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reconciliation_evaluator_result_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reconciliation_process_nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reconciliation_process_receipt_locator": {
+          "pattern": "^randle-evidence://sha256/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reconciliation_process_run_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reconciliation_result": {
+          "const": "SEMANTICALLY_EQUIVALENT_REAL_EXECUTIONS"
+        },
+        "schema_version": {
+          "const": "7.1.0-DRAFT"
+        },
+        "service_binary_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "service_sid": {
+          "pattern": "^S-[0-9]+(?:-[0-9]+)+$",
+          "type": "string"
+        },
+        "subject_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "synthetic_result_class_absent": {
+          "const": true
+        },
+        "worker_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "attempt_id",
+        "candidate_event_root",
+        "candidate_receipt_identity",
+        "candidate_receipt_locator",
+        "candidate_run_id",
+        "case_definition_git_blob",
+        "configuration",
+        "expectation_git_blob",
+        "fresh_event_root",
+        "fresh_receipt_identity",
+        "fresh_receipt_locator",
+        "fresh_run_id",
+        "interface_version",
+        "issue_time",
+        "ledger_id",
+        "ledger_reservation_entry_identity",
+        "ledger_reservation_sequence",
+        "policy_sha256",
+        "provenance_disjoint",
+        "public_key_identity",
+        "reconciliation_claim_identity",
+        "reconciliation_evaluator_result_locator",
+        "reconciliation_process_nonce",
+        "reconciliation_process_receipt_locator",
+        "reconciliation_process_run_id",
+        "reconciliation_result",
+        "schema_version",
+        "service_binary_sha256",
+        "service_sid",
+        "subject_commit",
+        "synthetic_result_class_absent",
+        "worker_sha256"
+      ],
+      "type": "object"
+    },
+    "public_key_identity": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "signature": {
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "type": "string"
+    },
+    "signature_algorithm": {
+      "const": "RSA-PSS-SHA256"
+    }
+  },
+  "required": [
+    "payload",
+    "public_key_identity",
+    "signature",
+    "signature_algorithm"
+  ],
+  "title": "R7 signed external reconciliation receipt",
+  "type": "object"
+}
