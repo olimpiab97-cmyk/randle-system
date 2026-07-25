@@ -9,7 +9,9 @@ param(
     [Parameter(Mandatory = $true)][string]$SecondFailedAttemptEvidence,
     [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedSecondFailedAttemptSha256,
     [Parameter(Mandatory = $true)][string]$ThirdFailedAttemptEvidence,
-    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedThirdFailedAttemptSha256
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedThirdFailedAttemptSha256,
+    [Parameter(Mandatory = $true)][string]$FourthFailedAttemptEvidence,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedFourthFailedAttemptSha256
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,6 +22,7 @@ $serviceAccount = 'NT SERVICE\RandleTerminalUpgradeAuthority'
 $terminalAccount = 'NT SERVICE\RandleTerminalAuthority'
 $expectedSid = 'S-1-5-80-238545627-4117296865-2677355104-248304369-1301198082'
 $terminalSid = 'S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948'
+$terminalBinaryPath = 'C:\Program Files\RandleAI\TerminalAuthority\RandleTerminalAuthority.exe'
 $installRoot = 'C:\Program Files\RandleAI\TerminalUpgradeAuthority'
 $stateRoot = 'C:\ProgramData\RandleAI\TerminalUpgradeAuthority'
 $binaryPath = Join-Path $installRoot 'RandleTerminalUpgradeAuthority.exe'
@@ -91,6 +94,29 @@ function Assert-DedicatedDirectoryAcl([string]$Path, [bool]$ServiceMayWrite) {
     }
 }
 
+function Assert-PublicCertificateAcl([string]$Path) {
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { throw 'Upgrade public certificate file is absent or reparsed.' }
+    $acl = Get-Acl -LiteralPath $Path
+    if ($acl.Owner -cne 'NT AUTHORITY\SYSTEM' -or -not $acl.AreAccessRulesProtected) { throw 'Upgrade public certificate owner or inheritance differs.' }
+    $rules = @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))
+    if (@($rules | Where-Object { $_.IsInherited -or $_.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow }).Count -ne 0) { throw 'Upgrade public certificate contains inherited or deny rules.' }
+    $systemSid = 'S-1-5-18'; $adminSid = 'S-1-5-32-544'; $usersSid = 'S-1-5-32-545'
+    $expectedSids = @($systemSid,$adminSid,$usersSid,$expectedSid,$terminalSid) | Sort-Object
+    $actualSids = @($rules | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique)
+    if (($expectedSids -join ',') -cne ($actualSids -join ',')) { throw 'Upgrade public certificate principal set differs.' }
+    $writeRights = [int64]([Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership)
+    foreach ($sid in @($usersSid,$expectedSid,$terminalSid)) {
+        $rule = @($rules | Where-Object { $_.IdentityReference.Value -ceq $sid })
+        $rights = $(if ($rule.Count -eq 1) { [int64]$rule[0].FileSystemRights } else { 0 })
+        if ($rule.Count -ne 1 -or (($rights -band $writeRights) -ne 0) -or (($rights -band [int64][Security.AccessControl.FileSystemRights]::ReadData) -eq 0)) { throw "Upgrade public certificate read-only rule differs: $sid" }
+    }
+    foreach ($sid in @($systemSid,$adminSid)) {
+        $rule = @($rules | Where-Object { $_.IdentityReference.Value -ceq $sid })
+        if ($rule.Count -ne 1 -or (([int64]$rule[0].FileSystemRights -band [int64][Security.AccessControl.FileSystemRights]::FullControl) -ne [int64][Security.AccessControl.FileSystemRights]::FullControl)) { throw "Upgrade public certificate administrative rule differs: $sid" }
+    }
+}
+
 function Invoke-Checked([string]$FilePath, [string[]]$Arguments) {
     $full = [IO.Path]::GetFullPath($FilePath)
     $expected = [string]$governedUtilityHashes[$full]
@@ -150,6 +176,29 @@ if ([string]$thirdFailure.artifact_type -cne 'R7_UNIT2_FAILED_BOOTSTRAP_ATTEMPT'
     [string]$thirdFailure.key.name -notmatch '^[0-9A-Za-z_-]{1,512}$' -or
     [bool]$thirdFailure.key.private_bytes_read -or [bool]$thirdFailure.key.private_bytes_exported -or
     [string]$thirdFailure.terminal_authority_effect -cne 'NONE') { throw 'Third failed-attempt evidence is not the governed stopped-service certificate-ACL failure.' }
+$fourthFailurePath = [IO.Path]::GetFullPath($FourthFailedAttemptEvidence)
+if (-not (Test-Path -LiteralPath $fourthFailurePath -PathType Leaf) -or (Get-LowerHash $fourthFailurePath) -cne $ExpectedFourthFailedAttemptSha256) { throw 'Fourth failed-attempt evidence identity mismatch.' }
+$fourthFailure = Get-Content -LiteralPath $fourthFailurePath -Raw | ConvertFrom-Json
+if ([string]$fourthFailure.artifact_type -cne 'R7_UNIT2_FAILED_BOOTSTRAP_ATTEMPT' -or
+    [string]$fourthFailure.failure_classification -cne 'SAFE_POST_CERTIFICATE_AND_KEY_ACL_RECOVERY_REDUNDANT_KEY_OWNER_REASSERTION_FAILURE' -or
+    [string]$fourthFailure.failed_operation -cne 'ICACLS_KEY_SETOWNER_SYSTEM_AFTER_OWNER_ALREADY_SYSTEM' -or
+    [int]$fourthFailure.icacls_exit_code -ne 5 -or
+    [string]$fourthFailure.status -cne 'PRESERVED_NONAUTHORITY_FAILURE' -or
+    [string]$fourthFailure.source_commit -cne '22ce0e7769228b43a5924522ab5f76cd3dfeb331' -or
+    [string]$fourthFailure.service.state -cne 'Stopped' -or [int64]$fourthFailure.service.process_id -ne 0 -or
+    [string]$fourthFailure.service.account -cne $serviceAccount -or [string]$fourthFailure.service.binary_path -cne $binaryPath -or [string]$fourthFailure.service.start_mode -cne 'Manual' -or
+    [int]@($fourthFailure.authority_file_paths).Count -ne 1 -or [string](@($fourthFailure.authority_file_paths)[0]) -cne $certificatePath -or
+    [string]$fourthFailure.certificate.file_path -cne $certificatePath -or [string]$fourthFailure.certificate.file_owner -cne 'NT AUTHORITY\SYSTEM' -or
+    [string]$fourthFailure.certificate.public_raw_data_sha256 -notmatch '^[0-9a-f]{64}$' -or
+    [string]$fourthFailure.certificate.store_thumbprint -notmatch '^[0-9a-f]{40}$' -or
+    -not [bool]$fourthFailure.certificate.store_has_private_key_reference -or
+    [string]$fourthFailure.certificate.public_raw_data_sha256 -cne [string]$thirdFailure.certificate.public_raw_data_sha256 -or
+    [string]$fourthFailure.certificate.store_subject -cne [string]$thirdFailure.certificate.store_subject -or
+    [string]$fourthFailure.certificate.store_thumbprint -cne [string]$thirdFailure.certificate.store_thumbprint -or
+    [string]$fourthFailure.key.name -cne [string]$thirdFailure.key.name -or [string]$fourthFailure.key.owner -cne 'NT AUTHORITY\SYSTEM' -or
+    [bool]$fourthFailure.key.private_bytes_read -or [bool]$fourthFailure.key.private_bytes_exported -or
+    [string]$fourthFailure.public_export_evidence.raw_sha256 -cne [string]$fourthFailure.certificate.public_raw_data_sha256 -or
+    [string]$fourthFailure.terminal_authority_effect -cne 'NONE') { throw 'Fourth failed-attempt evidence is not the governed stopped-service post-ACL-recovery failure.' }
 foreach ($required in @($powershellExecutable,$scExecutable,$icaclsExecutable,$takeownExecutable,$pkiModuleManifest)) { if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Provisioning dependency missing: $required" } }
 $dependenciesBefore = @(Get-ProvisioningDependencies)
 $dependenciesBeforeIdentity = Get-DependencySetIdentity $dependenciesBefore
@@ -161,6 +210,11 @@ Import-Module -Name $pkiModuleManifest -Force -ErrorAction Stop
 $evidence = [IO.Path]::GetFullPath($EvidenceRoot)
 if (-not (Test-Path -LiteralPath $evidence)) { New-Item -ItemType Directory -Path $evidence | Out-Null }
 if (-not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) { throw 'Preserved stopped upgrade service is absent; refusing discontinuous bootstrap.' }
+$terminalService = Get-CimInstance Win32_Service -Filter "Name='RandleTerminalAuthority'"
+if ($null -eq $terminalService -or [string]$terminalService.State -cne 'Running' -or [int64]$terminalService.ProcessId -ne [int64]$fourthFailure.terminal_authority.process_id -or
+    [string]$terminalService.StartName -cne $terminalAccount -or [string]$terminalService.PathName -cne $terminalBinaryPath -or
+    (Get-LowerHash $terminalBinaryPath) -cne [string]$fourthFailure.terminal_authority.binary_sha256 -or
+    [string]$fourthFailure.terminal_authority.state -cne 'Running' -or [string]$fourthFailure.terminal_authority.binary_sha256 -cne '9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526') { throw 'Existing terminal authority differs from the preserved no-effect boundary.' }
 Assert-DedicatedPath $installRoot 'C:\Program Files\RandleAI'
 Assert-DedicatedPath $stateRoot 'C:\ProgramData\RandleAI'
 
@@ -204,25 +258,22 @@ if ($publicRawHash -cne [string]$thirdFailure.certificate.public_raw_data_sha256
 $publicRsa = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPublicKey($certificate)
 try { if ($null -eq $publicRsa -or $publicRsa.KeySize -ne 3072) { throw 'Preserved public certificate is not RSA-3072.' } } finally { if ($null -ne $publicRsa) { $publicRsa.Dispose() } }
 
-$uniqueName = [string]$thirdFailure.key.name
+$uniqueName = [string]$fourthFailure.key.name
 $keyPath = Join-Path 'C:\ProgramData\Microsoft\Crypto\Keys' $uniqueName
 if (-not (Test-Path -LiteralPath $keyPath -PathType Leaf)) { throw 'Nonexportable CNG key file was not found.' }
 $keyItem = Get-Item -LiteralPath $keyPath -Force
 $keyAclBefore = Get-Acl -LiteralPath $keyPath
-if ($keyItem.Length -ne [int64]$thirdFailure.key.length -or $keyAclBefore.Owner -cne [string]$thirdFailure.key.owner -or $keyAclBefore.Sddl -cne [string]$thirdFailure.key.acl_sddl) { throw 'Preserved upgrade key metadata differs from failed-attempt evidence.' }
+if ($keyItem.Length -ne [int64]$fourthFailure.key.length -or $keyAclBefore.Owner -cne [string]$fourthFailure.key.owner -or $keyAclBefore.Sddl -cne [string]$fourthFailure.key.acl_sddl) { throw 'Preserved upgrade key metadata differs from post-recovery failed-attempt evidence.' }
 $certificateAclBefore = Get-Acl -LiteralPath $certificatePath
-if ($certificateAclBefore.Sddl -cne [string]$thirdFailure.certificate.file_acl_sddl) { throw 'Preserved public-certificate ACL differs from failed-attempt evidence.' }
+if ($certificateAclBefore.Sddl -cne [string]$fourthFailure.certificate.file_acl_sddl -or $certificateAclBefore.Owner -cne [string]$fourthFailure.certificate.file_owner) { throw 'Preserved public-certificate ACL differs from post-recovery failed-attempt evidence.' }
+Assert-PublicCertificateAcl $certificatePath
+$priorExportPath = [IO.Path]::GetFullPath([string]$fourthFailure.public_export_evidence.path)
+if (-not (Test-Path -LiteralPath $priorExportPath -PathType Leaf) -or (Get-LowerHash $priorExportPath) -cne [string]$fourthFailure.public_export_evidence.raw_sha256) { throw 'Preserved prior public-certificate export evidence differs.' }
 
 $reexportPath = Join-Path $evidence 'upgrade_authority_public_from_store.cer'
 if (Test-Path -LiteralPath $reexportPath) { throw 'Public-certificate re-export evidence path already exists.' }
 Export-Certificate -Cert $certificate -FilePath $reexportPath -Type CERT | Out-Null
 if ((Get-LowerHash $reexportPath) -cne $publicRawHash) { throw 'Public certificate export does not equal the preserved certificate bytes.' }
-
-Invoke-Checked $takeownExecutable @('/F', $certificatePath, '/A')
-Invoke-Checked $icaclsExecutable @($certificatePath, '/grant:r', 'SYSTEM:(F)', 'BUILTIN\Administrators:(F)', "$serviceAccount`:(R)", "$terminalAccount`:(R)", 'BUILTIN\Users:(R)')
-Invoke-Checked $icaclsExecutable @($certificatePath, '/setowner', 'SYSTEM')
-Invoke-Checked $icaclsExecutable @($keyPath, '/inheritance:r', '/grant:r', 'SYSTEM:(F)', "$serviceAccount`:(R)", 'BUILTIN\Administrators:(RA,RC)')
-Invoke-Checked $icaclsExecutable @($keyPath, '/setowner', 'SYSTEM')
 
 $certificateHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $certificatePath).Hash.ToLowerInvariant()
 $keyAcl = (Get-Acl -LiteralPath $keyPath).Sddl
@@ -245,7 +296,7 @@ $adminRule = @($keyRules | Where-Object { $_.IdentityReference.Value -ceq $admin
 if ($adminRule.Count -ne 1) { throw 'Recovered key ACL administrator metadata rule is absent or ambiguous.' }
 $adminRights = [int64]$adminRule[0].FileSystemRights
 $allowedAdminRights = [int64]([Security.AccessControl.FileSystemRights]::ReadAttributes -bor [Security.AccessControl.FileSystemRights]::ReadPermissions)
-if (($adminRights -band (-bnot $allowedAdminRights)) -ne 0) { throw 'Recovered key ACL grants Administrators more than metadata-read rights.' }
+if (($adminRights -band (-bnot $allowedAdminRights)) -ne 0 -or ($adminRights -band $allowedAdminRights) -ne $allowedAdminRights) { throw 'Recovered key ACL does not grant exactly the required Administrator metadata-read rights.' }
 $serviceRule = @($keyRules | Where-Object { $_.IdentityReference.Value -ceq $serviceSid })
 $systemRule = @($keyRules | Where-Object { $_.IdentityReference.Value -ceq $systemSid })
 if ($serviceRule.Count -ne 1 -or $systemRule.Count -ne 1) { throw 'Recovered key ACL authority rules are absent or ambiguous.' }
@@ -277,6 +328,8 @@ $record = [ordered]@{
     second_failed_attempt_status = 'PRESERVED_NONAUTHORITY_FAILURE'
     third_failed_attempt_sha256 = $ExpectedThirdFailedAttemptSha256
     third_failed_attempt_status = 'PRESERVED_NONAUTHORITY_FAILURE'
+    fourth_failed_attempt_sha256 = $ExpectedFourthFailedAttemptSha256
+    fourth_failed_attempt_status = 'PRESERVED_NONAUTHORITY_FAILURE'
     provisioning_dependencies = $dependenciesBefore
     provisioning_dependency_set_sha256 = $dependenciesBeforeIdentity
     provisioning_script_sha256 = $ExpectedScriptSha256
@@ -287,7 +340,8 @@ $record = [ordered]@{
     public_certificate_store_thumbprint = $storeThumbprint.ToLowerInvariant()
     public_export_evidence_path = $reexportPath
     public_export_sha256 = (Get-LowerHash $reexportPath)
-    recovery_utility = [ordered]@{ path=$takeownExecutable; raw_sha256=[string]$governedUtilityHashes[$takeownExecutable]; operation='CERTIFICATE_FILE_OWNER_RECOVERY_ONLY' }
+    recovered_acl_mutation_in_current_attempt = $false
+    recovery_utility = [ordered]@{ invoked_in_current_attempt=$false; governing_commit='22ce0e7769228b43a5924522ab5f76cd3dfeb331'; path=$takeownExecutable; preserved_failure_sha256=$ExpectedFourthFailedAttemptSha256; raw_sha256=[string]$governedUtilityHashes[$takeownExecutable]; operation='CERTIFICATE_FILE_OWNER_RECOVERY_ONLY' }
     schema_version = '1.0.0'
     service_account = $serviceAccount
     service_config = $serviceConfig
