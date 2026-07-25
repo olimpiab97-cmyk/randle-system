@@ -150,7 +150,7 @@ foreach ($required in @($compiler, $ildasm, $machineConfig, $serviceControlTool,
 }
 if ((Get-LowerHash $PSCommandPath) -cne $ExpectedOrchestratorScriptSha256) { throw 'Build orchestrator script identity mismatch.' }
 Assert-NewDirectory $output
-foreach ($directory in @('Bootstrap', 'Generated', 'Generated\BuildInputClosures', 'Generated\ImmutableRepository', 'Measurements', 'PassA', 'PassB', 'FinalPassA', 'FinalPassB', 'NormalizedIL', 'Staging\bin', 'Staging\config', 'Staging\build', 'Staging\authority', 'UpgradeBootstrap')) { New-Item -ItemType Directory -Path (Join-Path $output $directory) -Force | Out-Null }
+foreach ($directory in @('Bootstrap', 'BootstrapPassB', 'Generated', 'Generated\BuildInputClosures', 'Generated\ImmutableRepository', 'Measurements', 'PassA', 'PassB', 'FinalPassA', 'FinalPassB', 'NormalizedIL', 'Staging\bin', 'Staging\config', 'Staging\build', 'Staging\authority', 'UpgradeBootstrap')) { New-Item -ItemType Directory -Path (Join-Path $output $directory) -Force | Out-Null }
 if ($output.StartsWith($repositoryRoot.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Build output must be outside the immutable source checkout.' }
 
 $workingPackageRoot = $packageRoot
@@ -210,7 +210,7 @@ $sourcePaths = Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Fil
 $developmentIdentity = Join-Path $packageRoot 'BuildInputs\R7DevelopmentIdentity.g.cs'
 if ($sourcePaths.Count -eq 0 -or -not (Test-Path -LiteralPath $developmentIdentity -PathType Leaf)) { throw 'Immutable C# source extraction is incomplete.' }
 $bootstrapTool = Join-Path $output 'Bootstrap\R7ArtifactTool.bootstrap.exe'
-$bootstrapToolPassB = Join-Path $output 'Bootstrap\R7ArtifactTool.bootstrap.pass-b.exe'
+$bootstrapToolPassB = Join-Path $output 'BootstrapPassB\R7ArtifactTool.bootstrap.exe'
 Invoke-Compiler 'RandleAI.R7Remediation.R7ArtifactToolProgram' '' $bootstrapTool $developmentIdentity
 Start-Sleep -Milliseconds 1100
 Invoke-Compiler 'RandleAI.R7Remediation.R7ArtifactToolProgram' '' $bootstrapToolPassB $developmentIdentity
