@@ -285,6 +285,7 @@ $scriptRegistryPath = Join-Path $packageRoot 'governed_script_registry.json'
 $utilityRegistryPath = Join-Path $packageRoot 'external_utility_registry.json'
 $scopePath = Join-Path $packageRoot 'unit2_authorization_scope.json'
 $negativeCasesPath = Join-Path $packageRoot 'unit2_build_closure_negative_cases.json'
+$installContractPath = Join-Path $packageRoot 'unit2_stopped_install_contract.json'
 $hardenerPath = Join-Path $packageRoot 'complete_unit2_upgrade_authority.ps1'
 $scriptSha = Hash $PSCommandPath
 $scriptBlob = GitBlob $PSCommandPath
@@ -295,7 +296,7 @@ $configurationPaths = [ordered]@{
     PREFLIGHT_HOST_STATE=$preflightPath; PRINCIPAL_REGISTRY=$principalPath; REQUIREMENT_REGISTRY=$requirementPath; SCRIPT_REGISTRY=$scriptRegistryPath;
     TARGET_AUTHORITY_PACKAGE_MANIFEST=$targetManifestPath; TARGET_BUILD_ORCHESTRATOR_RECEIPT=$targetOrchestratorReceiptPath; TARGET_BUILD_RECEIPT=$targetReceiptPath;
     TARGET_BUILD_SUMMARY=$targetSummaryPath; TARGET_POLICY=$targetPolicyPath; TARGET_TRANSITION_TEMPLATE=$targetTemplatePath; TERMINAL_KEY_METADATA=$terminalKeyMetadataPath;
-    UNIT2_AUTHORIZATION_SCOPE=$scopePath; UNIT2_COMPLETION_SCRIPT=$hardenerPath; UPGRADE_KEY_METADATA=$upgradeKeyMetadataPath; UPGRADE_PUBLIC_CERTIFICATE=$certificatePath;
+    UNIT2_AUTHORIZATION_SCOPE=$scopePath; UNIT2_COMPLETION_SCRIPT=$hardenerPath; UNIT2_STOPPED_INSTALL_CONTRACT=$installContractPath; UPGRADE_KEY_METADATA=$upgradeKeyMetadataPath; UPGRADE_PUBLIC_CERTIFICATE=$certificatePath;
     UTILITY_REGISTRY=$utilityRegistryPath
 }
 $configurationRows = [Collections.Generic.List[object]]::new()

@@ -7,6 +7,8 @@ param(
     [Parameter(Mandatory=$true)][string]$UtilityRegistry,
     [Parameter(Mandatory=$true)][string]$EvidenceRoot,
     [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedBuildManifestSha256,
+    [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedPackageManifestSha256,
+    [Parameter(Mandatory=$true)][ValidateRange(1,[long]::MaxValue)][long]$ExpectedPackageManifestSize,
     [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedScriptSha256,
     [Parameter(Mandatory=$true)][switch]$PreStartOnly
 )
@@ -22,13 +24,22 @@ $install='C:\Program Files\RandleAI\TerminalUpgradeAuthority'
 $state='C:\ProgramData\RandleAI\TerminalUpgradeAuthority'
 $config=Join-Path $state 'Config'
 $trust=Join-Path $state 'Trust'
+$buildTools=Join-Path $state 'BuildTools'
 $evidenceParent=Join-Path $state 'Evidence'
 $build=[IO.Path]::GetFullPath($BuildRoot)
 $evidence=[IO.Path]::GetFullPath($EvidenceRoot)
+$packageManifestPath=Join-Path $build 'unit2b3b_install_package_manifest.json'
+$installContractPath=Join-Path $build 'Governance\unit2_stopped_install_contract.json'
 $expectedBinary=Join-Path $install 'RandleTerminalUpgradeAuthority.exe'
 $artifactTool=Join-Path $build 'Tools\R7ArtifactTool.exe'
 $createdFiles=[Collections.Generic.List[string]]::new()
+$createdDirectories=[Collections.Generic.List[string]]::new()
+$createdEvidenceFiles=[Collections.Generic.List[string]]::new()
 $createdEvidenceParent=$false
+$createdEvidenceRun=$false
+$evidenceClaim=$null
+$evidenceClaimCreated=$false
+$priorEvidenceSnapshot=@()
 $rightsMeasurement=$null
 $failureActionsSnapshot=$null
 $failureActionsRestoreRequired=$false
@@ -39,6 +50,7 @@ $mutations=[Collections.Generic.List[object]]::new()
 $aclSnapshots=[Collections.Generic.List[object]]::new()
 
 function Hash([string]$Path){(Get-FileHash -LiteralPath ([IO.Path]::GetFullPath($Path)) -Algorithm SHA256).Hash.ToLowerInvariant()}
+function HashText([string]$Text){$sha=[Security.Cryptography.SHA256]::Create();try{return ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text)))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}}
 function ReadJson([string]$Path){Get-Content -LiteralPath ([IO.Path]::GetFullPath($Path)) -Raw|ConvertFrom-Json}
 function IsAdministrator{return [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)}
 function AssertStopped {
@@ -63,6 +75,7 @@ function NewDirectory([string]$Path){
     AssertStopped
     if(Test-Path -LiteralPath $Path){throw "Directory already exists: $Path"}
     New-Item -ItemType Directory -Path $Path|Out-Null
+    $script:createdDirectories.Add([IO.Path]::GetFullPath($Path))
     AssertStopped
 }
 function CopyNew([string]$Source,[string]$Destination){
@@ -72,6 +85,69 @@ function CopyNew([string]$Source,[string]$Destination){
     $script:createdFiles.Add([IO.Path]::GetFullPath($Destination))
     $script:mutations.Add([ordered]@{destination=[IO.Path]::GetFullPath($Destination);operation='COPY_NEW';source=[IO.Path]::GetFullPath($Source);source_sha256=(Hash $Source)})
     AssertStopped
+}
+function AssertNoReparseTraversal([string]$Root,[string]$Path){
+    $rootFull=[IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $pathFull=[IO.Path]::GetFullPath($Path)
+    if($pathFull -cne $rootFull -and -not $pathFull.StartsWith($rootFull+'\',[StringComparison]::OrdinalIgnoreCase)){throw "Path escaped fixed root: $pathFull"}
+    $cursor=$rootFull
+    foreach($segment in @($pathFull.Substring($rootFull.Length).TrimStart('\').Split(@('\'),[StringSplitOptions]::RemoveEmptyEntries))){
+        $cursor=Join-Path $cursor $segment
+        if((Test-Path -LiteralPath $cursor) -and (((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw "Reparse traversal rejected: $cursor"}
+    }
+}
+function AssertSingleDataStream([string]$Path){
+    $streams=@(Get-Item -LiteralPath $Path -Stream * -ErrorAction Stop)
+    if($streams.Count -ne 1 -or [string]$streams[0].Stream -cne ':$DATA'){throw "Unexpected alternate data stream: $Path"}
+}
+function WriteExclusiveBytes([string]$Path,[byte[]]$Bytes){
+    $full=[IO.Path]::GetFullPath($Path)
+    $stream=[IO.File]::Open($full,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+    try{$stream.Write($Bytes,0,$Bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+}
+function WriteEvidenceJson([string]$Name,[object]$Value){
+    $path=Join-Path $evidence $Name
+    AssertNoReparseTraversal $evidence $path
+    WriteExclusiveBytes $path ([Text.UTF8Encoding]::new($false).GetBytes(($Value|ConvertTo-Json -Depth 50)))
+    $script:createdEvidenceFiles.Add($path)
+    return $path
+}
+function RunEvidenceTool([string[]]$Arguments,[string]$OutputPath){
+    if(Test-Path -LiteralPath $OutputPath){throw "Evidence output collision: $OutputPath"}
+    AssertNoReparseTraversal $evidence $OutputPath
+    $result=Run $artifactTool $Arguments
+    if(-not(Test-Path -LiteralPath $OutputPath -PathType Leaf)){throw "Evidence output absent: $OutputPath"}
+    $script:createdEvidenceFiles.Add([IO.Path]::GetFullPath($OutputPath))
+    return $result
+}
+function GetEvidenceSnapshot([object]$Policy){
+    if(-not(Test-Path -LiteralPath $evidenceParent -PathType Container)){return @()}
+    $expected=@{};foreach($row in @($Policy.preserved_records)){$expected[[string]$row.relative_path]=$row}
+    $actual=[Collections.Generic.List[object]]::new()
+    foreach($file in @(Get-ChildItem -LiteralPath $evidenceParent -Recurse -File -Force|Sort-Object FullName)){
+        $relative=$file.FullName.Substring($evidenceParent.TrimEnd('\').Length+1).Replace('\','/')
+        if(-not $expected.ContainsKey($relative)){throw "Unexpected pre-existing evidence rejected: $relative"}
+        $row=$expected[$relative]
+        if($file.Length -ne [long]$row.size -or (Hash $file.FullName) -cne [string]$row.raw_sha256){throw "Preserved evidence identity mismatch: $relative"}
+        AssertSingleDataStream $file.FullName
+        $actual.Add([ordered]@{path=$relative;raw_sha256=(Hash $file.FullName);size=[long]$file.Length})
+    }
+    if($actual.Count -ne $expected.Count){throw 'Required preserved evidence is absent'}
+    return $actual.ToArray()
+}
+function AssertEvidenceSnapshot([object[]]$Snapshot){
+    foreach($row in @($Snapshot)){$path=Join-Path $evidenceParent ([string]$row.path).Replace('/','\');if(-not(Test-Path -LiteralPath $path -PathType Leaf) -or (Hash $path) -cne [string]$row.raw_sha256 -or (Get-Item -LiteralPath $path).Length -ne [long]$row.size){throw "Prior evidence changed: $([string]$row.path)"}}
+}
+function AssertEvidenceRootAcl([object]$Policy){
+    $item=Get-Item -LiteralPath $evidenceParent -Force
+    if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'Evidence root reparse point rejected'}
+    $acl=Get-Acl -LiteralPath $evidenceParent
+    if([string]$acl.Owner -cne [string]$Policy.root_owner){throw 'Evidence root owner invalid'}
+    $allowed=@([string[]]$Policy.allowed_writable_sids)
+    $writeMask=[long]([Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::CreateDirectories -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership)
+    $rules=@($acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]))
+    foreach($rule in $rules){if($rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and (([long]$rule.FileSystemRights -band $writeMask) -ne 0) -and $allowed -notcontains [string]$rule.IdentityReference.Value){throw "Unauthorized writable Evidence ACE: $([string]$rule.IdentityReference.Value)"}}
+    foreach($sid in $allowed){if(@($rules|Where-Object{[string]$_.IdentityReference.Value -ceq $sid -and $_.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and (([long]$_.FileSystemRights -band [long][Security.AccessControl.FileSystemRights]::FullControl) -ne 0)}).Count -eq 0){throw "Required Evidence writer absent: $sid"}}
 }
 function TerminalSnapshot {
     $svc=Get-Service -Name 'RandleTerminalAuthority' -ErrorAction Stop
@@ -102,7 +178,7 @@ function WriteFailure([object]$Failure){
     try{
         if(Test-Path -LiteralPath $evidence -PathType Container){
             AssertStopped
-            [IO.File]::WriteAllText((Join-Path $evidence 'unit2b_failure.json'),($Failure|ConvertTo-Json -Depth 30),[Text.UTF8Encoding]::new($false))
+            WriteEvidenceJson 'unit2b_failure.json' $Failure|Out-Null
         }
     }catch{}
 }
@@ -114,6 +190,36 @@ $manifestPath=Join-Path $build 'unit2_build_manifest.json'
 if((Hash $manifestPath) -cne $ExpectedBuildManifestSha256){throw 'Unit 2B build manifest identity mismatch'}
 $manifest=ReadJson $manifestPath
 if([string]$manifest.source_commit -cne $SourceCommit -or [string]$manifest.status -cne 'PASS'){throw 'Build manifest source binding invalid'}
+if(-not(Test-Path -LiteralPath $packageManifestPath -PathType Leaf) -or (Hash $packageManifestPath) -cne $ExpectedPackageManifestSha256 -or (Get-Item -LiteralPath $packageManifestPath).Length -ne $ExpectedPackageManifestSize){throw 'Unit 2B package manifest identity mismatch'}
+$packageManifest=ReadJson $packageManifestPath
+if([string]$packageManifest.source_commit -cne $SourceCommit -or [string]$packageManifest.status -cne 'PASS' -or [bool]$packageManifest.host_actions_performed){throw 'Package manifest source or offline binding invalid'}
+$contractRows=@($packageManifest.files|Where-Object{[string]$_.path -ceq 'Governance/unit2_stopped_install_contract.json'})
+if($contractRows.Count -ne 1 -or -not(Test-Path -LiteralPath $installContractPath -PathType Leaf) -or (Hash $installContractPath) -cne [string]$contractRows[0].raw_sha256 -or (Get-Item -LiteralPath $installContractPath).Length -ne [long]$contractRows[0].size){throw 'Install contract package binding invalid'}
+$installContract=ReadJson $installContractPath
+if([string]$installContract.artifact_type -cne 'R7_UNIT2_STOPPED_INSTALL_CONTRACT' -or [string]$installContract.schema_version -cne '1.0.0'){throw 'Install contract schema invalid'}
+$installPlan=@($installContract.install_items)
+$requiredInstallIds=@('BUILD_MANIFEST','DEPENDENCY_MANIFEST','DETERMINISM_RECEIPT','PACKAGE_MANIFEST','PACKAGED_ARTIFACT_TOOL','PACKAGED_PROTECTED_METADATA_TOOL','PUBLIC_CERTIFICATE','SOURCE_TO_BINARY_RECEIPT','UPGRADE_AUTHORITY','UPGRADE_CLIENT','UPGRADE_POLICY','UPGRADE_PROTOCOL_PROBE','UPGRADE_PUBLIC_VERIFIER')|Sort-Object
+if($installPlan.Count -ne 13 -or ((@($installPlan.id|Sort-Object)-join "`n") -cne ($requiredInstallIds-join "`n"))){throw 'Install contract required payload set invalid'}
+if(@($installPlan.source_path|Sort-Object -Unique).Count -ne $installPlan.Count){throw 'Install contract duplicate source'}
+if(@($installPlan.destination_path|ForEach-Object{[IO.Path]::GetFullPath([string]$_)}|Sort-Object -Unique).Count -ne $installPlan.Count){throw 'Install contract duplicate destination'}
+$manifestedInstallable=@($packageManifest.files|Where-Object{([string]$_.path -match '^(Install/.+|Tools/.+|Receipts/unit2_build_determinism_receipt.json|unit2_build_manifest.json)$')}|ForEach-Object{[string]$_.path}|Sort-Object)
+$declaredManifestInstallable=@($installPlan|Where-Object{[string]$_.expected_sha256_source -ceq 'PACKAGE_MANIFEST_ROW'}|ForEach-Object{[string]$_.source_path}|Sort-Object)
+if(($manifestedInstallable-join "`n") -cne ($declaredManifestInstallable-join "`n")){throw 'Unmanifested or unmapped installable payload'}
+foreach($item in $installPlan){
+    $sourceRelative=[string]$item.source_path
+    if([IO.Path]::IsPathRooted($sourceRelative) -or $sourceRelative -match '(^|/)\.\.(/|$)' -or $sourceRelative.Contains('\')){throw "Install source path invalid: $sourceRelative"}
+    $source=Join-Path $build $sourceRelative.Replace('/','\')
+    AssertNoReparseTraversal $build $source
+    if(-not(Test-Path -LiteralPath $source -PathType Leaf)){throw "Install source absent: $sourceRelative"}
+    AssertSingleDataStream $source
+    if([string]$item.expected_sha256_source -ceq 'PACKAGE_MANIFEST_ROW'){
+        $rows=@($packageManifest.files|Where-Object{[string]$_.path -ceq $sourceRelative})
+        if($rows.Count -ne 1 -or (Hash $source) -cne [string]$rows[0].raw_sha256 -or (Get-Item -LiteralPath $source).Length -ne [long]$rows[0].size){throw "Install source manifest mismatch: $sourceRelative"}
+    }elseif([string]$item.id -ceq 'PACKAGE_MANIFEST'){
+        if((Hash $source) -cne $ExpectedPackageManifestSha256 -or (Get-Item -LiteralPath $source).Length -ne $ExpectedPackageManifestSize){throw 'Package manifest self identity mismatch'}
+    }else{throw "Install identity source invalid: $([string]$item.id)"}
+    if([string]$item.required_owner -cne 'NT AUTHORITY\SYSTEM' -or [string]$item.rollback_behavior -notmatch 'CURRENT_RUN' -or [string]::IsNullOrWhiteSpace([string]$item.acl_class) -or [string]::IsNullOrWhiteSpace([string]$item.authority_classification)){throw "Install metadata incomplete: $([string]$item.id)"}
+}
 $utility=ReadJson $UtilityRegistry
 function Utility([string]$Role){$rows=@($utility.utilities|Where-Object{$_.role -ceq $Role});if($rows.Count -ne 1){throw "Utility role invalid: $Role"};$path=[IO.Path]::GetFullPath([string]$rows[0].path);if((Hash $path) -cne [string]$rows[0].measurement.sha256){throw "Utility drift: $Role"};return $rows[0]}
 $scRow=Utility 'SC_SERVICE_CONTROL_TOOL'
@@ -146,7 +252,18 @@ foreach($childName in $expectedConfigChildren){
     if(-not(Test-Path -LiteralPath $child -PathType Container) -or @(Get-ChildItem -LiteralPath $child -Force).Count -ne 0){throw "Upgrade bootstrap configuration root is not an empty directory: $child"}
     AssertBootstrapRootAcl $bootstrap $child
 }
-if(Test-Path -LiteralPath $evidenceParent){throw 'Unit 2B evidence parent must not exist before installation'}
+$evidencePolicy=$installContract.evidence_policy
+if([IO.Path]::GetFullPath([string]$evidencePolicy.fixed_root) -cne [IO.Path]::GetFullPath($evidenceParent)){throw 'Evidence contract fixed root invalid'}
+if([IO.Path]::GetPathRoot($evidenceParent) -cne [IO.Path]::GetPathRoot($state)){throw 'Evidence root is on the wrong volume'}
+$runIdentity=HashText ("R7_UNIT2B3C_EVIDENCE_RUN_V1`n$SourceCommit`n$ExpectedPackageManifestSha256`n$ExpectedBuildManifestSha256`n$ExpectedScriptSha256")
+$expectedEvidence=Join-Path $evidenceParent (([string]$evidencePolicy.run_directory_prefix)+$runIdentity)
+if($evidence -cne [IO.Path]::GetFullPath($expectedEvidence)){throw 'EvidenceRoot is not the governed content-addressed run directory'}
+AssertNoReparseTraversal $state $evidenceParent
+if(Test-Path -LiteralPath $evidenceParent){
+    if(-not(Test-Path -LiteralPath $evidenceParent -PathType Container)){throw 'Evidence root is not a directory'}
+    AssertEvidenceRootAcl $evidencePolicy
+    $priorEvidenceSnapshot=@(GetEvidenceSnapshot $evidencePolicy)
+}
 $certTarget=Join-Path $trust 'upgrade_authority_public.cer'
 if((Hash $certTarget) -cne [string]$bootstrap.public_certificate_sha256){throw 'Preserved public certificate bytes drifted'}
     $certificateAcl=Get-Acl -LiteralPath $certTarget
@@ -154,12 +271,23 @@ if((Hash $certTarget) -cne [string]$bootstrap.public_certificate_sha256){throw '
     foreach($snapshotPath in @($install,$config,$trust,$certTarget)){$aclSnapshots.Add([ordered]@{acl=(Get-Acl -LiteralPath $snapshotPath);path=$snapshotPath})}
 
 try{
-    NewDirectory $evidenceParent
-    $createdEvidenceParent=$true
+    if(-not(Test-Path -LiteralPath $evidenceParent)){
+        NewDirectory $evidenceParent
+        $createdEvidenceParent=$true
+        $rootOwner=Run $icacls @($evidenceParent,'/setowner','SYSTEM','/C')
+        $rootAcl=Run $icacls @($evidenceParent,'/inheritance:r','/grant:r','SYSTEM:(OI)(CI)(F)','BUILTIN\Administrators:(OI)(CI)(F)')
+        $mutations.Add([ordered]@{acl_result=$rootAcl;operation='CREATE_GOVERNED_EVIDENCE_ROOT';owner_result=$rootOwner;root=$evidenceParent;service_stopped_before=$true})
+        AssertEvidenceRootAcl $evidencePolicy
+    }
+    $evidenceClaim=Join-Path $evidenceParent ('.'+$runIdentity+[string]$evidencePolicy.exclusive_claim_suffix)
+    WriteExclusiveBytes $evidenceClaim ([Text.Encoding]::UTF8.GetBytes($runIdentity+"`n"))
+    $evidenceClaimCreated=$true
+    if(Test-Path -LiteralPath $evidence){throw 'Content-addressed evidence run collision'}
     NewDirectory $evidence
+    $createdEvidenceRun=$true
     $baselineRecord=[ordered]@{artifact_type='R7_UNIT2B_PRESTART_INSTALL_BASELINE';bootstrap_record_sha256=(Hash $BootstrapRecord);existing_terminal=$terminalBefore;preflight_host_state_sha256=$preflightSha;schema_version='1.0.0';service_state='STOPPED';source_commit=$SourceCommit;upgrade_service_pid=0}
     AssertStopped
-    [IO.File]::WriteAllText((Join-Path $evidence 'preinstall_baseline.json'),($baselineRecord|ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
+    WriteEvidenceJson 'preinstall_baseline.json' $baselineRecord|Out-Null
 
     RunScMutation @('config',$service,'binPath=',$expectedBinary,'start=','demand','obj=',$account) 'SCM_CONFIG_FIXED_BINARY_ACCOUNT_MANUAL'|Out-Null
     RunScMutation @('sidtype',$service,'restricted') 'SCM_SID_TYPE_RESTRICTED'|Out-Null
@@ -167,28 +295,30 @@ try{
     $scmConfigurationChanged=$true
     $failureActionsSnapshot=Join-Path $evidence 'failure_actions_before.json'
     AssertStopped
-    Run $artifactTool @('capture-failure-actions',$service,$failureActionsSnapshot)|Out-Null
+    RunEvidenceTool @('capture-failure-actions',$service,$failureActionsSnapshot) $failureActionsSnapshot|Out-Null
     AssertStopped
     $failureActionsRestoreRequired=$true
     $failureActionsConfiguration=Join-Path $evidence 'failure_actions_configuration.json'
     AssertStopped
-    $failureConfigurationResult=Run $artifactTool @('configure-failure-actions-none',$service,'0',$failureActionsSnapshot,$failureActionsConfiguration)
+    $failureConfigurationResult=RunEvidenceTool @('configure-failure-actions-none',$service,'0',$failureActionsSnapshot,$failureActionsConfiguration) $failureActionsConfiguration
     $mutations.Add([ordered]@{measurement=$failureActionsConfiguration;operation='SCM_FAILURE_ACTIONS_NATIVE_ZERO_ACTION_CONFIGURATION';result=$failureConfigurationResult;service_stopped_before=$true})
     AssertStopped
 
-    $installInput=Join-Path $build 'Install'
-    $installMap=@(
-        [ordered]@{source=(Join-Path $installInput 'RandleTerminalUpgradeAuthority.exe');destination=(Join-Path $install 'RandleTerminalUpgradeAuthority.exe')},
-        [ordered]@{source=(Join-Path $installInput 'RandleTerminalUpgradeClient.exe');destination=(Join-Path $install 'RandleTerminalUpgradeClient.exe')},
-        [ordered]@{source=(Join-Path $installInput 'RandleTerminalUpgradePublicVerifier.exe');destination=(Join-Path $install 'RandleTerminalUpgradePublicVerifier.exe')},
-        [ordered]@{source=(Join-Path $installInput 'unit2_upgrade_policy.json');destination=(Join-Path $config 'upgrade_authority_policy.json')},
-        [ordered]@{source=(Join-Path $installInput 'dependency_manifest.json');destination=(Join-Path $config 'dependency_manifest.json')},
-        [ordered]@{source=(Join-Path $installInput 'unit2_build_receipt.json');destination=(Join-Path $config 'upgrade_authority_build_receipt.json')}
-    )
-    foreach($item in $installMap){CopyNew ([string]$item.source) ([string]$item.destination)}
-    if((Hash (Join-Path $installInput 'upgrade_authority_public.cer')) -cne (Hash $certTarget)){throw 'Build public certificate differs from preserved public trust'}
+    if(-not(Test-Path -LiteralPath $buildTools)){NewDirectory $buildTools}
+    $installMap=@($installPlan|ForEach-Object{
+        [ordered]@{acl_class=[string]$_.acl_class;authority_classification=[string]$_.authority_classification;destination=[IO.Path]::GetFullPath([string]$_.destination_path);destination_behavior=[string]$_.destination_behavior;id=[string]$_.id;kind=[string]$_.kind;rollback_behavior=[string]$_.rollback_behavior;source=[IO.Path]::GetFullPath((Join-Path $build ([string]$_.source_path).Replace('/','\')));source_path=[string]$_.source_path}
+    })
+    foreach($item in $installMap){
+        if([string]$item.destination_behavior -ceq 'PRESERVE_EXISTING_EXACT_OR_COPY_NEW'){
+            if(Test-Path -LiteralPath ([string]$item.destination) -PathType Leaf){
+                if((Hash ([string]$item.source)) -cne (Hash ([string]$item.destination)) -or (Get-Item -LiteralPath ([string]$item.source)).Length -ne (Get-Item -LiteralPath ([string]$item.destination)).Length){throw "Preserved install target differs: $([string]$item.id)"}
+            }else{CopyNew ([string]$item.source) ([string]$item.destination)}
+        }elseif([string]$item.destination_behavior -ceq 'COPY_NEW_EXCLUSIVE'){
+            CopyNew ([string]$item.source) ([string]$item.destination)
+        }else{throw "Unknown destination behavior: $([string]$item.id)"}
+    }
 
-    foreach($root in @($install,$config,$trust)){
+    foreach($root in @($install,$config,$trust,$buildTools)){
         AssertStopped
         $ownerResult=Run $icacls @($root,'/setowner','SYSTEM','/T','/C')
         $aclResult=Run $icacls @($root,'/inheritance:r','/grant:r','SYSTEM:(OI)(CI)(F)','BUILTIN\Administrators:(OI)(CI)(F)',"$account`:(OI)(CI)(RX)","$terminalAccount`:(OI)(CI)(RX)",'BUILTIN\Users:(OI)(CI)(RX)','/T','/C')
@@ -196,14 +326,14 @@ try{
         AssertStopped
     }
     AssertStopped
-    $evidenceOwner=Run $icacls @($evidenceParent,'/setowner','SYSTEM','/T','/C')
-    $evidenceAcl=Run $icacls @($evidenceParent,'/inheritance:r','/grant:r','SYSTEM:(OI)(CI)(F)','BUILTIN\Administrators:(OI)(CI)(F)',"$account`:(OI)(CI)(F)","$terminalAccount`:(OI)(CI)(RX)",'BUILTIN\Users:(OI)(CI)(RX)','/T','/C')
-    $mutations.Add([ordered]@{acl_result=$evidenceAcl;operation='ACL_FIXED_EVIDENCE_ROOT';owner_result=$evidenceOwner;root=$evidenceParent;service_stopped_before=$true})
+    $evidenceOwner=Run $icacls @($evidence,'/setowner','SYSTEM','/T','/C')
+    $evidenceAcl=Run $icacls @($evidence,'/inheritance:r','/grant:r','SYSTEM:(OI)(CI)(F)','BUILTIN\Administrators:(OI)(CI)(F)','/T','/C')
+    $mutations.Add([ordered]@{acl_result=$evidenceAcl;operation='ACL_CURRENT_EVIDENCE_RUN_ONLY';owner_result=$evidenceOwner;root=$evidence;service_stopped_before=$true})
     AssertStopped
 
     $rightsMeasurement=Join-Path $evidence 'service_boundary_rights.json'
     AssertStopped
-    Run $artifactTool @('service-boundary',$service,$sid,$expectedBinary,$rightsMeasurement)|Out-Null
+    RunEvidenceTool @('service-boundary',$service,$sid,$expectedBinary,$rightsMeasurement) $rightsMeasurement|Out-Null
     $mutations.Add([ordered]@{measurement=$rightsMeasurement;operation='LSA_DENY_RIGHTS_ENFORCE_AND_MEASURE';service_stopped_before=$true})
     AssertStopped
 
@@ -212,23 +342,21 @@ try{
         $name=[IO.Path]::GetFileName([string]$item.destination)
         $contentPath=Join-Path $evidence ('physical_content_'+$name+'.json')
         $metadataPath=Join-Path $evidence ('physical_metadata_'+$name+'.json')
-        AssertStopped;Run $artifactTool @('measure',[string]$item.destination,$contentPath)|Out-Null
-        AssertStopped;Run $artifactTool @('measure-metadata',[string]$item.destination,$metadataPath)|Out-Null
+        AssertStopped;RunEvidenceTool @('measure',[string]$item.destination,$contentPath) $contentPath|Out-Null
+        AssertStopped;RunEvidenceTool @('measure-metadata',[string]$item.destination,$metadataPath) $metadataPath|Out-Null
         $physical.Add([ordered]@{content_measurement=$contentPath;metadata_measurement=$metadataPath;path=[string]$item.destination;sha256=(Hash ([string]$item.destination))})
     }
-    $certContent=Join-Path $evidence 'physical_content_upgrade_authority_public.cer.json'
-    $certMetadata=Join-Path $evidence 'physical_metadata_upgrade_authority_public.cer.json'
-    AssertStopped;Run $artifactTool @('measure',$certTarget,$certContent)|Out-Null
-    AssertStopped;Run $artifactTool @('measure-metadata',$certTarget,$certMetadata)|Out-Null
-    $physical.Add([ordered]@{content_measurement=$certContent;metadata_measurement=$certMetadata;path=$certTarget;sha256=(Hash $certTarget)})
 
-    $expectedInstallNames=@('RandleTerminalUpgradeAuthority.exe','RandleTerminalUpgradeClient.exe','RandleTerminalUpgradePublicVerifier.exe')
+    $expectedInstallNames=@('RandleTerminalUpgradeAuthority.exe','RandleTerminalUpgradeClient.exe','RandleTerminalUpgradeProtocolProbe.exe','RandleTerminalUpgradePublicVerifier.exe')
     $actualInstallNames=@(Get-ChildItem -LiteralPath $install -Force -File|ForEach-Object Name|Sort-Object)
     if((@($expectedInstallNames|Sort-Object)-join "`n") -cne ($actualInstallNames-join "`n")){throw 'Installed executable set is not exact'}
-    $expectedConfigNames=@('dependency_manifest.json','upgrade_authority_build_receipt.json','upgrade_authority_policy.json')
+    $expectedConfigNames=@('dependency_manifest.json','unit2_build_manifest.json','unit2b_install_package_manifest.json','upgrade_authority_build_receipt.json','upgrade_authority_determinism_receipt.json','upgrade_authority_policy.json')
     $actualConfigNames=@(Get-ChildItem -LiteralPath $config -Force -File|ForEach-Object Name|Sort-Object)
     if((@($expectedConfigNames|Sort-Object)-join "`n") -cne ($actualConfigNames-join "`n")){throw 'Installed configuration set is not exact'}
     if(@(Get-ChildItem -LiteralPath $trust -Force -File).Count -ne 1){throw 'Public trust file set is not exact'}
+    $expectedToolNames=@('R7ArtifactTool.exe','R7ProtectedMetadataTool.exe')
+    $actualToolNames=@(Get-ChildItem -LiteralPath $buildTools -Force -File|ForEach-Object Name|Sort-Object)
+    if((@($expectedToolNames|Sort-Object)-join "`n") -cne ($actualToolNames-join "`n")){throw 'Installed governed tool set is not exact'}
 
     $policy=ReadJson (Join-Path $config 'upgrade_authority_policy.json')
     if(([string[]]@($policy.operation_allowlist)-join "`n") -cne (@('AUTHORIZE_TERMINAL_TRANSITION','GET_AUTHORIZATION','GET_HEALTH','GET_PUBLIC_IDENTITY')-join "`n") -or [string]$policy.service.name -cne $service -or [string]$policy.service.account -cne $account -or [string]$policy.service.sid -cne $sid -or [string]$policy.provisioning_script_sha256 -cne $ExpectedScriptSha256 -or [string]$policy.key.key_unique_name -cne [string]$bootstrap.key_unique_name){throw 'Installed policy fixed-boundary validation failed'}
@@ -238,7 +366,7 @@ try{
     $privileges=Run $sc @('qprivs',$service)
     $failureActionsVerification=Join-Path $evidence 'failure_actions_verification.json'
     AssertStopped
-    Run $artifactTool @('verify-failure-actions-none',$service,'0',$failureActionsVerification)|Out-Null
+    RunEvidenceTool @('verify-failure-actions-none',$service,'0',$failureActionsVerification) $failureActionsVerification|Out-Null
     AssertStopped
     $query=Run $sc @('queryex',$service)
     $qcText=$qc.output -join "`n";$sidText=$sidType.output -join "`n";$privText=$privileges.output -join "`n";$queryText=$query.output -join "`n"
@@ -255,14 +383,19 @@ try{
     AssertTerminalSnapshot $terminalAfter
     if([long]$terminalBefore.process_id -ne [long]$terminalAfter.process_id){throw 'Existing terminal service process changed'}
     AssertStopped
-    $record=[ordered]@{artifact_type='R7_UNIT2B_STOPPED_BOUNDARY_INSTALLATION_RECORD';build_manifest_sha256=$ExpectedBuildManifestSha256;existing_terminal_after=$terminalAfter;existing_terminal_before=$terminalBefore;failure_actions_configuration_sha256=(Hash $failureActionsConfiguration);failure_actions_disabled=$true;failure_actions_prior_snapshot_sha256=(Hash $failureActionsSnapshot);failure_actions_verification_sha256=(Hash $failureActionsVerification);installed_files=@($physical);key_opened_for_signing=$false;ledger_created=$false;mutations=$mutations.ToArray();preflight_baseline_sha256=$preflightSha;private_key_exported=$false;provisioning_attestation_issued=$false;public_certificate_retained_sha256=(Hash $certTarget);repository_acl=$repositoryAcl;schema_version='1.0.0';service_name=$service;service_pid=0;service_started=$false;service_state='STOPPED';source_commit=$SourceCommit;status='PASS';terminal_boundary_acls=$terminalBoundaryAcls;terminal_transition_authorized=$false;utilities=@([ordered]@{role=[string]$scRow.role;sha256=[string]$scRow.measurement.sha256},[ordered]@{role=[string]$icaclsRow.role;sha256=[string]$icaclsRow.measurement.sha256},[ordered]@{role=[string]$powershellRow.role;sha256=[string]$powershellRow.measurement.sha256})}
+    AssertEvidenceSnapshot $priorEvidenceSnapshot
+    $record=[ordered]@{artifact_type='R7_UNIT2B_STOPPED_BOUNDARY_INSTALLATION_RECORD';build_manifest_sha256=$ExpectedBuildManifestSha256;evidence_run_identity=$runIdentity;existing_terminal_after=$terminalAfter;existing_terminal_before=$terminalBefore;failure_actions_configuration_sha256=(Hash $failureActionsConfiguration);failure_actions_disabled=$true;failure_actions_prior_snapshot_sha256=(Hash $failureActionsSnapshot);failure_actions_verification_sha256=(Hash $failureActionsVerification);install_contract_sha256=(Hash $installContractPath);installed_files=@($physical);key_opened_for_signing=$false;ledger_created=$false;mutations=$mutations.ToArray();package_manifest_sha256=$ExpectedPackageManifestSha256;preexisting_evidence=@($priorEvidenceSnapshot);preflight_baseline_sha256=$preflightSha;private_key_exported=$false;provisioning_attestation_issued=$false;public_certificate_retained_sha256=(Hash $certTarget);repository_acl=$repositoryAcl;schema_version='1.0.0';service_name=$service;service_pid=0;service_started=$false;service_state='STOPPED';source_commit=$SourceCommit;status='PASS';terminal_boundary_acls=$terminalBoundaryAcls;terminal_transition_authorized=$false;utilities=@([ordered]@{role=[string]$scRow.role;sha256=[string]$scRow.measurement.sha256},[ordered]@{role=[string]$icaclsRow.role;sha256=[string]$icaclsRow.measurement.sha256},[ordered]@{role=[string]$powershellRow.role;sha256=[string]$powershellRow.measurement.sha256})}
     $rawRecord=Join-Path $evidence 'unit2b_installation_record.raw.json'
     $recordPath=Join-Path $evidence 'unit2b_installation_record.json'
     AssertStopped
-    [IO.File]::WriteAllText($rawRecord,($record|ConvertTo-Json -Depth 40),[Text.UTF8Encoding]::new($false))
+    WriteEvidenceJson 'unit2b_installation_record.raw.json' $record|Out-Null
     AssertStopped
-    Run $artifactTool @('canonicalize',$rawRecord,$recordPath)|Out-Null
+    RunEvidenceTool @('canonicalize',$rawRecord,$recordPath) $recordPath|Out-Null
     AssertStopped
+    AssertEvidenceSnapshot $priorEvidenceSnapshot
+    Remove-Item -LiteralPath $evidenceClaim -Force
+    $evidenceClaim=$null
+    $evidenceClaimCreated=$false
     [ordered]@{evidence_root=$evidence;record_sha256=(Hash $recordPath);service_started=$false;status='PASS';terminal_transition_authorized=$false}|ConvertTo-Json
 }
 catch{
@@ -270,10 +403,10 @@ catch{
     $rollbackErrors=[Collections.Generic.List[string]]::new()
     try{AssertStopped}catch{$rollbackErrors.Add($_.Exception.Message)}
     if($rightsMeasurement -and (Test-Path -LiteralPath $rightsMeasurement -PathType Leaf)){
-        try{AssertStopped;$restorePath=Join-Path $evidence 'service_boundary_rights_restoration.json';Run $artifactTool @('restore-service-boundary',$rightsMeasurement,$restorePath)|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
+        try{AssertStopped;$restorePath=Join-Path $evidence 'service_boundary_rights_restoration.json';RunEvidenceTool @('restore-service-boundary',$rightsMeasurement,$restorePath) $restorePath|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
     if($failureActionsRestoreRequired -and $failureActionsSnapshot -and (Test-Path -LiteralPath $failureActionsSnapshot -PathType Leaf)){
-        try{AssertStopped;$failureRestorePath=Join-Path $evidence 'failure_actions_restoration.json';Run $artifactTool @('restore-failure-actions',$service,$failureActionsSnapshot,$failureRestorePath)|Out-Null;AssertStopped}catch{$rollbackErrors.Add($_.Exception.Message)}
+        try{AssertStopped;$failureRestorePath=Join-Path $evidence 'failure_actions_restoration.json';RunEvidenceTool @('restore-failure-actions',$service,$failureActionsSnapshot,$failureRestorePath) $failureRestorePath|Out-Null;AssertStopped}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
     if($scmConfigurationChanged){
         try{RunScMutation @('config',$service,'binPath=',$expectedBinary,'start=','demand','obj=',$account) 'ROLLBACK_SCM_CONFIG'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
@@ -281,11 +414,17 @@ catch{
         try{RunScMutation @('privs',$service,'SeChangeNotifyPrivilege') 'ROLLBACK_SCM_PRIVILEGES'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
     foreach($path in @($createdFiles.ToArray()|Sort-Object -Descending)){
-        try{AssertStopped;$resolved=[IO.Path]::GetFullPath($path);if(-not($resolved.StartsWith($install+'\',[StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith($config+'\',[StringComparison]::OrdinalIgnoreCase))){throw "Rollback path escaped Unit 2B roots: $resolved"};if(Test-Path -LiteralPath $resolved -PathType Leaf){Remove-Item -LiteralPath $resolved -Force}}catch{$rollbackErrors.Add($_.Exception.Message)}
+        try{AssertStopped;$resolved=[IO.Path]::GetFullPath($path);if(-not($resolved.StartsWith($install+'\',[StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith($config+'\',[StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith($buildTools+'\',[StringComparison]::OrdinalIgnoreCase))){throw "Rollback path escaped Unit 2B roots: $resolved"};if(Test-Path -LiteralPath $resolved -PathType Leaf){Remove-Item -LiteralPath $resolved -Force}}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
     foreach($snapshot in @($aclSnapshots.ToArray()|Sort-Object{([string]$_.path).Length} -Descending)){
         try{AssertStopped;if(Test-Path -LiteralPath ([string]$snapshot.path)){Set-Acl -LiteralPath ([string]$snapshot.path) -AclObject $snapshot.acl;AssertStopped}}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
+    foreach($path in @($createdEvidenceFiles.ToArray()|Sort-Object -Unique|Sort-Object -Descending)){
+        try{$resolved=[IO.Path]::GetFullPath($path);AssertNoReparseTraversal $evidence $resolved;if([IO.Path]::GetFileName($resolved) -notin @('preinstall_baseline.json','unit2b_failure.json') -and (Test-Path -LiteralPath $resolved -PathType Leaf)){Remove-Item -LiteralPath $resolved -Force}}catch{$rollbackErrors.Add($_.Exception.Message)}
+    }
+    if($evidenceClaimCreated -and $evidenceClaim){try{if(Test-Path -LiteralPath $evidenceClaim -PathType Leaf){Remove-Item -LiteralPath $evidenceClaim -Force};$evidenceClaimCreated=$false}catch{$rollbackErrors.Add($_.Exception.Message)}}
+    try{AssertEvidenceSnapshot $priorEvidenceSnapshot}catch{$rollbackErrors.Add($_.Exception.Message)}
+    if((Test-Path -LiteralPath $buildTools -PathType Container) -and @(Get-ChildItem -LiteralPath $buildTools -Force).Count -eq 0){try{Remove-Item -LiteralPath $buildTools -Force}catch{$rollbackErrors.Add($_.Exception.Message)}}
     $failure['rollback_errors']=$rollbackErrors.ToArray()
     $failure['rollback_complete']=($rollbackErrors.Count -eq 0)
     WriteFailure $failure

@@ -1,0 +1,201 @@
+{
+  "artifact_type": "R7_UNIT2_STOPPED_INSTALL_CONTRACT",
+  "schema_version": "1.0.0",
+  "source_commit_binding": "INSTALLER_SOURCE_COMMIT_PARAMETER",
+  "install_items": [
+    {
+      "id": "UPGRADE_AUTHORITY",
+      "source_path": "Install/RandleTerminalUpgradeAuthority.exe",
+      "destination_path": "C:\\Program Files\\RandleAI\\TerminalUpgradeAuthority\\RandleTerminalUpgradeAuthority.exe",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAM_FILES_EXECUTABLE_READ_ONLY",
+      "authority_classification": "UNIT2_UPGRADE_DISPOSITION_AUTHORITY_AFTER_PROVISIONING",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "EXECUTABLE",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "UPGRADE_CLIENT",
+      "source_path": "Install/RandleTerminalUpgradeClient.exe",
+      "destination_path": "C:\\Program Files\\RandleAI\\TerminalUpgradeAuthority\\RandleTerminalUpgradeClient.exe",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAM_FILES_EXECUTABLE_READ_ONLY",
+      "authority_classification": "UNIT2_NONAUTHORITATIVE_MEASURED_CLIENT",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "EXECUTABLE",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "UPGRADE_PUBLIC_VERIFIER",
+      "source_path": "Install/RandleTerminalUpgradePublicVerifier.exe",
+      "destination_path": "C:\\Program Files\\RandleAI\\TerminalUpgradeAuthority\\RandleTerminalUpgradePublicVerifier.exe",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAM_FILES_EXECUTABLE_READ_ONLY",
+      "authority_classification": "UNIT2_PUBLIC_ONLY_UPGRADE_VERIFIER",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "EXECUTABLE",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "UPGRADE_PROTOCOL_PROBE",
+      "source_path": "Install/RandleTerminalUpgradeProtocolProbe.exe",
+      "destination_path": "C:\\Program Files\\RandleAI\\TerminalUpgradeAuthority\\RandleTerminalUpgradeProtocolProbe.exe",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAM_FILES_EXECUTABLE_READ_ONLY",
+      "authority_classification": "UNIT2_NONAUTHORITATIVE_PROTOCOL_PROBE",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "EXECUTABLE",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "PACKAGED_ARTIFACT_TOOL",
+      "source_path": "Tools/R7ArtifactTool.exe",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\BuildTools\\R7ArtifactTool.exe",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAMDATA_GOVERNED_TOOL_READ_ONLY",
+      "authority_classification": "NONAUTHORITATIVE_BUILD_AND_INSTALL_SUPPORT",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "EXECUTABLE_TOOL",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "PACKAGED_PROTECTED_METADATA_TOOL",
+      "source_path": "Tools/R7ProtectedMetadataTool.exe",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\BuildTools\\R7ProtectedMetadataTool.exe",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAMDATA_GOVERNED_TOOL_READ_ONLY",
+      "authority_classification": "NONAUTHORITATIVE_BUILD_AND_INSTALL_SUPPORT",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "EXECUTABLE_TOOL",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "UPGRADE_POLICY",
+      "source_path": "Install/unit2_upgrade_policy.json",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\Config\\upgrade_authority_policy.json",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAMDATA_IMMUTABLE_POLICY_READ_ONLY",
+      "authority_classification": "UNIT2_FUTURE_DISPOSITION_POLICY_AFTER_INSTALL",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "POLICY",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "PUBLIC_CERTIFICATE",
+      "source_path": "Install/upgrade_authority_public.cer",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\Trust\\upgrade_authority_public.cer",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PUBLIC_TRUST_READ_ONLY",
+      "authority_classification": "PUBLIC_TRUST_MATERIAL",
+      "rollback_behavior": "DELETE_ONLY_IF_CREATED_BY_CURRENT_RUN_NEVER_DELETE_PRESERVED",
+      "kind": "PUBLIC_TRUST",
+      "destination_behavior": "PRESERVE_EXISTING_EXACT_OR_COPY_NEW"
+    },
+    {
+      "id": "DEPENDENCY_MANIFEST",
+      "source_path": "Install/dependency_manifest.json",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\Config\\dependency_manifest.json",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAMDATA_IMMUTABLE_RECEIPT_READ_ONLY",
+      "authority_classification": "NONAUTHORITATIVE_DEPENDENCY_CLOSURE",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "DEPENDENCY_MANIFEST",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "SOURCE_TO_BINARY_RECEIPT",
+      "source_path": "Install/unit2_build_receipt.json",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\Config\\upgrade_authority_build_receipt.json",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAMDATA_IMMUTABLE_RECEIPT_READ_ONLY",
+      "authority_classification": "NONAUTHORITATIVE_SOURCE_TO_BINARY_EVIDENCE",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "RECEIPT",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "DETERMINISM_RECEIPT",
+      "source_path": "Receipts/unit2_build_determinism_receipt.json",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\Config\\upgrade_authority_determinism_receipt.json",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAMDATA_IMMUTABLE_RECEIPT_READ_ONLY",
+      "authority_classification": "NONAUTHORITATIVE_DETERMINISM_EVIDENCE",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "RECEIPT",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "BUILD_MANIFEST",
+      "source_path": "unit2_build_manifest.json",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\Config\\unit2_build_manifest.json",
+      "expected_sha256_source": "PACKAGE_MANIFEST_ROW",
+      "expected_size_source": "PACKAGE_MANIFEST_ROW",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAMDATA_IMMUTABLE_RECEIPT_READ_ONLY",
+      "authority_classification": "NONAUTHORITATIVE_BUILD_MANIFEST",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "MANIFEST",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    },
+    {
+      "id": "PACKAGE_MANIFEST",
+      "source_path": "unit2b3b_install_package_manifest.json",
+      "destination_path": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\Config\\unit2b_install_package_manifest.json",
+      "expected_sha256_source": "EXPECTED_PACKAGE_MANIFEST_PARAMETER",
+      "expected_size_source": "EXPECTED_PACKAGE_MANIFEST_SIZE_PARAMETER",
+      "required_owner": "NT AUTHORITY\\SYSTEM",
+      "acl_class": "PROGRAMDATA_IMMUTABLE_RECEIPT_READ_ONLY",
+      "authority_classification": "NONAUTHORITATIVE_CONTENT_ADDRESSED_PACKAGE_MANIFEST",
+      "rollback_behavior": "DELETE_IF_CREATED_BY_CURRENT_RUN",
+      "kind": "MANIFEST",
+      "destination_behavior": "COPY_NEW_EXCLUSIVE"
+    }
+  ],
+  "evidence_policy": {
+    "fixed_root": "C:\\ProgramData\\RandleAI\\TerminalUpgradeAuthority\\Evidence",
+    "root_owner": "NT AUTHORITY\\SYSTEM",
+    "root_acl_class": "EVIDENCE_APPEND_ROOT_SYSTEM_ADMIN_WRITERS_ONLY",
+    "allowed_writable_sids": ["S-1-5-18", "S-1-5-32-544"],
+    "run_directory_prefix": "Unit2B3C_",
+    "run_identity_derivation": "SHA256_UTF8_LINES:R7_UNIT2B3C_EVIDENCE_RUN_V1,SOURCE_COMMIT,PACKAGE_MANIFEST_SHA256,BUILD_MANIFEST_SHA256,INSTALLER_SHA256",
+    "exclusive_claim_suffix": ".claim",
+    "unexpected_existing_evidence_policy": "REJECT",
+    "rollback_behavior": "REMOVE_CURRENT_RUN_TRANSIENTS_PRESERVE_CURRENT_BASELINE_AND_FAILURE_RECORD_AND_ALL_PRIOR_RUNS",
+    "preserved_records": [
+      {
+        "relative_path": "Unit2B3_5a4bb2d49a255403_20260725T200100Z/preinstall_baseline.json",
+        "raw_sha256": "e56cb14b7ea054a376f2808bbcb36f5534b586d11841b76110bef9bf0cc2ce70",
+        "size": 1633,
+        "classification": "PRESERVED_PRIOR_FAILURE_BASELINE"
+      },
+      {
+        "relative_path": "Unit2B3_5a4bb2d49a255403_20260725T200100Z/unit2b_failure.json",
+        "raw_sha256": "ba596a992760f29807864fe5fe9c7b4ea70526eadb285829e6eb510457bd1620",
+        "size": 1347,
+        "classification": "PRESERVED_PRIOR_FAILURE_RECORD"
+      }
+    ]
+  }
+}
