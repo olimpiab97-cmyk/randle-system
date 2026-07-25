@@ -6,136 +6,532 @@ param(
     [Parameter(Mandatory=$true)][string]$UpgradePublicCertificate,
     [Parameter(Mandatory=$true)][string]$PreflightHostState,
     [Parameter(Mandatory=$true)][string]$OutputRoot,
-    [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedScriptSha256
+    [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedScriptSha256,
+    [switch]$CandidateWorktree
 )
 
-$ErrorActionPreference='Stop'
+$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$packageRoot=[IO.Path]::GetFullPath($PSScriptRoot)
-$repositoryRoot=[IO.Path]::GetFullPath((Join-Path $packageRoot '..\..\..'))
-$target=[IO.Path]::GetFullPath($TargetBuildRoot)
-$output=[IO.Path]::GetFullPath($OutputRoot)
-$unit1Commit='d22610e96496f7a9209edff36442be843f06fed4'
-$unit1Tree='8a627b54537e4c26835345907fc5181205ce496f'
-$bootstrapCommit='b07fd42a20ed612d53070aa1d1ae1bda6ace1e93'
-$bootstrapTree='7d0d92000192b913f9ff3fba6e57ce7308d2f3be'
-$bootstrapProvisioningScriptSha256='ce93883e714a8a33e1a078cd5e6857c0012e601a9c9829df67b2aede882a2547'
-$transitionNonce='bc3a3218-5f52-4f2c-9d5e-eceda24dab36'
-$provisioningNonce='438bd38a-b02a-423f-bc5f-11847a8a76d9'
-$expiration='2026-08-24T00:00:00.0000000Z'
-$terminalLedgerId='899e4db2b5c0f4ad58a09c682324a2ee9e5d7e2f180822ce9300922e56741d52'
-$terminalSid='S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948'
-$upgradeSid='S-1-5-80-238545627-4117296865-2677355104-248304369-1301198082'
 
-function Hash([string]$p){(Get-FileHash -LiteralPath ([IO.Path]::GetFullPath($p)) -Algorithm SHA256).Hash.ToLowerInvariant()}
-function BytesHash([byte[]]$b){$a=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($a.ComputeHash($b))).Replace('-','').ToLowerInvariant()}finally{$a.Dispose()}}
-function TextHash([string]$s){BytesHash ([Text.UTF8Encoding]::new($false).GetBytes($s))}
-function ReadJson([string]$p){Get-Content -LiteralPath $p -Raw|ConvertFrom-Json}
-function WriteRaw([object]$v,[string]$p){[IO.File]::WriteAllText($p,($v|ConvertTo-Json -Depth 100),[Text.UTF8Encoding]::new($false))}
-function Canonical([object]$v,[string]$p,[string]$tool){$raw=$p+'.raw';if(Test-Path $p){throw "Output exists: $p"};WriteRaw $v $raw;& $tool canonicalize $raw $p|Out-Null;if($LASTEXITCODE -ne 0){throw "Canonicalization failed: $p"}}
-function NewDir([string]$p){if(Test-Path $p){if(@(Get-ChildItem -LiteralPath $p -Force).Count){throw "Output root not empty: $p"}}else{New-Item -ItemType Directory -Path $p|Out-Null}}
-function NormalizeIl([string]$binary,[string]$dest,[string]$ildasm){$raw=$dest+'.raw.il';& $ildasm /text /nobar /utf8 ("/out=$raw") $binary|Out-Null;if($LASTEXITCODE -ne 0){throw "ILDASM failed: $binary"};$t=[IO.File]::ReadAllText($raw);$m=[regex]::Match($t,'(?m)^// MVID: \{([0-9A-Fa-f-]+)\}\r?$');if(-not $m.Success){throw 'MVID absent'};$t=$t.Replace($m.Groups[1].Value,'NORMALIZED-MVID');$t=[regex]::Replace($t,'(?m)^// Image base: 0x[0-9A-Fa-f]+\r?$','// Image base: NORMALIZED');$t=[regex]::Replace($t,'(?m)^// WARNING: Created Win32 resource file .+\.raw\.res\r?$','// WARNING: Created Win32 resource file NORMALIZED.raw.res');[IO.File]::WriteAllText($dest,$t,[Text.UTF8Encoding]::new($false));Hash $dest}
-function Compile([string]$main,[string]$define,[string]$dest,[string]$unit2Source,[string]$csc,[string[]]$refs,[string[]]$baseSources,[string]$devIdentity){$a=@('/nologo','/noconfig','/target:exe','/platform:x64','/optimize+','/checked+','/debug-','/warn:4','/warnaserror+','/nostdlib+','/langversion:5','/filealign:512',('/main:'+$main),('/out:'+$dest));if($define){$a+=('/define:'+$define)};foreach($r in $refs){$a+=('/reference:'+$r)};$a+=$baseSources;$a+=$unit2Source;$a+=$devIdentity;& $csc @a;if($LASTEXITCODE -ne 0){throw "Compilation failed: $main"}}
+$packageRoot = [IO.Path]::GetFullPath($PSScriptRoot)
+$repositoryRoot = [IO.Path]::GetFullPath((Join-Path $packageRoot '..\..\..'))
+$packageRelativeRoot = 'Architecture/Audits/2026-07-24_R7_Terminal_Authority_Architecture_Remediation_DRAFT'
+$target = [IO.Path]::GetFullPath($TargetBuildRoot)
+$output = [IO.Path]::GetFullPath($OutputRoot)
+$tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+$unit1Commit = 'd22610e96496f7a9209edff36442be843f06fed4'
+$unit1Tree = '8a627b54537e4c26835345907fc5181205ce496f'
+$bootstrapCommit = 'b07fd42a20ed612d53070aa1d1ae1bda6ace1e93'
+$bootstrapTree = '7d0d92000192b913f9ff3fba6e57ce7308d2f3be'
+$bootstrapProvisioningScriptSha256 = 'ce93883e714a8a33e1a078cd5e6857c0012e601a9c9829df67b2aede882a2547'
+$terminalLedgerId = '899e4db2b5c0f4ad58a09c682324a2ee9e5d7e2f180822ce9300922e56741d52'
+$terminalLedgerRoot = '87fdc1bbcef606ad134cf5cd2c0cad83dd4df25ed96544c05fd5adbeff5f82e5'
+$terminalCheckpointSha256 = '988f08177b04125e3f92f0696adac8c22b7d24ab0a4cba726145d97ea2958962'
+$terminalPolicySha256 = '76eb2900b2000aa0b41e6040335cc323f7443728aad21cd871d5b6b8e17bcd8b'
+$terminalBinarySha256 = '9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526'
+$terminalTrustSha256 = 'b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285'
+$terminalSid = 'S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948'
+$upgradeSid = 'S-1-5-80-238545627-4117296865-2677355104-248304369-1301198082'
+$transitionNonce = 'bc3a3218-5f52-4f2c-9d5e-eceda24dab36'
+$provisioningNonce = '438bd38a-b02a-423f-bc5f-11847a8a76d9'
+$expiration = '2026-08-24T00:00:00.0000000Z'
+$compilerOptions = @('/nologo','/noconfig','/target:exe','/platform:x64','/optimize+','/checked+','/debug-','/warn:4','/warnaserror+','/nostdlib+','/langversion:5','/filealign:512')
 
-if((Hash $PSCommandPath) -cne $ExpectedScriptSha256){throw 'Build script identity mismatch'}
-NewDir $output
-foreach($d in @('Generated','PassA','PassB','NormalizedIL','Install','TargetStaging','Tools')){New-Item -ItemType Directory -Path (Join-Path $output $d)|Out-Null}
-$registry=ReadJson (Join-Path $packageRoot 'external_utility_registry.json')
-function Utility([string]$role){$r=@($registry.utilities|Where-Object{$_.role -ceq $role});if($r.Count -ne 1){throw "Utility role invalid: $role"};if((Hash ([string]$r[0].path)) -cne [string]$r[0].measurement.sha256){throw "Utility drift: $role"};$r[0]}
-$gitRow=Utility 'GIT_BUILD_AND_VERIFICATION';$cscRow=Utility 'CSC_COMPILER';$ildasmRow=Utility 'ILDASM_TOOL';$powershellRow=Utility 'POWERSHELL_ORCHESTRATOR'
-$git=[string]$gitRow.path;$csc=[string]$cscRow.path;$ildasm=[string]$ildasmRow.path
-$refs=@('COMPILER_REFERENCE_mscorlib.dll','COMPILER_REFERENCE_System.dll','COMPILER_REFERENCE_System.Core.dll','COMPILER_REFERENCE_System.Security.dll','COMPILER_REFERENCE_System.ServiceProcess.dll')|ForEach-Object{[string](Utility $_).path}
-$head=(& $git --no-pager -c "safe.directory=$($repositoryRoot.Replace('\','/'))" -C $repositoryRoot rev-parse HEAD).Trim();if($LASTEXITCODE -ne 0 -or $head -cne $SourceCommit){throw 'Source HEAD mismatch'}
-$status=@(& $git --no-pager -c "safe.directory=$($repositoryRoot.Replace('\','/'))" -C $repositoryRoot status --porcelain=v1 --untracked-files=all);if($status.Count){throw 'Source checkout not clean'}
-$tree=(& $git --no-pager -c "safe.directory=$($repositoryRoot.Replace('\','/'))" -C $repositoryRoot show -s --format=%T $SourceCommit).Trim()
-if($SourceCommit -ceq $unit1Commit){throw 'Unit 2 provisioning source must be committed after Unit 1'}
-$bootstrap=ReadJson $BootstrapRecord
-if([string]$bootstrap.source_commit -cne $bootstrapCommit -or [string]$bootstrap.source_tree -cne $bootstrapTree -or [string]$bootstrap.provisioning_script_sha256 -cne $bootstrapProvisioningScriptSha256 -or [string]$bootstrap.service_sid -cne $upgradeSid -or [string]$bootstrap.prior_failed_attempt_status -cne 'PRESERVED_NONAUTHORITY_FAILURE' -or [string]$bootstrap.prior_failed_attempt_sha256 -notmatch '^[0-9a-f]{64}$' -or [string]$bootstrap.second_failed_attempt_status -cne 'PRESERVED_NONAUTHORITY_FAILURE' -or [string]$bootstrap.second_failed_attempt_sha256 -notmatch '^[0-9a-f]{64}$' -or [string]$bootstrap.third_failed_attempt_status -cne 'PRESERVED_NONAUTHORITY_FAILURE' -or [string]$bootstrap.third_failed_attempt_sha256 -notmatch '^[0-9a-f]{64}$' -or [string]$bootstrap.fourth_failed_attempt_status -cne 'PRESERVED_NONAUTHORITY_FAILURE' -or [string]$bootstrap.fourth_failed_attempt_sha256 -notmatch '^[0-9a-f]{64}$' -or $bootstrap.recovered_acl_mutation_in_current_attempt -ne $false -or (Hash $UpgradePublicCertificate) -cne [string]$bootstrap.public_certificate_sha256 -or [string]$bootstrap.public_export_sha256 -cne [string]$bootstrap.public_certificate_sha256){throw 'Preserved Unit 2A bootstrap binding invalid'}
-$preflightPath=[IO.Path]::GetFullPath($PreflightHostState);$preflight=ReadJson $preflightPath;$preflightSha=Hash $preflightPath
-if([string]$preflight.artifact_type -cne 'R7_REMEDIATION_HOST_STATE_CAPTURE' -or [string]$preflight.phase -cne 'PRECHANGE' -or [int64]$preflight.ledger_entry_file_count -ne 678 -or [string]$preflight.checkpoint.raw_sha256 -cne '988f08177b04125e3f92f0696adac8c22b7d24ab0a4cba726145d97ea2958962'){throw 'Preflight host-state binding invalid'}
-$terminalRow=@($preflight.terminal_authority_services|Where-Object{$_.name -ceq 'RandleTerminalAuthority'});if($terminalRow.Count -ne 1 -or [string]$terminalRow[0].state -cne 'Running' -or [string]$terminalRow[0].account -cne 'NT SERVICE\RandleTerminalAuthority' -or [string]$terminalRow[0].binary_sha256 -cne '9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526'){throw 'Preflight terminal service binding invalid'}
-foreach($fixed in @([ordered]@{path='C:\Program Files\RandleAI\TerminalAuthority\RandleTerminalAuthority.exe';sha='9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526'},[ordered]@{path='C:\ProgramData\RandleAI\TerminalAuthority\Config\r7_terminal_authority_policy.json';sha='76eb2900b2000aa0b41e6040335cc323f7443728aad21cd871d5b6b8e17bcd8b'},[ordered]@{path='C:\ProgramData\RandleAI\TerminalAuthority\Ledger\checkpoint.json';sha='988f08177b04125e3f92f0696adac8c22b7d24ab0a4cba726145d97ea2958962'},[ordered]@{path='C:\ProgramData\RandleAI\TerminalAuthority\Trust\terminal_authority_public.cer';sha='b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285'})){if((Hash ([string]$fixed.path)) -cne [string]$fixed.sha){throw "Current terminal state drift: $($fixed.path)"}}
-$artifact=Join-Path $target 'Bootstrap\R7ArtifactTool.bootstrap.exe';if(-not(Test-Path $artifact)){throw 'Target artifact tool missing'}
-$targetSummary=ReadJson (Join-Path $target 'build_summary.json');if([string]$targetSummary.source_commit -cne $unit1Commit -or [string]$targetSummary.source_tree -cne $unit1Tree){throw 'Target build source mismatch'}
-$targetOrchestratorReceipt=Join-Path $target 'Generated\build_orchestrator_receipt.json';if(-not(Test-Path -LiteralPath $targetOrchestratorReceipt -PathType Leaf) -or [string]$targetSummary.orchestrator_receipt_sha256 -cne (Hash $targetOrchestratorReceipt)){throw 'Target build orchestrator receipt mismatch'};$targetOrchestratorReceiptSha=Hash $targetOrchestratorReceipt
-$targetOrchestrator=ReadJson $targetOrchestratorReceipt
-$targetReceipt=Join-Path $target 'Generated\build_receipt.json';$targetReceiptSha=Hash $targetReceipt
-$targetTemplate=ReadJson (Join-Path $target 'Generated\transition_request_template.json')
-$dependency=Join-Path $target 'Generated\dependency_manifest.json';$dependencySha=Hash $dependency
-$targetPolicy=Join-Path $target 'Generated\terminal_authority_v4_policy.json';$targetPolicySha=Hash $targetPolicy
-$targetManifest=Join-Path $target 'Generated\authority_package_manifest.json';$targetManifestSha=Hash $targetManifest
-if([string]$targetTemplate.build_receipt_sha256 -cne $targetReceiptSha -or [string]$targetTemplate.dependency_manifest_sha256 -cne $dependencySha){throw 'Target template binding invalid'}
-$components=[Collections.Generic.List[object]]::new();$componentPaths=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-foreach($component in @($targetTemplate.components)){$components.Add([ordered]@{final_path=[string]$component.final_path;role=[string]$component.role;sha256=[string]$component.sha256;staging_relative_path=[string]$component.staging_relative_path});[void]$componentPaths.Add([string]$component.staging_relative_path)}
-$targetManifestValue=ReadJson $targetManifest;$extraIndex=0
-foreach($file in @($targetManifestValue.files|Sort-Object staging_relative_path)){if($componentPaths.Contains([string]$file.staging_relative_path)){continue};$components.Add([ordered]@{final_path=[string]$file.final_path;role=('PACKAGE_FILE_'+$extraIndex.ToString('D4')+'_'+([string]$file.raw_sha256).Substring(0,16));sha256=[string]$file.raw_sha256;staging_relative_path=[string]$file.staging_relative_path});[void]$componentPaths.Add([string]$file.staging_relative_path);$extraIndex++}
-
-$keyPath=Join-Path 'C:\ProgramData\Microsoft\Crypto\Keys' ([string]$bootstrap.key_unique_name)
-$protectedTool=Join-Path $target 'OrchestratorBootstrap\R7ProtectedMetadataTool.exe'
-$protectedReceiptPath=Join-Path $target 'Generated\protected_metadata_tool_build_receipt.json'
-$protectedReceipt=ReadJson $protectedReceiptPath
-if([string]$protectedReceipt.artifact_type -cne 'R7_PROTECTED_METADATA_TOOL_BUILD_RECEIPT' -or [string]$protectedReceipt.source_commit -cne [string]$targetOrchestrator.orchestrator_commit -or [string]$protectedReceipt.source_tree -cne [string]$targetOrchestrator.orchestrator_tree -or [string]$protectedReceipt.pass_a_sha256 -cne (Hash $protectedTool) -or $protectedReceipt.private_key_bytes_read -ne $false -or [string]$protectedReceipt.data_access_mask -cne 'FILE_READ_ATTRIBUTES|READ_CONTROL'){throw 'Protected metadata tool receipt mismatch'}
-$priorKey=ReadJson (Join-Path $target 'Generated\upgrade_key_file_metadata.json')
-$keyAclBefore=Get-Acl -LiteralPath $keyPath;$keyAclBeforeSha=TextHash ([string]$keyAclBefore.Sddl)
-$keyProtectedPath=Join-Path $output 'Generated\upgrade_key_protected_metadata_evidence.json';& $protectedTool measure-protected-metadata $keyPath $keyProtectedPath|Out-Null;if($LASTEXITCODE -ne 0){throw 'Protected key metadata failed'};$keyProtected=ReadJson $keyProtectedPath
-if([string]$keyProtected.artifact_type -cne 'R7_PROTECTED_FILE_METADATA_MEASUREMENT' -or $keyProtected.data_access_requested -ne $false -or $keyProtected.private_bytes_read -ne $false -or $keyProtected.privilege_restored_before_evidence_write -ne $true -or [string]$keyProtected.metadata_privilege -cne 'SeBackupPrivilege'){throw 'Protected key metadata boundary invalid'}
-$key=$keyProtected.measurement
-$keyMetadataPath=Join-Path $output 'Generated\upgrade_key_metadata.json';Canonical $key $keyMetadataPath $artifact
-$keyAclAfter=Get-Acl -LiteralPath $keyPath;$keyAclAfterSha=TextHash ([string]$keyAclAfter.Sddl)
-foreach($field in @('canonical_path','file_identity','final_nt_path','hard_link_count','owner_sid','security_descriptor_sha256','size','volume_identity')){if([string]$key.$field -cne [string]$priorKey.$field){throw "Protected key physical identity changed: $field"}}
-if([string]$key.owner_sid -cne 'S-1-5-18' -or [long]$key.hard_link_count -ne 1 -or @($key.streams).Count -ne 1 -or [string]$key.streams[0] -cne '::$DATA' -or $keyAclBeforeSha -cne [string]$bootstrap.key_file_acl_sha256 -or $keyAclAfterSha -cne [string]$bootstrap.key_file_acl_sha256 -or [string]$keyAclBefore.Sddl -cne [string]$bootstrap.key_file_acl_sddl -or [string]$keyAclAfter.Sddl -cne [string]$bootstrap.key_file_acl_sddl){throw 'Key metadata or canonical ACL mismatch'}
-$volume=[string]$key.volume_identity;$certSha=Hash $UpgradePublicCertificate
-
-$originalUnit2=Join-Path $packageRoot 'Source\R7Unit2UpgradeAuthority.cs';$text=[IO.File]::ReadAllText($originalUnit2,[Text.Encoding]::UTF8)
-function BoundSource([hashtable]$replacements,[string]$path){$value=$text;foreach($k in $replacements.Keys){if(-not $value.Contains($k)){throw "Identity placeholder absent: $k"};$value=$value.Replace($k,[string]$replacements[$k])};[IO.File]::WriteAllText($path,$value,[Text.UTF8Encoding]::new($false))}
-$clientSource=Join-Path $output 'Generated\R7Unit2ClientShared.g.cs';BoundSource @{'UNIT2_GENERATED_CERTIFICATE_SHA256'=$certSha} $clientSource
-$baseSources=@(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Filter '*.cs' -File|Where-Object{$_.Name -ne 'R7Unit2UpgradeAuthority.cs'}|ForEach-Object FullName)
-$devIdentity=Join-Path $packageRoot 'BuildInputs\R7DevelopmentIdentity.g.cs'
-$roles=@(
-    [ordered]@{role='UPGRADE_CLIENT';name='RandleTerminalUpgradeClient.exe';main='RandleAI.R7Remediation.R7Unit2UpgradeClientProgram'},
-    [ordered]@{role='UPGRADE_PUBLIC_VERIFIER';name='RandleTerminalUpgradePublicVerifier.exe';main='RandleAI.R7Remediation.R7Unit2UpgradePublicVerifierProgram'},
-    [ordered]@{role='UPGRADE_PROTOCOL_PROBE';name='RandleTerminalUpgradeProtocolProbe.exe';main='RandleAI.R7Remediation.R7Unit2UpgradeProbeProgram'}
-)
-$binary=@{};$binaryDetail=[Collections.Generic.List[object]]::new()
-foreach($r in $roles){$a=Join-Path $output ('PassA\'+$r.name);$b=Join-Path $output ('PassB\'+$r.name);Compile $r.main '' $a $clientSource $csc $refs $baseSources $devIdentity;Compile $r.main '' $b $clientSource $csc $refs $baseSources $devIdentity;$ia=NormalizeIl $a (Join-Path $output ('NormalizedIL\'+$r.name+'.a.il')) $ildasm;$ib=NormalizeIl $b (Join-Path $output ('NormalizedIL\'+$r.name+'.b.il')) $ildasm;if($ia -cne $ib){throw "Normalized IL mismatch: $($r.role)"};$passA=Hash $a;$passB=Hash $b;$binary[$r.role]=[ordered]@{normalized_il_sha256=$ia;raw_sha256=$passA;role=$r.role;size=(Get-Item $a).Length};$binaryDetail.Add([ordered]@{file_name=$r.name;intended_final_path=(Join-Path 'C:\Program Files\RandleAI\TerminalUpgradeAuthority' $r.name);normalized_il_equal=$true;normalized_il_sha256=$ia;pass_a_sha256=$passA;pass_b_sha256=$passB;role=$r.role;size=(Get-Item $a).Length})}
-
-$requirementSha=Hash (Join-Path $packageRoot 'governed_requirement_registry.json');$caseSha=Hash (Join-Path $packageRoot 'immutable_case_definitions.json');$expectationSha=Hash (Join-Path $packageRoot 'immutable_expectations.json');$principalSha=Hash (Join-Path $packageRoot 'service_principal_registry.json');$scriptSha=Hash (Join-Path $packageRoot 'governed_script_registry.json');$utilitySha=Hash (Join-Path $packageRoot 'external_utility_registry.json')
-$scopePath=Join-Path $packageRoot 'unit2_authorization_scope.json';$scopeSha=Hash $scopePath
-$hostCore=[ordered]@{terminal_ledger_id=$terminalLedgerId;terminal_public_trust_sha256='b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285';terminal_service_sid=$terminalSid;volume_identity=$volume}
-$hostCorePath=Join-Path $output 'Generated\host_identity_input.json';Canonical $hostCore $hostCorePath $artifact;$hostIdentity=Hash $hostCorePath
-$targetBindings=[ordered]@{authority_package_manifest_sha256=$targetManifestSha;build_orchestrator_receipt_sha256=$targetOrchestratorReceiptSha;build_receipt_sha256=$targetReceiptSha;case_definitions_sha256=$caseSha;dependency_manifest_sha256=$dependencySha;expectations_sha256=$expectationSha;expected_terminal_ledger_continuity='PRESERVE_SEQUENCE_678_ROOT_AND_CHECKPOINT_UNTIL_SEPARATE_INSTALL_UNIT';expected_terminal_public_trust_sha256='b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285';interface_version='4.0.0-REMEDIATION';principal_registry_sha256=$principalSha;requirement_registry_sha256=$requirementSha;script_registry_sha256=$scriptSha;terminal_policy_sha256=$targetPolicySha;utility_registry_sha256=$utilitySha}
-$authorityBindings=[ordered]@{bootstrap_source_commit=$bootstrapCommit;bootstrap_source_tree=$bootstrapTree;fourth_failed_bootstrap_attempt_sha256=[string]$bootstrap.fourth_failed_attempt_sha256;independent_rejection_commit='9d813a4bad29ec04f022f54ffcae73a5d542eb44';preflight_baseline_sha256=$preflightSha;prior_failed_bootstrap_attempt_sha256=[string]$bootstrap.prior_failed_attempt_sha256;second_failed_bootstrap_attempt_sha256=[string]$bootstrap.second_failed_attempt_sha256;third_failed_bootstrap_attempt_sha256=[string]$bootstrap.third_failed_attempt_sha256;prohibited_source_commit='f0cfbce97e913a133530dd66a70326b1e03a0fb6';prohibited_source_dependency_count=0;provisioned_infrastructure_commit='bb04ac54fb328516d0c785f4e6551e6a20d73759';provisioning_commit=$SourceCommit;r6_commit='87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94';r7_record_commits=@('06c6805ed52a0d539a73088c097c60dec335462a','8ec5697b3c6fd9d93b972113b7e79d033b4cb1f6');unit1_commit=$unit1Commit;unit2_authorization_scope_sha256=$scopeSha}
-$rollback=[ordered]@{automatic_rollback=$false;existing_terminal_ledger_rewrite='PROHIBITED';governed_rollback_authorization_required=$true;rejected_v3_reinstall='PROHIBITED';v1_rollback='PROHIBITED'}
-$threat=[ordered]@{excludes=@('kernel','offline_administrator','physical_attack','TPM_or_HSM_claim');protects=@('terminal_self_authorization','caller_selected_components','component_substitution','cross_host_replay','policy_downgrade','interface_downgrade','authorization_replay')}
-$plan=[ordered]@{components=$components.ToArray();current_checkpoint_sha256='988f08177b04125e3f92f0696adac8c22b7d24ab0a4cba726145d97ea2958962';current_ledger_root='87fdc1bbcef606ad134cf5cd2c0cad83dd4df25ed96544c05fd5adbeff5f82e5';current_ledger_sequence=678;host_identity=$hostIdentity;target_bindings=$targetBindings;transition_nonce=$transitionNonce}
-$planPath=Join-Path $output 'Generated\transition_plan.json';Canonical $plan $planPath $artifact;$planSha=Hash $planPath
-$ledgerId=TextHash ('R7_UNIT2_UPGRADE_LEDGER|'+$certSha+'|'+$terminalLedgerId+'|'+$SourceCommit)
-$hardener=Join-Path $packageRoot 'complete_unit2_upgrade_authority.ps1';if(-not(Test-Path $hardener)){throw 'Unit 2 completion script absent'}
-$policy=[ordered]@{
- artifact_type='R7_UNIT2_SEPARATE_UPGRADE_AUTHORITY_POLICY';authority_bindings=$authorityBindings;authorization_expiration=$expiration;authorization_scope_sha256=$scopeSha;bootstrap_authority='EXPLICIT_R7_REMEDIATION_UNIT_2_AUTHORIZATION';dependency_manifest_sha256=$dependencySha;
- fixed_roots=@('C:\Program Files\RandleAI\TerminalUpgradeAuthority','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Config','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Ledger','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Trust','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Evidence','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Responses','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Objects','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Authorizations','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Recovery','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Staging');
- host_binding=[ordered]@{checkpoint_sha256='988f08177b04125e3f92f0696adac8c22b7d24ab0a4cba726145d97ea2958962';host_identity=$hostIdentity;terminal_interface='3.0.0-DRAFT';terminal_ledger_id=$terminalLedgerId;terminal_ledger_root='87fdc1bbcef606ad134cf5cd2c0cad83dd4df25ed96544c05fd5adbeff5f82e5';terminal_ledger_sequence=678;terminal_policy_sha256='76eb2900b2000aa0b41e6040335cc323f7443728aad21cd871d5b6b8e17bcd8b';terminal_public_trust_sha256='b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285';terminal_service_binary_sha256='9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526';terminal_service_name='RandleTerminalAuthority';terminal_service_sid=$terminalSid;volume_identity=$volume};
- installer_script_sha256=[string]$targetTemplate.installer_identity.script_sha256;interface_version='1.0.0';key=[ordered]@{algorithm='RSA-3072';export_policy='NONEXPORTABLE';key_unique_name=[string]$bootstrap.key_unique_name;provider='Microsoft Software Key Storage Provider';scope='LocalMachine';signature_algorithm='RSA-PSS-SHA256'};ledger_id=$ledgerId;minimum_terminal_version='4.0.0-REMEDIATION';operation_allowlist=@('AUTHORIZE_TERMINAL_TRANSITION','GET_AUTHORIZATION','GET_HEALTH','GET_PUBLIC_IDENTITY');preflight_baseline_sha256=$preflightSha;protocol_version='4.0';provisioning_nonce=$provisioningNonce;provisioning_script_sha256=(Hash $hardener);public_certificate_sha256=$certSha;required_components=$components.ToArray();revoked_component_sha256=@('632afaeeaf15c26ac057b34692ac672e03bc02f60fbb35177c378736b5e316ba','9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526','76eb2900b2000aa0b41e6040335cc323f7443728aad21cd871d5b6b8e17bcd8b');rollback_constraints=$rollback;schema_version='2.0.0';service=[ordered]@{account='NT SERVICE\RandleTerminalUpgradeAuthority';denied_logon_rights=@('SeDenyInteractiveLogonRight','SeDenyRemoteInteractiveLogonRight');name='RandleTerminalUpgradeAuthority';pipe='RandleAI.TerminalUpgradeAuthority.v1';required_privileges=@('SeChangeNotifyPrivilege');sid=$upgradeSid;sid_type='RESTRICTED'};source_bindings=[ordered]@{provisioning_commit=$SourceCommit;provisioning_tree=$tree;target_commit=$unit1Commit;target_tree=$unit1Tree;unit1_commit=$unit1Commit;unit1_tree=$unit1Tree};target_bindings=$targetBindings;threat_model=$threat;transition_nonce=$transitionNonce;transition_plan_sha256=$planSha;upgrade_client_sha256=[string]$binary.UPGRADE_CLIENT.raw_sha256;upgrade_probe_sha256=[string]$binary.UPGRADE_PROTOCOL_PROBE.raw_sha256;upgrade_public_verifier_sha256=[string]$binary.UPGRADE_PUBLIC_VERIFIER.raw_sha256;volume_identity=$volume
+function Hash([string]$Path) {
+    return (Get-FileHash -LiteralPath ([IO.Path]::GetFullPath($Path)) -Algorithm SHA256).Hash.ToLowerInvariant()
 }
-$policyPath=Join-Path $output 'Generated\unit2_upgrade_policy.json';Canonical $policy $policyPath $artifact;$policySha=Hash $policyPath
-$serviceSource=Join-Path $output 'Generated\R7Unit2Service.g.cs';BoundSource @{'UNIT2_GENERATED_CERTIFICATE_SHA256'=$certSha;'UNIT2_GENERATED_POLICY_SHA256'=$policySha;'UNIT2_GENERATED_DEPENDENCY_SHA256'=$dependencySha;'UNIT2_GENERATED_SOURCE_COMMIT'=$SourceCommit;'UNIT2_GENERATED_SOURCE_TREE'=$tree;'UNIT2_GENERATED_KEY_FILE_PATH'=$keyPath;'UNIT2_GENERATED_KEY_OWNER_SID'=[string]$key.owner_sid;'UNIT2_GENERATED_KEY_ACL_SHA256'=[string]$key.security_descriptor_sha256;'UNIT2_GENERATED_KEY_VOLUME_IDENTITY'=[string]$key.volume_identity;'UNIT2_GENERATED_KEY_FILE_IDENTITY'=[string]$key.file_identity} $serviceSource
-$sa=Join-Path $output 'PassA\RandleTerminalUpgradeAuthority.exe';$sb=Join-Path $output 'PassB\RandleTerminalUpgradeAuthority.exe';Compile 'RandleAI.R7Remediation.R7Unit2UpgradeServiceProgram' 'UNIT2_SERVICE' $sa $serviceSource $csc $refs $baseSources $devIdentity;Compile 'RandleAI.R7Remediation.R7Unit2UpgradeServiceProgram' 'UNIT2_SERVICE' $sb $serviceSource $csc $refs $baseSources $devIdentity;$sia=NormalizeIl $sa (Join-Path $output 'NormalizedIL\RandleTerminalUpgradeAuthority.a.il') $ildasm;$sib=NormalizeIl $sb (Join-Path $output 'NormalizedIL\RandleTerminalUpgradeAuthority.b.il') $ildasm;if($sia -cne $sib){throw 'Service normalized IL mismatch'};$servicePassA=Hash $sa;$servicePassB=Hash $sb;$binary.UPGRADE_AUTHORITY=[ordered]@{normalized_il_sha256=$sia;raw_sha256=$servicePassA;role='UPGRADE_AUTHORITY';size=(Get-Item $sa).Length};$binaryDetail.Add([ordered]@{file_name='RandleTerminalUpgradeAuthority.exe';intended_final_path='C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeAuthority.exe';normalized_il_equal=$true;normalized_il_sha256=$sia;pass_a_sha256=$servicePassA;pass_b_sha256=$servicePassB;role='UPGRADE_AUTHORITY';size=(Get-Item $sa).Length})
-$compilerOptions=@('/nologo','/noconfig','/target:exe','/platform:x64','/optimize+','/checked+','/debug-','/warn:4','/warnaserror+','/nostdlib+','/langversion:5','/filealign:512')
-$scripts=@(Get-ChildItem -LiteralPath $packageRoot -Filter '*.ps1' -File|Sort-Object Name|ForEach-Object{[ordered]@{path=$_.Name;raw_sha256=(Hash $_.FullName);size=$_.Length}})
-$sources=@(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Filter '*.cs' -File|Sort-Object Name|ForEach-Object{[ordered]@{path=('Source/'+$_.Name);raw_sha256=(Hash $_.FullName);size=$_.Length}})
-$artifactMeasurementPath=Join-Path $output 'Generated\target_artifact_tool_measurement.json';& $artifact measure $artifact $artifactMeasurementPath|Out-Null;if($LASTEXITCODE -ne 0){throw 'Target artifact tool measurement failed'}
-$protectedToolMeasurementPath=Join-Path $output 'Generated\protected_metadata_tool_measurement.json';& $artifact measure $protectedTool $protectedToolMeasurementPath|Out-Null;if($LASTEXITCODE -ne 0){throw 'Protected metadata tool measurement failed'}
-$toolchain=@($cscRow,$ildasmRow,$gitRow,$powershellRow)|ForEach-Object{[ordered]@{measurement=$_.measurement;role=$_.role}}
-$toolchain+=@([ordered]@{measurement=(ReadJson $artifactMeasurementPath);role='TARGET_CANONICAL_ARTIFACT_TOOL'},[ordered]@{measurement=(ReadJson $protectedToolMeasurementPath);role='PROTECTED_METADATA_TOOL'})
-$receipt=[ordered]@{artifact_type='R7_UNIT2_UPGRADE_AUTHORITY_SOURCE_TO_BINARY_RECEIPT';binaries=@($binary.UPGRADE_AUTHORITY,$binary.UPGRADE_CLIENT,$binary.UPGRADE_PROTOCOL_PROBE,$binary.UPGRADE_PUBLIC_VERIFIER);compiler_options=$compilerOptions;dependency_manifest_sha256=$dependencySha;governed_scripts=$scripts;policy_sha256=$policySha;schema_version='1.0.0';source_commit=$SourceCommit;source_files=$sources;source_tree=$tree;target_build_receipt_sha256=$targetReceiptSha;target_source_commit=$unit1Commit;target_source_tree=$unit1Tree;toolchain=$toolchain}
-$receiptPath=Join-Path $output 'Generated\unit2_build_receipt.json';Canonical $receipt $receiptPath $artifact
-$determinismReceipt=[ordered]@{artifact_type='R7_UNIT2B_BUILD_DETERMINISM_RECEIPT';binaries=@($binaryDetail|Sort-Object role);compiler_arguments=$compilerOptions;framework_references=@($refs|ForEach-Object{[ordered]@{path=$_;raw_sha256=(Hash $_);size=(Get-Item -LiteralPath $_).Length}});schema_version='1.0.0';source_commit=$SourceCommit;source_files=$sources;source_tree=$tree;status='PASS';target_build_orchestrator_receipt_sha256=$targetOrchestratorReceiptSha;target_source_commit=$unit1Commit;target_source_tree=$unit1Tree}
-$determinismPath=Join-Path $output 'Generated\unit2_build_determinism_receipt.json';Canonical $determinismReceipt $determinismPath $artifact
-Copy-Item -LiteralPath $sa -Destination (Join-Path $output 'Install\RandleTerminalUpgradeAuthority.exe');Copy-Item -LiteralPath (Join-Path $output 'PassA\RandleTerminalUpgradeClient.exe') -Destination (Join-Path $output 'Install\RandleTerminalUpgradeClient.exe');Copy-Item -LiteralPath (Join-Path $output 'PassA\RandleTerminalUpgradeProtocolProbe.exe') -Destination (Join-Path $output 'Install\RandleTerminalUpgradeProtocolProbe.exe');Copy-Item -LiteralPath (Join-Path $output 'PassA\RandleTerminalUpgradePublicVerifier.exe') -Destination (Join-Path $output 'Install\RandleTerminalUpgradePublicVerifier.exe');Copy-Item -LiteralPath $policyPath -Destination (Join-Path $output 'Install\unit2_upgrade_policy.json');Copy-Item -LiteralPath $dependency -Destination (Join-Path $output 'Install\dependency_manifest.json');Copy-Item -LiteralPath $receiptPath -Destination (Join-Path $output 'Install\unit2_build_receipt.json');Copy-Item -LiteralPath $UpgradePublicCertificate -Destination (Join-Path $output 'Install\upgrade_authority_public.cer')
-Copy-Item -LiteralPath $artifact -Destination (Join-Path $output 'Tools\R7ArtifactTool.exe')
-Copy-Item -LiteralPath $protectedTool -Destination (Join-Path $output 'Tools\R7ProtectedMetadataTool.exe')
-foreach($item in Get-ChildItem -LiteralPath (Join-Path $target 'Staging') -Force){Copy-Item -LiteralPath $item.FullName -Destination (Join-Path $output 'TargetStaging') -Recurse}
-$manifestRows=@(Get-ChildItem -LiteralPath $output -File -Recurse|Where-Object{$_.FullName -notlike '*.raw' -and $_.FullName -notlike '*.raw.il'}|Sort-Object FullName|ForEach-Object{[ordered]@{path=$_.FullName.Substring($output.Length+1).Replace('\','/');raw_sha256=(Hash $_.FullName);size=$_.Length}})
-$manifest=[ordered]@{artifact_type='R7_UNIT2_BUILD_OUTPUT_MANIFEST';files=$manifestRows;policy_sha256=$policySha;schema_version='1.0.0';source_commit=$SourceCommit;source_tree=$tree;status='PASS';target_source_commit=$unit1Commit;transition_plan_sha256=$planSha}
-$manifestPath=Join-Path $output 'unit2_build_manifest.json';Canonical $manifest $manifestPath $artifact
-[ordered]@{build_determinism_receipt_sha256=(Hash $determinismPath);build_manifest_sha256=(Hash $manifestPath);output_root=$output;policy_sha256=$policySha;service_sha256=[string]$binary.UPGRADE_AUTHORITY.raw_sha256;source_commit=$SourceCommit;source_tree=$tree;status='PASS';target_build_orchestrator_receipt_sha256=$targetOrchestratorReceiptSha;target_build_receipt_sha256=$targetReceiptSha;transition_plan_sha256=$planSha}|ConvertTo-Json
+function BytesHash([byte[]]$Bytes) {
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($algorithm.ComputeHash($Bytes))).Replace('-','').ToLowerInvariant() }
+    finally { $algorithm.Dispose() }
+}
+function TextHash([string]$Value) { return BytesHash ([Text.UTF8Encoding]::new($false).GetBytes($Value)) }
+function GitBlob([string]$Path) {
+    $bytes = [IO.File]::ReadAllBytes([IO.Path]::GetFullPath($Path))
+    $header = [Text.Encoding]::ASCII.GetBytes(('blob ' + $bytes.Length + [char]0))
+    $all = New-Object byte[] ($header.Length + $bytes.Length)
+    [Buffer]::BlockCopy($header,0,$all,0,$header.Length)
+    [Buffer]::BlockCopy($bytes,0,$all,$header.Length,$bytes.Length)
+    $algorithm = [Security.Cryptography.SHA1]::Create()
+    try { return ([BitConverter]::ToString($algorithm.ComputeHash($all))).Replace('-','').ToLowerInvariant() }
+    finally { $algorithm.Dispose() }
+}
+function ReadJson([string]$Path) { return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json }
+function WriteRaw([object]$Value,[string]$Path) { [IO.File]::WriteAllText($Path,($Value | ConvertTo-Json -Depth 100),[Text.UTF8Encoding]::new($false)) }
+function Canonical([object]$Value,[string]$Path,[string]$Tool) {
+    if (Test-Path -LiteralPath $Path) { throw "Output exists: $Path" }
+    $raw = $Path + '.raw'
+    WriteRaw $Value $raw
+    & $Tool canonicalize $raw $Path | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Canonicalization failed: $Path" }
+}
+function NewDir([string]$Path) {
+    if (Test-Path -LiteralPath $Path) {
+        if (@(Get-ChildItem -LiteralPath $Path -Force).Count -ne 0) { throw "Output root not empty: $Path" }
+    } else { New-Item -ItemType Directory -Path $Path | Out-Null }
+}
+function Relative([string]$Base,[string]$Path) {
+    $baseFull = [IO.Path]::GetFullPath($Base).TrimEnd('\') + '\'
+    return [Uri]::UnescapeDataString(([Uri]$baseFull).MakeRelativeUri([Uri][IO.Path]::GetFullPath($Path)).ToString()).Replace('\','/')
+}
+function EscapeCs([string]$Value) { return $Value.Replace('\','\\').Replace('"','\"') }
+function Derive([string]$Domain,[string[]]$Values) {
+    $builder = [Text.StringBuilder]::new()
+    [void]$builder.Append($Domain.Length).Append(':').Append($Domain)
+    foreach ($value in $Values) {
+        $item = if ($null -eq $value) { '' } else { [string]$value }
+        [void]$builder.Append('|').Append($item.Length).Append(':').Append($item)
+    }
+    return TextHash $builder.ToString()
+}
+function NormalizeIl([string]$Binary,[string]$Destination,[string]$Ildasm) {
+    $raw = $Destination + '.raw.il'
+    & $Ildasm /text /nobar /utf8 ("/out=$raw") $Binary | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "ILDASM failed: $Binary" }
+    $text = [IO.File]::ReadAllText($raw)
+    $mvid = [regex]::Match($text,'(?m)^// MVID: \{([0-9A-Fa-f-]+)\}\r?$')
+    if (-not $mvid.Success) { throw "MVID absent: $Binary" }
+    $text = $text.Replace($mvid.Groups[1].Value,'NORMALIZED-MVID')
+    $text = [regex]::Replace($text,'(?m)^// Image base: 0x[0-9A-Fa-f]+\r?$','// Image base: NORMALIZED')
+    $text = [regex]::Replace($text,'(?m)^// WARNING: Created Win32 resource file .+\.raw\.res\r?$','// WARNING: Created Win32 resource file NORMALIZED.raw.res')
+    [IO.File]::WriteAllText($Destination,$text,[Text.UTF8Encoding]::new($false))
+    return Hash $Destination
+}
+function CompilerArguments([object]$Role,[string]$Destination,[string[]]$References,[string[]]$Sources,[string]$IdentitySource) {
+    $arguments = @($compilerOptions)
+    $arguments += ('/main:' + [string]$Role.main)
+    $arguments += ('/out:' + [IO.Path]::GetFullPath($Destination))
+    $arguments += ('/define:' + [string]$Role.define)
+    foreach ($reference in $References) { $arguments += ('/reference:' + [IO.Path]::GetFullPath($reference)) }
+    foreach ($source in $Sources) { $arguments += [IO.Path]::GetFullPath($source) }
+    $arguments += [IO.Path]::GetFullPath($IdentitySource)
+    return @($arguments)
+}
+function Compile([string]$Compiler,[string[]]$Arguments,[string]$Destination,[string]$Role) {
+    & $Compiler @Arguments
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Destination -PathType Leaf)) { throw "Compilation failed: $Role" }
+}
+function ExtractIdentity([string]$Binary) {
+    $assembly = [Reflection.Assembly]::ReflectionOnlyLoadFrom([IO.Path]::GetFullPath($Binary))
+    $result = [ordered]@{}
+    foreach ($typeName in @('RandleAI.R7Remediation.R7BuildIdentity','RandleAI.R7Remediation.R7Unit2BuildIdentity')) {
+        $type = $assembly.GetType($typeName,$true,$false)
+        foreach ($field in @($type.GetFields([Reflection.BindingFlags]'Static,NonPublic,Public') | Sort-Object Name)) {
+            if ($field.IsLiteral) { $result[($type.Name + '.' + $field.Name)] = $field.GetRawConstantValue() }
+        }
+    }
+    return $result
+}
+function ExtractPackagedIdentity([string]$Binary) {
+    $assembly = [Reflection.Assembly]::ReflectionOnlyLoadFrom([IO.Path]::GetFullPath($Binary))
+    $result = [ordered]@{}
+    foreach ($typeName in @('RandleAI.R7Remediation.R7BuildIdentity','RandleAI.R7Remediation.R7Unit2BuildIdentity')) {
+        $type = $assembly.GetType($typeName,$false,$false)
+        if ($null -eq $type) { continue }
+        foreach ($field in @($type.GetFields([Reflection.BindingFlags]'Static,NonPublic,Public') | Sort-Object Name)) {
+            if ($field.IsLiteral) { $result[($type.Name + '.' + $field.Name)] = $field.GetRawConstantValue() }
+        }
+    }
+    return $result
+}
+function IsForbiddenIdentityValue([object]$Value) {
+    if ($Value -isnot [string]) { return $false }
+    $text = [string]$Value
+    if ([string]::IsNullOrWhiteSpace($text) -or $text -match '^(?:0{40}|0{64}|0{8}|0{8}:0{16})$') { return $true }
+    return $text -match '(?i)(?:BOOTSTRAP_PENDING|DEVELOPMENT|PLACEHOLDER|\bTBD\b|\bUNKNOWN\b)'
+}
+function AssertIdentity([object]$Expected,[object]$ExpectedUnit2,[object]$Actual,[string]$Role) {
+    foreach ($key in @($Expected.Keys)) {
+        $qualified = 'R7BuildIdentity.' + $key
+        if (-not $Actual.Contains($qualified) -or [string]$Actual[$qualified] -cne [string]$Expected[$key]) { throw "Embedded identity mismatch: $Role/$qualified" }
+    }
+    foreach ($key in @($ExpectedUnit2.Keys)) {
+        $qualified = 'R7Unit2BuildIdentity.' + $key
+        if (-not $Actual.Contains($qualified) -or [string]$Actual[$qualified] -cne [string]$ExpectedUnit2[$key]) { throw "Embedded Unit 2 identity mismatch: $Role/$qualified" }
+    }
+}
+function GeneratedRow([string]$Path,[string]$Rule,[string]$ScriptSha,[string]$ScriptBlob,[object[]]$Inputs) {
+    return [ordered]@{
+        generator=[ordered]@{git_blob_identity=$ScriptBlob;path=($packageRelativeRoot + '/build_unit2_upgrade_authority.ps1');raw_sha256=$ScriptSha}
+        generation_rule=$Rule
+        output_identity=(Hash $Path)
+        path=('Generated/' + [IO.Path]::GetFileName($Path))
+        raw_sha256=(Hash $Path)
+        size=(Get-Item -LiteralPath $Path).Length
+        source_inputs=$Inputs
+    }
+}
+function IdentitySource([string]$Path,[object]$Values,[object]$Unit2Values) {
+    $lines = [Collections.Generic.List[string]]::new()
+    $lines.Add('namespace RandleAI.R7Remediation')
+    $lines.Add('{')
+    $lines.Add('    internal static class R7BuildIdentity')
+    $lines.Add('    {')
+    foreach ($key in @($Values.Keys)) {
+        $value = $Values[$key]
+        if ($value -is [uint32] -or $value -is [int32] -or $value -is [int64]) { $lines.Add(('        internal const uint ' + $key + ' = ' + [uint32]$value + ';')) }
+        else { $lines.Add(('        internal const string ' + $key + ' = "' + (EscapeCs ([string]$value)) + '";')) }
+    }
+    $lines.Add('    }')
+    $lines.Add('    internal static class R7Unit2BuildIdentity')
+    $lines.Add('    {')
+    foreach ($key in @($Unit2Values.Keys)) {
+        $value = $Unit2Values[$key]
+        if ($value -is [uint32] -or $value -is [int32] -or $value -is [int64]) { $lines.Add(('        internal const uint ' + $key + ' = ' + [uint32]$value + ';')) }
+        else { $lines.Add(('        internal const string ' + $key + ' = "' + (EscapeCs ([string]$value)) + '";')) }
+    }
+    $lines.Add('    }')
+    $lines.Add('}')
+    [IO.File]::WriteAllText($Path,($lines -join "`r`n") + "`r`n",[Text.UTF8Encoding]::new($false))
+}
+
+if ((Hash $PSCommandPath) -cne $ExpectedScriptSha256) { throw 'Build script identity mismatch' }
+if (-not $output.StartsWith($tempRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'Build output must remain below the disposable Temp root' }
+if ($output.StartsWith($repositoryRoot.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Build output must remain outside the source checkout' }
+NewDir $output
+foreach ($directory in @('Generated','Install','Measurements','NormalizedIL','PassA','PassB','TargetStaging','Tools')) { New-Item -ItemType Directory -Path (Join-Path $output $directory) | Out-Null }
+
+$registry = ReadJson (Join-Path $packageRoot 'external_utility_registry.json')
+function Utility([string]$Role) {
+    $rows = @($registry.utilities | Where-Object { [string]$_.role -ceq $Role })
+    if ($rows.Count -ne 1) { throw "Utility role invalid: $Role" }
+    $path = [IO.Path]::GetFullPath([string]$rows[0].path)
+    if ((Hash $path) -cne [string]$rows[0].measurement.sha256 -or (Get-Item -LiteralPath $path).Length -ne [long]$rows[0].measurement.size) { throw "Utility drift: $Role" }
+    return $rows[0]
+}
+$gitRow = Utility 'GIT_BUILD_AND_VERIFICATION'
+$cscRow = Utility 'CSC_COMPILER'
+$ildasmRow = Utility 'ILDASM_TOOL'
+$powershellRow = Utility 'POWERSHELL_ORCHESTRATOR'
+$git = [string]$gitRow.path
+$csc = [string]$cscRow.path
+$ildasm = [string]$ildasmRow.path
+$referenceRoles = @('COMPILER_REFERENCE_mscorlib.dll','COMPILER_REFERENCE_System.dll','COMPILER_REFERENCE_System.Core.dll','COMPILER_REFERENCE_System.Security.dll','COMPILER_REFERENCE_System.ServiceProcess.dll')
+$referenceRows = @($referenceRoles | ForEach-Object { Utility $_ })
+$refs = @($referenceRows | ForEach-Object { [string]$_.path })
+
+$safeRepository = $repositoryRoot.Replace('\','/')
+$head = (& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $head -cne $SourceCommit) { throw 'Source HEAD mismatch' }
+$status = @(& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot status --porcelain=v1 --untracked-files=all)
+if (-not $CandidateWorktree -and $status.Count -ne 0) { throw 'Exact source checkout is not clean' }
+$sourceIdentityClass = if ($CandidateWorktree) { 'CANDIDATE_CONTENT_DERIVATION_V1' } else { 'EXACT_COMMIT_AND_TREE' }
+$tree = if ($CandidateWorktree) { '' } else { (& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot show -s --format=%T $SourceCommit).Trim() }
+
+$sourcePaths = @(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Filter '*.cs' -File | Sort-Object Name | ForEach-Object FullName)
+$contractPath = Join-Path $packageRoot 'BuildInputs\R7BuildIdentityContract.cs'
+if ($sourcePaths.Count -eq 0 -or -not (Test-Path -LiteralPath $contractPath -PathType Leaf)) { throw 'Compiler source inventory is incomplete' }
+$committedCompilerPaths = @($sourcePaths + $contractPath)
+$sourceRows = [Collections.Generic.List[object]]::new()
+$sourceClosureParts = [Collections.Generic.List[string]]::new()
+foreach ($path in $committedCompilerPaths) {
+    $relative = (Relative $repositoryRoot $path)
+    $blob = GitBlob $path
+    $mode = '100644'
+    if (-not $CandidateWorktree) {
+        $treeRow = @(& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot ls-tree $SourceCommit -- $relative)
+        if ($treeRow.Count -ne 1 -or [string]$treeRow[0] -notmatch '^(100644|100755) blob ([0-9a-f]{40})\t') { throw "Committed compiler input absent: $relative" }
+        $mode = $Matches[1]
+        if ($Matches[2] -cne $blob) { throw "Committed compiler input differs from Git: $relative" }
+    }
+    $row = [ordered]@{git_blob_identity=$blob;mode=$mode;path=$relative;raw_sha256=(Hash $path);size=(Get-Item -LiteralPath $path).Length}
+    $sourceRows.Add($row)
+    $sourceClosureParts.Add(($relative + '|' + $blob + '|' + $row.raw_sha256 + '|' + $row.size + '|' + $mode))
+}
+if ($CandidateWorktree) { $tree = (Derive 'R7_UNIT2_CANDIDATE_TREE_V1' @($sourceClosureParts.ToArray())).Substring(0,40) }
+
+$bootstrapPath = [IO.Path]::GetFullPath($BootstrapRecord)
+$certificatePath = [IO.Path]::GetFullPath($UpgradePublicCertificate)
+$preflightPath = [IO.Path]::GetFullPath($PreflightHostState)
+$bootstrap = ReadJson $bootstrapPath
+$certSha = Hash $certificatePath
+if ([string]$bootstrap.source_commit -cne $bootstrapCommit -or [string]$bootstrap.source_tree -cne $bootstrapTree -or [string]$bootstrap.provisioning_script_sha256 -cne $bootstrapProvisioningScriptSha256 -or [string]$bootstrap.service_sid -cne $upgradeSid -or [string]$bootstrap.public_certificate_sha256 -cne $certSha -or [string]$bootstrap.public_export_sha256 -cne $certSha -or $bootstrap.private_key_exported -ne $false -or $bootstrap.recovered_acl_mutation_in_current_attempt -ne $false) { throw 'Preserved Unit 2A bootstrap binding invalid' }
+$preflight = ReadJson $preflightPath
+if ([string]$preflight.artifact_type -cne 'R7_REMEDIATION_HOST_STATE_CAPTURE' -or [string]$preflight.phase -cne 'PRECHANGE' -or [int64]$preflight.ledger_entry_file_count -ne 678 -or [string]$preflight.checkpoint.raw_sha256 -cne $terminalCheckpointSha256) { throw 'Preflight host-state binding invalid' }
+$terminalRows = @($preflight.terminal_authority_services | Where-Object { [string]$_.name -ceq 'RandleTerminalAuthority' })
+if ($terminalRows.Count -ne 1 -or [string]$terminalRows[0].state -cne 'Running' -or [string]$terminalRows[0].binary_sha256 -cne $terminalBinarySha256) { throw 'Preflight terminal authority binding invalid' }
+
+$targetSummaryPath = Join-Path $target 'build_summary.json'
+$targetOrchestratorReceiptPath = Join-Path $target 'Generated\build_orchestrator_receipt.json'
+$targetReceiptPath = Join-Path $target 'Generated\build_receipt.json'
+$targetTemplatePath = Join-Path $target 'Generated\transition_request_template.json'
+$dependencyPath = Join-Path $target 'Generated\dependency_manifest.json'
+$targetPolicyPath = Join-Path $target 'Generated\terminal_authority_v4_policy.json'
+$targetManifestPath = Join-Path $target 'Generated\authority_package_manifest.json'
+$terminalKeyMetadataPath = Join-Path $target 'Generated\terminal_key_file_metadata.json'
+$upgradeKeyMetadataPath = Join-Path $target 'Generated\upgrade_key_file_metadata.json'
+foreach ($required in @($targetSummaryPath,$targetOrchestratorReceiptPath,$targetReceiptPath,$targetTemplatePath,$dependencyPath,$targetPolicyPath,$targetManifestPath,$terminalKeyMetadataPath,$upgradeKeyMetadataPath)) { if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Target build input missing: $required" } }
+$targetSummary = ReadJson $targetSummaryPath
+if ([string]$targetSummary.source_commit -cne $unit1Commit -or [string]$targetSummary.source_tree -cne $unit1Tree) { throw 'Target source identity mismatch' }
+$targetOrchestratorReceiptSha = Hash $targetOrchestratorReceiptPath
+$targetReceiptSha = Hash $targetReceiptPath
+$dependencySha = Hash $dependencyPath
+$targetPolicySha = Hash $targetPolicyPath
+$targetManifestSha = Hash $targetManifestPath
+$targetTemplate = ReadJson $targetTemplatePath
+if ([string]$targetTemplate.build_receipt_sha256 -cne $targetReceiptSha -or [string]$targetTemplate.dependency_manifest_sha256 -cne $dependencySha) { throw 'Target template binding invalid' }
+$terminalKey = ReadJson $terminalKeyMetadataPath
+$upgradeKey = ReadJson $upgradeKeyMetadataPath
+if ([string]$terminalKey.owner_sid -cne 'S-1-5-18' -or [string]$upgradeKey.owner_sid -cne 'S-1-5-18' -or [long]$terminalKey.hard_link_count -ne 1 -or [long]$upgradeKey.hard_link_count -ne 1 -or [string]$upgradeKey.canonical_path -cne ('C:\ProgramData\Microsoft\Crypto\Keys\' + [string]$bootstrap.key_unique_name)) { throw 'Committed key-metadata input invalid' }
+
+$requirementPath = Join-Path $packageRoot 'governed_requirement_registry.json'
+$casePath = Join-Path $packageRoot 'immutable_case_definitions.json'
+$expectationPath = Join-Path $packageRoot 'immutable_expectations.json'
+$coveragePath = Join-Path $packageRoot 'exact_byte_coverage_proof.json'
+$authorityManifestPath = Join-Path $packageRoot 'AuthoritySources\authority_source_manifest.json'
+$historyPath = Join-Path $packageRoot 'historical_classification_registry.json'
+$principalPath = Join-Path $packageRoot 'service_principal_registry.json'
+$scriptRegistryPath = Join-Path $packageRoot 'governed_script_registry.json'
+$utilityRegistryPath = Join-Path $packageRoot 'external_utility_registry.json'
+$scopePath = Join-Path $packageRoot 'unit2_authorization_scope.json'
+$negativeCasesPath = Join-Path $packageRoot 'unit2_build_closure_negative_cases.json'
+$hardenerPath = Join-Path $packageRoot 'complete_unit2_upgrade_authority.ps1'
+$scriptSha = Hash $PSCommandPath
+$scriptBlob = GitBlob $PSCommandPath
+
+$configurationPaths = [ordered]@{
+    AUTHORITY_SOURCE_MANIFEST=$authorityManifestPath; BOOTSTRAP_RECORD=$bootstrapPath; CASE_DEFINITIONS=$casePath; COVERAGE_PROOF=$coveragePath;
+    DEPENDENCY_MANIFEST=$dependencyPath; EXPECTATIONS=$expectationPath; HISTORICAL_CLASSIFICATION_REGISTRY=$historyPath; NEGATIVE_CASE_REGISTRY=$negativeCasesPath;
+    PREFLIGHT_HOST_STATE=$preflightPath; PRINCIPAL_REGISTRY=$principalPath; REQUIREMENT_REGISTRY=$requirementPath; SCRIPT_REGISTRY=$scriptRegistryPath;
+    TARGET_AUTHORITY_PACKAGE_MANIFEST=$targetManifestPath; TARGET_BUILD_ORCHESTRATOR_RECEIPT=$targetOrchestratorReceiptPath; TARGET_BUILD_RECEIPT=$targetReceiptPath;
+    TARGET_BUILD_SUMMARY=$targetSummaryPath; TARGET_POLICY=$targetPolicyPath; TARGET_TRANSITION_TEMPLATE=$targetTemplatePath; TERMINAL_KEY_METADATA=$terminalKeyMetadataPath;
+    UNIT2_AUTHORIZATION_SCOPE=$scopePath; UNIT2_COMPLETION_SCRIPT=$hardenerPath; UPGRADE_KEY_METADATA=$upgradeKeyMetadataPath; UPGRADE_PUBLIC_CERTIFICATE=$certificatePath;
+    UTILITY_REGISTRY=$utilityRegistryPath
+}
+$configurationRows = [Collections.Generic.List[object]]::new()
+$configurationClosureParts = [Collections.Generic.List[string]]::new()
+foreach ($entry in $configurationPaths.GetEnumerator() | Sort-Object Key) {
+    if (-not (Test-Path -LiteralPath $entry.Value -PathType Leaf)) { throw "Configuration input absent: $($entry.Key)" }
+    $row = [ordered]@{path=[IO.Path]::GetFullPath([string]$entry.Value);raw_sha256=(Hash ([string]$entry.Value));role=[string]$entry.Key;size=(Get-Item -LiteralPath ([string]$entry.Value)).Length}
+    $configurationRows.Add($row)
+    $configurationClosureParts.Add(($row.role + '|' + $row.raw_sha256 + '|' + $row.size))
+}
+
+$components = [Collections.Generic.List[object]]::new()
+$componentPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($component in @($targetTemplate.components)) {
+    $components.Add([ordered]@{final_path=[string]$component.final_path;role=[string]$component.role;sha256=[string]$component.sha256;staging_relative_path=[string]$component.staging_relative_path})
+    [void]$componentPaths.Add([string]$component.staging_relative_path)
+}
+$targetManifest = ReadJson $targetManifestPath
+$extraIndex = 0
+foreach ($file in @($targetManifest.files | Sort-Object staging_relative_path)) {
+    if ($componentPaths.Contains([string]$file.staging_relative_path)) { continue }
+    $components.Add([ordered]@{final_path=[string]$file.final_path;role=('PACKAGE_FILE_' + $extraIndex.ToString('D4') + '_' + ([string]$file.raw_sha256).Substring(0,16));sha256=[string]$file.raw_sha256;staging_relative_path=[string]$file.staging_relative_path})
+    [void]$componentPaths.Add([string]$file.staging_relative_path)
+    $extraIndex++
+}
+$targetPackagedExecutables = [Collections.Generic.List[object]]::new()
+foreach ($executable in Get-ChildItem -LiteralPath (Join-Path $target 'Staging') -Filter '*.exe' -File -Recurse | Sort-Object FullName) {
+    $identity = ExtractPackagedIdentity $executable.FullName
+    if ($identity.Count -eq 0) { throw "Target packaged executable omits governed build identity: $($executable.FullName)" }
+    foreach ($field in $identity.GetEnumerator()) {
+        if (IsForbiddenIdentityValue $field.Value) { throw "Target packaged executable contains forbidden identity: $($executable.FullName)/$($field.Key)" }
+    }
+    $relativeExecutable = 'Staging/' + $executable.FullName.Substring((Join-Path $target 'Staging').Length + 1).Replace('\','/')
+    $targetPackagedExecutables.Add([ordered]@{embedded_identity=$identity;path=$relativeExecutable;raw_sha256=(Hash $executable.FullName);size=$executable.Length})
+}
+$componentClosure = @($components | Sort-Object role | ForEach-Object { ([string]$_.role + '|' + [string]$_.staging_relative_path + '|' + [string]$_.sha256 + '|' + [string]$_.final_path) })
+$targetComponentSetSha = Derive 'R7_UNIT2_TARGET_COMPONENT_SET_V1' $componentClosure
+$fixedRoots = @('C:\Program Files\RandleAI\TerminalUpgradeAuthority','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Config','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Ledger','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Trust','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Evidence','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Responses','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Objects','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Authorizations','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Recovery','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Staging')
+$fixedRootsSha = Derive 'R7_UNIT2_FIXED_ROOTS_V1' $fixedRoots
+$toolchainClosure = @(
+    ('CSC|' + (Hash $csc) + '|' + (Get-Item -LiteralPath $csc).Length),
+    ('ILDASM|' + (Hash $ildasm) + '|' + (Get-Item -LiteralPath $ildasm).Length),
+    ('GIT|' + (Hash $git) + '|' + (Get-Item -LiteralPath $git).Length),
+    ('POWERSHELL|' + (Hash ([string]$powershellRow.path)) + '|' + (Get-Item -LiteralPath ([string]$powershellRow.path)).Length)
+)
+foreach ($reference in $refs) { $toolchainClosure += ('REFERENCE|' + (Hash $reference) + '|' + (Get-Item -LiteralPath $reference).Length) }
+$roleDefinitions = @(
+    [ordered]@{role='BUILD_BOOTSTRAP_ARTIFACT_TOOL';name='R7ArtifactTool.build-bootstrap.exe';main='RandleAI.R7Remediation.R7ArtifactToolProgram';define='UNIT2_BUILD_BOOTSTRAP_ARTIFACT_TOOL';identity='bootstrap';intended='DISPOSABLE_BUILD_ONLY'},
+    [ordered]@{role='BUILD_BOOTSTRAP_PROTECTED_METADATA_TOOL';name='R7ProtectedMetadataTool.build-bootstrap.exe';main='RandleAI.R7Remediation.R7ArtifactToolProgram';define='UNIT2_BUILD_BOOTSTRAP_PROTECTED_METADATA_TOOL';identity='bootstrap';intended='DISPOSABLE_BUILD_ONLY'},
+    [ordered]@{role='UPGRADE_CLIENT';name='RandleTerminalUpgradeClient.exe';main='RandleAI.R7Remediation.R7Unit2UpgradeClientProgram';define='UNIT2_CLIENT';identity='client';intended='C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeClient.exe'},
+    [ordered]@{role='UPGRADE_PUBLIC_VERIFIER';name='RandleTerminalUpgradePublicVerifier.exe';main='RandleAI.R7Remediation.R7Unit2UpgradePublicVerifierProgram';define='UNIT2_PUBLIC_VERIFIER';identity='client';intended='C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradePublicVerifier.exe'},
+    [ordered]@{role='UPGRADE_PROTOCOL_PROBE';name='RandleTerminalUpgradeProtocolProbe.exe';main='RandleAI.R7Remediation.R7Unit2UpgradeProbeProgram';define='UNIT2_PROTOCOL_PROBE';identity='client';intended='C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeProtocolProbe.exe'},
+    [ordered]@{role='UPGRADE_AUTHORITY';name='RandleTerminalUpgradeAuthority.exe';main='RandleAI.R7Remediation.R7Unit2UpgradeServiceProgram';define='UNIT2_SERVICE';identity='service';intended='C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeAuthority.exe'},
+    [ordered]@{role='PACKAGED_ARTIFACT_TOOL';name='R7ArtifactTool.exe';main='RandleAI.R7Remediation.R7ArtifactToolProgram';define='UNIT2_PACKAGED_ARTIFACT_TOOL';identity='tools';intended='C:\ProgramData\RandleAI\TerminalUpgradeAuthority\BuildTools\R7ArtifactTool.exe'},
+    [ordered]@{role='PACKAGED_PROTECTED_METADATA_TOOL';name='R7ProtectedMetadataTool.exe';main='RandleAI.R7Remediation.R7ArtifactToolProgram';define='UNIT2_PACKAGED_PROTECTED_METADATA_TOOL';identity='tools';intended='C:\ProgramData\RandleAI\TerminalUpgradeAuthority\BuildTools\R7ProtectedMetadataTool.exe'}
+)
+$roleClosure = @($roleDefinitions | ForEach-Object { ([string]$_.role + '|' + [string]$_.main + '|' + [string]$_.define + '|' + [string]$_.name + '|' + [string]$_.intended) })
+$buildInputClosureSha = Derive 'R7_UNIT2_BUILD_INPUT_CLOSURE_V2' @($sourceClosureParts.ToArray() + $configurationClosureParts.ToArray() + $toolchainClosure + $compilerOptions + $roleClosure + $componentClosure)
+$sourceReceiptDerivationSha = Derive 'R7_UNIT2_SOURCE_TO_BINARY_RECEIPT_DERIVATION_V1' @($buildInputClosureSha,$SourceCommit,$tree)
+$determinismDerivationSha = Derive 'R7_UNIT2_DETERMINISM_RECEIPT_DERIVATION_V1' @($buildInputClosureSha,$SourceCommit,$tree)
+$clientPolicyDerivationSha = Derive 'R7_UNIT2_CLIENT_POLICY_BINDING_DERIVATION_V1' @($buildInputClosureSha,$certSha,$dependencySha,$targetReceiptSha)
+$hostIdentitySha = Derive 'R7_UNIT2_HOST_IDENTITY_V1' @($terminalLedgerId,$terminalSid,[string]$upgradeKey.volume_identity,$terminalTrustSha256,$terminalPolicySha256,$terminalBinarySha256,$terminalLedgerRoot,$terminalCheckpointSha256)
+
+$identityCommon = [ordered]@{
+    IdentitySchemaVersion='2.0.0';IdentityBindingKind='EXACT_CONTENT_AND_NONCIRCULAR_DERIVATION_V1';BuildInputClosureSha256=$buildInputClosureSha;
+    SourceToBinaryReceiptDerivationSha256=$sourceReceiptDerivationSha;DeterminismReceiptDerivationSha256=$determinismDerivationSha;
+    UpgradePublicCertificateSha256=$certSha;UpgradeCertificateSha256=$certSha;UpgradePublicKeyIdentity=$certSha;DependencyManifestSha256=$dependencySha;
+    UpgradeBinaryPath='C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeAuthority.exe';SourceCommit=$SourceCommit;SourceTree=$tree;
+    RequirementRegistrySha256=(Hash $requirementPath);CaseDefinitionsSha256=(Hash $casePath);ExpectationsSha256=(Hash $expectationPath);CoverageProofSha256=(Hash $coveragePath);
+    AuthoritySourceManifestSha256=(Hash $authorityManifestPath);HistoricalClassificationRegistrySha256=(Hash $historyPath);ScriptRegistrySha256=(Hash $scriptRegistryPath);UtilityRegistrySha256=(Hash $utilityRegistryPath);
+    FixedRootsSha256=$fixedRootsSha;TargetBuildReceiptSha256=$targetReceiptSha;TargetOrchestratorReceiptSha256=$targetOrchestratorReceiptSha;TargetComponentSetSha256=$targetComponentSetSha;
+    HostIdentitySha256=$hostIdentitySha;InterfaceIdentity='1.0.0';ProtocolIdentity='4.0';PipeIdentity='RandleAI.TerminalUpgradeAuthority.v1';TerminalServiceSid=$terminalSid;UpgradeServiceSid=$upgradeSid;
+    TerminalPublicTrustSha256=$terminalTrustSha256;TerminalPolicySha256=$terminalPolicySha256;TerminalBinarySha256=$terminalBinarySha256;TerminalLedgerIdentity=$terminalLedgerId;TerminalLedgerRoot=$terminalLedgerRoot;TerminalCheckpointSha256=$terminalCheckpointSha256;
+    ExecutionBinaryPath='C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalExecution.exe';ObservationBinaryPath='C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalObservation.exe';ComparatorBinaryPath='C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalComparator.exe';
+    TerminalKeyFilePath=[string]$terminalKey.canonical_path;TerminalKeyFileIdentity=[string]$terminalKey.file_identity;TerminalKeyFileOwnerSid=[string]$terminalKey.owner_sid;TerminalKeyFileSecurityDescriptorSha256=[string]$terminalKey.security_descriptor_sha256;TerminalKeyFileVolumeIdentity=[string]$terminalKey.volume_identity;TerminalKeyFileLinkCount=[uint32]$terminalKey.hard_link_count;
+    UpgradeKeyFilePath=[string]$upgradeKey.canonical_path;UpgradeKeyFileIdentity=[string]$upgradeKey.file_identity;UpgradeKeyFileOwnerSid=[string]$upgradeKey.owner_sid;UpgradeKeyFileSecurityDescriptorSha256=[string]$upgradeKey.security_descriptor_sha256;UpgradeKeyFileVolumeIdentity=[string]$upgradeKey.volume_identity;UpgradeKeyFileLinkCount=[uint32]$upgradeKey.hard_link_count;
+    UpgradeKeyCanonicalAclSha256=[string]$bootstrap.key_file_acl_sha256
+}
+function ValuesWithPolicy([string]$PolicySha,[string]$BindingKind) {
+    $values = [ordered]@{}
+    foreach ($key in $identityCommon.Keys) { $values[$key] = $identityCommon[$key] }
+    $values['UpgradePolicySha256'] = $PolicySha
+    $values['UpgradePolicyBindingKind'] = $BindingKind
+    return $values
+}
+function Unit2Values([string]$PolicySha,[string]$BindingKind) {
+    return [ordered]@{
+        PublicCertificateSha256=$certSha;PolicySha256=$PolicySha;DependencyManifestSha256=$dependencySha;SourceCommit=$SourceCommit;SourceTree=$tree;
+        KeyFilePath=[string]$upgradeKey.canonical_path;KeyFileOwnerSid=[string]$upgradeKey.owner_sid;KeyFileSecurityDescriptorSha256=[string]$upgradeKey.security_descriptor_sha256;
+        KeyFileVolumeIdentity=[string]$upgradeKey.volume_identity;KeyFileIdentity=[string]$upgradeKey.file_identity;KeyFileLinkCount=[uint32]$upgradeKey.hard_link_count;
+        BuildInputClosureSha256=$buildInputClosureSha;PolicyBindingKind=$BindingKind
+    }
+}
+$generatorInputs = @($configurationRows | ForEach-Object { [ordered]@{identity=[string]$_.raw_sha256;role=[string]$_.role} })
+$generatorInputs += @($sourceRows | ForEach-Object { [ordered]@{identity=[string]$_.raw_sha256;role=('COMPILER_SOURCE:' + [string]$_.path)} })
+$generatorInputs += @([ordered]@{identity=$buildInputClosureSha;role='BUILD_INPUT_CLOSURE'},[ordered]@{identity=$scriptSha;role='GENERATOR_SCRIPT'})
+
+$bootstrapIdentityPath = Join-Path $output 'Generated\R7Unit2BuildBootstrap.g.cs'
+$bootstrapValues = ValuesWithPolicy $clientPolicyDerivationSha 'NONCIRCULAR_INPUT_CLOSURE_DERIVATION_V1'
+IdentitySource $bootstrapIdentityPath $bootstrapValues (Unit2Values $clientPolicyDerivationSha 'NONCIRCULAR_INPUT_CLOSURE_DERIVATION_V1')
+$bootstrapGeneratedRow = GeneratedRow $bootstrapIdentityPath 'R7_UNIT2_BUILD_BOOTSTRAP_IDENTITY_V2' $scriptSha $scriptBlob $generatorInputs
+
+$roleResults = [Collections.Generic.List[object]]::new()
+$roleState = @{}
+function BuildRole([object]$Role,[string]$IdentityPath,[object]$ExpectedIdentity,[object]$ExpectedUnit2,[object]$GeneratedSourceRow) {
+    $passA = Join-Path $output ('PassA\' + [string]$Role.name)
+    $passB = Join-Path $output ('PassB\' + [string]$Role.name)
+    $argumentsA = CompilerArguments $Role $passA $refs $committedCompilerPaths $IdentityPath
+    $argumentsB = CompilerArguments $Role $passB $refs $committedCompilerPaths $IdentityPath
+    Compile $csc $argumentsA $passA ([string]$Role.role)
+    [Threading.Thread]::Sleep(1100)
+    Compile $csc $argumentsB $passB ([string]$Role.role)
+    $ilAPath = Join-Path $output ('NormalizedIL\' + [string]$Role.name + '.pass-a.il')
+    $ilBPath = Join-Path $output ('NormalizedIL\' + [string]$Role.name + '.pass-b.il')
+    $ilA = NormalizeIl $passA $ilAPath $ildasm
+    $ilB = NormalizeIl $passB $ilBPath $ildasm
+    if ($ilA -cne $ilB) { throw "Normalized IL mismatch: $($Role.role)" }
+    $embedded = ExtractIdentity $passA
+    AssertIdentity $ExpectedIdentity $ExpectedUnit2 $embedded ([string]$Role.role)
+    $inputRows = @($sourceRows | ForEach-Object { [ordered]@{generation_rule=$null;generator=$null;git_blob_identity=[string]$_.git_blob_identity;mode=[string]$_.mode;path=[string]$_.path;raw_sha256=[string]$_.raw_sha256;size=[long]$_.size} })
+    $inputRows += [ordered]@{generation_rule=[string]$GeneratedSourceRow.generation_rule;generator=$GeneratedSourceRow.generator;git_blob_identity=$null;mode=$null;path=[string]$GeneratedSourceRow.path;raw_sha256=[string]$GeneratedSourceRow.raw_sha256;size=[long]$GeneratedSourceRow.size}
+    $result = [ordered]@{
+        architecture='x64';compiler_arguments=[ordered]@{pass_a=@($argumentsA);pass_b=@($argumentsB)};compiler_inputs=$inputRows;define=[string]$Role.define;
+        embedded_identity=$embedded;file_name=[string]$Role.name;generated_source_sha256=(Hash $IdentityPath);intended_future_installation_path=[string]$Role.intended;
+        main=[string]$Role.main;normalized_il_equal=$true;normalized_il_sha256=$ilA;pass_a_path=$passA;pass_a_sha256=(Hash $passA);pass_b_path=$passB;pass_b_sha256=(Hash $passB);
+        platform='x64';preprocessor_symbols=@([string]$Role.define);resource_files=@();response_files=@();role=[string]$Role.role;size=(Get-Item -LiteralPath $passA).Length;
+        standard_library_behavior='NOSTDLIB_EXPLICIT_REFERENCES';target_type='exe'
+    }
+    $roleResults.Add($result)
+    $roleState[[string]$Role.role] = $result
+}
+
+$bootstrapUnit2Values = Unit2Values $clientPolicyDerivationSha 'NONCIRCULAR_INPUT_CLOSURE_DERIVATION_V1'
+foreach ($role in @($roleDefinitions | Where-Object { [string]$_.identity -ceq 'bootstrap' })) { BuildRole $role $bootstrapIdentityPath $bootstrapValues $bootstrapUnit2Values $bootstrapGeneratedRow }
+$artifactBootstrap = [string]$roleState.BUILD_BOOTSTRAP_ARTIFACT_TOOL.pass_a_path
+
+$hostCore = [ordered]@{terminal_ledger_id=$terminalLedgerId;terminal_public_trust_sha256=$terminalTrustSha256;terminal_service_sid=$terminalSid;volume_identity=[string]$upgradeKey.volume_identity}
+$hostCorePath = Join-Path $output 'Generated\host_identity_input.json'
+Canonical $hostCore $hostCorePath $artifactBootstrap
+$hostIdentity = Hash $hostCorePath
+$targetBindings = [ordered]@{authority_package_manifest_sha256=$targetManifestSha;build_orchestrator_receipt_sha256=$targetOrchestratorReceiptSha;build_receipt_sha256=$targetReceiptSha;case_definitions_sha256=(Hash $casePath);dependency_manifest_sha256=$dependencySha;expectations_sha256=(Hash $expectationPath);expected_terminal_ledger_continuity='PRESERVE_SEQUENCE_678_ROOT_AND_CHECKPOINT_UNTIL_SEPARATE_INSTALL_UNIT';expected_terminal_public_trust_sha256=$terminalTrustSha256;interface_version='4.0.0-REMEDIATION';principal_registry_sha256=(Hash $principalPath);requirement_registry_sha256=(Hash $requirementPath);script_registry_sha256=(Hash $scriptRegistryPath);terminal_policy_sha256=$targetPolicySha;utility_registry_sha256=(Hash $utilityRegistryPath)}
+$authorityBindings = [ordered]@{bootstrap_source_commit=$bootstrapCommit;bootstrap_source_tree=$bootstrapTree;fourth_failed_bootstrap_attempt_sha256=[string]$bootstrap.fourth_failed_attempt_sha256;independent_rejection_commit='9d813a4bad29ec04f022f54ffcae73a5d542eb44';preflight_baseline_sha256=(Hash $preflightPath);prior_failed_bootstrap_attempt_sha256=[string]$bootstrap.prior_failed_attempt_sha256;second_failed_bootstrap_attempt_sha256=[string]$bootstrap.second_failed_attempt_sha256;third_failed_bootstrap_attempt_sha256=[string]$bootstrap.third_failed_attempt_sha256;prohibited_source_commit='f0cfbce97e913a133530dd66a70326b1e03a0fb6';prohibited_source_dependency_count=0;provisioned_infrastructure_commit='bb04ac54fb328516d0c785f4e6551e6a20d73759';provisioning_commit=$SourceCommit;r6_commit='87d066eb16d7fe0b6a1677ea7739c5c2ead4ad94';r7_record_commits=@('06c6805ed52a0d539a73088c097c60dec335462a','8ec5697b3c6fd9d93b972113b7e79d033b4cb1f6');unit1_commit=$unit1Commit;unit2_authorization_scope_sha256=(Hash $scopePath)}
+$rollback = [ordered]@{automatic_rollback=$false;existing_terminal_ledger_rewrite='PROHIBITED';governed_rollback_authorization_required=$true;rejected_v3_reinstall='PROHIBITED';v1_rollback='PROHIBITED'}
+$threat = [ordered]@{excludes=@('kernel','offline_administrator','physical_attack','TPM_or_HSM_claim');protects=@('terminal_self_authorization','caller_selected_components','component_substitution','cross_host_replay','policy_downgrade','interface_downgrade','authorization_replay')}
+$plan = [ordered]@{components=$components.ToArray();current_checkpoint_sha256=$terminalCheckpointSha256;current_ledger_root=$terminalLedgerRoot;current_ledger_sequence=678;host_identity=$hostIdentity;target_bindings=$targetBindings;transition_nonce=$transitionNonce}
+$planPath = Join-Path $output 'Generated\transition_plan.json'
+Canonical $plan $planPath $artifactBootstrap
+$planSha = Hash $planPath
+$ledgerId = Derive 'R7_UNIT2_UPGRADE_LEDGER_V1' @($certSha,$terminalLedgerId,$SourceCommit)
+
+$clientIdentityPath = Join-Path $output 'Generated\R7Unit2ClientShared.g.cs'
+$clientValues = ValuesWithPolicy $clientPolicyDerivationSha 'NONCIRCULAR_INPUT_CLOSURE_DERIVATION_V1'
+IdentitySource $clientIdentityPath $clientValues (Unit2Values $clientPolicyDerivationSha 'NONCIRCULAR_INPUT_CLOSURE_DERIVATION_V1')
+$clientGeneratedRow = GeneratedRow $clientIdentityPath 'R7_UNIT2_CLIENT_SHARED_IDENTITY_V2' $scriptSha $scriptBlob $generatorInputs
+$clientUnit2Values = Unit2Values $clientPolicyDerivationSha 'NONCIRCULAR_INPUT_CLOSURE_DERIVATION_V1'
+foreach ($role in @($roleDefinitions | Where-Object { [string]$_.identity -ceq 'client' })) { BuildRole $role $clientIdentityPath $clientValues $clientUnit2Values $clientGeneratedRow }
+
+$policy = [ordered]@{
+    artifact_type='R7_UNIT2_SEPARATE_UPGRADE_AUTHORITY_POLICY';authority_bindings=$authorityBindings;authorization_expiration=$expiration;authorization_scope_sha256=(Hash $scopePath);bootstrap_authority='EXPLICIT_R7_REMEDIATION_UNIT_2_AUTHORIZATION';dependency_manifest_sha256=$dependencySha;
+    fixed_roots=$fixedRoots;host_binding=[ordered]@{checkpoint_sha256=$terminalCheckpointSha256;host_identity=$hostIdentity;terminal_interface='3.0.0-DRAFT';terminal_ledger_id=$terminalLedgerId;terminal_ledger_root=$terminalLedgerRoot;terminal_ledger_sequence=678;terminal_policy_sha256=$terminalPolicySha256;terminal_public_trust_sha256=$terminalTrustSha256;terminal_service_binary_sha256=$terminalBinarySha256;terminal_service_name='RandleTerminalAuthority';terminal_service_sid=$terminalSid;volume_identity=[string]$upgradeKey.volume_identity};
+    installer_script_sha256=[string]$targetTemplate.installer_identity.script_sha256;interface_version='1.0.0';key=[ordered]@{algorithm='RSA-3072';export_policy='NONEXPORTABLE';key_unique_name=[string]$bootstrap.key_unique_name;provider='Microsoft Software Key Storage Provider';scope='LocalMachine';signature_algorithm='RSA-PSS-SHA256'};ledger_id=$ledgerId;minimum_terminal_version='4.0.0-REMEDIATION';operation_allowlist=@('AUTHORIZE_TERMINAL_TRANSITION','GET_AUTHORIZATION','GET_HEALTH','GET_PUBLIC_IDENTITY');preflight_baseline_sha256=(Hash $preflightPath);protocol_version='4.0';provisioning_nonce=$provisioningNonce;provisioning_script_sha256=(Hash $hardenerPath);public_certificate_sha256=$certSha;required_components=$components.ToArray();revoked_component_sha256=@('632afaeeaf15c26ac057b34692ac672e03bc02f60fbb35177c378736b5e316ba',$terminalBinarySha256,$terminalPolicySha256);rollback_constraints=$rollback;schema_version='2.0.0';service=[ordered]@{account='NT SERVICE\RandleTerminalUpgradeAuthority';denied_logon_rights=@('SeDenyInteractiveLogonRight','SeDenyRemoteInteractiveLogonRight');name='RandleTerminalUpgradeAuthority';pipe='RandleAI.TerminalUpgradeAuthority.v1';required_privileges=@('SeChangeNotifyPrivilege');sid=$upgradeSid;sid_type='RESTRICTED'};source_bindings=[ordered]@{provisioning_commit=$SourceCommit;provisioning_tree=$tree;target_commit=$unit1Commit;target_tree=$unit1Tree;unit1_commit=$unit1Commit;unit1_tree=$unit1Tree};target_bindings=$targetBindings;threat_model=$threat;transition_nonce=$transitionNonce;transition_plan_sha256=$planSha;
+    upgrade_client_sha256=[string]$roleState.UPGRADE_CLIENT.pass_a_sha256;upgrade_probe_sha256=[string]$roleState.UPGRADE_PROTOCOL_PROBE.pass_a_sha256;upgrade_public_verifier_sha256=[string]$roleState.UPGRADE_PUBLIC_VERIFIER.pass_a_sha256;volume_identity=[string]$upgradeKey.volume_identity
+}
+$policyPath = Join-Path $output 'Generated\unit2_upgrade_policy.json'
+Canonical $policy $policyPath $artifactBootstrap
+$policySha = Hash $policyPath
+
+$serviceIdentityPath = Join-Path $output 'Generated\R7Unit2Service.g.cs'
+$serviceValues = ValuesWithPolicy $policySha 'EXACT_POLICY_SHA256'
+IdentitySource $serviceIdentityPath $serviceValues (Unit2Values $policySha 'EXACT_POLICY_SHA256')
+$serviceInputs = @($generatorInputs + [ordered]@{identity=$policySha;role='COMPLETED_UNIT2_POLICY'})
+$serviceGeneratedRow = GeneratedRow $serviceIdentityPath 'R7_UNIT2_SERVICE_IDENTITY_V2' $scriptSha $scriptBlob $serviceInputs
+$serviceUnit2Values = Unit2Values $policySha 'EXACT_POLICY_SHA256'
+foreach ($role in @($roleDefinitions | Where-Object { [string]$_.identity -ceq 'service' })) { BuildRole $role $serviceIdentityPath $serviceValues $serviceUnit2Values $serviceGeneratedRow }
+
+$toolsIdentityPath = Join-Path $output 'Generated\R7PackagedTools.g.cs'
+$toolValues = ValuesWithPolicy $policySha 'EXACT_POLICY_SHA256'
+IdentitySource $toolsIdentityPath $toolValues (Unit2Values $policySha 'EXACT_POLICY_SHA256')
+$toolsGeneratedRow = GeneratedRow $toolsIdentityPath 'R7_UNIT2_PACKAGED_TOOLS_IDENTITY_V2' $scriptSha $scriptBlob $serviceInputs
+$toolsUnit2Values = Unit2Values $policySha 'EXACT_POLICY_SHA256'
+foreach ($role in @($roleDefinitions | Where-Object { [string]$_.identity -ceq 'tools' })) { BuildRole $role $toolsIdentityPath $toolValues $toolsUnit2Values $toolsGeneratedRow }
+
+$artifactFinal = [string]$roleState.PACKAGED_ARTIFACT_TOOL.pass_a_path
+foreach ($result in $roleResults) {
+    $measurementAPath = Join-Path $output ('Measurements\' + [string]$result.role + '.pass-a.json')
+    $measurementBPath = Join-Path $output ('Measurements\' + [string]$result.role + '.pass-b.json')
+    & $artifactFinal measure ([string]$result.pass_a_path) $measurementAPath | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Pass-A measurement failed: $($result.role)" }
+    & $artifactFinal measure ([string]$result.pass_b_path) $measurementBPath | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Pass-B measurement failed: $($result.role)" }
+    $measurementA = ReadJson $measurementAPath
+    $measurementB = ReadJson $measurementBPath
+    $result['pass_a_file_identity'] = [string]$measurementA.file_identity
+    $result['pass_b_file_identity'] = [string]$measurementB.file_identity
+    $result['pass_a_measurement_sha256'] = Hash $measurementAPath
+    $result['pass_b_measurement_sha256'] = Hash $measurementBPath
+}
+
+$scriptRegistry = ReadJson $scriptRegistryPath
+$governedScripts = [Collections.Generic.List[object]]::new()
+foreach ($row in @($scriptRegistry.scripts | Sort-Object path)) {
+    $path = Join-Path $repositoryRoot ([string]$row.path).Replace('/','\')
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Hash $path) -cne [string]$row.raw_sha256 -or (GitBlob $path) -cne [string]$row.git_blob_identity -or (Get-Item -LiteralPath $path).Length -ne [long]$row.size) { throw "Governed script registry mismatch: $($row.path)" }
+    $governedScripts.Add([ordered]@{git_blob_identity=[string]$row.git_blob_identity;mode=[string]$row.mode;path=[string]$row.path;raw_sha256=[string]$row.raw_sha256;role=[string]$row.role;size=[long]$row.size})
+}
+$generatedSources = @($bootstrapGeneratedRow,$clientGeneratedRow,$serviceGeneratedRow,$toolsGeneratedRow)
+$frameworkReferences = @($referenceRows | ForEach-Object { [ordered]@{path=[string]$_.path;raw_sha256=[string]$_.measurement.sha256;role=[string]$_.role;size=[long]$_.measurement.size} })
+$compilerIdentity = [ordered]@{path=$csc;raw_sha256=(Hash $csc);size=(Get-Item -LiteralPath $csc).Length}
+$toolchain = @(@($cscRow,$ildasmRow,$gitRow,$powershellRow) | ForEach-Object { [ordered]@{measurement=$_.measurement;role=[string]$_.role} })
+$nonCircular = [ordered]@{algorithm='SHA256_UTF8_LENGTH_PREFIXED_FIELDS_V1';build_input_closure_sha256=$buildInputClosureSha;client_policy_binding_derivation_sha256=$clientPolicyDerivationSha;determinism_receipt_derivation_sha256=$determinismDerivationSha;reason='The client raw identities are policy inputs, so client binaries bind the complete pre-policy input closure; service and packaged tools bind the completed policy raw identity.';source_to_binary_receipt_derivation_sha256=$sourceReceiptDerivationSha}
+$receipt = [ordered]@{
+    artifact_type='R7_UNIT2_UPGRADE_AUTHORITY_SOURCE_TO_BINARY_RECEIPT';build_input_closure_sha256=$buildInputClosureSha;compiler=$compilerIdentity;configuration_inputs=$configurationRows.ToArray();dependency_manifest_sha256=$dependencySha;
+    framework_references=$frameworkReferences;generated_sources=$generatedSources;governed_scripts=$governedScripts.ToArray();noncircular_derivations=$nonCircular;policy_sha256=$policySha;roles=@($roleResults | Sort-Object role);
+    schema_version='2.0.0';source_commit=$SourceCommit;source_files=$sourceRows.ToArray();source_identity_class=$sourceIdentityClass;source_tree=$tree;target_build_receipt_sha256=$targetReceiptSha;target_packaged_executables=$targetPackagedExecutables.ToArray();target_source_commit=$unit1Commit;target_source_tree=$unit1Tree;toolchain=$toolchain
+}
+$receiptPath = Join-Path $output 'Generated\unit2_build_receipt.json'
+Canonical $receipt $receiptPath $artifactFinal
+$determinismRoles = @($roleResults | Sort-Object role | ForEach-Object { [ordered]@{compiler_arguments=$_.compiler_arguments;compiler_inputs=$_.compiler_inputs;file_name=$_.file_name;generated_source_sha256=$_.generated_source_sha256;normalized_il_equal=$_.normalized_il_equal;normalized_il_sha256=$_.normalized_il_sha256;pass_a_sha256=$_.pass_a_sha256;pass_b_sha256=$_.pass_b_sha256;preprocessor_symbols=$_.preprocessor_symbols;resource_files=$_.resource_files;response_files=$_.response_files;role=$_.role;size=$_.size} })
+$determinismReceipt = [ordered]@{artifact_type='R7_UNIT2B_BUILD_DETERMINISM_RECEIPT';build_input_closure_sha256=$buildInputClosureSha;compiler=$compilerIdentity;framework_references=$frameworkReferences;generated_sources=$generatedSources;noncircular_derivations=$nonCircular;role_determinism=$determinismRoles;schema_version='2.0.0';source_commit=$SourceCommit;source_files=$sourceRows.ToArray();source_identity_class=$sourceIdentityClass;source_tree=$tree;status='PASS';target_build_orchestrator_receipt_sha256=$targetOrchestratorReceiptSha;target_packaged_executables=$targetPackagedExecutables.ToArray()}
+$determinismPath = Join-Path $output 'Generated\unit2_build_determinism_receipt.json'
+Canonical $determinismReceipt $determinismPath $artifactFinal
+
+Copy-Item -LiteralPath ([string]$roleState.UPGRADE_AUTHORITY.pass_a_path) -Destination (Join-Path $output 'Install\RandleTerminalUpgradeAuthority.exe')
+Copy-Item -LiteralPath ([string]$roleState.UPGRADE_CLIENT.pass_a_path) -Destination (Join-Path $output 'Install\RandleTerminalUpgradeClient.exe')
+Copy-Item -LiteralPath ([string]$roleState.UPGRADE_PROTOCOL_PROBE.pass_a_path) -Destination (Join-Path $output 'Install\RandleTerminalUpgradeProtocolProbe.exe')
+Copy-Item -LiteralPath ([string]$roleState.UPGRADE_PUBLIC_VERIFIER.pass_a_path) -Destination (Join-Path $output 'Install\RandleTerminalUpgradePublicVerifier.exe')
+Copy-Item -LiteralPath $policyPath -Destination (Join-Path $output 'Install\unit2_upgrade_policy.json')
+Copy-Item -LiteralPath $dependencyPath -Destination (Join-Path $output 'Install\dependency_manifest.json')
+Copy-Item -LiteralPath $receiptPath -Destination (Join-Path $output 'Install\unit2_build_receipt.json')
+Copy-Item -LiteralPath $certificatePath -Destination (Join-Path $output 'Install\upgrade_authority_public.cer')
+Copy-Item -LiteralPath ([string]$roleState.PACKAGED_ARTIFACT_TOOL.pass_a_path) -Destination (Join-Path $output 'Tools\R7ArtifactTool.exe')
+Copy-Item -LiteralPath ([string]$roleState.PACKAGED_PROTECTED_METADATA_TOOL.pass_a_path) -Destination (Join-Path $output 'Tools\R7ProtectedMetadataTool.exe')
+foreach ($item in Get-ChildItem -LiteralPath (Join-Path $target 'Staging') -Force) { Copy-Item -LiteralPath $item.FullName -Destination (Join-Path $output 'TargetStaging') -Recurse }
+
+$manifestRows = @(Get-ChildItem -LiteralPath $output -File -Recurse | Where-Object { $_.FullName -notlike '*.raw' -and $_.FullName -notlike '*.raw.il' } | Sort-Object FullName | ForEach-Object { [ordered]@{path=$_.FullName.Substring($output.Length + 1).Replace('\','/');raw_sha256=(Hash $_.FullName);size=$_.Length} })
+$manifest = [ordered]@{artifact_type='R7_UNIT2_BUILD_OUTPUT_MANIFEST';build_determinism_receipt_sha256=(Hash $determinismPath);build_receipt_sha256=(Hash $receiptPath);files=$manifestRows;policy_sha256=$policySha;prohibited_source_dependency_count=0;schema_version='2.0.0';self_exclusion='unit2_build_manifest.json';source_commit=$SourceCommit;source_identity_class=$sourceIdentityClass;source_tree=$tree;status='PASS';target_source_commit=$unit1Commit;transition_plan_sha256=$planSha}
+$manifestPath = Join-Path $output 'unit2_build_manifest.json'
+Canonical $manifest $manifestPath $artifactFinal
+[ordered]@{build_determinism_receipt_sha256=(Hash $determinismPath);build_input_closure_sha256=$buildInputClosureSha;build_manifest_sha256=(Hash $manifestPath);build_receipt_sha256=(Hash $receiptPath);output_root=$output;policy_sha256=$policySha;role_count=$roleResults.Count;source_commit=$SourceCommit;source_identity_class=$sourceIdentityClass;source_tree=$tree;status='PASS'} | ConvertTo-Json

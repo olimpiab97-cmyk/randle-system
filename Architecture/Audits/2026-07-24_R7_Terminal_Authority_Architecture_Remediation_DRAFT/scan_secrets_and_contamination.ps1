@@ -72,6 +72,7 @@ if (-not [string]::IsNullOrWhiteSpace($BuildRoot)) {
     $buildRootFull = [IO.Path]::GetFullPath($BuildRoot)
     $buildSummaryPath = Join-Path $buildRootFull 'static_build_summary.json'
     if (-not (Test-Path -LiteralPath $buildSummaryPath -PathType Leaf)) { $buildSummaryPath = Join-Path $buildRootFull 'build_summary.json' }
+    if (-not (Test-Path -LiteralPath $buildSummaryPath -PathType Leaf)) { $buildSummaryPath = Join-Path $buildRootFull 'unit2_build_manifest.json' }
     if (-not (Test-Path -LiteralPath $buildSummaryPath -PathType Leaf)) { throw "Recognized build summary is absent: $buildRootFull" }
     $buildSummary = Get-Content -Raw -LiteralPath $buildSummaryPath | ConvertFrom-Json
     if ($buildSummary.PSObject.Properties.Name -notcontains 'prohibited_source_dependency_count') { throw "Build summary omits prohibited-source closure: $buildSummaryPath" }

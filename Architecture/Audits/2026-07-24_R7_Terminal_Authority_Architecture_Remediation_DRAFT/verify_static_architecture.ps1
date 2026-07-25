@@ -3,6 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [string]$CompiledRoleRoot,
     [string]$StaticBuildRoot,
+    [string]$Unit2BuildRoot,
+    [string]$Unit2ClosureReport,
     [string]$TransactionProbeRoot,
     [string]$RecoveryProbeRoot,
     [string]$LegacySnapshotRoot
@@ -195,7 +197,18 @@ $protectedMetadataClosed=$protectedMethod.Success -and -not $protectedMethod.Val
 Add-Check 'protected-key-metadata-is-held-no-read-and-exact-commit-bound' ($protectedMetadataClosed -and $artifactToolSource.Contains('measure-protected-metadata') -and $artifactToolSource.Contains('"data_access_requested", false') -and $artifactToolSource.Contains('"private_bytes_read", false') -and $artifactToolSource.Contains('"privilege_restored_before_evidence_write", true') -and $safeFileSource.Contains('RestoreTokenPrivileges') -and $targetBuildSource.Contains('Generated\ImmutableOrchestratorRepository') -and $targetBuildSource.Contains('R7_PROTECTED_METADATA_TOOL_BUILD_RECEIPT') -and $targetBuildSource.Contains('R7_PROTECTED_METADATA_TOOL_INVOCATION_RECEIPT') -and $targetBuildSource.Contains('private_bytes_read=$false') -and $targetBuildSource.Contains('data_access_requested=$false')) ([ordered]@{artifact_tool_sha256=(Get-LowerHash (Join-Path $sourceRoot 'R7ArtifactTool.cs'));build_script_sha256=(Get-LowerHash (Join-Path $packageRoot 'build_remediation_package.ps1'));safe_file_sha256=(Get-LowerHash (Join-Path $sourceRoot 'R7SafeFile.cs'))})
 $unit2BuildPath=Join-Path $packageRoot 'build_unit2_upgrade_authority.ps1'
 $unit2BuildSource=Get-Content -LiteralPath $unit2BuildPath -Raw
-Add-Check 'unit2-build-reuses-exact-protected-metadata-tool-without-key-use' (-not $unit2BuildSource.Contains('& $artifact measure-metadata $keyPath') -and $unit2BuildSource.Contains('OrchestratorBootstrap\R7ProtectedMetadataTool.exe') -and $unit2BuildSource.Contains('& $protectedTool measure-protected-metadata $keyPath') -and $unit2BuildSource.Contains('$keyAclBefore=Get-Acl') -and $unit2BuildSource.Contains('$keyAclAfter=Get-Acl') -and $unit2BuildSource.Contains("private_key_bytes_read -ne `$false") -and $unit2BuildSource.Contains("data_access_mask -cne 'FILE_READ_ATTRIBUTES|READ_CONTROL'") -and $unit2BuildSource.Contains("role='PROTECTED_METADATA_TOOL'") -and $unit2BuildSource.Contains("role='TARGET_CANONICAL_ARTIFACT_TOOL'")) ([ordered]@{build_script_sha256=(Get-LowerHash $unit2BuildPath)})
+$unit2ClosureVerifierPath=Join-Path $packageRoot 'verify_unit2_build_closure.ps1'
+$unit2ClosureVerifierSource=Get-Content -LiteralPath $unit2ClosureVerifierPath -Raw
+$unit2NegativePath=Join-Path $packageRoot 'unit2_build_closure_negative_cases.json'
+$unit2Negative=Read-Json $unit2NegativePath
+$identityContractPath=Join-Path $packageRoot 'BuildInputs\R7BuildIdentityContract.cs'
+$identityContractSource=Get-Content -LiteralPath $identityContractPath -Raw
+$unit2AuthoritySource=Get-Content -LiteralPath (Join-Path $sourceRoot 'R7Unit2UpgradeAuthority.cs') -Raw
+$legacyIdentityPath=Join-Path $packageRoot 'BuildInputs\R7DevelopmentIdentity.g.cs'
+$unit2SourceTokens=@('UNIT2_GENERATED_','BOOTSTRAP_PENDING','STATIC_PLACEHOLDER','R7DevelopmentIdentity')
+$unit2TokenFindings=@($unit2SourceTokens|Where-Object{$unit2AuthoritySource.Contains($_)-or$identityContractSource.Contains($_)})
+Add-Check 'unit2-build-generates-final-identities-and-never-opens-private-key' (-not(Test-Path -LiteralPath $legacyIdentityPath) -and $unit2TokenFindings.Count -eq 0 -and $unit2BuildSource.Contains('R7Unit2ClientShared.g.cs') -and $unit2BuildSource.Contains('R7Unit2Service.g.cs') -and $unit2BuildSource.Contains('R7PackagedTools.g.cs') -and $unit2BuildSource.Contains('NONCIRCULAR_INPUT_CLOSURE_DERIVATION_V1') -and $unit2BuildSource.Contains('EXACT_POLICY_SHA256') -and $unit2BuildSource.Contains('compiler_arguments') -and $unit2BuildSource.Contains('compiler_inputs') -and $unit2BuildSource.Contains('PACKAGED_ARTIFACT_TOOL') -and $unit2BuildSource.Contains('PACKAGED_PROTECTED_METADATA_TOOL') -and $unit2BuildSource.Contains('ReflectionOnlyLoadFrom') -and -not $unit2BuildSource.Contains('measure-protected-metadata $keyPath') -and -not $unit2BuildSource.Contains('CngKey') -and -not $unit2BuildSource.Contains('SignData') -and -not $unit2BuildSource.Contains('SignHash')) ([ordered]@{build_script_sha256=(Get-LowerHash $unit2BuildPath);contract_sha256=(Get-LowerHash $identityContractPath);source_token_findings=$unit2TokenFindings})
+Add-Check 'unit2-build-closure-verifier-and-negative-regressions-are-explicit' (@($unit2Negative.cases).Count -eq 9 -and $unit2ClosureVerifierSource.Contains('COMPILER_INPUT_SET_MISMATCH') -and $unit2ClosureVerifierSource.Contains('COMPILER_ARGUMENT_VECTOR_MISMATCH') -and $unit2ClosureVerifierSource.Contains('GENERATED_SOURCE_TOKEN_INVALID') -and $unit2ClosureVerifierSource.Contains('PACKAGED_TOOL_IDENTITY_INVALID') -and $unit2ClosureVerifierSource.Contains('ExtractIdentity') -and $unit2ClosureVerifierSource.Contains('ValidateModel')) ([ordered]@{negative_case_count=@($unit2Negative.cases).Count;negative_registry_sha256=(Get-LowerHash $unit2NegativePath);verifier_sha256=(Get-LowerHash $unit2ClosureVerifierPath)})
 $declaredScriptNames=@($scriptRegistry.scripts|ForEach-Object{Split-Path -Leaf ([string]$_.path)}|Sort-Object)
 $actualScriptNames=@($packageScripts|ForEach-Object Name|Sort-Object)
 $badScriptRows=[Collections.Generic.List[object]]::new()
@@ -237,6 +250,18 @@ if (-not [string]::IsNullOrWhiteSpace($StaticBuildRoot)) {
     $badBinaries=@($receipt.binaries|Where-Object{$_.normalized_il_equal -ne $true -or [string]$_.authority_classification -cne 'UNINSTALLED_NONAUTHORITATIVE_STATIC_COMPILE_EVIDENCE' -or @($_.source_paths).Count -ne $sourceFiles.Count})
     $unstableClosures=@($receipt.build_input_closures|Where-Object{$_.stable_during_use -ne $true -or [string]$_.initial_manifest_raw_sha256 -cne [string]$_.post_manifest_raw_sha256})
     Add-Check 'static-build-receipt-closes-all-roles-sources-and-dependencies' ([string]$receipt.status -ceq 'PASS' -and [int]$summary.binary_count -eq [int]$sourceRoleRegistry.executable_role_count -and @($receipt.binaries).Count -eq [int]$sourceRoleRegistry.executable_role_count -and $badBinaries.Count -eq 0 -and $unstableClosures.Count -eq 0 -and [string]$dependency.status -match 'RUNTIME_CLOSURE_REMAINS_PENDING_LIVE_PROOF' -and [string]$receipt.generated_identity.authority_classification -ceq 'UNINSTALLED_NONAUTHORITATIVE_STATIC_COMPILE_IDENTITY') ([ordered]@{bad_binaries=$badBinaries;build_receipt_sha256=(Get-LowerHash $receiptPath);dependency_manifest_sha256=(Get-LowerHash $dependencyPath);unstable_closures=$unstableClosures})
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Unit2BuildRoot)) {
+    if ([string]::IsNullOrWhiteSpace($Unit2ClosureReport)) { throw 'Unit2ClosureReport is required with Unit2BuildRoot.' }
+    $unit2Build=[IO.Path]::GetFullPath($Unit2BuildRoot);$unit2ReportPath=[IO.Path]::GetFullPath($Unit2ClosureReport)
+    $unit2ReceiptPath=Join-Path $unit2Build 'Generated\unit2_build_receipt.json';$unit2DeterminismPath=Join-Path $unit2Build 'Generated\unit2_build_determinism_receipt.json';$unit2ManifestPath=Join-Path $unit2Build 'unit2_build_manifest.json'
+    foreach($required in @($unit2ReceiptPath,$unit2DeterminismPath,$unit2ManifestPath,$unit2ReportPath)){if(-not(Test-Path -LiteralPath $required -PathType Leaf)){throw "Unit 2 build-closure evidence missing: $required"}}
+    $unit2Receipt=Read-Json $unit2ReceiptPath;$unit2Determinism=Read-Json $unit2DeterminismPath;$unit2Manifest=Read-Json $unit2ManifestPath;$unit2Report=Read-Json $unit2ReportPath
+    $unit2BadRoles=@($unit2Receipt.roles|Where-Object{$_.normalized_il_equal-ne$true-or@($_.compiler_inputs).Count-ne(@($unit2Receipt.source_files).Count+1)-or@($_.compiler_arguments.pass_a).Count-ne@($_.compiler_arguments.pass_b).Count-or@($_.response_files).Count-ne0-or@($_.resource_files).Count-ne0})
+    $unit2BadGenerated=@($unit2Receipt.generated_sources|Where-Object{[string]$_.generation_rule-notmatch'^R7_UNIT2_' -or [string]$_.raw_sha256-notmatch'^[0-9a-f]{64}$'})
+    $unit2BadTargetExecutables=@($unit2Receipt.target_packaged_executables|Where-Object{[string]$_.raw_sha256-notmatch'^[0-9a-f]{64}$'-or@($_.embedded_identity.PSObject.Properties).Count-eq0})
+    Add-Check 'unit2-exact-build-receipts-close-roles-inputs-arguments-and-generated-sources' ([string]$unit2Receipt.schema_version-ceq'2.0.0' -and @($unit2Receipt.roles).Count-eq8 -and @($unit2Receipt.generated_sources).Count-eq4 -and @($unit2Receipt.target_packaged_executables).Count-ge9 -and $unit2BadRoles.Count-eq0 -and $unit2BadGenerated.Count-eq0 -and $unit2BadTargetExecutables.Count-eq0 -and @($unit2Determinism.role_determinism).Count-eq8 -and @($unit2Determinism.target_packaged_executables).Count-eq@($unit2Receipt.target_packaged_executables).Count -and [string]$unit2Manifest.status-ceq'PASS' -and [string]$unit2Report.status-ceq'PASS' -and [int]$unit2Report.negative_test_count-eq9) ([ordered]@{bad_generated=$unit2BadGenerated;bad_roles=$unit2BadRoles;bad_target_packaged_executables=$unit2BadTargetExecutables;closure_report_sha256=(Get-LowerHash $unit2ReportPath);determinism_receipt_sha256=(Get-LowerHash $unit2DeterminismPath);manifest_sha256=(Get-LowerHash $unit2ManifestPath);source_to_binary_receipt_sha256=(Get-LowerHash $unit2ReceiptPath);target_packaged_executable_count=@($unit2Receipt.target_packaged_executables).Count})
 }
 
 if (-not [string]::IsNullOrWhiteSpace($CompiledRoleRoot)) {

@@ -7,7 +7,8 @@ param(
     [Parameter(Mandatory = $true)][string]$UpgradePublicCertificate,
     [Parameter(Mandatory = $true)][string]$TerminalPublicCertificate,
     [Parameter(Mandatory = $true)][string]$OutputRoot,
-    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedOrchestratorScriptSha256
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedOrchestratorScriptSha256,
+    [switch]$CandidateWorktree
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,6 +31,8 @@ $terminalRemediationRoot = 'C:\ProgramData\RandleAI\TerminalAuthority\Remediatio
 $upgradeInstallRoot = 'C:\Program Files\RandleAI\TerminalUpgradeAuthority'
 $upgradeStateRoot = 'C:\ProgramData\RandleAI\TerminalUpgradeAuthority'
 $terminalKeyFile = 'C:\ProgramData\Microsoft\Crypto\Keys\1c9681c0b04a3dd4843d8cb457b92413_c5338977-c52f-4ca7-af6f-db9b5e287cca'
+$compilerInvocationRecords = [Collections.Generic.List[object]]::new()
+$compilerOptions = @('/nologo','/noconfig','/target:exe','/platform:x64','/optimize+','/checked+','/debug-','/warn:4','/warnaserror+','/nostdlib+','/langversion:5','/filealign:512')
 
 function Get-LowerHash([string]$Path) { return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant() }
 function Get-RelativePath([string]$Base, [string]$Path) {
@@ -48,6 +51,72 @@ function Get-ByteHash([byte[]]$Value) {
     try { return ([BitConverter]::ToString($algorithm.ComputeHash($Value)).Replace('-', '')).ToLowerInvariant() }
     finally { $algorithm.Dispose() }
 }
+function Get-GitBlobIdentity([string]$Path) {
+    $bytes = [IO.File]::ReadAllBytes([IO.Path]::GetFullPath($Path))
+    $header = [Text.Encoding]::ASCII.GetBytes(('blob ' + $bytes.Length + [char]0))
+    $all = New-Object byte[] ($header.Length + $bytes.Length)
+    [Buffer]::BlockCopy($header,0,$all,0,$header.Length)
+    [Buffer]::BlockCopy($bytes,0,$all,$header.Length,$bytes.Length)
+    $algorithm = [Security.Cryptography.SHA1]::Create()
+    try { return ([BitConverter]::ToString($algorithm.ComputeHash($all))).Replace('-','').ToLowerInvariant() }
+    finally { $algorithm.Dispose() }
+}
+function Write-BuildToolIdentity([string]$Path,[string]$Commit,[string]$Tree,[string]$Label) {
+    $identity = Get-ByteHash ([Text.UTF8Encoding]::new($false).GetBytes(('R7_BUILD_TOOL_IDENTITY_V1|' + $Label + '|' + $Commit + '|' + $Tree)))
+    $fileIdentity = $identity.Substring(0,8) + ':' + $identity.Substring(8,16)
+    $text = @"
+namespace RandleAI.R7Remediation
+{
+    internal static class R7BuildIdentity
+    {
+        internal const string UpgradePolicySha256 = "$identity";
+        internal const string UpgradePublicCertificateSha256 = "$identity";
+        internal const string DependencyManifestSha256 = "$identity";
+        internal const string UpgradeBinaryPath = @"C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeAuthority.exe";
+        internal const string SourceCommit = "$Commit";
+        internal const string SourceTree = "$Tree";
+        internal const string RequirementRegistrySha256 = "$identity";
+        internal const string CaseDefinitionsSha256 = "$identity";
+        internal const string ExpectationsSha256 = "$identity";
+        internal const string CoverageProofSha256 = "$identity";
+        internal const string AuthoritySourceManifestSha256 = "$identity";
+        internal const string HistoricalClassificationRegistrySha256 = "$identity";
+        internal const string ExecutionBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalExecution.exe";
+        internal const string ObservationBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalObservation.exe";
+        internal const string ComparatorBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalComparator.exe";
+        internal const string TerminalKeyFilePath = @"$output\IdentityInputs\terminal-$identity";
+        internal const string TerminalKeyFileIdentity = "$fileIdentity";
+        internal const string TerminalKeyFileOwnerSid = "S-1-5-18";
+        internal const string TerminalKeyFileSecurityDescriptorSha256 = "$identity";
+        internal const string TerminalKeyFileVolumeIdentity = "$($identity.Substring(0,8))";
+        internal const uint TerminalKeyFileLinkCount = 1;
+        internal const string UpgradeKeyFilePath = @"$output\IdentityInputs\upgrade-$identity";
+        internal const string UpgradeKeyFileIdentity = "$fileIdentity";
+        internal const string UpgradeKeyFileOwnerSid = "S-1-5-18";
+        internal const string UpgradeKeyFileSecurityDescriptorSha256 = "$identity";
+        internal const string UpgradeKeyFileVolumeIdentity = "$($identity.Substring(0,8))";
+        internal const uint UpgradeKeyFileLinkCount = 1;
+    }
+    internal static class R7Unit2BuildIdentity
+    {
+        internal const string PublicCertificateSha256 = "$identity";
+        internal const string PolicySha256 = "$identity";
+        internal const string DependencyManifestSha256 = "$identity";
+        internal const string SourceCommit = "$Commit";
+        internal const string SourceTree = "$Tree";
+        internal const string KeyFilePath = @"$output\IdentityInputs\upgrade-$identity";
+        internal const string KeyFileOwnerSid = "S-1-5-18";
+        internal const string KeyFileSecurityDescriptorSha256 = "$identity";
+        internal const string KeyFileVolumeIdentity = "$($identity.Substring(0,8))";
+        internal const string KeyFileIdentity = "$fileIdentity";
+        internal const uint KeyFileLinkCount = 1;
+        internal const string BuildInputClosureSha256 = "$identity";
+        internal const string PolicyBindingKind = "CONTENT_DERIVED_BUILD_TOOL_IDENTITY_V1";
+    }
+}
+"@
+    [IO.File]::WriteAllText($Path,$text,[Text.UTF8Encoding]::new($false))
+}
 function Assert-ExactPropertySet([object]$Value, [string[]]$Expected, [string]$Label) {
     $actual = @($Value.PSObject.Properties.Name | Sort-Object)
     $required = @($Expected | Sort-Object)
@@ -59,14 +128,13 @@ function Assert-NewDirectory([string]$Path) {
     } else { New-Item -ItemType Directory -Path $Path | Out-Null }
 }
 function Invoke-Compiler([string]$Main, [string]$Define, [string]$Destination, [string]$IdentitySource) {
-    $arguments = @(
-        '/nologo', '/noconfig', '/target:exe', '/platform:x64', '/optimize+', '/checked+', '/debug-', '/warn:4', '/nostdlib+', '/langversion:5', '/filealign:512',
-        ('/main:' + $Main), ('/out:' + $Destination)
-    )
+    $arguments = @($compilerOptions)
+    $arguments += ('/main:' + $Main), ('/out:' + $Destination)
     if ($Define) { $arguments += ('/define:' + $Define) }
     foreach ($reference in $referencePaths) { $arguments += ('/reference:' + $reference) }
     $arguments += $sourcePaths
     $arguments += $IdentitySource
+    $compilerInvocationRecords.Add([ordered]@{arguments=@($arguments);define=$Define;destination=[IO.Path]::GetFullPath($Destination);identity_source=[IO.Path]::GetFullPath($IdentitySource);main=$Main;source_paths=@($sourcePaths | ForEach-Object {[IO.Path]::GetFullPath($_)})})
     & $compiler @arguments
     if ($LASTEXITCODE -ne 0) { throw "Compiler failed for $Main" }
 }
@@ -172,9 +240,9 @@ $gitEnvironment = [ordered]@{GIT_ATTR_NOSYSTEM=$env:GIT_ATTR_NOSYSTEM;GIT_CONFIG
 
 $head = ([string](Invoke-GovernedGit @('rev-parse','HEAD'))).Trim()
 if ($head -ne $OrchestratorCommit) { throw "HEAD $head does not match requested orchestrator commit $OrchestratorCommit" }
-if (@(Invoke-GovernedGit @('status','--porcelain=v1','--untracked-files=all')).Count -ne 0) { throw 'Source checkout must be clean.' }
+if (-not $CandidateWorktree -and @(Invoke-GovernedGit @('status','--porcelain=v1','--untracked-files=all')).Count -ne 0) { throw 'Source checkout must be clean.' }
+$packageRelativeRoot = (Get-RelativePath $repositoryRoot $workingPackageRoot).Replace('\','/')
 $sourceTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$SourceCommit))).Trim()
-$orchestratorTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$OrchestratorCommit))).Trim()
 $bootstrapSourceTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$BootstrapSourceCommit))).Trim()
 $commitBlobMap = @{}
 $commitModeMap = @{}
@@ -186,13 +254,34 @@ foreach ($treeRow in @(Invoke-GovernedGit @('ls-tree','-r',$SourceCommit))) {
 }
 $orchestratorBlobMap = @{}
 $orchestratorModeMap = @{}
-foreach ($treeRow in @(Invoke-GovernedGit @('ls-tree','-r',$OrchestratorCommit))) {
-    if ([string]$treeRow -notmatch '^(100644|100755) blob ([0-9a-f]{40})\t(.+)$') { continue }
-    if ($orchestratorBlobMap.ContainsKey($Matches[3])) { throw "Duplicate orchestrator path: $($Matches[3])" }
-    $orchestratorBlobMap[$Matches[3]] = $Matches[2]
-    $orchestratorModeMap[$Matches[3]] = $Matches[1]
+$orchestratorSourceIdentity = $OrchestratorCommit
+$orchestratorSourceIdentityClass = 'EXACT_COMMIT'
+$candidateOrchestratorFingerprint = $null
+if ($CandidateWorktree) {
+    $candidatePaths = @(Get-ChildItem -LiteralPath (Join-Path $workingPackageRoot 'Source') -Filter '*.cs' -File | Sort-Object Name | ForEach-Object FullName) + (Join-Path $workingPackageRoot 'BuildInputs\R7BuildIdentityContract.cs')
+    $candidateParts = [Collections.Generic.List[string]]::new()
+    foreach ($candidatePath in $candidatePaths) {
+        if (-not (Test-Path -LiteralPath $candidatePath -PathType Leaf)) { throw "Candidate orchestrator input is absent: $candidatePath" }
+        $relativePath = (Get-RelativePath $repositoryRoot $candidatePath).Replace('\','/')
+        $blob = Get-GitBlobIdentity $candidatePath
+        $orchestratorBlobMap[$relativePath] = $blob
+        $orchestratorModeMap[$relativePath] = '100644'
+        $candidateParts.Add(($relativePath + '|' + $blob + '|' + (Get-LowerHash $candidatePath) + '|' + (Get-Item -LiteralPath $candidatePath).Length))
+    }
+    $candidateParts.Add(($packageRelativeRoot + '/build_remediation_package.ps1|' + (Get-GitBlobIdentity $PSCommandPath) + '|' + (Get-LowerHash $PSCommandPath) + '|' + (Get-Item -LiteralPath $PSCommandPath).Length))
+    $candidateOrchestratorFingerprint = Get-StringHash ('R7_ORCHESTRATOR_CANDIDATE_INPUTS_V1|' + ($candidateParts.ToArray() -join "`n"))
+    $orchestratorTree = (Get-StringHash ('R7_ORCHESTRATOR_CANDIDATE_TREE_V1|' + $candidateOrchestratorFingerprint)).Substring(0,40)
+    $orchestratorSourceIdentity = (Get-StringHash ('R7_ORCHESTRATOR_CANDIDATE_COMMIT_V1|' + $head + '|' + $orchestratorTree + '|' + $candidateOrchestratorFingerprint)).Substring(0,40)
+    $orchestratorSourceIdentityClass = 'CANDIDATE_CONTENT_DERIVATION_V1'
+} else {
+    $orchestratorTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$OrchestratorCommit))).Trim()
+    foreach ($treeRow in @(Invoke-GovernedGit @('ls-tree','-r',$OrchestratorCommit))) {
+        if ([string]$treeRow -notmatch '^(100644|100755) blob ([0-9a-f]{40})\t(.+)$') { continue }
+        if ($orchestratorBlobMap.ContainsKey($Matches[3])) { throw "Duplicate orchestrator path: $($Matches[3])" }
+        $orchestratorBlobMap[$Matches[3]] = $Matches[2]
+        $orchestratorModeMap[$Matches[3]] = $Matches[1]
+    }
 }
-$packageRelativeRoot = (Get-RelativePath $repositoryRoot $workingPackageRoot).Replace('\','/')
 $bootstrapProvisioningPath = $packageRelativeRoot + '/provision_upgrade_authority.ps1'
 $bootstrapProvisioningBlob = ([string](Invoke-GovernedGit @('rev-parse',($BootstrapSourceCommit + ':' + $bootstrapProvisioningPath)))).Trim()
 $bootstrapProvisioningBytes = Invoke-GovernedGitRaw @('cat-file','blob',$bootstrapProvisioningBlob)
@@ -217,11 +306,12 @@ $orchestratorImmutableRepositoryRoot = Join-Path $output 'Generated\ImmutableOrc
 $orchestratorPackageRoot = Join-Path $orchestratorImmutableRepositoryRoot $packageRelativeRoot.Replace('/','\')
 $orchestratorToolSourceReceipts = [Collections.Generic.List[object]]::new()
 $orchestratorRequiredPaths = @($orchestratorBlobMap.Keys | Where-Object { $_.StartsWith($packageRelativeRoot + '/Source/', [StringComparison]::Ordinal) -and $_.EndsWith('.cs', [StringComparison]::Ordinal) } | Sort-Object)
-$orchestratorRequiredPaths += ($packageRelativeRoot + '/BuildInputs/R7DevelopmentIdentity.g.cs')
+$orchestratorRequiredPaths += ($packageRelativeRoot + '/BuildInputs/R7BuildIdentityContract.cs')
 foreach ($relativePath in $orchestratorRequiredPaths) {
     if (-not $orchestratorBlobMap.ContainsKey($relativePath)) { throw "Orchestrator tool source path is absent: $relativePath" }
     $blob = [string]$orchestratorBlobMap[$relativePath]
-    $raw = Invoke-GovernedGitRaw @('cat-file','blob',$blob)
+    $raw = if ($CandidateWorktree) { [IO.File]::ReadAllBytes((Join-Path $repositoryRoot $relativePath.Replace('/','\'))) } else { Invoke-GovernedGitRaw @('cat-file','blob',$blob) }
+    if ($CandidateWorktree -and (Get-GitBlobIdentity (Join-Path $repositoryRoot $relativePath.Replace('/','\'))) -cne $blob) { throw "Candidate orchestrator input changed during extraction: $relativePath" }
     $destination = Join-Path $orchestratorImmutableRepositoryRoot $relativePath.Replace('/','\')
     $parent = Split-Path -Parent $destination
     if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
@@ -232,12 +322,14 @@ foreach ($relativePath in $orchestratorRequiredPaths) {
     $orchestratorToolSourceReceipts.Add([ordered]@{blob=$blob;mode=[string]$orchestratorModeMap[$relativePath];path=$relativePath;raw_sha256=$rawSha256;size=$raw.Length})
 }
 $packageRoot = $immutablePackageRoot
-$sourcePaths = Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName
-$developmentIdentity = Join-Path $packageRoot 'BuildInputs\R7DevelopmentIdentity.g.cs'
-if ($sourcePaths.Count -eq 0 -or -not (Test-Path -LiteralPath $developmentIdentity -PathType Leaf)) { throw 'Immutable C# source extraction is incomplete.' }
-$orchestratorSourcePaths = Get-ChildItem -LiteralPath (Join-Path $orchestratorPackageRoot 'Source') -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName
-$orchestratorDevelopmentIdentity = Join-Path $orchestratorPackageRoot 'BuildInputs\R7DevelopmentIdentity.g.cs'
-if ($orchestratorSourcePaths.Count -eq 0 -or -not (Test-Path -LiteralPath $orchestratorDevelopmentIdentity -PathType Leaf)) { throw 'Immutable orchestrator tool source extraction is incomplete.' }
+$sourcePaths = @(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName) + (Join-Path $orchestratorPackageRoot 'BuildInputs\R7BuildIdentityContract.cs')
+$orchestratorSourcePaths = @(Get-ChildItem -LiteralPath (Join-Path $orchestratorPackageRoot 'Source') -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName) + (Join-Path $orchestratorPackageRoot 'BuildInputs\R7BuildIdentityContract.cs')
+if ($sourcePaths.Count -eq 0 -or $orchestratorSourcePaths.Count -eq 0) { throw 'Immutable C# source extraction is incomplete.' }
+$developmentIdentity = Join-Path $output 'Generated\R7TargetBuildToolIdentity.g.cs'
+$orchestratorDevelopmentIdentity = Join-Path $output 'Generated\R7OrchestratorBuildToolIdentity.g.cs'
+Write-BuildToolIdentity $developmentIdentity $SourceCommit $sourceTree 'TARGET_BUILD_TOOL'
+Write-BuildToolIdentity $orchestratorDevelopmentIdentity $orchestratorSourceIdentity $orchestratorTree 'ORCHESTRATOR_BUILD_TOOL'
+$orchestratorToolSourceReceipts.Add([ordered]@{blob=$null;generation_rule='R7_BUILD_TOOL_IDENTITY_V1';mode=$null;path='GENERATED/R7OrchestratorBuildToolIdentity.g.cs';raw_sha256=(Get-LowerHash $orchestratorDevelopmentIdentity);size=(Get-Item -LiteralPath $orchestratorDevelopmentIdentity).Length})
 $bootstrapTool = Join-Path $output 'Bootstrap\R7ArtifactTool.bootstrap.exe'
 $bootstrapToolPassB = Join-Path $output 'BootstrapPassB\R7ArtifactTool.bootstrap.exe'
 Invoke-Compiler 'RandleAI.R7Remediation.R7ArtifactToolProgram' '' $bootstrapTool $developmentIdentity
@@ -268,10 +360,10 @@ $sourcePaths = $targetSourcePaths
 $orchestratorMetadataToolBuildReceiptPath = Join-Path $output 'Generated\protected_metadata_tool_build_receipt.json'
 $orchestratorMetadataToolBuildReceipt = [ordered]@{
     artifact_type='R7_PROTECTED_METADATA_TOOL_BUILD_RECEIPT';compiler=[ordered]@{path=$compiler;raw_sha256=(Get-LowerHash $compiler);size=(Get-Item -LiteralPath $compiler).Length};
-    compiler_options=@('/noconfig','/target:exe','/platform:x64','/optimize+','/checked+','/debug-','/warn:4','/nostdlib+','/langversion:5','/filealign:512');
+    compiler_invocations=@($compilerInvocationRecords | Where-Object {[string]$_.identity_source -ceq [IO.Path]::GetFullPath($orchestratorDevelopmentIdentity)});compiler_options=$compilerOptions;
     data_access_mask='FILE_READ_ATTRIBUTES|READ_CONTROL';framework_references=@($referencePaths | ForEach-Object { [ordered]@{path=$_;raw_sha256=(Get-LowerHash $_);size=(Get-Item -LiteralPath $_).Length} });
     normalized_il_sha256=$orchestratorMetadataLeftIlSha;pass_a_sha256=(Get-LowerHash $orchestratorMetadataTool);pass_b_sha256=(Get-LowerHash $orchestratorMetadataToolPassB);
-    private_key_bytes_read=$false;schema_version='1.0.0';source_commit=$OrchestratorCommit;source_files=$orchestratorToolSourceReceipts.ToArray();source_tree=$orchestratorTree;
+    private_key_bytes_read=$false;schema_version='1.0.0';source_commit=$orchestratorSourceIdentity;source_identity_class=$orchestratorSourceIdentityClass;source_files=$orchestratorToolSourceReceipts.ToArray();source_tree=$orchestratorTree;
     temporary_privilege='SeBackupPrivilege';tool_role='BUILD_TIME_PROTECTED_FILE_METADATA_ONLY'
 }
 Write-CanonicalJson $orchestratorMetadataToolBuildReceipt $orchestratorMetadataToolBuildReceiptPath $bootstrapTool
@@ -298,8 +390,20 @@ foreach ($closureInput in $closureInputs) {
 }
 $verificationHead = ([string](Invoke-GovernedGit @('rev-parse','HEAD'))).Trim()
 $verificationTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$SourceCommit))).Trim()
-$verificationOrchestratorTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$OrchestratorCommit))).Trim()
-if ($verificationHead -ne $head -or $verificationTree -ne $sourceTree -or $verificationOrchestratorTree -ne $orchestratorTree -or @(Invoke-GovernedGit @('status','--porcelain=v1','--untracked-files=all')).Count -ne 0) { throw 'Immutable source or orchestrator identity changed during extraction.' }
+$verificationOrchestratorTree = $orchestratorTree
+if ($CandidateWorktree) {
+    $verificationParts = [Collections.Generic.List[string]]::new()
+    foreach ($candidatePath in $candidatePaths) {
+        $relativePath = (Get-RelativePath $repositoryRoot $candidatePath).Replace('\','/')
+        $verificationParts.Add(($relativePath + '|' + (Get-GitBlobIdentity $candidatePath) + '|' + (Get-LowerHash $candidatePath) + '|' + (Get-Item -LiteralPath $candidatePath).Length))
+    }
+    $verificationParts.Add(($packageRelativeRoot + '/build_remediation_package.ps1|' + (Get-GitBlobIdentity $PSCommandPath) + '|' + (Get-LowerHash $PSCommandPath) + '|' + (Get-Item -LiteralPath $PSCommandPath).Length))
+    $verificationFingerprint = Get-StringHash ('R7_ORCHESTRATOR_CANDIDATE_INPUTS_V1|' + ($verificationParts.ToArray() -join "`n"))
+    if ($verificationFingerprint -cne $candidateOrchestratorFingerprint) { throw 'Candidate orchestrator inputs changed during extraction.' }
+} else {
+    $verificationOrchestratorTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$OrchestratorCommit))).Trim()
+}
+if ($verificationHead -ne $head -or $verificationTree -ne $sourceTree -or $verificationOrchestratorTree -ne $orchestratorTree -or (-not $CandidateWorktree -and @(Invoke-GovernedGit @('status','--porcelain=v1','--untracked-files=all')).Count -ne 0)) { throw 'Immutable source or orchestrator identity changed during extraction.' }
 foreach ($record in $extractedPackageBlobs) {
     $verifiedRaw = Invoke-GovernedGitRaw @('cat-file','blob',[string]$record.blob)
     if ($verifiedRaw.Length -ne [long]$record.size -or (Get-ByteHash $verifiedRaw) -ne [string]$record.raw_sha256) { throw "Git blob changed across closed verification: $($record.path)" }
@@ -343,7 +447,7 @@ $bootstrap = Get-Content -Raw -LiteralPath $UpgradeBootstrapRecord | ConvertFrom
 $upgradeCertificateSha = Get-LowerHash $UpgradePublicCertificate
 if ($bootstrap.public_certificate_sha256 -ne $upgradeCertificateSha -or $bootstrap.service_sid -ne 'S-1-5-80-238545627-4117296865-2677355104-248304369-1301198082' -or $bootstrap.source_commit -cne $BootstrapSourceCommit -or $bootstrap.source_tree -cne $bootstrapSourceTree -or $bootstrap.provisioning_script_sha256 -cne $bootstrapProvisioningSha256 -or $bootstrap.interactive_logon_denial -cne 'DEFERRED_TO_MEASURED_PRESTART_BOOTSTRAP') { throw 'Upgrade bootstrap record does not bind the supplied trust, bootstrap source object, bootstrap script blob, service SID and prestart boundary obligation.' }
 $orchestratorReceiptPath = Join-Path $output 'Generated\build_orchestrator_receipt.json'
-$orchestratorReceipt = [ordered]@{artifact_type='R7_TARGET_BUILD_ORCHESTRATOR_RECEIPT';bootstrap_provisioning_blob=$bootstrapProvisioningBlob;bootstrap_provisioning_sha256=$bootstrapProvisioningSha256;bootstrap_source_commit=$BootstrapSourceCommit;bootstrap_source_tree=$bootstrapSourceTree;orchestrator_commit=$OrchestratorCommit;orchestrator_script_sha256=$ExpectedOrchestratorScriptSha256;orchestrator_tree=$orchestratorTree;schema_version='1.0.0';target_source_commit=$SourceCommit;target_source_tree=$sourceTree}
+$orchestratorReceipt = [ordered]@{artifact_type='R7_TARGET_BUILD_ORCHESTRATOR_RECEIPT';bootstrap_provisioning_blob=$bootstrapProvisioningBlob;bootstrap_provisioning_sha256=$bootstrapProvisioningSha256;bootstrap_source_commit=$BootstrapSourceCommit;bootstrap_source_tree=$bootstrapSourceTree;orchestrator_base_commit=$OrchestratorCommit;orchestrator_commit=$orchestratorSourceIdentity;orchestrator_script_sha256=$ExpectedOrchestratorScriptSha256;orchestrator_source_identity_class=$orchestratorSourceIdentityClass;orchestrator_tree=$orchestratorTree;schema_version='1.0.0';target_source_commit=$SourceCommit;target_source_tree=$sourceTree}
 Write-CanonicalJson $orchestratorReceipt $orchestratorReceiptPath $bootstrapTool
 $orchestratorReceiptSha256 = Get-LowerHash $orchestratorReceiptPath
 $bootstrapDependencyPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -390,14 +494,14 @@ if ([string]$terminalKeyMetadata.security_descriptor_sha256 -cne '2d117c2338cdc8
 if ($upgradeKeyAclBeforeSha256 -cne [string]$bootstrap.key_file_acl_sha256 -or $upgradeKeyAclAfterSha256 -cne [string]$bootstrap.key_file_acl_sha256 -or [string]$upgradeKeyAclBefore.Sddl -cne [string]$bootstrap.key_file_acl_sddl -or [string]$upgradeKeyAclAfter.Sddl -cne [string]$bootstrap.key_file_acl_sddl -or [string]$upgradeKeyAclBefore.Owner -cne 'NT AUTHORITY\SYSTEM' -or [string]$upgradeKeyAclAfter.Owner -cne 'NT AUTHORITY\SYSTEM') { throw 'Upgrade key canonical ACL differs from the separately captured bootstrap identity or changed across held-handle measurement.' }
 $terminalKeyProtectedInvocation = [ordered]@{
     artifact_type='R7_PROTECTED_METADATA_TOOL_INVOCATION_RECEIPT';data_access_requested=$false;measurement_sha256=(Get-LowerHash $terminalKeyMetadataPath);
-    private_bytes_read=$false;protected_evidence_sha256=(Get-LowerHash $terminalKeyProtectedEvidencePath);schema_version='1.0.0';source_commit=$OrchestratorCommit;
+    private_bytes_read=$false;protected_evidence_sha256=(Get-LowerHash $terminalKeyProtectedEvidencePath);schema_version='1.0.0';source_commit=$orchestratorSourceIdentity;
     source_tree=$orchestratorTree;tool_build_receipt_sha256=(Get-LowerHash $orchestratorMetadataToolBuildReceiptPath);tool_sha256=(Get-LowerHash $orchestratorMetadataTool)
 }
 Write-CanonicalJson $terminalKeyProtectedInvocation $terminalKeyProtectedInvocationPath $bootstrapTool
 $upgradeKeyProtectedInvocation = [ordered]@{
     artifact_type='R7_PROTECTED_METADATA_TOOL_INVOCATION_RECEIPT';bootstrap_acl_sddl_sha256=[string]$bootstrap.key_file_acl_sha256;canonical_acl_stable=$true;data_access_requested=$false;measurement_sha256=(Get-LowerHash $upgradeKeyMetadataPath);
     native_handle_acl_sha256=[string]$upgradeKeyMetadata.security_descriptor_sha256;powershell_acl_sddl_sha256=$upgradeKeyAclAfterSha256;
-    private_bytes_read=$false;protected_evidence_sha256=(Get-LowerHash $upgradeKeyProtectedEvidencePath);schema_version='1.0.0';source_commit=$OrchestratorCommit;
+    private_bytes_read=$false;protected_evidence_sha256=(Get-LowerHash $upgradeKeyProtectedEvidencePath);schema_version='1.0.0';source_commit=$orchestratorSourceIdentity;
     source_tree=$orchestratorTree;tool_build_receipt_sha256=(Get-LowerHash $orchestratorMetadataToolBuildReceiptPath);tool_sha256=(Get-LowerHash $orchestratorMetadataTool)
 }
 Write-CanonicalJson $upgradeKeyProtectedInvocation $upgradeKeyProtectedInvocationPath $bootstrapTool
@@ -489,6 +593,22 @@ namespace RandleAI.R7Remediation
         internal const string UpgradeKeyFileVolumeIdentity = "$($upgradeKeyMetadata.volume_identity)";
         internal const uint UpgradeKeyFileLinkCount = $([uint32]$upgradeKeyMetadata.hard_link_count);
     }
+    internal static class R7Unit2BuildIdentity
+    {
+        internal const string PublicCertificateSha256 = "$upgradeCertificateSha";
+        internal const string PolicySha256 = "$upgradePolicySha";
+        internal const string DependencyManifestSha256 = "$dependencyManifestSha";
+        internal const string SourceCommit = "$SourceCommit";
+        internal const string SourceTree = "$sourceTree";
+        internal const string KeyFilePath = @"$upgradeKeyFile";
+        internal const string KeyFileOwnerSid = "$($upgradeKeyMetadata.owner_sid)";
+        internal const string KeyFileSecurityDescriptorSha256 = "$($upgradeKeyMetadata.security_descriptor_sha256)";
+        internal const string KeyFileVolumeIdentity = "$($upgradeKeyMetadata.volume_identity)";
+        internal const string KeyFileIdentity = "$($upgradeKeyMetadata.file_identity)";
+        internal const uint KeyFileLinkCount = $([uint32]$upgradeKeyMetadata.hard_link_count);
+        internal const string BuildInputClosureSha256 = "$dependencyManifestSha";
+        internal const string PolicyBindingKind = "EXACT_POLICY_SHA256";
+    }
 }
 "@
 [IO.File]::WriteAllText($identitySource, $identityText, [Text.UTF8Encoding]::new($false))
@@ -538,14 +658,18 @@ for ($closureIndex = 1; $closureIndex -lt $closureInputs.Count; $closureIndex++)
 
 $sourceReceipts = [Collections.Generic.List[object]]::new()
 foreach ($source in $sourcePaths) {
-    $relative = (Get-RelativePath $immutableRepositoryRoot $source).Replace('\','/')
-    if (-not $commitBlobMap.ContainsKey($relative)) { throw "Source blob not bound in commit: $relative" }
-    $sourceReceipts.Add([ordered]@{ path=$relative; blob=[string]$commitBlobMap[$relative]; raw_sha256=(Get-LowerHash $source); size=(Get-Item -LiteralPath $source).Length })
+    $fullSource = [IO.Path]::GetFullPath($source)
+    if ($fullSource.StartsWith($orchestratorImmutableRepositoryRoot.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase)) {
+        $relative = (Get-RelativePath $orchestratorImmutableRepositoryRoot $fullSource).Replace('\','/')
+        if (-not $orchestratorBlobMap.ContainsKey($relative)) { throw "Source blob not bound in orchestrator input: $relative" }
+        $sourceReceipts.Add([ordered]@{path=$relative;blob=[string]$orchestratorBlobMap[$relative];mode=[string]$orchestratorModeMap[$relative];raw_sha256=(Get-LowerHash $fullSource);size=(Get-Item -LiteralPath $fullSource).Length;source_identity=$orchestratorSourceIdentity;source_identity_class=$orchestratorSourceIdentityClass;source_origin='BUILD_ORCHESTRATOR'})
+    } else {
+        $relative = (Get-RelativePath $immutableRepositoryRoot $fullSource).Replace('\','/')
+        if (-not $commitBlobMap.ContainsKey($relative)) { throw "Source blob not bound in target commit: $relative" }
+        $sourceReceipts.Add([ordered]@{path=$relative;blob=[string]$commitBlobMap[$relative];mode=[string]$commitModeMap[$relative];raw_sha256=(Get-LowerHash $fullSource);size=(Get-Item -LiteralPath $fullSource).Length;source_identity=$SourceCommit;source_identity_class='EXACT_COMMIT';source_origin='TARGET_SOURCE'})
+    }
 }
-$developmentRelative = (Get-RelativePath $immutableRepositoryRoot $developmentIdentity).Replace('\','/')
-if (-not $commitBlobMap.ContainsKey($developmentRelative)) { throw "Bootstrap identity blob not bound in commit: $developmentRelative" }
-$sourceReceipts.Add([ordered]@{ path=$developmentRelative; blob=[string]$commitBlobMap[$developmentRelative]; raw_sha256=(Get-LowerHash $developmentIdentity); size=(Get-Item -LiteralPath $developmentIdentity).Length })
-$sourceReceipts.Add([ordered]@{ path='GENERATED/R7BuildIdentity.g.cs'; blob='GENERATED_BUILD_INPUT'; raw_sha256=(Get-LowerHash $identitySource); size=(Get-Item -LiteralPath $identitySource).Length })
+$sourceReceipts.Add([ordered]@{path='GENERATED/R7BuildIdentity.g.cs';blob='GENERATED_BUILD_INPUT';generation_rule='R7_FINAL_TARGET_BUILD_IDENTITY';mode=$null;raw_sha256=(Get-LowerHash $identitySource);size=(Get-Item -LiteralPath $identitySource).Length;source_identity=$orchestratorSourceIdentity;source_identity_class=$orchestratorSourceIdentityClass;source_origin='GENERATED'})
 
 $governedScriptRegistryPath = Join-Path $packageRoot 'governed_script_registry.json'
 $governedScriptRegistry = Get-Content -LiteralPath $governedScriptRegistryPath -Raw | ConvertFrom-Json
@@ -565,10 +689,10 @@ foreach ($script in @($governedScriptRegistry.scripts | Sort-Object path)) {
 }
 
 $buildReceiptPath = Join-Path $output 'Generated\build_receipt.json'
-$compilerOptions = @('/noconfig','/target:exe','/platform:x64','/optimize+','/checked+','/debug-','/warn:4','/nostdlib+','/langversion:5','/filealign:512')
+$bootstrapToolSourceFiles = @($sourceReceipts | Where-Object {[string]$_.blob -cne 'GENERATED_BUILD_INPUT'}) + [ordered]@{path='GENERATED/R7TargetBuildToolIdentity.g.cs';blob='GENERATED_BUILD_INPUT';generation_rule='R7_BUILD_TOOL_IDENTITY_V1';mode=$null;raw_sha256=(Get-LowerHash $developmentIdentity);size=(Get-Item -LiteralPath $developmentIdentity).Length;source_identity=$SourceCommit;source_identity_class='EXACT_COMMIT';source_origin='GENERATED'}
 $buildReceipt = [ordered]@{
     artifact_type='R7_SOURCE_TO_BINARY_BUILD_RECEIPT'; architecture='x64'; binaries=$binaryReceipts.ToArray(); bootstrap_artifact_tool_sha256=(Get-LowerHash $bootstrapTool);
-    build_input_closures=$buildInputClosures.ToArray(); compiler_options=$compilerOptions; dependency_manifest_sha256=$dependencyManifestSha; framework_reference_paths=$referencePaths; governed_scripts=$governedScripts.ToArray();
+    bootstrap_artifact_tool_source_files=$bootstrapToolSourceFiles;build_input_closures=$buildInputClosures.ToArray(); compiler_invocations=$compilerInvocationRecords.ToArray(); compiler_options=$compilerOptions; dependency_manifest_sha256=$dependencyManifestSha; framework_reference_paths=$referencePaths; governed_scripts=$governedScripts.ToArray();
     governed_git=[ordered]@{environment=$gitEnvironment;executable_path=$gitExecutable;executable_sha256=$gitExecutableSha256;invocations=$governedGitInvocations.ToArray();runtime_authority='DENIED';source_bytes='RAW_CAT_FILE_BLOB_BYTES'};
     key_file_metadata=@([ordered]@{private_bytes_read=$false;role='TERMINAL_SIGNING_KEY';measurement=$terminalKeyMetadata},[ordered]@{private_bytes_read=$false;role='UPGRADE_SIGNING_KEY';measurement=$upgradeKeyMetadata}); schema_version='1.0.0';
     source_commit=$SourceCommit; source_files=$sourceReceipts.ToArray(); source_tree=$sourceTree; toolchain=$buildTools.ToArray()
@@ -620,7 +744,7 @@ Copy-New $upgradeKeyProtectedEvidencePath (Join-Path $staging 'build\upgrade_key
 Copy-New $upgradeKeyProtectedInvocationPath (Join-Path $staging 'build\upgrade_key_protected_metadata_invocation.json')
 foreach ($closureFile in Get-ChildItem -LiteralPath (Join-Path $output 'Generated\BuildInputClosures') -File | Sort-Object Name) { Copy-New $closureFile.FullName (Join-Path $staging ('build\BuildInputClosures\' + $closureFile.Name)) }
 foreach ($sourceReceipt in $sourceReceipts) {
-    $sourceInput = if ([string]$sourceReceipt.blob -ceq 'GENERATED_BUILD_INPUT') { $identitySource } else { Join-Path $immutableRepositoryRoot ([string]$sourceReceipt.path).Replace('/','\') }
+    $sourceInput = if ([string]$sourceReceipt.blob -ceq 'GENERATED_BUILD_INPUT') { $identitySource } elseif ([string]$sourceReceipt.source_origin -ceq 'BUILD_ORCHESTRATOR') { Join-Path $orchestratorImmutableRepositoryRoot ([string]$sourceReceipt.path).Replace('/','\') } else { Join-Path $immutableRepositoryRoot ([string]$sourceReceipt.path).Replace('/','\') }
     if ((Get-LowerHash $sourceInput) -cne [string]$sourceReceipt.raw_sha256 -or (Get-Item -LiteralPath $sourceInput).Length -ne [long]$sourceReceipt.size) { throw "Terminal source input changed before staging: $($sourceReceipt.path)" }
     Copy-New $sourceInput (Join-Path $staging ('build\SourceInputs\' + ([string]$sourceReceipt.path).Replace('/','\')))
 }
@@ -707,10 +831,10 @@ $upgradeSourceReceipts = [Collections.Generic.List[object]]::new()
 foreach ($sourceReceipt in $sourceReceipts) {
     if ([string]$sourceReceipt.blob -cne 'GENERATED_BUILD_INPUT') { $upgradeSourceReceipts.Add($sourceReceipt) }
 }
-$upgradeSourceReceipts.Add([ordered]@{path='GENERATED/R7UpgradeBuildIdentity.g.cs';blob='GENERATED_BUILD_INPUT';raw_sha256=(Get-LowerHash $upgradeIdentitySource);size=(Get-Item -LiteralPath $upgradeIdentitySource).Length})
+$upgradeSourceReceipts.Add([ordered]@{path='GENERATED/R7UpgradeBuildIdentity.g.cs';blob='GENERATED_BUILD_INPUT';generation_rule='R7_FINAL_UPGRADE_BUILD_IDENTITY';mode=$null;raw_sha256=(Get-LowerHash $upgradeIdentitySource);size=(Get-Item -LiteralPath $upgradeIdentitySource).Length;source_identity=$orchestratorSourceIdentity;source_identity_class=$orchestratorSourceIdentityClass;source_origin='GENERATED'})
 $upgradeAuthorityBuildReceiptPath = Join-Path $output 'Generated\upgrade_authority_build_receipt.json'
 $upgradeAuthorityBuildReceipt = [ordered]@{
-    artifact_type='R7_UPGRADE_AUTHORITY_SOURCE_TO_BINARY_BUILD_RECEIPT';binary=$upgradeFinalReceipt;compiler_options=$compilerOptions;
+    artifact_type='R7_UPGRADE_AUTHORITY_SOURCE_TO_BINARY_BUILD_RECEIPT';binary=$upgradeFinalReceipt;compiler_invocations=@($compilerInvocationRecords | Where-Object {[string]$_.identity_source -ceq [IO.Path]::GetFullPath($upgradeIdentitySource)});compiler_options=$compilerOptions;
     dependency_manifest_sha256=$dependencyManifestSha;final_build_input_closures=$finalBuildInputClosures.ToArray();generated_identity_sha256=(Get-LowerHash $upgradeIdentitySource);governed_scripts=$governedScripts.ToArray();
     schema_version='1.0.0';source_commit=$SourceCommit;source_tree=$sourceTree;source_files=$upgradeSourceReceipts.ToArray();toolchain=$buildTools.ToArray();upgrade_policy_sha256=$upgradePolicySha
 }
@@ -727,7 +851,7 @@ foreach ($closure in $finalBuildInputClosures) {
     Copy-New (Join-Path $output ('Generated\' + $relative.Replace('/','\'))) (Join-Path $output ('UpgradeBootstrap\' + $relative.Replace('/','\')))
 }
 foreach ($sourceReceipt in $upgradeSourceReceipts) {
-    $sourceInput = if ([string]$sourceReceipt.blob -ceq 'GENERATED_BUILD_INPUT') { $upgradeIdentitySource } else { Join-Path $immutableRepositoryRoot ([string]$sourceReceipt.path).Replace('/','\') }
+    $sourceInput = if ([string]$sourceReceipt.blob -ceq 'GENERATED_BUILD_INPUT') { $upgradeIdentitySource } elseif ([string]$sourceReceipt.source_origin -ceq 'BUILD_ORCHESTRATOR') { Join-Path $orchestratorImmutableRepositoryRoot ([string]$sourceReceipt.path).Replace('/','\') } else { Join-Path $immutableRepositoryRoot ([string]$sourceReceipt.path).Replace('/','\') }
     if ((Get-LowerHash $sourceInput) -cne [string]$sourceReceipt.raw_sha256 -or (Get-Item -LiteralPath $sourceInput).Length -ne [long]$sourceReceipt.size) { throw "Upgrade source input changed before staging: $($sourceReceipt.path)" }
     Copy-New $sourceInput (Join-Path $output ('UpgradeBootstrap\SourceInputs\' + ([string]$sourceReceipt.path).Replace('/','\')))
 }
@@ -755,4 +879,4 @@ $summary = [ordered]@{
     upgrade_ledger_id=$upgradeLedgerId;upgrade_policy_sha256=$upgradePolicySha;upgrade_public_certificate_sha256=$upgradeCertificateSha
 }
 Write-CanonicalJson $summary $summaryPath $bootstrapTool
-Write-Output ([ordered]@{orchestrator_commit=$OrchestratorCommit;orchestrator_receipt_sha256=$orchestratorReceiptSha256;output_root=$output;summary_sha256=(Get-LowerHash $summaryPath);source_commit=$SourceCommit;source_tree=$sourceTree} | ConvertTo-Json)
+Write-Output ([ordered]@{orchestrator_commit=$orchestratorSourceIdentity;orchestrator_source_identity_class=$orchestratorSourceIdentityClass;orchestrator_receipt_sha256=$orchestratorReceiptSha256;output_root=$output;summary_sha256=(Get-LowerHash $summaryPath);source_commit=$SourceCommit;source_tree=$sourceTree} | ConvertTo-Json)

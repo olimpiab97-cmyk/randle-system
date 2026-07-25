@@ -2,7 +2,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$ArtifactTool,
     [switch]$GenerateRegistries,
-    [switch]$GeneratePackageManifest
+    [switch]$GeneratePackageManifest,
+    [string]$ExternalMeasurementRoot,
+    [switch]$ReplaceExisting
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,7 +14,7 @@ $packageRoot = [IO.Path]::GetFullPath($PSScriptRoot)
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $packageRoot '..\..\..'))
 $packageRelativeRoot = 'Architecture/Audits/2026-07-24_R7_Terminal_Authority_Architecture_Remediation_DRAFT'
 $artifactToolFull = [IO.Path]::GetFullPath($ArtifactTool)
-$measurementRoot = Join-Path $packageRoot ('Build\StaticRegistryMeasurements_' + [DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))
+$measurementRoot = if ([string]::IsNullOrWhiteSpace($ExternalMeasurementRoot)) { Join-Path $packageRoot ('Build\StaticRegistryMeasurements_' + [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')) } else { [IO.Path]::GetFullPath($ExternalMeasurementRoot) }
 
 function Get-LowerHash([string]$Path) { return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant() }
 function Get-RelativePath([string]$Base, [string]$Path) {
@@ -32,12 +34,16 @@ function Get-GitBlobIdentity([string]$Path) {
 }
 function Write-CanonicalNew([object]$Value, [string]$Path, [string]$Label) {
     $full = [IO.Path]::GetFullPath($Path)
-    if (Test-Path -LiteralPath $full) { throw "$Label already exists: $full" }
+    if ((Test-Path -LiteralPath $full) -and -not $ReplaceExisting) { throw "$Label already exists: $full" }
     if (-not (Test-Path -LiteralPath $measurementRoot)) { New-Item -ItemType Directory -Path $measurementRoot | Out-Null }
     $raw = Join-Path $measurementRoot ($Label + '.raw.json')
+    $canonical = Join-Path $measurementRoot ($Label + '.canonical.json')
+    if ((Test-Path -LiteralPath $raw) -or (Test-Path -LiteralPath $canonical)) { throw "$Label measurement output already exists." }
     [IO.File]::WriteAllText($raw, ($Value | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false))
-    & $artifactToolFull canonicalize $raw $full | Out-Null
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "Canonical registry write failed: $Label" }
+    & $artifactToolFull canonicalize $raw $canonical | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $canonical -PathType Leaf)) { throw "Canonical registry generation failed: $Label" }
+    [IO.File]::WriteAllBytes($full,[IO.File]::ReadAllBytes($canonical))
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf) -or (Get-LowerHash $full) -cne (Get-LowerHash $canonical)) { throw "Canonical registry write failed: $Label" }
 }
 function New-ScriptDefinition([string]$Name,[string]$Role,[string[]]$Stages,[string]$ExecutionClass,[string[]]$Dependencies,[string]$AuthorityClass) {
     return [ordered]@{ authority_classification=$AuthorityClass; dependencies=$Dependencies; execution_class=$ExecutionClass; name=$Name; role=$Role; stages=$Stages }
@@ -71,6 +77,7 @@ if ($GenerateRegistries) {
         (New-ScriptDefinition 'scan_secrets_and_contamination.ps1' 'SECRET_AND_CONTAMINATION_SCAN' @('PRECOMMIT_STATIC_VERIFICATION','STAGED_DELTA_VERIFICATION','FUTURE_POSTMATRIX_VERIFICATION') 'VERIFICATION_TIME' @('POWERSHELL_ORCHESTRATOR','GIT_BUILD_AND_VERIFICATION','POWERSHELL_UTILITY_MODULE') 'NONAUTHORITATIVE_FAIL_CLOSED_VERIFICATION'),
         (New-ScriptDefinition 'verify_authority_coverage.ps1' 'AUTHORITY_COVERAGE_VERIFICATION' @('PRECOMMIT_STATIC_VERIFICATION','DETACHED_POSTCOMMIT_STATIC_VERIFICATION') 'VERIFICATION_TIME' @('POWERSHELL_ORCHESTRATOR') 'NONAUTHORITATIVE_FAIL_CLOSED_VERIFICATION'),
         (New-ScriptDefinition 'verify_static_architecture.ps1' 'STATIC_ARCHITECTURE_VERIFICATION' @('PRECOMMIT_STATIC_VERIFICATION','DETACHED_POSTCOMMIT_STATIC_VERIFICATION') 'VERIFICATION_TIME' @('POWERSHELL_ORCHESTRATOR','GIT_BUILD_AND_VERIFICATION','STATIC_VERIFIER_OFFLINE_BUILD_OUTPUT') 'NONAUTHORITATIVE_FAIL_CLOSED_VERIFICATION'),
+        (New-ScriptDefinition 'verify_unit2_build_closure.ps1' 'UNIT2_BUILD_CLOSURE_VERIFICATION' @('UNIT2_PRECOMMIT_CANDIDATE_VERIFICATION','UNIT2_DETACHED_POSTCOMMIT_VERIFICATION') 'VERIFICATION_TIME' @('POWERSHELL_ORCHESTRATOR','GIT_BUILD_AND_VERIFICATION') 'NONAUTHORITATIVE_FAIL_CLOSED_BUILD_IDENTITY_VERIFICATION'),
         (New-ScriptDefinition 'verify_unit2_upgrade_authority.ps1' 'UNIT2_UPGRADE_AUTHORITY_VERIFICATION' @('UNIT2_POSTPROVISION_LIVE_VERIFICATION') 'VERIFICATION_TIME' @('POWERSHELL_ORCHESTRATOR','SC_SERVICE_CONTROL_TOOL','POWERSHELL_MANAGEMENT_ASSEMBLY','UNIT2_UPGRADE_CLIENT_BUILD_OUTPUT','UNIT2_UPGRADE_PUBLIC_VERIFIER_BUILD_OUTPUT','UNIT2_UPGRADE_PROTOCOL_PROBE_BUILD_OUTPUT') 'UNIT2_PUBLIC_AND_LIVE_BOUNDARY_VERIFICATION')
     )
     $actualScripts = @(Get-ChildItem -LiteralPath $packageRoot -Filter '*.ps1' -File | Sort-Object Name)
@@ -100,7 +107,7 @@ if ($GenerateRegistries) {
     $utilityModuleManifest = 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1'
     $utilityModuleScript = 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psm1'
     $utilityDefinitions = @(
-        (New-UtilityDefinition 'GIT_BUILD_AND_VERIFICATION' 'C:\Program Files\Git\cmd\git.exe' @('BUILD_TIME','VERIFICATION_TIME','FUTURE_MATRIX') @('extract_immutable_authority.ps1','build_remediation_package.ps1','build_static_closure.ps1','build_unit2_upgrade_authority.ps1','capture_remediation_host_state.ps1','run_fresh_matrix.ps1','scan_secrets_and_contamination.ps1','verify_static_architecture.ps1') 'ABSOLUTE_PATH_ONLY; ENVIRONMENT_AND_CONFIG_CLOSED; PROHIBITED_FROM_RUNTIME_AUTHORITY' 'NONAUTHORITATIVE_BUILD_AND_VERIFICATION_TOOL' 'RECURSIVE_INSTALLATION_ROOT' @('cat-file','ls-tree','rev-parse','status','diff','clone','checkout')),
+        (New-UtilityDefinition 'GIT_BUILD_AND_VERIFICATION' 'C:\Program Files\Git\cmd\git.exe' @('BUILD_TIME','VERIFICATION_TIME','FUTURE_MATRIX') @('extract_immutable_authority.ps1','build_remediation_package.ps1','build_static_closure.ps1','build_unit2_upgrade_authority.ps1','capture_remediation_host_state.ps1','run_fresh_matrix.ps1','scan_secrets_and_contamination.ps1','verify_static_architecture.ps1','verify_unit2_build_closure.ps1') 'ABSOLUTE_PATH_ONLY; ENVIRONMENT_AND_CONFIG_CLOSED; PROHIBITED_FROM_RUNTIME_AUTHORITY' 'NONAUTHORITATIVE_BUILD_AND_VERIFICATION_TOOL' 'RECURSIVE_INSTALLATION_ROOT' @('cat-file','ls-tree','rev-parse','status','diff','clone','checkout')),
         (New-UtilityDefinition 'POWERSHELL_ORCHESTRATOR' 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' @('BUILD_TIME','VERIFICATION_TIME','UNIT2_INSTALLATION','UNIT2_VERIFICATION','FUTURE_INSTALLATION','FUTURE_MATRIX') @($actualScriptNames) 'ABSOLUTE_HOST_PATH; NONAUTHORITATIVE_ORCHESTRATOR; SCRIPT_BYTES_SEPARATELY_GOVERNED' 'NONAUTHORITATIVE_ORCHESTRATOR' 'RECURSIVE_POWERSHELL_ROOT' @('PowerShell-script-host')),
         (New-UtilityDefinition 'CSC_COMPILER' 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe' @('BUILD_TIME') @('build_remediation_package.ps1','build_static_closure.ps1','build_unit2_upgrade_authority.ps1') 'ABSOLUTE_PATH; FIXED OPTIONS; NO RESPONSE FILES; NO PATH SEARCH' 'NONAUTHORITATIVE_COMPILER_INPUT' 'RECURSIVE_FRAMEWORK_ROOT' @('compile-x64-net48')),
         (New-UtilityDefinition 'ILDASM_TOOL' 'C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\ildasm.exe' @('BUILD_TIME') @('build_remediation_package.ps1','build_static_closure.ps1','build_unit2_upgrade_authority.ps1') 'ABSOLUTE_PATH; NORMALIZED_IL_COMPARISON_ONLY' 'NONAUTHORITATIVE_BINARY_SEMANTIC_CHECK_TOOL' 'RECURSIVE_ILDASM_ROOT' @('normalized-il')),

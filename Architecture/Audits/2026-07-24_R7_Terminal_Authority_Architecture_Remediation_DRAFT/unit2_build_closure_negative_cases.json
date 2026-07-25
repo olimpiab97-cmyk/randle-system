@@ -1,0 +1,15 @@
+{
+  "artifact_type": "R7_UNIT2_BUILD_CLOSURE_NEGATIVE_CASE_REGISTRY",
+  "cases": [
+    {"case_id":"U2BC-N001","mutation":"OMIT_COMMITTED_COMPILER_INPUT","expected_error":"COMPILER_INPUT_SET_MISMATCH"},
+    {"case_id":"U2BC-N002","mutation":"OMIT_GENERATED_COMPILER_INPUT","expected_error":"COMPILER_INPUT_SET_MISMATCH"},
+    {"case_id":"U2BC-N003","mutation":"REMOVE_REQUIRED_COMPILER_ARGUMENT","expected_error":"COMPILER_ARGUMENT_VECTOR_MISMATCH"},
+    {"case_id":"U2BC-N004","mutation":"ZERO_EMBEDDED_IDENTITY","expected_error":"EMBEDDED_IDENTITY_INVALID"},
+    {"case_id":"U2BC-N005","mutation":"DIAGNOSTIC_EMBEDDED_IDENTITY","expected_error":"EMBEDDED_IDENTITY_INVALID"},
+    {"case_id":"U2BC-N006","mutation":"TOKEN_IN_NONCOMPILED_SOURCE_REGION","expected_error":"GENERATED_SOURCE_TOKEN_INVALID"},
+    {"case_id":"U2BC-N007","mutation":"PACKAGED_TOOL_DIAGNOSTIC_IDENTITY","expected_error":"PACKAGED_TOOL_IDENTITY_INVALID"},
+    {"case_id":"U2BC-N008","mutation":"RECEIPT_SOURCE_NOT_IN_ARGUMENT_VECTOR","expected_error":"COMPILER_INPUT_SET_MISMATCH"},
+    {"case_id":"U2BC-N009","mutation":"ARGUMENT_SOURCE_NOT_IN_RECEIPT","expected_error":"COMPILER_INPUT_SET_MISMATCH"}
+  ],
+  "schema_version": "1.0.0"
+}

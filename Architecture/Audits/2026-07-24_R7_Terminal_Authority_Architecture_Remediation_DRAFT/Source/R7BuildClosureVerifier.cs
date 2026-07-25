@@ -363,7 +363,7 @@ namespace RandleAI.R7Remediation
                 else
                 {
                     committed++;
-                    if (blob.Length != 40 || !IsLowerHex(blob) || path.IndexOf("/Source/", StringComparison.Ordinal) < 0 && !path.EndsWith("/BuildInputs/R7DevelopmentIdentity.g.cs", StringComparison.Ordinal) || GitBlobIdentity(bytes) != blob) throw new InvalidDataException("COMMITTED_SOURCE_BLOB_INVALID");
+                    if (blob.Length != 40 || !IsLowerHex(blob) || path.IndexOf("/Source/", StringComparison.Ordinal) < 0 && !path.EndsWith("/BuildInputs/R7BuildIdentityContract.cs", StringComparison.Ordinal) || GitBlobIdentity(bytes) != blob) throw new InvalidDataException("COMMITTED_SOURCE_BLOB_INVALID");
                 }
             }
             if (committed < 10 || generated != 1 || expectedCommit == null || expectedCommit.Length != 40 || !IsLowerHex(expectedCommit)) throw new InvalidDataException("SOURCE_FILE_RECEIPT_INCOMPLETE");

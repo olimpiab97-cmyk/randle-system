@@ -24,6 +24,7 @@ function Get-BytesSha256([byte[]]$Bytes) {
     try { return ([BitConverter]::ToString($algorithm.ComputeHash($Bytes))).Replace('-','').ToLowerInvariant() }
     finally { $algorithm.Dispose() }
 }
+function Get-TextSha256([string]$Value) { return Get-BytesSha256 ([Text.UTF8Encoding]::new($false).GetBytes($Value)) }
 function Get-GitBlobIdentity([string]$Path) {
     $bytes = [IO.File]::ReadAllBytes([IO.Path]::GetFullPath($Path))
     $header = [Text.Encoding]::ASCII.GetBytes(('blob ' + $bytes.Length + [char]0))
@@ -160,8 +161,8 @@ $references = @($referenceRoles | ForEach-Object { [string](Get-Utility $utility
 $compiler = [string]$compilerRow.path; $ildasm = [string]$ildasmRow.path; $git = [string]$gitRow.path
 if (-not [string]::Equals([IO.Path]::GetFullPath((Get-Process -Id $PID).Path), [IO.Path]::GetFullPath([string]$powershellRow.path), [StringComparison]::OrdinalIgnoreCase)) { throw 'Static build is not running under the governed PowerShell executable.' }
 
-$sourceTree = '0000000000000000000000000000000000000000'
-$sourceIdentityClass = 'PRECOMMIT_PLACEHOLDER_NONAUTHORITY'
+$sourceTree = ''
+$sourceIdentityClass = 'WORKTREE_CONTENT_DERIVATION_STATIC_NONAUTHORITY'
 $commitBlobMap = @{}
 if ($SourceCommit -cne 'PRECOMMIT') {
     $head = ([string](Invoke-Git $git @('rev-parse','HEAD'))).Trim()
@@ -177,14 +178,74 @@ if ($SourceCommit -cne 'PRECOMMIT') {
     }
     $sourceIdentityClass = 'EXACT_COMMIT_AND_TREE_STATIC_NONAUTHORITY'
 }
-$identityCommit = if ($SourceCommit -ceq 'PRECOMMIT') { '0000000000000000000000000000000000000000' } else { $SourceCommit }
+$contractPath = Join-Path $packageRoot 'BuildInputs\R7BuildIdentityContract.cs'
+if (-not (Test-Path -LiteralPath $contractPath -PathType Leaf)) { throw 'Build-identity generation contract is absent.' }
+$sourcePaths = @($actualSources | ForEach-Object FullName) + $contractPath
+if ($SourceCommit -ceq 'PRECOMMIT') {
+    $worktreeIdentity = Get-TextSha256 ((@($sourcePaths | Sort-Object | ForEach-Object { (Get-RelativePath $repositoryRoot $_) + '|' + (Get-Sha256 $_) + '|' + (Get-Item -LiteralPath $_).Length }) -join "`n"))
+    $identityCommit = $worktreeIdentity.Substring(0,40)
+    $sourceTree = (Get-TextSha256 ('R7_STATIC_WORKTREE_TREE_V1|' + $worktreeIdentity)).Substring(0,40)
+} else { $identityCommit = $SourceCommit }
 
-$developmentIdentity = Join-Path $packageRoot 'BuildInputs\R7DevelopmentIdentity.g.cs'
-$sourcePaths = @($actualSources | ForEach-Object FullName)
+$bootstrapDerivation = Get-TextSha256 ('R7_STATIC_BOOTSTRAP_IDENTITY_V1|' + $identityCommit + '|' + $sourceTree + '|' + (Get-Sha256 $utilityRegistryPath))
+$bootstrapFileIdentity = $bootstrapDerivation.Substring(0,8) + ':' + $bootstrapDerivation.Substring(8,16)
+$bootstrapIdentity = Join-Path $output 'Generated\R7StaticBootstrapIdentity.g.cs'
+$bootstrapIdentityText = @"
+namespace RandleAI.R7Remediation
+{
+    internal static class R7BuildIdentity
+    {
+        internal const string UpgradePolicySha256 = "$bootstrapDerivation";
+        internal const string UpgradePublicCertificateSha256 = "$bootstrapDerivation";
+        internal const string DependencyManifestSha256 = "$bootstrapDerivation";
+        internal const string UpgradeBinaryPath = @"C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeAuthority.exe";
+        internal const string SourceCommit = "$identityCommit";
+        internal const string SourceTree = "$sourceTree";
+        internal const string RequirementRegistrySha256 = "$bootstrapDerivation";
+        internal const string CaseDefinitionsSha256 = "$bootstrapDerivation";
+        internal const string ExpectationsSha256 = "$bootstrapDerivation";
+        internal const string CoverageProofSha256 = "$bootstrapDerivation";
+        internal const string AuthoritySourceManifestSha256 = "$bootstrapDerivation";
+        internal const string HistoricalClassificationRegistrySha256 = "$bootstrapDerivation";
+        internal const string ExecutionBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalExecution.exe";
+        internal const string ObservationBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalObservation.exe";
+        internal const string ComparatorBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalComparator.exe";
+        internal const string TerminalKeyFilePath = @"$output\IdentityInputs\terminal-$bootstrapDerivation";
+        internal const string TerminalKeyFileIdentity = "$bootstrapFileIdentity";
+        internal const string TerminalKeyFileOwnerSid = "S-1-5-18";
+        internal const string TerminalKeyFileSecurityDescriptorSha256 = "$bootstrapDerivation";
+        internal const string TerminalKeyFileVolumeIdentity = "$($bootstrapDerivation.Substring(0,8))";
+        internal const uint TerminalKeyFileLinkCount = 1;
+        internal const string UpgradeKeyFilePath = @"$output\IdentityInputs\upgrade-$bootstrapDerivation";
+        internal const string UpgradeKeyFileIdentity = "$bootstrapFileIdentity";
+        internal const string UpgradeKeyFileOwnerSid = "S-1-5-18";
+        internal const string UpgradeKeyFileSecurityDescriptorSha256 = "$bootstrapDerivation";
+        internal const string UpgradeKeyFileVolumeIdentity = "$($bootstrapDerivation.Substring(0,8))";
+        internal const uint UpgradeKeyFileLinkCount = 1;
+    }
+    internal static class R7Unit2BuildIdentity
+    {
+        internal const string PublicCertificateSha256 = "$bootstrapDerivation";
+        internal const string PolicySha256 = "$bootstrapDerivation";
+        internal const string DependencyManifestSha256 = "$bootstrapDerivation";
+        internal const string SourceCommit = "$identityCommit";
+        internal const string SourceTree = "$sourceTree";
+        internal const string KeyFilePath = @"$output\IdentityInputs\upgrade-$bootstrapDerivation";
+        internal const string KeyFileOwnerSid = "S-1-5-18";
+        internal const string KeyFileSecurityDescriptorSha256 = "$bootstrapDerivation";
+        internal const string KeyFileVolumeIdentity = "$($bootstrapDerivation.Substring(0,8))";
+        internal const string KeyFileIdentity = "$bootstrapFileIdentity";
+        internal const uint KeyFileLinkCount = 1;
+        internal const string BuildInputClosureSha256 = "$bootstrapDerivation";
+        internal const string PolicyBindingKind = "STATIC_CONTENT_DERIVATION_V1";
+    }
+}
+"@
+[IO.File]::WriteAllText($bootstrapIdentity,$bootstrapIdentityText,[Text.UTF8Encoding]::new($false))
 $artifactTarget = @($sourceRegistry.executable_roles | Where-Object { [string]$_.role -ceq 'ARTIFACT_TOOL' })
 if ($artifactTarget.Count -ne 1) { throw 'Artifact-tool executable role is not unique.' }
 $bootstrapTool = Join-Path $output 'Bootstrap\R7ArtifactTool.bootstrap.exe'
-Invoke-Compiler $artifactTarget[0] $sourcePaths $developmentIdentity $bootstrapTool $compiler $references
+Invoke-Compiler $artifactTarget[0] $sourcePaths $bootstrapIdentity $bootstrapTool $compiler $references
 
 $initialUtilityMeasurements = [Collections.Generic.List[object]]::new()
 foreach ($row in @($utilityRegistry.utilities | Sort-Object role)) { $initialUtilityMeasurements.Add((Measure-Utility $row $bootstrapTool (Join-Path $output 'Measurements') 'initial')) }
@@ -233,16 +294,18 @@ $artifactHashes = [ordered]@{
     dependency=(Get-Sha256 $dependencyManifestPath)
 }
 $identitySource = Join-Path $output 'Generated\R7StaticBuildIdentity.g.cs'
+$staticPolicyIdentity = Get-TextSha256 ('R7_STATIC_POLICY_IDENTITY_V1|' + $identityCommit + '|' + $sourceTree + '|' + $artifactHashes.dependency)
+$staticCertificateIdentity = Get-TextSha256 ('R7_STATIC_CERTIFICATE_IDENTITY_V1|' + $identityCommit + '|' + $sourceTree)
+$staticKeyIdentity = Get-TextSha256 ('R7_STATIC_KEY_METADATA_IDENTITY_V1|' + $identityCommit + '|' + $sourceTree)
+$staticFileIdentity = $staticKeyIdentity.Substring(0,8) + ':' + $staticKeyIdentity.Substring(8,16)
 $identityText = @"
 namespace RandleAI.R7Remediation
 {
-    // Uninstalled static-compile identity. Host/key/trust identities remain
-    // explicit placeholders and these binaries cannot authorize a transition.
     internal static class R7BuildIdentity
     {
         internal const string StaticAuthorityClassification = "UNINSTALLED_NONAUTHORITATIVE_STATIC_COMPILE_IDENTITY";
-        internal const string UpgradePolicySha256 = "0000000000000000000000000000000000000000000000000000000000000000";
-        internal const string UpgradePublicCertificateSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+        internal const string UpgradePolicySha256 = "$staticPolicyIdentity";
+        internal const string UpgradePublicCertificateSha256 = "$staticCertificateIdentity";
         internal const string DependencyManifestSha256 = "$($artifactHashes.dependency)";
         internal const string UpgradeBinaryPath = @"C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeAuthority.exe";
         internal const string SourceCommit = "$identityCommit";
@@ -256,18 +319,34 @@ namespace RandleAI.R7Remediation
         internal const string ExecutionBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalExecution.exe";
         internal const string ObservationBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalObservation.exe";
         internal const string ComparatorBinaryPath = @"C:\Program Files\RandleAI\TerminalAuthorityV4\RandleTerminalComparator.exe";
-        internal const string TerminalKeyFilePath = @"C:\ProgramData\Microsoft\Crypto\Keys\STATIC_PLACEHOLDER";
-        internal const string TerminalKeyFileIdentity = "00000000:0000000000000000";
+        internal const string TerminalKeyFilePath = @"$output\IdentityInputs\terminal-$staticKeyIdentity";
+        internal const string TerminalKeyFileIdentity = "$staticFileIdentity";
         internal const string TerminalKeyFileOwnerSid = "S-1-5-18";
-        internal const string TerminalKeyFileSecurityDescriptorSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
-        internal const string TerminalKeyFileVolumeIdentity = "00000000";
+        internal const string TerminalKeyFileSecurityDescriptorSha256 = "$staticKeyIdentity";
+        internal const string TerminalKeyFileVolumeIdentity = "$($staticKeyIdentity.Substring(0,8))";
         internal const uint TerminalKeyFileLinkCount = 1;
-        internal const string UpgradeKeyFilePath = @"C:\ProgramData\Microsoft\Crypto\Keys\STATIC_PLACEHOLDER";
-        internal const string UpgradeKeyFileIdentity = "00000000:0000000000000000";
+        internal const string UpgradeKeyFilePath = @"$output\IdentityInputs\upgrade-$staticKeyIdentity";
+        internal const string UpgradeKeyFileIdentity = "$staticFileIdentity";
         internal const string UpgradeKeyFileOwnerSid = "S-1-5-18";
-        internal const string UpgradeKeyFileSecurityDescriptorSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
-        internal const string UpgradeKeyFileVolumeIdentity = "00000000";
+        internal const string UpgradeKeyFileSecurityDescriptorSha256 = "$staticKeyIdentity";
+        internal const string UpgradeKeyFileVolumeIdentity = "$($staticKeyIdentity.Substring(0,8))";
         internal const uint UpgradeKeyFileLinkCount = 1;
+    }
+    internal static class R7Unit2BuildIdentity
+    {
+        internal const string PublicCertificateSha256 = "$staticCertificateIdentity";
+        internal const string PolicySha256 = "$staticPolicyIdentity";
+        internal const string DependencyManifestSha256 = "$($artifactHashes.dependency)";
+        internal const string SourceCommit = "$identityCommit";
+        internal const string SourceTree = "$sourceTree";
+        internal const string KeyFilePath = @"$output\IdentityInputs\upgrade-$staticKeyIdentity";
+        internal const string KeyFileOwnerSid = "S-1-5-18";
+        internal const string KeyFileSecurityDescriptorSha256 = "$staticKeyIdentity";
+        internal const string KeyFileVolumeIdentity = "$($staticKeyIdentity.Substring(0,8))";
+        internal const string KeyFileIdentity = "$staticFileIdentity";
+        internal const uint KeyFileLinkCount = 1;
+        internal const string BuildInputClosureSha256 = "$staticKeyIdentity";
+        internal const string PolicyBindingKind = "STATIC_CONTENT_DERIVATION_V1";
     }
 }
 "@
@@ -281,7 +360,7 @@ $binaryReceipts = [Collections.Generic.List[object]]::new()
 foreach ($target in $targets) {
     $targetSources = @($declaredSources | Where-Object { @($_.compiled_into_roles) -contains [string]$target.role } | Sort-Object path)
     if ($targetSources.Count -eq 0) { throw "Executable role has no source set: $($target.role)" }
-    $sourceFiles = @($targetSources | ForEach-Object { Join-Path $packageRoot ([string]$_.path).Replace('/','\') })
+    $sourceFiles = @($targetSources | ForEach-Object { Join-Path $packageRoot ([string]$_.path).Replace('/','\') }) + $contractPath
     $passA = Join-Path $output ('PassA\' + [string]$target.file_name)
     $passB = Join-Path $output ('PassB\' + [string]$target.file_name)
     Invoke-Compiler $target $sourceFiles $identitySource $passA $compiler $references
@@ -324,7 +403,8 @@ for ($index = 0; $index -lt $closureDefinitions.Count; $index++) {
     $closures[$index].stable_during_use = $true
 }
 
-$sourceReceiptRows = foreach ($row in $declaredSources) { [ordered]@{git_blob_identity=[string]$row.git_blob_identity;mode=[string]$row.mode;path=($packageRelativeRoot + '/' + [string]$row.path);raw_sha256=[string]$row.raw_sha256;size=[long]$row.size} }
+$sourceReceiptRows = @($declaredSources | ForEach-Object { [ordered]@{git_blob_identity=[string]$_.git_blob_identity;mode=[string]$_.mode;path=($packageRelativeRoot + '/' + [string]$_.path);raw_sha256=[string]$_.raw_sha256;size=[long]$_.size} })
+$sourceReceiptRows += [ordered]@{git_blob_identity=(Get-GitBlobIdentity $contractPath);mode='100644';path=($packageRelativeRoot + '/BuildInputs/R7BuildIdentityContract.cs');raw_sha256=(Get-Sha256 $contractPath);size=(Get-Item -LiteralPath $contractPath).Length}
 $scriptReceiptRows = foreach ($row in $declaredScripts) { [ordered]@{allowed_invocation_stages=@($row.allowed_invocation_stages);authority_classification=[string]$row.authority_classification;dependencies=@($row.dependencies);execution_class=[string]$row.execution_class;git_blob_identity=[string]$row.git_blob_identity;mode=[string]$row.mode;path=[string]$row.path;raw_sha256=[string]$row.raw_sha256;role=[string]$row.role;size=[long]$row.size} }
 $receiptPath = Join-Path $output 'static_build_receipt.json'
 $receipt = [ordered]@{

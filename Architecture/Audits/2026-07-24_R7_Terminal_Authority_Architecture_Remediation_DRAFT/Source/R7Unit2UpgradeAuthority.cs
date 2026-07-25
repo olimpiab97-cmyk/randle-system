@@ -14,23 +14,6 @@ using Microsoft.Win32.SafeHandles;
 
 namespace RandleAI.R7Remediation
 {
-    internal static class R7Unit2BuildIdentity
-    {
-        internal const string PublicCertificateSha256 = "UNIT2_GENERATED_CERTIFICATE_SHA256";
-#if UNIT2_SERVICE
-        internal const string PolicySha256 = "UNIT2_GENERATED_POLICY_SHA256";
-        internal const string DependencyManifestSha256 = "UNIT2_GENERATED_DEPENDENCY_SHA256";
-        internal const string SourceCommit = "UNIT2_GENERATED_SOURCE_COMMIT";
-        internal const string SourceTree = "UNIT2_GENERATED_SOURCE_TREE";
-        internal const string KeyFilePath = @"UNIT2_GENERATED_KEY_FILE_PATH";
-        internal const string KeyFileOwnerSid = "UNIT2_GENERATED_KEY_OWNER_SID";
-        internal const string KeyFileSecurityDescriptorSha256 = "UNIT2_GENERATED_KEY_ACL_SHA256";
-        internal const string KeyFileVolumeIdentity = "UNIT2_GENERATED_KEY_VOLUME_IDENTITY";
-        internal const string KeyFileIdentity = "UNIT2_GENERATED_KEY_FILE_IDENTITY";
-        internal const uint KeyFileLinkCount = 1;
-#endif
-    }
-
     internal sealed class R7Unit2Component
     {
         internal string Role;
