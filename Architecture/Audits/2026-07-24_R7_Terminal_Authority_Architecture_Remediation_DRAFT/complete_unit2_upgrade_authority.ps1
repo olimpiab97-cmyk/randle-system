@@ -135,7 +135,14 @@ AssertTerminalSnapshot $terminalBefore
 AssertNoAuthorityArtifacts
 foreach($requiredRoot in @($install,$config,$trust)){if(-not(Test-Path -LiteralPath $requiredRoot -PathType Container)){throw "Preserved root absent: $requiredRoot"};AssertBootstrapRootAcl $bootstrap $requiredRoot}
 if(@(Get-ChildItem -LiteralPath $install -Force).Count -ne 0){throw 'Upgrade installation root is not empty'}
-if(@(Get-ChildItem -LiteralPath $config -Force).Count -ne 0){throw 'Upgrade configuration root is not empty'}
+$configChildren=@(Get-ChildItem -LiteralPath $config -Force)
+$expectedConfigChildren=@('BuildInputClosures','SourceInputs')
+if($configChildren.Count -ne $expectedConfigChildren.Count -or ((@($configChildren.Name|Sort-Object)-join "`n") -cne (@($expectedConfigChildren|Sort-Object)-join "`n"))){throw 'Upgrade configuration root contains an unexpected bootstrap artifact'}
+foreach($childName in $expectedConfigChildren){
+    $child=Join-Path $config $childName
+    if(-not(Test-Path -LiteralPath $child -PathType Container) -or @(Get-ChildItem -LiteralPath $child -Force).Count -ne 0){throw "Upgrade bootstrap configuration root is not an empty directory: $child"}
+    AssertBootstrapRootAcl $bootstrap $child
+}
 if(Test-Path -LiteralPath $evidenceParent){throw 'Unit 2B evidence parent must not exist before installation'}
 $certTarget=Join-Path $trust 'upgrade_authority_public.cer'
 if((Hash $certTarget) -cne [string]$bootstrap.public_certificate_sha256){throw 'Preserved public certificate bytes drifted'}
