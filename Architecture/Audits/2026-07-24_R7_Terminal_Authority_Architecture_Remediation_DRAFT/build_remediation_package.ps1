@@ -365,6 +365,8 @@ $terminalKeyProtectedInvocationPath = Join-Path $output 'Generated\terminal_key_
 $upgradeKeyMetadataPath = Join-Path $output 'Generated\upgrade_key_file_metadata.json'
 $upgradeKeyProtectedEvidencePath = Join-Path $output 'Generated\upgrade_key_protected_metadata_evidence.json'
 $upgradeKeyProtectedInvocationPath = Join-Path $output 'Generated\upgrade_key_protected_metadata_invocation.json'
+$upgradeKeyAclBefore = Get-Acl -LiteralPath $upgradeKeyFile
+$upgradeKeyAclBeforeSha256 = Get-StringHash ([string]$upgradeKeyAclBefore.Sddl)
 & $orchestratorMetadataTool measure-protected-metadata $terminalKeyFile $terminalKeyProtectedEvidencePath
 if ($LASTEXITCODE -ne 0) { throw 'Terminal key protected metadata measurement failed.' }
 & $orchestratorMetadataTool measure-protected-metadata $upgradeKeyFile $upgradeKeyProtectedEvidencePath
@@ -379,11 +381,13 @@ Assert-ExactPropertySet $upgradeKeyProtectedEvidence @('artifact_type','data_acc
 if ([string]$upgradeKeyProtectedEvidence.artifact_type -cne 'R7_PROTECTED_FILE_METADATA_MEASUREMENT' -or [string]$upgradeKeyProtectedEvidence.schema_version -cne '1.0.0' -or $upgradeKeyProtectedEvidence.data_access_requested -ne $false -or $upgradeKeyProtectedEvidence.private_bytes_read -ne $false -or $upgradeKeyProtectedEvidence.privilege_restored_before_evidence_write -ne $true -or [string]$upgradeKeyProtectedEvidence.metadata_privilege -cne 'SeBackupPrivilege') { throw 'Upgrade key protected metadata evidence boundary is invalid.' }
 $upgradeKeyMetadata = $upgradeKeyProtectedEvidence.measurement
 Write-CanonicalJson $upgradeKeyMetadata $upgradeKeyMetadataPath $bootstrapTool
+$upgradeKeyAclAfter = Get-Acl -LiteralPath $upgradeKeyFile
+$upgradeKeyAclAfterSha256 = Get-StringHash ([string]$upgradeKeyAclAfter.Sddl)
 foreach ($keyMetadata in @($terminalKeyMetadata,$upgradeKeyMetadata)) {
     if ($keyMetadata.owner_sid -ne 'S-1-5-18' -or [long]$keyMetadata.hard_link_count -ne 1 -or $keyMetadata.volume_identity -ne $volumeIdentity -or @($keyMetadata.streams).Count -ne 1 -or $keyMetadata.streams[0] -ne '::$DATA') { throw 'Signing key metadata violates the governed physical-identity policy.' }
 }
 if ([string]$terminalKeyMetadata.security_descriptor_sha256 -cne '2d117c2338cdc8cfb2bfabf2abf2c2730ef36b897a613d3624e46d128afb5e4d' -or [long]$terminalKeyMetadata.size -ne 2051 -or [string]$terminalKeyMetadata.canonical_path -cne $terminalKeyFile) { throw 'Terminal key protected metadata differs from the preserved independently captured ACL, size, or path.' }
-if ($upgradeKeyMetadata.security_descriptor_sha256 -ne [string]$bootstrap.key_file_acl_sha256) { throw 'Upgrade key ACL differs from the separately captured bootstrap identity.' }
+if ($upgradeKeyAclBeforeSha256 -cne [string]$bootstrap.key_file_acl_sha256 -or $upgradeKeyAclAfterSha256 -cne [string]$bootstrap.key_file_acl_sha256 -or [string]$upgradeKeyAclBefore.Sddl -cne [string]$bootstrap.key_file_acl_sddl -or [string]$upgradeKeyAclAfter.Sddl -cne [string]$bootstrap.key_file_acl_sddl -or [string]$upgradeKeyAclBefore.Owner -cne 'NT AUTHORITY\SYSTEM' -or [string]$upgradeKeyAclAfter.Owner -cne 'NT AUTHORITY\SYSTEM') { throw 'Upgrade key canonical ACL differs from the separately captured bootstrap identity or changed across held-handle measurement.' }
 $terminalKeyProtectedInvocation = [ordered]@{
     artifact_type='R7_PROTECTED_METADATA_TOOL_INVOCATION_RECEIPT';data_access_requested=$false;measurement_sha256=(Get-LowerHash $terminalKeyMetadataPath);
     private_bytes_read=$false;protected_evidence_sha256=(Get-LowerHash $terminalKeyProtectedEvidencePath);schema_version='1.0.0';source_commit=$OrchestratorCommit;
@@ -391,7 +395,8 @@ $terminalKeyProtectedInvocation = [ordered]@{
 }
 Write-CanonicalJson $terminalKeyProtectedInvocation $terminalKeyProtectedInvocationPath $bootstrapTool
 $upgradeKeyProtectedInvocation = [ordered]@{
-    artifact_type='R7_PROTECTED_METADATA_TOOL_INVOCATION_RECEIPT';data_access_requested=$false;measurement_sha256=(Get-LowerHash $upgradeKeyMetadataPath);
+    artifact_type='R7_PROTECTED_METADATA_TOOL_INVOCATION_RECEIPT';bootstrap_acl_sddl_sha256=[string]$bootstrap.key_file_acl_sha256;canonical_acl_stable=$true;data_access_requested=$false;measurement_sha256=(Get-LowerHash $upgradeKeyMetadataPath);
+    native_handle_acl_sha256=[string]$upgradeKeyMetadata.security_descriptor_sha256;powershell_acl_sddl_sha256=$upgradeKeyAclAfterSha256;
     private_bytes_read=$false;protected_evidence_sha256=(Get-LowerHash $upgradeKeyProtectedEvidencePath);schema_version='1.0.0';source_commit=$OrchestratorCommit;
     source_tree=$orchestratorTree;tool_build_receipt_sha256=(Get-LowerHash $orchestratorMetadataToolBuildReceiptPath);tool_sha256=(Get-LowerHash $orchestratorMetadataTool)
 }
