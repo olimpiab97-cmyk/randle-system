@@ -42,7 +42,7 @@ NewDir $output
 foreach($d in @('Generated','PassA','PassB','NormalizedIL','Install','TargetStaging','Tools')){New-Item -ItemType Directory -Path (Join-Path $output $d)|Out-Null}
 $registry=ReadJson (Join-Path $packageRoot 'external_utility_registry.json')
 function Utility([string]$role){$r=@($registry.utilities|Where-Object{$_.role -ceq $role});if($r.Count -ne 1){throw "Utility role invalid: $role"};if((Hash ([string]$r[0].path)) -cne [string]$r[0].measurement.sha256){throw "Utility drift: $role"};$r[0]}
-$gitRow=Utility 'GIT_BUILD_AND_VERIFICATION';$cscRow=Utility 'CSC_COMPILER';$ildasmRow=Utility 'ILDASM_TOOL'
+$gitRow=Utility 'GIT_BUILD_AND_VERIFICATION';$cscRow=Utility 'CSC_COMPILER';$ildasmRow=Utility 'ILDASM_TOOL';$powershellRow=Utility 'POWERSHELL_ORCHESTRATOR'
 $git=[string]$gitRow.path;$csc=[string]$cscRow.path;$ildasm=[string]$ildasmRow.path
 $refs=@('COMPILER_REFERENCE_mscorlib.dll','COMPILER_REFERENCE_System.dll','COMPILER_REFERENCE_System.Core.dll','COMPILER_REFERENCE_System.Security.dll','COMPILER_REFERENCE_System.ServiceProcess.dll')|ForEach-Object{[string](Utility $_).path}
 $head=(& $git --no-pager -c "safe.directory=$($repositoryRoot.Replace('\','/'))" -C $repositoryRoot rev-parse HEAD).Trim();if($LASTEXITCODE -ne 0 -or $head -cne $SourceCommit){throw 'Source HEAD mismatch'}
@@ -58,6 +58,7 @@ foreach($fixed in @([ordered]@{path='C:\Program Files\RandleAI\TerminalAuthority
 $artifact=Join-Path $target 'Bootstrap\R7ArtifactTool.bootstrap.exe';if(-not(Test-Path $artifact)){throw 'Target artifact tool missing'}
 $targetSummary=ReadJson (Join-Path $target 'build_summary.json');if([string]$targetSummary.source_commit -cne $unit1Commit -or [string]$targetSummary.source_tree -cne $unit1Tree){throw 'Target build source mismatch'}
 $targetOrchestratorReceipt=Join-Path $target 'Generated\build_orchestrator_receipt.json';if(-not(Test-Path -LiteralPath $targetOrchestratorReceipt -PathType Leaf) -or [string]$targetSummary.orchestrator_receipt_sha256 -cne (Hash $targetOrchestratorReceipt)){throw 'Target build orchestrator receipt mismatch'};$targetOrchestratorReceiptSha=Hash $targetOrchestratorReceipt
+$targetOrchestrator=ReadJson $targetOrchestratorReceipt
 $targetReceipt=Join-Path $target 'Generated\build_receipt.json';$targetReceiptSha=Hash $targetReceipt
 $targetTemplate=ReadJson (Join-Path $target 'Generated\transition_request_template.json')
 $dependency=Join-Path $target 'Generated\dependency_manifest.json';$dependencySha=Hash $dependency
@@ -70,8 +71,19 @@ $targetManifestValue=ReadJson $targetManifest;$extraIndex=0
 foreach($file in @($targetManifestValue.files|Sort-Object staging_relative_path)){if($componentPaths.Contains([string]$file.staging_relative_path)){continue};$components.Add([ordered]@{final_path=[string]$file.final_path;role=('PACKAGE_FILE_'+$extraIndex.ToString('D4')+'_'+([string]$file.raw_sha256).Substring(0,16));sha256=[string]$file.raw_sha256;staging_relative_path=[string]$file.staging_relative_path});[void]$componentPaths.Add([string]$file.staging_relative_path);$extraIndex++}
 
 $keyPath=Join-Path 'C:\ProgramData\Microsoft\Crypto\Keys' ([string]$bootstrap.key_unique_name)
-$keyMetadataPath=Join-Path $output 'Generated\upgrade_key_metadata.json';& $artifact measure-metadata $keyPath $keyMetadataPath|Out-Null;if($LASTEXITCODE -ne 0){throw 'Key metadata failed'};$key=ReadJson $keyMetadataPath
-if([string]$key.owner_sid -cne 'S-1-5-18' -or [long]$key.hard_link_count -ne 1 -or [string]$key.security_descriptor_sha256 -cne [string]$bootstrap.key_file_acl_sha256){throw 'Key metadata mismatch'}
+$protectedTool=Join-Path $target 'OrchestratorBootstrap\R7ProtectedMetadataTool.exe'
+$protectedReceiptPath=Join-Path $target 'Generated\protected_metadata_tool_build_receipt.json'
+$protectedReceipt=ReadJson $protectedReceiptPath
+if([string]$protectedReceipt.artifact_type -cne 'R7_PROTECTED_METADATA_TOOL_BUILD_RECEIPT' -or [string]$protectedReceipt.source_commit -cne [string]$targetOrchestrator.orchestrator_commit -or [string]$protectedReceipt.source_tree -cne [string]$targetOrchestrator.orchestrator_tree -or [string]$protectedReceipt.pass_a_sha256 -cne (Hash $protectedTool) -or $protectedReceipt.private_key_bytes_read -ne $false -or [string]$protectedReceipt.data_access_mask -cne 'FILE_READ_ATTRIBUTES|READ_CONTROL'){throw 'Protected metadata tool receipt mismatch'}
+$priorKey=ReadJson (Join-Path $target 'Generated\upgrade_key_file_metadata.json')
+$keyAclBefore=Get-Acl -LiteralPath $keyPath;$keyAclBeforeSha=TextHash ([string]$keyAclBefore.Sddl)
+$keyProtectedPath=Join-Path $output 'Generated\upgrade_key_protected_metadata_evidence.json';& $protectedTool measure-protected-metadata $keyPath $keyProtectedPath|Out-Null;if($LASTEXITCODE -ne 0){throw 'Protected key metadata failed'};$keyProtected=ReadJson $keyProtectedPath
+if([string]$keyProtected.artifact_type -cne 'R7_PROTECTED_FILE_METADATA_MEASUREMENT' -or $keyProtected.data_access_requested -ne $false -or $keyProtected.private_bytes_read -ne $false -or $keyProtected.privilege_restored_before_evidence_write -ne $true -or [string]$keyProtected.metadata_privilege -cne 'SeBackupPrivilege'){throw 'Protected key metadata boundary invalid'}
+$key=$keyProtected.measurement
+$keyMetadataPath=Join-Path $output 'Generated\upgrade_key_metadata.json';Canonical $key $keyMetadataPath $artifact
+$keyAclAfter=Get-Acl -LiteralPath $keyPath;$keyAclAfterSha=TextHash ([string]$keyAclAfter.Sddl)
+foreach($field in @('canonical_path','file_identity','final_nt_path','hard_link_count','owner_sid','security_descriptor_sha256','size','volume_identity')){if([string]$key.$field -cne [string]$priorKey.$field){throw "Protected key physical identity changed: $field"}}
+if([string]$key.owner_sid -cne 'S-1-5-18' -or [long]$key.hard_link_count -ne 1 -or @($key.streams).Count -ne 1 -or [string]$key.streams[0] -cne '::$DATA' -or $keyAclBeforeSha -cne [string]$bootstrap.key_file_acl_sha256 -or $keyAclAfterSha -cne [string]$bootstrap.key_file_acl_sha256 -or [string]$keyAclBefore.Sddl -cne [string]$bootstrap.key_file_acl_sddl -or [string]$keyAclAfter.Sddl -cne [string]$bootstrap.key_file_acl_sddl){throw 'Key metadata or canonical ACL mismatch'}
 $volume=[string]$key.volume_identity;$certSha=Hash $UpgradePublicCertificate
 
 $originalUnit2=Join-Path $packageRoot 'Source\R7Unit2UpgradeAuthority.cs';$text=[IO.File]::ReadAllText($originalUnit2,[Text.Encoding]::UTF8)
@@ -111,13 +123,17 @@ $sa=Join-Path $output 'PassA\RandleTerminalUpgradeAuthority.exe';$sb=Join-Path $
 $compilerOptions=@('/nologo','/noconfig','/target:exe','/platform:x64','/optimize+','/checked+','/debug-','/warn:4','/warnaserror+','/nostdlib+','/langversion:5','/filealign:512')
 $scripts=@(Get-ChildItem -LiteralPath $packageRoot -Filter '*.ps1' -File|Sort-Object Name|ForEach-Object{[ordered]@{path=$_.Name;raw_sha256=(Hash $_.FullName);size=$_.Length}})
 $sources=@(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Filter '*.cs' -File|Sort-Object Name|ForEach-Object{[ordered]@{path=('Source/'+$_.Name);raw_sha256=(Hash $_.FullName);size=$_.Length}})
-$toolchain=@($cscRow,$ildasmRow,$gitRow)|ForEach-Object{[ordered]@{measurement=$_.measurement;role=$_.role}}
+$artifactMeasurementPath=Join-Path $output 'Generated\target_artifact_tool_measurement.json';& $artifact measure $artifact $artifactMeasurementPath|Out-Null;if($LASTEXITCODE -ne 0){throw 'Target artifact tool measurement failed'}
+$protectedToolMeasurementPath=Join-Path $output 'Generated\protected_metadata_tool_measurement.json';& $artifact measure $protectedTool $protectedToolMeasurementPath|Out-Null;if($LASTEXITCODE -ne 0){throw 'Protected metadata tool measurement failed'}
+$toolchain=@($cscRow,$ildasmRow,$gitRow,$powershellRow)|ForEach-Object{[ordered]@{measurement=$_.measurement;role=$_.role}}
+$toolchain+=@([ordered]@{measurement=(ReadJson $artifactMeasurementPath);role='TARGET_CANONICAL_ARTIFACT_TOOL'},[ordered]@{measurement=(ReadJson $protectedToolMeasurementPath);role='PROTECTED_METADATA_TOOL'})
 $receipt=[ordered]@{artifact_type='R7_UNIT2_UPGRADE_AUTHORITY_SOURCE_TO_BINARY_RECEIPT';binaries=@($binary.UPGRADE_AUTHORITY,$binary.UPGRADE_CLIENT,$binary.UPGRADE_PROTOCOL_PROBE,$binary.UPGRADE_PUBLIC_VERIFIER);compiler_options=$compilerOptions;dependency_manifest_sha256=$dependencySha;governed_scripts=$scripts;policy_sha256=$policySha;schema_version='1.0.0';source_commit=$SourceCommit;source_files=$sources;source_tree=$tree;target_build_receipt_sha256=$targetReceiptSha;target_source_commit=$unit1Commit;target_source_tree=$unit1Tree;toolchain=$toolchain}
 $receiptPath=Join-Path $output 'Generated\unit2_build_receipt.json';Canonical $receipt $receiptPath $artifact
 $determinismReceipt=[ordered]@{artifact_type='R7_UNIT2B_BUILD_DETERMINISM_RECEIPT';binaries=@($binaryDetail|Sort-Object role);compiler_arguments=$compilerOptions;framework_references=@($refs|ForEach-Object{[ordered]@{path=$_;raw_sha256=(Hash $_);size=(Get-Item -LiteralPath $_).Length}});schema_version='1.0.0';source_commit=$SourceCommit;source_files=$sources;source_tree=$tree;status='PASS';target_build_orchestrator_receipt_sha256=$targetOrchestratorReceiptSha;target_source_commit=$unit1Commit;target_source_tree=$unit1Tree}
 $determinismPath=Join-Path $output 'Generated\unit2_build_determinism_receipt.json';Canonical $determinismReceipt $determinismPath $artifact
 Copy-Item -LiteralPath $sa -Destination (Join-Path $output 'Install\RandleTerminalUpgradeAuthority.exe');Copy-Item -LiteralPath (Join-Path $output 'PassA\RandleTerminalUpgradeClient.exe') -Destination (Join-Path $output 'Install\RandleTerminalUpgradeClient.exe');Copy-Item -LiteralPath (Join-Path $output 'PassA\RandleTerminalUpgradeProtocolProbe.exe') -Destination (Join-Path $output 'Install\RandleTerminalUpgradeProtocolProbe.exe');Copy-Item -LiteralPath (Join-Path $output 'PassA\RandleTerminalUpgradePublicVerifier.exe') -Destination (Join-Path $output 'Install\RandleTerminalUpgradePublicVerifier.exe');Copy-Item -LiteralPath $policyPath -Destination (Join-Path $output 'Install\unit2_upgrade_policy.json');Copy-Item -LiteralPath $dependency -Destination (Join-Path $output 'Install\dependency_manifest.json');Copy-Item -LiteralPath $receiptPath -Destination (Join-Path $output 'Install\unit2_build_receipt.json');Copy-Item -LiteralPath $UpgradePublicCertificate -Destination (Join-Path $output 'Install\upgrade_authority_public.cer')
 Copy-Item -LiteralPath $artifact -Destination (Join-Path $output 'Tools\R7ArtifactTool.exe')
+Copy-Item -LiteralPath $protectedTool -Destination (Join-Path $output 'Tools\R7ProtectedMetadataTool.exe')
 foreach($item in Get-ChildItem -LiteralPath (Join-Path $target 'Staging') -Force){Copy-Item -LiteralPath $item.FullName -Destination (Join-Path $output 'TargetStaging') -Recurse}
 $manifestRows=@(Get-ChildItem -LiteralPath $output -File -Recurse|Where-Object{$_.FullName -notlike '*.raw' -and $_.FullName -notlike '*.raw.il'}|Sort-Object FullName|ForEach-Object{[ordered]@{path=$_.FullName.Substring($output.Length+1).Replace('\','/');raw_sha256=(Hash $_.FullName);size=$_.Length}})
 $manifest=[ordered]@{artifact_type='R7_UNIT2_BUILD_OUTPUT_MANIFEST';files=$manifestRows;policy_sha256=$policySha;schema_version='1.0.0';source_commit=$SourceCommit;source_tree=$tree;status='PASS';target_source_commit=$unit1Commit;transition_plan_sha256=$planSha}
