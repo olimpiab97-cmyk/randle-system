@@ -27,7 +27,8 @@ function Write-JsonNew([object]$Value, [string]$Path) {
     if (Test-Path -LiteralPath $full) { throw "Refusing trace overwrite: $full" }
     $parent = Split-Path -Parent $full
     if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent | Out-Null }
-    [IO.File]::WriteAllText($full, ($Value | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false))
+    $json = ($Value | ConvertTo-Json -Depth 100).Replace("`r`n", "`n")
+    [IO.File]::WriteAllText($full, $json, [Text.UTF8Encoding]::new($false))
 }
 function Require-ObjectMap([object[]]$Rows, [string]$Field) {
     $map = @{}

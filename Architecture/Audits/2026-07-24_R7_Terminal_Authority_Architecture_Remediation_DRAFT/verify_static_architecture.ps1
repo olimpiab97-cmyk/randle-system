@@ -167,11 +167,10 @@ $installSource = Get-Content -Raw -LiteralPath (Join-Path $packageRoot 'install_
 $provisionSource = Get-Content -Raw -LiteralPath (Join-Path $packageRoot 'provision_upgrade_authority.ps1')
 Add-Check 'build-time-toolchain-recursively-content-bound' ($buildSource.Contains('directory-manifest') -and $buildSource.Contains('Git installation changed while resolving immutable source objects') -and $buildSource.Contains('BOOTSTRAP_ARTIFACT_TOOL') -and $buildSource.Contains('normalized_il_equal=$true')) ([ordered]@{build_script_sha256=(Get-LowerHash (Join-Path $packageRoot 'build_remediation_package.ps1'))})
 $installLines = @($installSource -split '\r?\n')
-$provisionLines = @($provisionSource -split '\r?\n')
 $terminalRootAclLine = @($installLines | Where-Object { $_.Contains('@($remediationRoot') })[0]
 $upgradeStateAclLine = @($installLines | Where-Object { $_.Contains('@($upgradeStateRoot') -and $_.Contains('/inheritance:r') })[0]
-$provisionRootAclLine = @($provisionLines | Where-Object { $_.Contains('@($root') -and $_.Contains('/inheritance:r') })[0]
-$immutableRootAclPass = $terminalRootAclLine.Contains('$terminalAccount`:(OI)(CI)(RX)') -and $upgradeStateAclLine.Contains('$upgradeAccount`:(OI)(CI)(RX)') -and $provisionRootAclLine.Contains('$serviceAccount`:(OI)(CI)(RX)')
+$provisionRootAclPass = $provisionSource.Contains('Assert-DedicatedDirectoryAcl') -and $provisionSource.Contains('$immutableDirectories') -and $provisionSource.Contains('$mutableDirectories') -and $provisionSource.Contains('Dedicated authority directory principal set differs') -and $provisionSource.Contains("`$takeownExecutable = 'C:\Windows\System32\takeown.exe'") -and $provisionSource.Contains("'/F', `$certificatePath, '/A'") -and $provisionSource.Contains("'BUILTIN\Administrators:(RA,RC)'")
+$immutableRootAclPass = $terminalRootAclLine.Contains('$terminalAccount`:(OI)(CI)(RX)') -and $upgradeStateAclLine.Contains('$upgradeAccount`:(OI)(CI)(RX)') -and $provisionRootAclPass
 Add-Check 'immutable-authority-and-policy-roots-are-read-only-to-signers' $immutableRootAclPass ([ordered]@{install_sha256=(Get-LowerHash (Join-Path $packageRoot 'install_authorized_transition.ps1'));provision_sha256=(Get-LowerHash (Join-Path $packageRoot 'provision_upgrade_authority.ps1'));terminal_root_acl=$terminalRootAclLine;upgrade_state_acl=$upgradeStateAclLine})
 
 $scriptErrors = [Collections.Generic.List[object]]::new()

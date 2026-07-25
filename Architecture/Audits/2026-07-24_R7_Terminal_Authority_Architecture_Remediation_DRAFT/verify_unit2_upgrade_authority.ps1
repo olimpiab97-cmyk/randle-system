@@ -107,7 +107,13 @@ $scEvidence=[Collections.Generic.List[object]]::new();foreach($query in @(@('qc'
 $keyPath=Join-Path 'C:\ProgramData\Microsoft\Crypto\Keys' ([string]$policy.key.key_unique_name)
 $aclPaths=@($install,$state,(Join-Path $state 'Config'),(Join-Path $state 'Ledger'),(Join-Path $state 'Trust'),(Join-Path $state 'Evidence'),(Join-Path $state 'Responses'),$keyPath)
 $aclEvidence=@(foreach($path in $aclPaths){$acl=Get-Acl -LiteralPath $path;$sddl=$acl.Sddl;[ordered]@{owner=$acl.Owner;path=$path;sddl=$sddl;sddl_sha256=(TextHash $sddl)}})
-$keySddl=[string](@($aclEvidence|Where-Object path -ceq $keyPath)[0].sddl);if($keySddl.Contains($terminalSid) -or $keySddl.Contains($operatorSid) -or $keySddl.Contains(';;;BU') -or $keySddl.Contains(';;;BA')){throw 'Upgrade private-key ACL grants a prohibited principal'}
+$keyAcl=Get-Acl -LiteralPath $keyPath;$keySddl=$keyAcl.Sddl;$keyRules=@($keyAcl.GetAccessRules($true,$false,[Security.Principal.SecurityIdentifier]));$adminSid='S-1-5-32-544';$systemSid='S-1-5-18'
+$observedKeySids=@($keyRules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique);$expectedKeySids=@($adminSid,$systemSid,$upgradeSid)|Sort-Object
+if(($observedKeySids -join ',') -cne ($expectedKeySids -join ',') -or $observedKeySids -contains $terminalSid -or $observedKeySids -contains $operatorSid -or @($keyRules|Where-Object{$_.IsInherited}).Count -ne 0 -or $keyAcl.Owner -cne 'NT AUTHORITY\SYSTEM'){throw 'Upgrade private-key ACL principal, inheritance, or owner closure failed'}
+$adminRule=@($keyRules|Where-Object{$_.IdentityReference.Value -ceq $adminSid});if($adminRule.Count -ne 1){throw 'Upgrade private-key administrator metadata rule is absent or ambiguous'}
+$adminRights=[int64]$adminRule[0].FileSystemRights;$allowedAdminRights=[int64]([Security.AccessControl.FileSystemRights]::ReadAttributes -bor [Security.AccessControl.FileSystemRights]::ReadPermissions);if(($adminRights -band (-bnot $allowedAdminRights)) -ne 0){throw 'Upgrade private-key ACL grants Administrators more than metadata-read rights'}
+$serviceRule=@($keyRules|Where-Object{$_.IdentityReference.Value -ceq $upgradeSid});if($serviceRule.Count -ne 1){throw 'Upgrade private-key service rule is absent or ambiguous'}
+$serviceRights=[int64]$serviceRule[0].FileSystemRights;$prohibitedServiceRights=[int64]([Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership);if(($serviceRights -band [int64][Security.AccessControl.FileSystemRights]::ReadData) -eq 0 -or ($serviceRights -band $prohibitedServiceRights) -ne 0){throw 'Upgrade private-key service rule is not read-only'}
 $cert=New-Object Security.Cryptography.X509Certificates.X509Certificate2((Join-Path $state 'Trust\upgrade_authority_public.cer'))
 $terminalAfter=TerminalSnapshot;AssertTerminal $terminalAfter $terminalPid
 $summary=[ordered]@{
@@ -115,7 +121,7 @@ $summary=[ordered]@{
     build_manifest_sha256=(Hash (Join-Path $build 'unit2_build_manifest.json'));checkpoint_after_restart=[string]$authorizedRestart.checkpoint_sha256;
     copied_executable_rejected=$true;existing_terminal_after=$terminalAfter;existing_terminal_before=$terminalBefore;existing_terminal_changed=$false;
     final_ledger_root=[string]$authorizedRestart.ledger_root;final_ledger_sequence=[int64]$authorizedRestart.ledger_sequence;interface_version=[string]$policy.interface_version;
-    key_acl_cross_service_denial=$true;key_algorithm='RSA-3072';key_nonexportability_verified=$true;key_provider='Microsoft Software Key Storage Provider';
+    key_acl_administrator_metadata_only=$true;key_acl_cross_service_denial=$true;key_algorithm='RSA-3072';key_nonexportability_verified=$true;key_provider='Microsoft Software Key Storage Provider';
     operation_allowlist=$policy.operation_allowlist;preflight_baseline_sha256=(Hash $preflight);principal_isolation_verified=$true;private_key_exported=$false;
     protocol_probe_sha256=(Hash $parserPath);public_certificate_sha256=(Hash (Join-Path $state 'Trust\upgrade_authority_public.cer'));public_certificate_thumbprint=$cert.Thumbprint.ToLowerInvariant();
     public_stopped_service_verification_sha256=(Hash $authorizedStoppedPath);restart_sequence_delta=1;schema_version='1.0.0';service_control_evidence=$scEvidence.ToArray();
