@@ -1,0 +1,18 @@
+{
+  "artifact_type": "R7_INDEPENDENT_SOURCE_BINARY_RESULTS",
+  "compiler": {
+    "path": "C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe",
+    "sha256": "adeda78a951529462f9411e016c1a1b87ddfd94c55912cbd2957817f39929af1"
+  },
+  "outputs": [
+    {"name":"RandleTerminalAuthority.exe","installed_sha256":"9ea829416f37c94db2858586fa5e0042652f6caa4637a29fdbefb513577a7526","rebuild_sha256":"a3a6a5cc43ef3ad2ced27b6fedc7a8f572144720f7e19b8982bc542b291acb9c","normalized_il_sha256":"ca7edf17a15a8798ad36185629201dc30151521f704007e5128bab1a83b58ea5","normalized_il_equal":true,"raw_differing_byte_count":18},
+    {"name":"RandleTerminalAuthorityR7Worker.exe","installed_sha256":"b2971b85de73d999bfa801d047b22c2ec6fc3d6bc5cb5923ea4a9ab240ed4401","rebuild_sha256":"7d214fe23e8c04e49a8d044a2756db8b14f93957c48c3619b46a4e2452431aa5","normalized_il_sha256":"aef1589dc610a5903dc259ac97752c7a4c33ee7877c4d97797033b0e7aed5c14","normalized_il_equal":true,"raw_differing_byte_count":17},
+    {"name":"RandleTerminalAuthorityR7Client.exe","installed_sha256":"8d5a5e803c9b7c17f06a488ef815b138d9de1dcd666ab1d4c333414801d4b6e9","rebuild_sha256":"03bd8142c77c45c5ca9ae93b16686d28c279dc900a698fa23856a79692e019e2","normalized_il_sha256":"116679b5f6deeba3ba743d3a9492fa2cb103a1fdf72fac7ff9cf14b6d8bf2cff","normalized_il_equal":true,"raw_differing_byte_count":18},
+    {"name":"RandleTerminalAuthorityR7PublicVerifier.exe","installed_sha256":"88c4e631035af0c7ec366256c78f4d1f21994554a30201b30b4d6bf775314a3d","rebuild_sha256":"7c39be4910f6fb385d92f466162832cb35c76bcca603eea0a2aa18fb6c05847f","normalized_il_sha256":"97076345c0452eb0c3a2483d657b8bd52718d8c425e6e888f5673e6dc493c214","normalized_il_equal":true,"raw_differing_byte_count":17},
+    {"name":"RandleTerminalAuthorityR7FixtureHost.exe","installed_sha256":"7a82bab5acfa36555d0e3b9cf29084101f8276b4ceba93cd48cc1e85fadf1454","rebuild_sha256":"b7d14929073fbef22a7bcc0b8506e9196d573e4b8602753e90d32fcfc2e10822","normalized_il_sha256":"9db65647b46fb70388073eb30d5392ae56340223b0691ee3d4b89460d6b81529","normalized_il_equal":true,"raw_differing_byte_count":18},
+    {"name":"RandleTerminalAuthorityR7SubjectLauncher.exe","installed_sha256":"3445e5effd6398b648afa6898391f4e2b5de34f696dd91bfedc2dc29be4e3877","rebuild_sha256":"d3a12ac15808ebd9e962acd0e4baf91190b000affc27ee8bced1f3ea7eddcf79","normalized_il_sha256":"d978f43c296041f932ceadfe5b085ea4497f245377d56ad5199cfad7e1e513ce","normalized_il_equal":true,"raw_differing_byte_count":18}
+  ],
+  "raw_difference_explanation": "Every differing byte is within the PE COFF timestamp field (offsets 136-137 differed) or the 16-byte MVID. Equal-size output and normalized IL were independently confirmed.",
+  "schema_version": "1.0.0",
+  "status": "PARTIAL_CORRESPONDENCE_ONLY_DEPENDENCY_CLOSURE_FAILED"
+}

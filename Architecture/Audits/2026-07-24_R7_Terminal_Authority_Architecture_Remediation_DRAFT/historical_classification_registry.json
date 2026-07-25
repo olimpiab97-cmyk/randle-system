@@ -1,0 +1,184 @@
+{
+  "artifact_type": "R7_APPEND_ONLY_HISTORICAL_CLASSIFICATION_REGISTRY",
+  "rules": [
+    {
+      "classification": "VALID_PROVISIONED_INFRASTRUCTURE_AUTHORITY",
+      "end_sequence": 5,
+      "reason": "Pre-R7 terminal-authority infrastructure history; retain and verify under its issuance schema.",
+      "start_sequence": 1
+    },
+    {
+      "classification": "STRUCTURALLY_VALID_REJECTED_NONAUTHORITATIVE_CANDIDATE_EVIDENCE",
+      "end_sequence": 678,
+      "reason": "Rejected v3/DRAFT implementation ancestry and semantics cannot become terminal authority.",
+      "start_sequence": 6
+    },
+    {
+      "classification": "INCOMPLETE_ISSUANCE_SUPERSEDED_NONAUTHORITY",
+      "original_sequence": 332,
+      "reuse": "PERMANENTLY_FORBIDDEN"
+    },
+    {
+      "classification": "ABORTED_CLIENT_REJECTED_ISSUANCE_NONAUTHORITY",
+      "original_sequence": 678,
+      "reuse": "PERMANENTLY_FORBIDDEN"
+    },
+    {
+      "classification": "SIGNED_ISSUANCE_WITHOUT_TERMINAL_RECEIPT_OR_DURABLE_RESPONSE_REQUIRES_APPEND_ONLY_CLASSIFICATION",
+      "records": [
+        {
+          "classification": "LEGACY_TOP_LEVEL_RESPONSE_MISSING_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "0f65bae93462d7f717a956295bb25e54d462afa1d9d9d5a581a72d0aa4d9a852",
+          "original_entry_identity": "1e7c7ce9df91ca5b6e11b21126e054cd7e54a008dc4473b46c97dde0eb840a49",
+          "original_operation": "R7_RUN_ISSUED",
+          "original_request_nonce": "4eb80863-58cf-484d-b102-34e00c059c71",
+          "original_sequence": 326,
+          "original_signed_issuance_artifact_type": "R7_REAL_EXECUTION_RUN_ISSUANCE",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "79f1dfd2023ad983db5c833c92a448ec6096b3625ba504e28dde8bfa607c9b53",
+          "original_subject_id": "4019b8e90ec8a87bf558c37ee4fe2887f2e55ec637005b3bc3e9a5239223b58e",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "LEGACY_TOP_LEVEL_RESPONSE_MISSING_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "4806417a39a3a69f9f6fdf909f9e18680c861eeff7b31d38db28db9e891fcc47",
+          "original_entry_identity": "14582eff17688640d41b97583751f3a39c92f89743fc62914f7ed761a4947a5e",
+          "original_operation": "R7_RUN_ISSUED",
+          "original_request_nonce": "fd64df8a-f7cf-4cb9-a20f-b643f039ab85",
+          "original_sequence": 329,
+          "original_signed_issuance_artifact_type": "R7_REAL_EXECUTION_RUN_ISSUANCE",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "f5d23b0cf74a73e30192d2c7ec15ddc4c0ef77b5f482e0d5361ea827316969fe",
+          "original_subject_id": "f0c787ef977e030783528beb4e3e684d67326cfbdd705cf5dbb0ab1ecc9297c8",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "INCOMPLETE_ISSUANCE_SUPERSEDED_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "d1bcc98285819b098865b7c0b3dc1ea836a2a0da3c10ebd0b160ef91a74a394c",
+          "original_entry_identity": "9d7fc789ff1c0959a819f03ac1bef4e69e1d09cc8bb0e81538c85d78141fae96",
+          "original_operation": "R7_RUN_ISSUED",
+          "original_request_nonce": "e4585ef3-dcfb-4e81-a6e9-4720323f8226",
+          "original_sequence": 332,
+          "original_signed_issuance_artifact_type": "R7_REAL_EXECUTION_RUN_ISSUANCE",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "3868455a742cb6c8801b7898a99e259b378b15f45bddab4b0a63a9e0e5aee77a",
+          "original_subject_id": "9d0c5983a2c54767e5dede815816b11f925b2695739d18099ef8bb59d7f0c1f7",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "LEGACY_TOP_LEVEL_RESPONSE_MISSING_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "9b0ade1cfff27cbed10aaa0211e2d5dffaa5a7bbb2517267aace25dc6da090e4",
+          "original_entry_identity": "614d53d76cdc5674fe23b02de0b7171ab67ac02a8f1dc29e8a08481a776bacfc",
+          "original_operation": "R7_RUN_ISSUED",
+          "original_request_nonce": "7cb13355-28bd-4555-9e2b-4e88b633193f",
+          "original_sequence": 335,
+          "original_signed_issuance_artifact_type": "R7_REAL_EXECUTION_RUN_ISSUANCE",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "b9c3105610f62f4f34a33eaa927854d31232f6b550212eebf1041f165cdeec65",
+          "original_subject_id": "e093add2c39bfffda41fc3ada2a00162768650e129c159314b124c95dc635e3a",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "LEGACY_TOP_LEVEL_RESPONSE_MISSING_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "52972257a3b144bc3621b25a7f3de45f5734c9aafc2ca7cd970dd7a9bdfcd95f",
+          "original_entry_identity": "0cda4d91574df447887e923ae2afa1e40ac3d9a883ac4db6f1e608d41631194c",
+          "original_operation": "R7_ATTEMPT_ISSUED",
+          "original_request_nonce": "1b72ab47-9889-4278-b5aa-9ecc448b50ae",
+          "original_sequence": 375,
+          "original_signed_issuance_artifact_type": "R7_ATTEMPT_AUTHORITY",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "0c9739d514eef379c7e9ad2fbdf3ad497a4d24239252110919cd2c92e1bc668d",
+          "original_subject_id": "a6d5cc7e02e13451fbdea3a67c8f208b3cff51b3001cfa233fa1146770ba1013",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "LEGACY_TOP_LEVEL_RESPONSE_MISSING_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "7fed9c820f86bf48ed634140271f30d0d4619998787156df05ffaf5613760282",
+          "original_entry_identity": "c4dece62ce9a87937118e310a0ad616144fc893f9c067181c5fd6dc6e6b1d1fc",
+          "original_operation": "R7_ATTEMPT_ISSUED",
+          "original_request_nonce": "17f6b798-afb5-4ced-ae55-62a009437e4c",
+          "original_sequence": 378,
+          "original_signed_issuance_artifact_type": "R7_ATTEMPT_AUTHORITY",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "bd209c0cf2cc37dd4aa050b851b87723b5768489e7c8ab8a0ea46dc5dec8ff42",
+          "original_subject_id": "04f3ffbb9ea3f5beabd10304383d0ef1d567e4adc380da27234ae667ba28724e",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "LEGACY_TOP_LEVEL_RESPONSE_MISSING_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "3c8077163b5ad26db522eb2d8f6aa1c244ad6690b3652c9fc30a2dbc6995d55c",
+          "original_entry_identity": "51a52ea8dc810b80fea55ca50ef81a3dd571d4595f4da8f6f55264cf0f1d192d",
+          "original_operation": "R7_ATTEMPT_ISSUED",
+          "original_request_nonce": "7c562a16-12db-4cd1-b5a0-7ffa81236a14",
+          "original_sequence": 381,
+          "original_signed_issuance_artifact_type": "R7_ATTEMPT_AUTHORITY",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "d9d2567c07fec71c714527f6a20dc462e247a362e8512200c41176d97a01c6ee",
+          "original_subject_id": "c917d832fe2cec3a908acf27fce72313ae56ea961bad85a9bd472436c8c6499f",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "LEGACY_TOP_LEVEL_RESPONSE_MISSING_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "08d2200b7241f263568406c3e54b93abeffe7a6436c6aa71cb4dcc680711da92",
+          "original_entry_identity": "7487839daa01014b53ebf470dafce332318900ea0c9264f24b2e3cbaeef28397",
+          "original_operation": "R7_ATTEMPT_ISSUED",
+          "original_request_nonce": "c4491cad-5193-4d3b-a883-30560bb24c80",
+          "original_sequence": 544,
+          "original_signed_issuance_artifact_type": "R7_ATTEMPT_AUTHORITY",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "1240ee4650e2c5cad46d37a1a5d061c4615ac3c3124139eba57163cbb3030d7a",
+          "original_subject_id": "6dc1ebf051412d2124661e57bb25ad4d62d35d84ca09c20dac0355adbf73c884",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "LEGACY_TOP_LEVEL_RESPONSE_MISSING_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "d8e649ca19344879913e2d3eb0b41cdebb390699c50e6d87ecc2b2f1be6c8200",
+          "original_entry_identity": "4fe710d2728af49c038008f4322241ae9caeca7a2bbe835027435260d5f3facc",
+          "original_operation": "R7_ATTEMPT_ISSUED",
+          "original_request_nonce": "9b2c3f51-cc54-4839-980c-9613f1ea006b",
+          "original_sequence": 547,
+          "original_signed_issuance_artifact_type": "R7_ATTEMPT_AUTHORITY",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "2c3a5b18f4ea3a4f1276bb4e6ff28cfc694f4de8eac6a8d6f09305ea08e93e4e",
+          "original_subject_id": "4d13ab452d3b8b8e3bb43d967ad554709e6783c1a604af089a658679793ee647",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        },
+        {
+          "classification": "ABORTED_CLIENT_REJECTED_ISSUANCE_NONAUTHORITY",
+          "original_client_response_identity": "ABSENT",
+          "original_entry_hash": "87fdc1bbcef606ad134cf5cd2c0cad83dd4df25ed96544c05fd5adbeff5f82e5",
+          "original_entry_identity": "6a59cc3b162cb4e3e9064a36f165dec8055e4bc5d11db76044d60deb25281d62",
+          "original_operation": "R7_ATTEMPT_ISSUED",
+          "original_request_nonce": "39464d8f-e6de-4554-aacb-0324d5586a69",
+          "original_sequence": 678,
+          "original_signed_issuance_artifact_type": "R7_ATTEMPT_AUTHORITY",
+          "original_signed_issuance_public_key_identity": "b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb5465b495282f0273285",
+          "original_signed_issuance_receipt_identity": "7159df8b1410f77b5afd6945a48ae290ba05f8e0e7c8184e141a32cb5f6af6ce",
+          "original_subject_id": "e8b59508fae94b6351e9568cbc4b148f16e36c786c40cc6f0c8272fa49e6292a",
+          "original_terminal_receipt_identity": "ABSENT",
+          "reuse": "PERMANENTLY_FORBIDDEN"
+        }
+      ],
+      "rule": "The immutable registry binds each original ledger envelope and signed issuance receipt. Public verification must prove the terminal receipt and durable response are absent, then resolve ambiguity only through an append-only nonauthority classification; original bytes remain unchanged."
+    }
+  ],
+  "schema_version": "1.0.0"
+}

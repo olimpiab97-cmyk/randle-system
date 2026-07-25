@@ -1,0 +1,76 @@
+{
+  "artifact_type": "R7_REMEDIATION_SERVICE_PRINCIPAL_REGISTRY",
+  "principals": [
+    {
+      "allowed_privileges": ["SeChangeNotifyPrivilege"],
+      "administrator_membership": false,
+      "interactive_logon": "DENIED_BY_LSA_ACCOUNT_RIGHT",
+      "key_authority": "TERMINAL_RSA_PSS_ONLY",
+      "name": "NT SERVICE\\RandleTerminalAuthority",
+      "repository_write": false,
+      "role": "TERMINAL_SIGNER",
+      "service": "RandleTerminalAuthority",
+      "sid": "S-1-5-80-1950096479-1020125124-2173088643-1633316353-879035948",
+      "user_right_denials": ["SeDenyInteractiveLogonRight", "SeDenyRemoteInteractiveLogonRight"],
+      "terminal_ledger_write": true,
+      "upgrade_ledger_write": false
+    },
+    {
+      "allowed_privileges": ["SeChangeNotifyPrivilege"],
+      "administrator_membership": false,
+      "interactive_logon": "DENIED_BY_LSA_ACCOUNT_RIGHT",
+      "key_authority": "NONE",
+      "name": "NT SERVICE\\RandleTerminalExecution",
+      "repository_write": false,
+      "role": "EXECUTION",
+      "service": "RandleTerminalExecution",
+      "sid": "S-1-5-80-2354876894-2467424667-1382161683-1170422623-3885682053",
+      "user_right_denials": ["SeDenyInteractiveLogonRight", "SeDenyRemoteInteractiveLogonRight"],
+      "terminal_ledger_write": false,
+      "upgrade_ledger_write": false
+    },
+    {
+      "allowed_privileges": ["SeChangeNotifyPrivilege"],
+      "administrator_membership": false,
+      "interactive_logon": "DENIED_BY_LSA_ACCOUNT_RIGHT",
+      "key_authority": "NONE",
+      "name": "NT SERVICE\\RandleTerminalObservation",
+      "repository_write": false,
+      "role": "OBSERVATION",
+      "service": "RandleTerminalObservation",
+      "sid": "S-1-5-80-1455550362-116536141-3163605276-3265053646-3003707260",
+      "user_right_denials": ["SeDenyInteractiveLogonRight", "SeDenyRemoteInteractiveLogonRight"],
+      "terminal_ledger_write": false,
+      "upgrade_ledger_write": false
+    },
+    {
+      "allowed_privileges": ["SeChangeNotifyPrivilege"],
+      "administrator_membership": false,
+      "interactive_logon": "DENIED_BY_LSA_ACCOUNT_RIGHT",
+      "key_authority": "NONE",
+      "name": "NT SERVICE\\RandleTerminalComparator",
+      "repository_write": false,
+      "role": "COMPARATOR",
+      "service": "RandleTerminalComparator",
+      "sid": "S-1-5-80-3174819085-3989415034-4266081362-372562941-1584450511",
+      "user_right_denials": ["SeDenyInteractiveLogonRight", "SeDenyRemoteInteractiveLogonRight"],
+      "terminal_ledger_write": false,
+      "upgrade_ledger_write": false
+    },
+    {
+      "allowed_privileges": ["SeChangeNotifyPrivilege"],
+      "administrator_membership": false,
+      "interactive_logon": "DENIED_BY_LSA_ACCOUNT_RIGHT",
+      "key_authority": "UPGRADE_RSA_PSS_OPERATION_ALLOWLIST_ONLY",
+      "name": "NT SERVICE\\RandleTerminalUpgradeAuthority",
+      "repository_write": false,
+      "role": "UPGRADE_AUTHORITY",
+      "service": "RandleTerminalUpgradeAuthority",
+      "sid": "S-1-5-80-238545627-4117296865-2677355104-248304369-1301198082",
+      "user_right_denials": ["SeDenyInteractiveLogonRight", "SeDenyRemoteInteractiveLogonRight"],
+      "terminal_ledger_write": false,
+      "upgrade_ledger_write": true
+    }
+  ],
+  "schema_version": "1.0.0"
+}

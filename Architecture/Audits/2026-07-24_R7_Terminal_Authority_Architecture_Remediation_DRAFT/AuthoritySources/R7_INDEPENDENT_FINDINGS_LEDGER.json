@@ -1,0 +1,99 @@
+{
+  "artifact_type": "R7_INDEPENDENT_FINDINGS_LEDGER",
+  "blocking_findings": [
+    {
+      "id": "R7AR-B01",
+      "finding": "All 178 cases have false governing-clause mappings and substantively import discarded f0 case/expectation authority.",
+      "required_correction": "Reconstruct normative cases directly from exact R6, imported rejection, and both R7 report bytes. Remove f0 as normative/executable authority unless a separate governing action expressly authorizes and graph-binds it."
+    },
+    {
+      "id": "R7AR-B02",
+      "finding": "Expectations, event actuals and observations are not independent; expected values enter actual-event construction and material obligations are never evaluated.",
+      "required_correction": "Author expectations independently before execution; deny them to event/observation producers; derive status/effects from raw current evidence; enforce every required/forbidden evidence, side-effect, durability, replay and restart rule."
+    },
+    {
+      "id": "R7AR-B03",
+      "finding": "The 178-case suite invokes only trusted-child execute_case fixture/meta handlers and contains zero outer terminal/reconciliation public-interface cases.",
+      "required_correction": "Use actual hostile caller classes and public submit/execute/retrieve/verify/reconcile/ledger/trust surfaces, including all direct R7 replay/fabrication/append/downgrade regressions."
+    },
+    {
+      "id": "R7AR-B04",
+      "finding": "The service shallowly trusts child outcome/inner identity claims; comparator and terminal verification cannot distinguish a semantically false but internally consistent graph.",
+      "required_correction": "Make the terminal service independently resolve raw process/request/response/receipt/ledger/side-effect evidence and independently derive semantics; use a comparator with a distinct oracle and no shared actual-generation logic."
+    },
+    {
+      "id": "R7AR-B05",
+      "finding": "Launcher, Python subject, worker, comparator and fixture inherit the service SID, which can use the signing key and modify terminal stores.",
+      "required_correction": "Run every subordinate under a genuinely distinct restricted principal/token/job with no key use, authority IPC, ledger/checkpoint/receipt/reconciliation/trust/policy write, or SeImpersonate capability; broker only narrow session I/O."
+    },
+    {
+      "id": "R7AR-B06",
+      "finding": "The IPC parser accepts duplicate keys and numeric string coercion and does not bind complete framed canonical/schema bytes; duplicate operation bypass was reproduced live.",
+      "required_correction": "Implement length-delimited complete framing, pre-parse duplicate-key detection, strict UTF-8/NFC/types, canonical roundtrip, exact schemas and semantic validation at every level; reject trailing/multiple objects."
+    },
+    {
+      "id": "R7AR-B07",
+      "finding": "The v3/DRAFT service/policy/interface upgrade is self-authorized with the preserved v1 key; 11 upgrade content addresses are unresolved and no anti-downgrade lifecycle exists.",
+      "required_correction": "Create a separately governed, pre-install signed, durable, publicly resolvable upgrade transition binding old/new service, policy, interface, IPC, worker, dependencies, key and ledger with activation, revocation and anti-rollback rules."
+    },
+    {
+      "id": "R7AR-B08",
+      "finding": "The current public verifier cannot verify all retained receipts across upgrade history; verify-all and the oldest terminal receipt fail fixed-authority checks.",
+      "required_correction": "Provide a governed version-aware public trust/verifier chain that validates every retained receipt and upgrade transition without private authority or mutable implementation state."
+    },
+    {
+      "id": "R7AR-B09",
+      "finding": "Authority append precedes durable response storage; seq 678 proves a client-visible rejection can leave a reusable signed attempt. Ten post-correction top-level authorities lack responses.",
+      "required_correction": "Use recoverable transactional request states and reconstructable idempotent responses; define pending/committed/aborted/superseded states and never report rejection while leaving usable issued authority."
+    },
+    {
+      "id": "R7AR-B10",
+      "finding": "A crash after durable entry append but before checkpoint replacement causes restart rejection with no forward recovery.",
+      "required_correction": "Adopt a WAL/atomic checkpoint protocol or deterministic signed-chain forward recovery, prove directory durability, and test every crash window."
+    },
+    {
+      "id": "R7AR-B11",
+      "finding": "Path-based reads do not reject reparse/hardlink/ADS/8.3/rename/read-after-hash substitution or hold immutable final-path handles.",
+      "required_correction": "Use no-follow handle opens, final NT-path/file-ID/link/stream checks and held handles across governed use; separate mutable child roots from authority roots."
+    },
+    {
+      "id": "R7AR-B12",
+      "finding": "Git, framework references and per-use Python dependencies are not completely content-bound; Python user-site is reopened.",
+      "required_correction": "Content-address every executable/reference/config/import dependency at each governed use or retain verified immutable handles; close import/DLL/current-directory/search paths and remove user-site."
+    },
+    {
+      "id": "R7AR-B13",
+      "finding": "Incomplete seq-332 has no governed abort/cancel/supersession and retains a junction/fixture evidence; permanent nonreuse is unproved.",
+      "required_correction": "Add public durable incomplete-issuance recovery/abort/supersession semantics while preserving historical evidence."
+    },
+    {
+      "id": "R7AR-B14",
+      "finding": "All 1,424 trace rows start from false normative roots and omit complete semantic, host, dependency, upgrade and recovery reverse mappings.",
+      "required_correction": "Rebuild bidirectional trace from exact clause bytes through actual raw execution and every host artifact; reject circular/self-authored summary mappings."
+    },
+    {
+      "id": "R7AR-B15",
+      "finding": "Complete binary input closure is absent: normalized IL matches six roles but framework references are unmeasured and the seventh installed role is unavailable.",
+      "required_correction": "Bind compiler, all source, reference assemblies, options, architecture and runtime inputs; produce reproducible or fully explained PE identities for every installed role."
+    },
+    {
+      "id": "R7AR-B16",
+      "finding": "No new independently authorized eight-run/four-reconciliation matrix or service-stopped verification was produced in this review.",
+      "required_correction": "After remediation and fresh authorization, run a new independent matrix and service-stopped public-verification audit; do not reuse authored evidence."
+    }
+  ],
+  "disposition": "REJECT — R7 REMEDIATION REQUIRED",
+  "nonblocking_findings": [
+    {"id": "R7AR-N01", "finding": "All 678 ledger signatures, entry hashes, links, fixed identities and checkpoint independently verify."},
+    {"id": "R7AR-N02", "finding": "Terminal 64/64 and reconciliation 31/31 reservations/commits pair; top-level content-addressed file hashes match."},
+    {"id": "R7AR-N03", "finding": "Filtered interactive-user ACLs, restricted service SID and ordinary-caller key denial are effective; RSA-3072 key is nonexportable."},
+    {"id": "R7AR-N04", "finding": "Current case/expectation/policy/runtime hashes and all 3,209 Python runtime files match their recorded identities."},
+    {"id": "R7AR-N05", "finding": "The final candidate/fresh terminal receipts and reconciliation verify with public material, although semantic authority fails."},
+    {"id": "R7AR-N06", "finding": "Old v1 client is rejected by the current service without checkpoint change."},
+    {"id": "R7AR-N07", "finding": "Fresh builds of six installed C# roles have identical normalized IL; raw differences are confined to COFF timestamp and MVID bytes."},
+    {"id": "R7AR-N08", "finding": "Current critical host files have no ADS, multi-hardlinks or reparse points; one retained noncritical test junction is inventoried."},
+    {"id": "R7AR-N09", "finding": "No unclassified secret was found after classifying pinned CPython test fixtures and security vocabulary."},
+    {"id": "R7AR-N10", "finding": "Active production root, trading processes, service configuration, trust, key and ledger bytes were not changed by the review."}
+  ],
+  "schema_version": "1.0.0"
+}

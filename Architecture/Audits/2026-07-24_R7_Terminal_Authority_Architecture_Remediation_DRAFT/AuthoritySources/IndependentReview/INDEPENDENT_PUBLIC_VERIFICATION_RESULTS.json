@@ -1,0 +1,47 @@
+{
+  "artifact_type": "R7_INDEPENDENT_PUBLIC_VERIFICATION_RESULTS",
+  "candidate_commit": "35add65e8900ce9a48c3a7175e5e61e5e0868a84",
+  "checks": [
+    {
+      "identity": "01d3f127509ae36579b2356ef452c9ada8b42a62f10ccebc2bfe550666d1c563",
+      "kind": "terminal",
+      "ledger_root": "87fdc1bbcef606ad134cf5cd2c0cad83dd4df25ed96544c05fd5adbeff5f82e5",
+      "ledger_sequence": 678,
+      "result": "VERIFIED"
+    },
+    {
+      "identity": "d935400395d5710ef296dcb0d1aeea5dc4654f0bbf696c062cb833b245164832",
+      "kind": "terminal",
+      "ledger_root": "87fdc1bbcef606ad134cf5cd2c0cad83dd4df25ed96544c05fd5adbeff5f82e5",
+      "ledger_sequence": 678,
+      "result": "VERIFIED"
+    },
+    {
+      "identity": "3bb2ef071095be927e5480d4b916478c70696244c97c64fff892d679d3b6778c",
+      "kind": "reconciliation",
+      "ledger_root": "87fdc1bbcef606ad134cf5cd2c0cad83dd4df25ed96544c05fd5adbeff5f82e5",
+      "ledger_sequence": 678,
+      "result": "VERIFIED"
+    },
+    {
+      "error": "InvalidDataException: terminal fixed authority rejected",
+      "kind": "all_retained_material",
+      "result": "FAILED"
+    },
+    {
+      "error": "InvalidDataException: terminal fixed authority rejected",
+      "identity": "8a06b2c2e851cc45f13ee9a618b6f34b1064945b63905c616cb6fd1893be6418",
+      "kind": "oldest_retained_terminal",
+      "result": "FAILED"
+    },
+    {
+      "kind": "service_stopped_public_verification",
+      "reason": "Stopping/restarting RandleTerminalAuthority was not authorized by the acceptance prompt.",
+      "result": "NOT_EXECUTED_AUTHORIZATION_LIMIT"
+    }
+  ],
+  "private_key_used": false,
+  "schema_version": "1.0.0",
+  "service_state_changed": false,
+  "status": "FAIL_HISTORICAL_PUBLIC_VERIFICATION_INCOMPATIBLE"
+}
