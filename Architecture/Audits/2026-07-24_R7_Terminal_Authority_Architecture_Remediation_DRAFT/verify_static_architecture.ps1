@@ -179,6 +179,11 @@ foreach ($script in $packageScripts) {
     foreach ($error in @(Parse-PowerShell $script.FullName)) { $scriptErrors.Add([ordered]@{ message = $error.Message; path = $script.FullName; line = $error.Extent.StartLineNumber }) }
 }
 Add-Check 'powershell-orchestrators-parse' ($scriptErrors.Count -eq 0) $scriptErrors.ToArray()
+$unit2bInstallerPath=Join-Path $packageRoot 'complete_unit2_upgrade_authority.ps1'
+$unit2bInstaller=Get-Content -LiteralPath $unit2bInstallerPath -Raw
+$unit2bForbidden=[Collections.Generic.List[string]]::new()
+foreach($pattern in @("@\('start'",'Start-Service','Stop-Service','Restart-Service','CngKey','SignData','SignHash','New-SelfSignedCertificate','UPGRADE_LEDGER_GENESIS','AUTHORIZE_TERMINAL_TRANSITION\s*\)')){if($unit2bInstaller -match $pattern){$unit2bForbidden.Add($pattern)}}
+Add-Check 'unit2b-installer-is-stopped-prestart-only-and-rollback-bound' ($unit2bForbidden.Count -eq 0 -and $unit2bInstaller.Contains('[Parameter(Mandatory=$true)][switch]$PreStartOnly') -and $unit2bInstaller.Contains('Only the explicit PreStartOnly path is exposed') -and $unit2bInstaller.Contains('RunScMutation @(''failure'',$service,''reset='',''0'',''actions='','''')') -and $unit2bInstaller.Contains('Run $artifactTool @(''service-boundary''') -and $unit2bInstaller.Contains('Run $artifactTool @(''restore-service-boundary''') -and $unit2bInstaller.Contains('service_started=$false') -and $unit2bInstaller.Contains('terminal_transition_authorized=$false')) ([ordered]@{forbidden_tokens=$unit2bForbidden.ToArray();installer_sha256=(Get-LowerHash $unit2bInstallerPath)})
 $declaredScriptNames=@($scriptRegistry.scripts|ForEach-Object{Split-Path -Leaf ([string]$_.path)}|Sort-Object)
 $actualScriptNames=@($packageScripts|ForEach-Object Name|Sort-Object)
 $badScriptRows=[Collections.Generic.List[object]]::new()

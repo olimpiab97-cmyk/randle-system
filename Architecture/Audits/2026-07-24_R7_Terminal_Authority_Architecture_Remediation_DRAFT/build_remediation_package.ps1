@@ -1,10 +1,13 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceCommit,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{40}$')][string]$OrchestratorCommit,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{40}$')][string]$BootstrapSourceCommit,
     [Parameter(Mandatory = $true)][string]$UpgradeBootstrapRecord,
     [Parameter(Mandatory = $true)][string]$UpgradePublicCertificate,
     [Parameter(Mandatory = $true)][string]$TerminalPublicCertificate,
-    [Parameter(Mandatory = $true)][string]$OutputRoot
+    [Parameter(Mandatory = $true)][string]$OutputRoot,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedOrchestratorScriptSha256
 )
 
 $ErrorActionPreference = 'Stop'
@@ -145,6 +148,7 @@ function Invoke-GovernedGit([string[]]$Arguments) {
 foreach ($required in @($compiler, $ildasm, $machineConfig, $serviceControlTool, $aclTool, $UpgradeBootstrapRecord, $UpgradePublicCertificate, $TerminalPublicCertificate, $terminalKeyFile) + $referencePaths) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required build input missing: $required" }
 }
+if ((Get-LowerHash $PSCommandPath) -cne $ExpectedOrchestratorScriptSha256) { throw 'Build orchestrator script identity mismatch.' }
 Assert-NewDirectory $output
 foreach ($directory in @('Bootstrap', 'Generated', 'Generated\BuildInputClosures', 'Generated\ImmutableRepository', 'Measurements', 'PassA', 'PassB', 'FinalPassA', 'FinalPassB', 'NormalizedIL', 'Staging\bin', 'Staging\config', 'Staging\build', 'Staging\authority', 'UpgradeBootstrap')) { New-Item -ItemType Directory -Path (Join-Path $output $directory) -Force | Out-Null }
 if ($output.StartsWith($repositoryRoot.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Build output must be outside the immutable source checkout.' }
@@ -167,9 +171,11 @@ $env:LC_ALL = 'C'
 $gitEnvironment = [ordered]@{GIT_ATTR_NOSYSTEM=$env:GIT_ATTR_NOSYSTEM;GIT_CONFIG_GLOBAL=$env:GIT_CONFIG_GLOBAL;GIT_CONFIG_NOSYSTEM=$env:GIT_CONFIG_NOSYSTEM;GIT_CONFIG_SYSTEM=$env:GIT_CONFIG_SYSTEM;GIT_LITERAL_PATHSPECS=$env:GIT_LITERAL_PATHSPECS;GIT_OPTIONAL_LOCKS=$env:GIT_OPTIONAL_LOCKS;GIT_PAGER=$env:GIT_PAGER;GIT_TERMINAL_PROMPT=$env:GIT_TERMINAL_PROMPT;LANG=$env:LANG;LC_ALL=$env:LC_ALL;path_resolution='RESOLVED_ONCE_THEN_EXACT_EXECUTABLE'}
 
 $head = ([string](Invoke-GovernedGit @('rev-parse','HEAD'))).Trim()
-if ($head -ne $SourceCommit) { throw "HEAD $head does not match requested source commit $SourceCommit" }
+if ($head -ne $OrchestratorCommit) { throw "HEAD $head does not match requested orchestrator commit $OrchestratorCommit" }
 if (@(Invoke-GovernedGit @('status','--porcelain=v1','--untracked-files=all')).Count -ne 0) { throw 'Source checkout must be clean.' }
 $sourceTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$SourceCommit))).Trim()
+$orchestratorTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$OrchestratorCommit))).Trim()
+$bootstrapSourceTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$BootstrapSourceCommit))).Trim()
 $commitBlobMap = @{}
 $commitModeMap = @{}
 foreach ($treeRow in @(Invoke-GovernedGit @('ls-tree','-r',$SourceCommit))) {
@@ -179,6 +185,10 @@ foreach ($treeRow in @(Invoke-GovernedGit @('ls-tree','-r',$SourceCommit))) {
     $commitModeMap[$Matches[3]] = $Matches[1]
 }
 $packageRelativeRoot = (Get-RelativePath $repositoryRoot $workingPackageRoot).Replace('\','/')
+$bootstrapProvisioningPath = $packageRelativeRoot + '/provision_upgrade_authority.ps1'
+$bootstrapProvisioningBlob = ([string](Invoke-GovernedGit @('rev-parse',($BootstrapSourceCommit + ':' + $bootstrapProvisioningPath)))).Trim()
+$bootstrapProvisioningBytes = Invoke-GovernedGitRaw @('cat-file','blob',$bootstrapProvisioningBlob)
+$bootstrapProvisioningSha256 = Get-ByteHash $bootstrapProvisioningBytes
 $immutableRepositoryRoot = Join-Path $output 'Generated\ImmutableRepository'
 $immutablePackageRoot = Join-Path $immutableRepositoryRoot $packageRelativeRoot.Replace('/','\')
 $extractedPackageBlobs = [Collections.Generic.List[object]]::new()
@@ -236,7 +246,8 @@ foreach ($closureInput in $closureInputs) {
 }
 $verificationHead = ([string](Invoke-GovernedGit @('rev-parse','HEAD'))).Trim()
 $verificationTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$SourceCommit))).Trim()
-if ($verificationHead -ne $head -or $verificationTree -ne $sourceTree -or @(Invoke-GovernedGit @('status','--porcelain=v1','--untracked-files=all')).Count -ne 0) { throw 'Immutable source identity changed during extraction.' }
+$verificationOrchestratorTree = ([string](Invoke-GovernedGit @('show','-s','--format=%T',$OrchestratorCommit))).Trim()
+if ($verificationHead -ne $head -or $verificationTree -ne $sourceTree -or $verificationOrchestratorTree -ne $orchestratorTree -or @(Invoke-GovernedGit @('status','--porcelain=v1','--untracked-files=all')).Count -ne 0) { throw 'Immutable source or orchestrator identity changed during extraction.' }
 foreach ($record in $extractedPackageBlobs) {
     $verifiedRaw = Invoke-GovernedGitRaw @('cat-file','blob',[string]$record.blob)
     if ($verifiedRaw.Length -ne [long]$record.size -or (Get-ByteHash $verifiedRaw) -ne [string]$record.raw_sha256) { throw "Git blob changed across closed verification: $($record.path)" }
@@ -278,8 +289,11 @@ $dependencyManifestSha = Get-LowerHash $dependencyManifestPath
 
 $bootstrap = Get-Content -Raw -LiteralPath $UpgradeBootstrapRecord | ConvertFrom-Json
 $upgradeCertificateSha = Get-LowerHash $UpgradePublicCertificate
-$provisionScriptPath = Join-Path $packageRoot 'provision_upgrade_authority.ps1'
-if ($bootstrap.public_certificate_sha256 -ne $upgradeCertificateSha -or $bootstrap.service_sid -ne 'S-1-5-80-238545627-4117296865-2677355104-248304369-1301198082' -or $bootstrap.source_commit -cne $SourceCommit -or $bootstrap.source_tree -cne $sourceTree -or $bootstrap.provisioning_script_sha256 -cne (Get-LowerHash $provisionScriptPath) -or $bootstrap.interactive_logon_denial -cne 'DEFERRED_TO_MEASURED_PRESTART_BOOTSTRAP') { throw 'Upgrade bootstrap record does not bind the supplied trust, source, script, service SID and prestart boundary obligation.' }
+if ($bootstrap.public_certificate_sha256 -ne $upgradeCertificateSha -or $bootstrap.service_sid -ne 'S-1-5-80-238545627-4117296865-2677355104-248304369-1301198082' -or $bootstrap.source_commit -cne $BootstrapSourceCommit -or $bootstrap.source_tree -cne $bootstrapSourceTree -or $bootstrap.provisioning_script_sha256 -cne $bootstrapProvisioningSha256 -or $bootstrap.interactive_logon_denial -cne 'DEFERRED_TO_MEASURED_PRESTART_BOOTSTRAP') { throw 'Upgrade bootstrap record does not bind the supplied trust, bootstrap source object, bootstrap script blob, service SID and prestart boundary obligation.' }
+$orchestratorReceiptPath = Join-Path $output 'Generated\build_orchestrator_receipt.json'
+$orchestratorReceipt = [ordered]@{artifact_type='R7_TARGET_BUILD_ORCHESTRATOR_RECEIPT';bootstrap_provisioning_blob=$bootstrapProvisioningBlob;bootstrap_provisioning_sha256=$bootstrapProvisioningSha256;bootstrap_source_commit=$BootstrapSourceCommit;bootstrap_source_tree=$bootstrapSourceTree;orchestrator_commit=$OrchestratorCommit;orchestrator_script_sha256=$ExpectedOrchestratorScriptSha256;orchestrator_tree=$orchestratorTree;schema_version='1.0.0';target_source_commit=$SourceCommit;target_source_tree=$sourceTree}
+Write-CanonicalJson $orchestratorReceipt $orchestratorReceiptPath $bootstrapTool
+$orchestratorReceiptSha256 = Get-LowerHash $orchestratorReceiptPath
 $bootstrapDependencyPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($dependency in @($bootstrap.provisioning_dependencies)) {
     Assert-ExactPropertySet $dependency @('path','raw_sha256','size') ('Bootstrap dependency ' + [string]$dependency.path)
@@ -650,8 +664,8 @@ $summaryPath = Join-Path $output 'build_summary.json'
 $summary = [ordered]@{
     artifact_type='R7_REMEDIATION_BUILD_SUMMARY';authority_package_manifest_sha256=$authorityManifestSha;build_receipt_sha256=$buildReceiptSha;case_definitions_sha256=$caseSha;
     dependency_manifest_sha256=$dependencyManifestSha;expectations_sha256=$expectationSha;installer_script_sha256=(Get-LowerHash $installerScript);interface_version='4.0.0-REMEDIATION';prohibited_source_dependency_count=0;requirement_registry_sha256=$requirementSha;
-    schema_version='1.0.0';source_commit=$SourceCommit;source_tree=$sourceTree;terminal_policy_sha256=$terminalPolicySha;upgrade_authority_build_receipt_sha256=(Get-LowerHash $upgradeAuthorityBuildReceiptPath);upgrade_binary_sha256=$binaryByRole.UPGRADE_AUTHORITY.pass_a_sha256;
+    orchestrator_receipt_sha256=$orchestratorReceiptSha256;schema_version='1.0.0';source_commit=$SourceCommit;source_tree=$sourceTree;terminal_policy_sha256=$terminalPolicySha;upgrade_authority_build_receipt_sha256=(Get-LowerHash $upgradeAuthorityBuildReceiptPath);upgrade_binary_sha256=$binaryByRole.UPGRADE_AUTHORITY.pass_a_sha256;
     upgrade_ledger_id=$upgradeLedgerId;upgrade_policy_sha256=$upgradePolicySha;upgrade_public_certificate_sha256=$upgradeCertificateSha
 }
 Write-CanonicalJson $summary $summaryPath $bootstrapTool
-Write-Output ([ordered]@{output_root=$output;summary_sha256=(Get-LowerHash $summaryPath);source_commit=$SourceCommit;source_tree=$sourceTree} | ConvertTo-Json)
+Write-Output ([ordered]@{orchestrator_commit=$OrchestratorCommit;orchestrator_receipt_sha256=$orchestratorReceiptSha256;output_root=$output;summary_sha256=(Get-LowerHash $summaryPath);source_commit=$SourceCommit;source_tree=$sourceTree} | ConvertTo-Json)
