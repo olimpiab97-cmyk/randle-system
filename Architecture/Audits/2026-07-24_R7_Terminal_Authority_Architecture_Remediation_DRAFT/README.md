@@ -1,6 +1,6 @@
-# R7 terminal-authority architecture remediation — static proposal package
+# R7 terminal-authority architecture remediation — Unit 2 source package
 
-Status: uninstalled, nonauthoritative remediation source. Every `R7AR-B01` through `R7AR-B16` finding remains **PARTIAL**. This package does not accept R7, amend canonical authority, authorize merge, install a service, create a principal or key, alter trust or a ledger, or authorize production/trading use.
+Status at this source boundary: the independent upgrade-authority implementation and governed Unit 2 provisioning/verification orchestration are prepared but not yet provisioned. Every `R7AR-B01` through `R7AR-B16` finding remains **PARTIAL**. This package does not accept R7, amend canonical authority, authorize merge, install or activate terminal v4, or authorize production/trading use.
 
 ## Exact authority and separated semantics
 
@@ -33,9 +33,13 @@ The signer source does not launch semantic children. The proposed named-pipe bou
 
 The proposed protocol uses a 12-byte `R7TA` frame with explicit version, flags, and big-endian length. The complete frame must contain one canonical NFC UTF-8 JSON payload and no trailing bytes. The raw-frame limit is 65,536 bytes and the payload limit is 65,524 bytes. Recursive duplicate keys, invalid UTF-8, non-NFC strings, non-integer numbers, numeric strings, null/absent confusion, unknown fields, partial/multiple frames, and noncanonical payload bytes are rejected before dispatch. The offline 22-case parser suite does not substitute for the still-pending live pipe probes.
 
-## Separate upgrade proposal
+## Separate Unit 2 upgrade authority
 
-The proposed upgrade authority has its own restricted identity, operation-specific nonexportable key, public trust, policy, and append-only ledger; it has no terminal-receipt or generic-signing operation. A transition must bind old/new service, policy, interface, component set, source commit/tree, build receipt, dependency manifest, installer, host/volume/ledger, nonce, activation sequence, rollback, revocation, and anti-downgrade state before installation. No upgrade authority, key, ledger, authorization, activation, or installation exists as a result of this unit.
+`R7Unit2UpgradeAuthority.cs` defines a separate restricted virtual-service identity, a distinct LocalMachine CNG RSA-3072 nonexportable key, fixed public trust, fixed policy, fixed pipe, and a separate signed append-only ledger. Its closed IPC allowlist is `AUTHORIZE_TERMINAL_TRANSITION`, `GET_AUTHORIZATION`, `GET_HEALTH`, and `GET_PUBLIC_IDENTITY`; it exposes no terminal-receipt, reconciliation, installation, activation, revocation, generic-sign, or arbitrary-hash-sign operation. The authoritative transition payload is constructed from policy, not caller-selected paths or components.
+
+The signed provisioning attestation binds the explicit Unit 2 scope, immutable authorities, source/build/dependency/script identities, principal/effective token, key and ACL identity, fixed roots, public trust, policy, pipe, and preflight baseline. The authorization binds the exact uninstalled Unit 1 terminal target and states only `AUTHORIZED FOR FUTURE INSTALLATION CONSIDERATION`.
+
+Existing terminal ACLs are immutable in this unit and intentionally do not grant the new SID read access to the terminal binary or policy. Therefore issuance binds the exact elevated immutable preflight capture and requires fresh direct remeasurement at any future consumption. The upgrade SID independently proves write denial to the terminal ledger, receipts, trust, repository, service configuration, and terminal key. No authorization can itself install anything.
 
 ## Transaction and recovery proposal
 
@@ -47,9 +51,9 @@ Issuance follows `REQUEST_RECEIVED -> RESERVED -> EVIDENCE_VALIDATED -> RECEIPT_
 
 `governed_script_registry.json` is an exact manifest of every top-level PowerShell script that can influence authority derivation, build, package staging, proposed installation/upgrade, matrix construction, evidence, traceability, verification, scanning, or host capture. It records path, raw SHA-256, Git blob identity, mode, size, role, allowed stage, dependency roles, and authority classification.
 
-`external_utility_registry.json` content-binds the absolute Git, PowerShell, compiler, IL, framework/reference, service-control, ACL, filesystem, job, management, utility-module, and PKI inputs. Host-transition utilities are classified as future inputs and are not invoked for mutation. `R7MeasuredUtility.cs` defines held-handle identity checks for future measured invocation. Static measurements do not prove installed runtime dependency closure.
+`external_utility_registry.json` content-binds the absolute Git, PowerShell, compiler, IL, framework/reference, service-control, ACL, filesystem, job, management, utility-module, and PKI inputs. Unit 2 permits only the content-bound SCM, ACL, PKI, and PowerShell inputs against the new upgrade boundary; terminal-service mutation remains forbidden. `R7MeasuredUtility.cs` defines held-handle identity checks. Static measurements do not prove installed runtime dependency closure.
 
-`source_role_registry.json` reverse-routes every current `Source/*.cs` file—including `R7MeasuredUtility.cs`, `R7ServiceBoundary.cs`, and `R7RecoveryProbeAuditor.cs`—to blocker/requirement IDs, architecture role, verification, intended authority, and executable consumers. It declares 12 compile targets with explicit source sets.
+`source_role_registry.json` reverse-routes every current `Source/*.cs` file—including the four Unit 2 sources, `R7MeasuredUtility.cs`, `R7ServiceBoundary.cs`, and `R7RecoveryProbeAuditor.cs`—to blocker/requirement IDs, architecture role, verification, intended authority, and executable consumers. It declares 14 compile targets with explicit source sets.
 
 `build_static_closure.ps1` creates uninstalled nonauthority binaries only. It verifies registry identities, uses absolute utilities, recursively snapshots build-input roots before and after use, compiles every role twice with fixed x64/.NET 4.8 options and explicit references, records raw PE identities/differences, and requires normalized-IL equality. Precommit commit/tree values are explicit zero placeholders; detached postcommit builds bind the exact commit/tree. No compiled output is installed.
 
@@ -61,6 +65,6 @@ Existing history remains immutable. The static classification registry binds seq
 
 The threat model excludes kernel compromise, offline/elevated administrator control, physical attack, compromised cryptographic primitives without detectable byte change, and TPM/HSM/remote-signer claims. It does not convert static compilation into OS isolation, host installation, ledger authority, matrix evidence, or independent acceptance.
 
-## Remaining governed work
+## Unit 2 stopping boundary and remaining governed work
 
-A separately authorized later unit must provision and verify the upgrade boundary, obtain a pre-install authorization, install only the authorized components, apply and probe the five-principal boundary, run live parser/path/key/dependency/ledger attacks, append governed historical classifications, execute the four candidate/fresh configurations and reconciliations, perform service-stopped and restart verification, and produce host/matrix traceability. This static package cannot approve that work or itself.
+This source commit is intended to be followed only by the separately authorized Unit 2 bootstrap, exact detached builds, upgrade-boundary provisioning, live probes against that new service, one pre-install authorization, public stopped-service verification, restart continuity, and a public evidence commit. Unit 2 must then stop. Terminal v4 installation/activation, the other service principals, historical terminal classifications, matrix execution, terminal crash testing, and independent-review readiness remain later separately authorized work. This package cannot approve itself.

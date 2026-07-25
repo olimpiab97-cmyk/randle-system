@@ -38,6 +38,16 @@ namespace RandleAI.R7Remediation
 
         internal static SortedDictionary<string, object> EnforceAndMeasure(string serviceName, string expectedSid, string expectedBinary)
         {
+            return MeasureBoundary(serviceName, expectedSid, expectedBinary, true);
+        }
+
+        internal static SortedDictionary<string, object> MeasureOnly(string serviceName, string expectedSid, string expectedBinary)
+        {
+            return MeasureBoundary(serviceName, expectedSid, expectedBinary, false);
+        }
+
+        private static SortedDictionary<string, object> MeasureBoundary(string serviceName, string expectedSid, string expectedBinary, bool enforceDenyRights)
+        {
             if (String.IsNullOrWhiteSpace(serviceName) || serviceName.IndexOfAny(new char[] { '\0', '\\', '/' }) >= 0) throw new ArgumentException("SERVICE_NAME_INVALID");
             SecurityIdentifier sid = ResolveServiceSid(serviceName, expectedSid);
             ServiceConfiguration configuration = ReadServiceConfiguration(serviceName);
@@ -52,7 +62,7 @@ namespace RandleAI.R7Remediation
             if (administrators.Contains(expectedSid)) throw new InvalidOperationException("SERVICE_SID_IS_ADMINISTRATOR");
 
             List<string> before = EnumerateRights(sid);
-            AddRights(sid, RequiredDenyRights);
+            if (enforceDenyRights) AddRights(sid, RequiredDenyRights);
             List<string> after = EnumerateRights(sid);
             List<object> added = new List<object>();
             foreach (string right in RequiredDenyRights)
@@ -75,14 +85,16 @@ namespace RandleAI.R7Remediation
                 "service_account", configuration.Account,
                 "service_name", serviceName,
                 "service_sid", expectedSid,
-                "service_sid_type", "RESTRICTED");
+                "service_sid_type", "RESTRICTED",
+                "verification_mode", enforceDenyRights ? "ENFORCE_AND_MEASURE" : "MEASURE_ONLY");
         }
 
         internal static SortedDictionary<string, object> RestoreAddedRights(byte[] measurementBytes)
         {
             SortedDictionary<string, object> measurement = R7Json.ParseCanonicalObject(measurementBytes);
-            R7Json.ExactKeys(measurement, "account_rights_after", "account_rights_before", "added_account_rights", "administrator_member_sids", "artifact_type", "binary_path", "interactive_logon_denied", "remote_interactive_logon_denied", "required_privileges", "schema_version", "service_account", "service_name", "service_sid", "service_sid_type");
+            R7Json.ExactKeys(measurement, "account_rights_after", "account_rights_before", "added_account_rights", "administrator_member_sids", "artifact_type", "binary_path", "interactive_logon_denied", "remote_interactive_logon_denied", "required_privileges", "schema_version", "service_account", "service_name", "service_sid", "service_sid_type", "verification_mode");
             if (!String.Equals(R7Json.String(measurement, "artifact_type", 1, 128), "R7_OS_ENFORCED_SERVICE_BOUNDARY_MEASUREMENT", StringComparison.Ordinal)) throw new InvalidDataException("SERVICE_BOUNDARY_MEASUREMENT_TYPE_INVALID");
+            if (!String.Equals(R7Json.String(measurement, "verification_mode", 1, 64), "ENFORCE_AND_MEASURE", StringComparison.Ordinal)) throw new InvalidDataException("SERVICE_BOUNDARY_MEASUREMENT_NOT_RESTORABLE");
             string sidText = R7Json.String(measurement, "service_sid", 1, 256);
             SecurityIdentifier sid = new SecurityIdentifier(sidText);
             object[] addedRaw = R7Json.Array(measurement, "added_account_rights");

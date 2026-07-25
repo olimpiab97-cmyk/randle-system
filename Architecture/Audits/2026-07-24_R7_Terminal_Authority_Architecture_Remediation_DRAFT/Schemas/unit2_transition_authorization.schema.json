@@ -1,0 +1,13 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"urn:randle:r7:unit2:terminal-transition-authorization:2.0.0",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["payload","public_key_identity","signature","signature_algorithm"],
+  "properties":{
+    "public_key_identity":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "signature":{"type":"string","minLength":1},
+    "signature_algorithm":{"const":"RSA-PSS-SHA256"},
+    "payload":{"type":"object","additionalProperties":false,"required":["anti_downgrade","authority_bindings","authority_class","authorization_expiration","authorization_time","components","consumption_state","current_state","disposition","host_bound","installation_performed","one_time_use","operation","request_frame_sha256","request_identity","request_payload_identity","revocation_state","rollback_constraints","schema_version","target_bindings","target_source_commit","target_source_tree","transition_nonce","transition_plan_sha256","upgrade_authority_may_install"],"properties":{"authority_class":{"const":"TERMINAL_TRANSITION_PREINSTALL_AUTHORIZATION"},"disposition":{"const":"AUTHORIZED FOR FUTURE INSTALLATION CONSIDERATION"},"operation":{"const":"AUTHORIZE_TERMINAL_TRANSITION"},"consumption_state":{"const":"PENDING_FUTURE_SEPARATE_UNIT"},"revocation_state":{"const":"ACTIVE"},"host_bound":{"const":true},"one_time_use":{"const":true},"installation_performed":{"const":false},"upgrade_authority_may_install":{"const":false},"schema_version":{"const":"2.0.0"},"anti_downgrade":{"type":"object"},"authority_bindings":{"type":"object"},"components":{"type":"array","minItems":13},"current_state":{"type":"object"},"rollback_constraints":{"type":"object"},"target_bindings":{"type":"object"},"authorization_expiration":{"type":"string"},"authorization_time":{"type":"string"},"request_frame_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"request_identity":{"type":"string"},"request_payload_identity":{"type":"string","pattern":"^[0-9a-f]{64}$"},"target_source_commit":{"type":"string","pattern":"^[0-9a-f]{40}$"},"target_source_tree":{"type":"string","pattern":"^[0-9a-f]{40}$"},"transition_nonce":{"type":"string"},"transition_plan_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
+  }
+}

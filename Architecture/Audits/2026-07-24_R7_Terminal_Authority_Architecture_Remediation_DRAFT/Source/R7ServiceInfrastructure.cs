@@ -79,6 +79,7 @@ namespace RandleAI.R7Remediation
         private readonly string pipeName;
         private readonly string[] allowedPipeSids;
         private readonly Func<R7PipeProcessor> processorFactory;
+        private readonly string responseInterfaceVersion;
         private volatile bool stopping;
         private Thread serverThread;
         private R7PipeProcessor processor;
@@ -88,6 +89,11 @@ namespace RandleAI.R7Remediation
         private int activeConnections;
 
         internal R7PipeWindowsService(string serviceName, string fixedPipeName, string[] pipeSids, Func<R7PipeProcessor> factory)
+            : this(serviceName, fixedPipeName, pipeSids, factory, R7Fixed.InterfaceVersion)
+        {
+        }
+
+        internal R7PipeWindowsService(string serviceName, string fixedPipeName, string[] pipeSids, Func<R7PipeProcessor> factory, string fixedResponseInterfaceVersion)
         {
             ServiceName = serviceName;
             CanStop = true;
@@ -96,6 +102,7 @@ namespace RandleAI.R7Remediation
             pipeName = fixedPipeName;
             allowedPipeSids = pipeSids;
             processorFactory = factory;
+            responseInterfaceVersion = fixedResponseInterfaceVersion;
         }
 
         protected override void OnStart(string[] args)
@@ -204,14 +211,14 @@ namespace RandleAI.R7Remediation
                 try { processor.ProtocolRejected(context, exception); }
                 catch
                 {
-                    TryWrite(pipe, Rejection("PROTOCOL_REJECTION_EVIDENCE_FAILURE"));
+                    TryWrite(pipe, RejectionFor(responseInterfaceVersion, "PROTOCOL_REJECTION_EVIDENCE_FAILURE"));
                     return;
                 }
-                TryWrite(pipe, Rejection(exception.Code));
+                TryWrite(pipe, RejectionFor(responseInterfaceVersion, exception.Code));
             }
-            catch (R7DurabilityUncertainException exception) { TryWrite(pipe, OutcomeUncertain(exception.Message)); }
-            catch (SecurityException exception) { TryWrite(pipe, Rejection(exception.Message)); }
-            catch (Exception) { TryWrite(pipe, Rejection("REQUEST_REJECTED")); }
+            catch (R7DurabilityUncertainException exception) { TryWrite(pipe, OutcomeUncertainFor(responseInterfaceVersion, exception.Message)); }
+            catch (SecurityException exception) { TryWrite(pipe, RejectionFor(responseInterfaceVersion, exception.Message)); }
+            catch (Exception) { TryWrite(pipe, RejectionFor(responseInterfaceVersion, "REQUEST_REJECTED")); }
             finally
             {
                 try { pipe.Dispose(); } catch { }
@@ -222,10 +229,15 @@ namespace RandleAI.R7Remediation
 
         internal static SortedDictionary<string, object> Rejection(string code)
         {
+            return RejectionFor(R7Fixed.InterfaceVersion, code);
+        }
+
+        internal static SortedDictionary<string, object> RejectionFor(string interfaceVersion, string code)
+        {
             return R7Json.Object(
                 "authority_effect", false,
                 "error_code", String.IsNullOrEmpty(code) ? "REQUEST_REJECTED" : code,
-                "interface_version", R7Fixed.InterfaceVersion,
+                "interface_version", interfaceVersion,
                 "protocol_version", R7Fixed.ProtocolVersion,
                 "status", "REJECTED");
         }
@@ -251,10 +263,15 @@ namespace RandleAI.R7Remediation
 
         internal static SortedDictionary<string, object> OutcomeUncertain(string code)
         {
+            return OutcomeUncertainFor(R7Fixed.InterfaceVersion, code);
+        }
+
+        internal static SortedDictionary<string, object> OutcomeUncertainFor(string interfaceVersion, string code)
+        {
             return R7Json.Object(
                 "authority_effect", "RESOLVE_BY_SAME_REQUEST_IDENTITY",
                 "error_code", String.IsNullOrEmpty(code) ? "DURABILITY_OUTCOME_UNCERTAIN" : code,
-                "interface_version", R7Fixed.InterfaceVersion,
+                "interface_version", interfaceVersion,
                 "protocol_version", R7Fixed.ProtocolVersion,
                 "status", "OUTCOME_UNCERTAIN");
         }

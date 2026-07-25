@@ -86,6 +86,8 @@ namespace RandleAI.R7Remediation
         internal const string UpgradeAuthorizationRoot = @"C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Authorizations";
         internal const string UpgradeObjectRoot = @"C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Objects";
         internal const string UpgradeActivationRoot = @"C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Activations";
+        internal const string UpgradeEvidenceRoot = @"C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Evidence";
+        internal const string UpgradeResponseRoot = @"C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Responses";
         internal const string UpgradeStagingRoot = @"C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Staging";
         internal const string UpgradeRecoveryRoot = @"C:\ProgramData\RandleAI\TerminalUpgradeAuthority\Recovery";
         internal const string ExecutionStateRoot = @"C:\ProgramData\RandleAI\TerminalExecution";
@@ -132,11 +134,13 @@ namespace RandleAI.R7Remediation
             paths.Add("UPGRADE_ACTIVATION_ROOT", UpgradeActivationRoot);
             paths.Add("UPGRADE_AUTHORIZATION_ROOT", UpgradeAuthorizationRoot);
             paths.Add("UPGRADE_CONFIG_ROOT", UpgradeConfigRoot);
+            paths.Add("UPGRADE_EVIDENCE_ROOT", UpgradeEvidenceRoot);
             paths.Add("UPGRADE_BUILD_CLOSURE_ROOT", UpgradeBuildClosureRoot);
             paths.Add("UPGRADE_INSTALL_ROOT", UpgradeInstallRoot);
             paths.Add("UPGRADE_LEDGER_ROOT", UpgradeLedgerRoot);
             paths.Add("UPGRADE_OBJECT_ROOT", UpgradeObjectRoot);
             paths.Add("UPGRADE_RECOVERY_ROOT", UpgradeRecoveryRoot);
+            paths.Add("UPGRADE_RESPONSE_ROOT", UpgradeResponseRoot);
             paths.Add("UPGRADE_STAGING_ROOT", UpgradeStagingRoot);
             paths.Add("UPGRADE_STATE_ROOT", UpgradeStateRoot);
             paths.Add("UPGRADE_SOURCE_INPUT_ROOT", UpgradeSourceInputRoot);

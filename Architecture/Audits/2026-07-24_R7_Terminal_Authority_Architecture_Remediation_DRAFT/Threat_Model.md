@@ -12,11 +12,15 @@ Terminal signer, execution, observation, comparator, and upgrade authority use d
 
 The protocol accepts only one complete canonical NFC UTF-8 JSON payload in an exact frame. Expected semantics are inaccessible to execution and observation under the proposed ACLs. Recovery-producer results are not trusted: the auditor reopens canonical evidence and independently derives the public result code from signed ledger/transaction state.
 
-Fixed files and external utilities are intended to be opened no-follow, measured by canonical handle identity, and held through use. Static package construction uses absolute utility paths and records recursive closure before and after compilation. Git and PowerShell remain measured nonauthoritative build/verification inputs; service-control, ACL, filesystem, job, and PKI tools are future transition/matrix inputs only. Python and runtime Git are prohibited.
+Fixed files and external utilities are intended to be opened no-follow, measured by canonical handle identity, and held through use. Static package construction uses absolute utility paths and records recursive closure before and after compilation. Git and PowerShell remain measured nonauthoritative build/verification inputs. Unit 2 limits measured SCM, ACL, management, and PKI use to the new upgrade authority; terminal-service mutation is prohibited. Python and runtime Git are prohibited.
 
-## Static-unit assurance actually established
+The Unit 2 authority has one signing operation: construction of the fixed `AUTHORIZE_TERMINAL_TRANSITION` envelope. Provisioning attestation signing is bootstrap evidence, not terminal-transition authority. No generic signing, arbitrary hash signing, terminal receipt, reconciliation, install, activation, or revocation IPC operation is exposed. The service captures and enforces its effective SID, groups, and one-privilege token before opening its key.
 
-This unit can establish only source/package identities, exact script/utility/source routing, fixed compiler/reference/options, successful two-pass compilation, normalized-IL equality, offline strict-parser behavior, disposable temporary transaction/recovery behavior, static retained-history classification, trace completeness, and secret/contamination scan results. The compiled binaries and generated identities are explicitly uninstalled and nonauthoritative.
+The existing terminal ACLs are not changed and do not grant the upgrade SID direct read access to the terminal binary or policy. Unit 2 therefore binds the exact elevated preflight capture and marks direct current-state remeasurement as mandatory when a later installer attempts consumption. This protects the existing terminal boundary but means Unit 2 authorization is not, by itself, proof that future current state remains unchanged.
+
+## Pre-provision Unit 2 source assurance
+
+Before host provisioning, this source boundary establishes source/package identities, exact script/utility/source routing, fixed compiler/reference/options, successful compile probes, offline strict-parser behavior, disposable transaction/recovery behavior, static retained-history classification, and the bounded Unit 2 implementation. Exact postcommit builds, installed identities, live pipe/key/principal/ledger proof, stopped-service verification, and restart continuity must still occur before the Unit 2 evidence commit.
 
 It does **not** establish that any proposed service, principal, LSA right, ACL, key, trust file, policy, ledger transition, runtime module hold, pipe caller check, hostile path denial, upgrade authorization, historical classification append, matrix graph, service-stop behavior, or restart behavior exists on the live host. All `R7AR-B01` through `R7AR-B16` findings therefore remain partial.
 
