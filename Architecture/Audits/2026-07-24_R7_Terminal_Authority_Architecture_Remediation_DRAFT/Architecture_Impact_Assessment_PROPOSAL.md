@@ -2,6 +2,8 @@
 
 This remains proposal-only and cannot change canonical architecture or establish acceptance. The Unit 2 upgrade-authority source and governed host plan are prepared at this boundary, but no host provisioning is claimed here. All sixteen independent-review blockers remain partial.
 
+A preserved bootstrap attempt failed before service creation because its `sc.exe create` argument framing was invalid. The attempt produced no certificate, key, ledger, or authorization and left only empty dedicated directories. A new corrective commit must bind that failure-evidence identity before bootstrap can continue; prior commits are not amended.
+
 ## Proposed architecture
 
 1. **Exact clause authority.** Requirements identify immutable commit, blob, path, heading, exact range/text, and clause SHA-256. The current static graph contains 79 requirements, 151 cases, and 151 expectations with zero declared authority gaps. Generated artifacts remain subordinate to exact governing bytes.

@@ -2,6 +2,8 @@
 
 Status at this source boundary: the independent upgrade-authority implementation and governed Unit 2 provisioning/verification orchestration are prepared but not yet provisioned. Every `R7AR-B01` through `R7AR-B16` finding remains **PARTIAL**. This package does not accept R7, amend canonical authority, authorize merge, install or activate terminal v4, or authorize production/trading use.
 
+The first Unit 2 bootstrap invocation was preserved as nonauthority failure evidence after `sc.exe create` rejected its argument framing with exit 1639. It stopped before service, certificate, key, policy, ledger, or authorization creation and created only twelve empty dedicated directories. The corrected bootstrap requires the exact failure-evidence hash, binds it into the later authority payload, and is replayable only from a new immutable corrective commit.
+
 ## Exact authority and separated semantics
 
 The package independently reconstructs five exact governing sources without importing the discarded `f0cfbce97e913a133530dd66a70326b1e03a0fb6` diagnostic object. The static graph currently contains 79 governed requirements, 151 independently authored cases, and 151 separately authored expectations:

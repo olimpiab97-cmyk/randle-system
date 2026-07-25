@@ -3,7 +3,9 @@ param(
     [Parameter(Mandatory = $true)][string]$EvidenceRoot,
     [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceCommit,
     [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceTree,
-    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedScriptSha256
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedScriptSha256,
+    [Parameter(Mandatory = $true)][string]$PriorFailedAttemptEvidence,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedPriorFailedAttemptSha256
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,6 +77,15 @@ $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Elevation is required.' }
 if ((Get-LowerHash $PSCommandPath) -cne $ExpectedScriptSha256) { throw 'Provisioning script does not match the governed committed identity.' }
+$priorFailurePath = [IO.Path]::GetFullPath($PriorFailedAttemptEvidence)
+if (-not (Test-Path -LiteralPath $priorFailurePath -PathType Leaf) -or (Get-LowerHash $priorFailurePath) -cne $ExpectedPriorFailedAttemptSha256) { throw 'Prior failed-attempt evidence identity mismatch.' }
+$priorFailure = Get-Content -LiteralPath $priorFailurePath -Raw | ConvertFrom-Json
+if ([string]$priorFailure.artifact_type -cne 'R7_UNIT2_FAILED_BOOTSTRAP_ATTEMPT' -or
+    [string]$priorFailure.failure_classification -cne 'SAFE_PRE_SERVICE_CREATE_ARGUMENT_FRAMING_FAILURE' -or
+    [string]$priorFailure.status -cne 'PRESERVED_NONAUTHORITY_FAILURE' -or
+    [bool]$priorFailure.service_exists -or [int]$priorFailure.certificate_count -ne 0 -or
+    [int]$priorFailure.observed_file_count -ne 0 -or [int]@($priorFailure.observed_directories).Count -ne 12 -or
+    [string]$priorFailure.terminal_authority_effect -cne 'NONE') { throw 'Prior failed-attempt evidence is not the governed safe pre-service failure.' }
 foreach ($required in @($powershellExecutable,$scExecutable,$icaclsExecutable,$pkiModuleManifest)) { if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Provisioning dependency missing: $required" } }
 $dependenciesBefore = @(Get-ProvisioningDependencies)
 $dependenciesBeforeIdentity = Get-DependencySetIdentity $dependenciesBefore
@@ -106,10 +117,10 @@ foreach ($directory in @(
     if (-not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory | Out-Null }
 }
 
-Invoke-Checked $scExecutable @('create', $serviceName, "binPath= `"$binaryPath`"", 'start= demand', "obj= $serviceAccount")
+Invoke-Checked $scExecutable @('create', $serviceName, 'binPath=', $binaryPath, 'start=', 'demand', 'obj=', $serviceAccount)
 Invoke-Checked $scExecutable @('sidtype', $serviceName, 'restricted')
 Invoke-Checked $scExecutable @('privs', $serviceName, 'SeChangeNotifyPrivilege')
-Invoke-Checked $scExecutable @('failure', $serviceName, 'reset= 86400', 'actions= restart/5000')
+Invoke-Checked $scExecutable @('failure', $serviceName, 'reset=', '86400', 'actions=', 'restart/5000')
 
 $sidOutput = Capture-Checked $scExecutable @('showsid',$serviceName)
 if ($sidOutput -notmatch [regex]::Escape($expectedSid)) { throw 'Resolved service SID does not match the governed principal identity.' }
@@ -176,6 +187,8 @@ $record = [ordered]@{
     key_unique_name = $uniqueName
     interactive_logon_denial = 'DEFERRED_TO_MEASURED_PRESTART_BOOTSTRAP'
     private_key_exported = $false
+    prior_failed_attempt_sha256 = $ExpectedPriorFailedAttemptSha256
+    prior_failed_attempt_status = 'PRESERVED_NONAUTHORITY_FAILURE'
     provisioning_dependencies = $dependenciesBefore
     provisioning_dependency_set_sha256 = $dependenciesBeforeIdentity
     provisioning_script_sha256 = $ExpectedScriptSha256
