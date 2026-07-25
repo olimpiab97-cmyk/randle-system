@@ -106,6 +106,35 @@ namespace RandleAI.R7Remediation
                     WriteNew(args[2], R7Json.Encode(R7ServiceBoundary.RestoreAddedRights(ReadInput(args[1]))));
                     return 0;
                 }
+                if (args.Length == 3 && args[0] == "capture-failure-actions")
+                {
+                    WriteNew(args[2], R7Json.Encode(R7ServiceFailureActions.Capture(args[1])));
+                    return 0;
+                }
+                if (args.Length == 5 && args[0] == "configure-failure-actions-none")
+                {
+                    uint resetPeriod;
+                    if (!UInt32.TryParse(args[2], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out resetPeriod)) throw new ArgumentException("FAILURE_ACTION_RESET_PERIOD_INVALID");
+                    WriteNew(args[4], R7Json.Encode(R7ServiceFailureActions.ConfigureNone(args[1], resetPeriod, ReadInput(args[3]))));
+                    return 0;
+                }
+                if (args.Length == 4 && args[0] == "verify-failure-actions-none")
+                {
+                    uint resetPeriod;
+                    if (!UInt32.TryParse(args[2], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out resetPeriod)) throw new ArgumentException("FAILURE_ACTION_RESET_PERIOD_INVALID");
+                    WriteNew(args[3], R7Json.Encode(R7ServiceFailureActions.VerifyNone(args[1], resetPeriod)));
+                    return 0;
+                }
+                if (args.Length == 4 && args[0] == "restore-failure-actions")
+                {
+                    WriteNew(args[3], R7Json.Encode(R7ServiceFailureActions.Restore(args[1], ReadInput(args[2]))));
+                    return 0;
+                }
+                if (args.Length == 2 && args[0] == "failure-actions-regression")
+                {
+                    WriteNew(args[1], R7Json.Encode(R7ServiceFailureActions.RunOfflineRegression()));
+                    return 0;
+                }
                 if (args.Length == 9 && args[0] == "run-measured-utility")
                 {
                     uint expectedLinkCount;
@@ -114,7 +143,7 @@ namespace RandleAI.R7Remediation
                     WriteNew(args[8], R7Json.Encode(invocation));
                     return (long)invocation["exit_code"] == 0 ? 0 : 1;
                 }
-                throw new ArgumentException("usage: canonicalize <input> <output> | directory-manifest <root> <output> | durable-copy <source> <new-output> | measure-metadata <path> <output> | measure-protected-metadata <path> <output> | module-snapshot <output> [public-certificates...] | measure <path> <output> | restore-service-boundary <measurement> <output> | run-measured-utility <executable> <sha256> <owner-sid> <security-descriptor-sha256> <volume-identity> <link-count> <canonical-arguments> <output> | service-boundary <service> <expected-sid> <expected-binary> <output> | sha256 <path> | verify-envelope <envelope> <certificate> <certificate-sha256> <payload-output>");
+                throw new ArgumentException("usage: canonicalize <input> <output> | capture-failure-actions <service> <output> | configure-failure-actions-none <service> <reset-period-seconds> <prior-snapshot> <output> | directory-manifest <root> <output> | durable-copy <source> <new-output> | failure-actions-regression <output> | measure-metadata <path> <output> | measure-protected-metadata <path> <output> | module-snapshot <output> [public-certificates...] | measure <path> <output> | restore-failure-actions <service> <prior-snapshot> <output> | restore-service-boundary <measurement> <output> | run-measured-utility <executable> <sha256> <owner-sid> <security-descriptor-sha256> <volume-identity> <link-count> <canonical-arguments> <output> | service-boundary <service> <expected-sid> <expected-binary> <output> | sha256 <path> | verify-envelope <envelope> <certificate> <certificate-sha256> <payload-output> | verify-failure-actions-none <service> <reset-period-seconds> <output>");
             }
             catch (Exception exception)
             {

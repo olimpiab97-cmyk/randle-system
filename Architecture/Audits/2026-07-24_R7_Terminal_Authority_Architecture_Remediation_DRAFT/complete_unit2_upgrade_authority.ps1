@@ -30,7 +30,10 @@ $artifactTool=Join-Path $build 'Tools\R7ArtifactTool.exe'
 $createdFiles=[Collections.Generic.List[string]]::new()
 $createdEvidenceParent=$false
 $rightsMeasurement=$null
-$failureActionsChanged=$false
+$failureActionsSnapshot=$null
+$failureActionsRestoreRequired=$false
+$failureActionsConfiguration=$null
+$failureActionsVerification=$null
 $scmConfigurationChanged=$false
 $mutations=[Collections.Generic.List[object]]::new()
 $aclSnapshots=[Collections.Generic.List[object]]::new()
@@ -161,10 +164,17 @@ try{
     RunScMutation @('config',$service,'binPath=',$expectedBinary,'start=','demand','obj=',$account) 'SCM_CONFIG_FIXED_BINARY_ACCOUNT_MANUAL'|Out-Null
     RunScMutation @('sidtype',$service,'restricted') 'SCM_SID_TYPE_RESTRICTED'|Out-Null
     RunScMutation @('privs',$service,'SeChangeNotifyPrivilege') 'SCM_REQUIRED_PRIVILEGES_MINIMAL'|Out-Null
-    RunScMutation @('failure',$service,'reset=','0','actions=','') 'SCM_FAILURE_ACTIONS_CLEARED'|Out-Null
-    $failureActionsChanged=$true
-    RunScMutation @('failureflag',$service,'0') 'SCM_NONCRASH_FAILURE_ACTIONS_DISABLED'|Out-Null
     $scmConfigurationChanged=$true
+    $failureActionsSnapshot=Join-Path $evidence 'failure_actions_before.json'
+    AssertStopped
+    Run $artifactTool @('capture-failure-actions',$service,$failureActionsSnapshot)|Out-Null
+    AssertStopped
+    $failureActionsRestoreRequired=$true
+    $failureActionsConfiguration=Join-Path $evidence 'failure_actions_configuration.json'
+    AssertStopped
+    $failureConfigurationResult=Run $artifactTool @('configure-failure-actions-none',$service,'0',$failureActionsSnapshot,$failureActionsConfiguration)
+    $mutations.Add([ordered]@{measurement=$failureActionsConfiguration;operation='SCM_FAILURE_ACTIONS_NATIVE_ZERO_ACTION_CONFIGURATION';result=$failureConfigurationResult;service_stopped_before=$true})
+    AssertStopped
 
     $installInput=Join-Path $build 'Install'
     $installMap=@(
@@ -226,11 +236,13 @@ try{
     $qc=Run $sc @('qc',$service)
     $sidType=Run $sc @('qsidtype',$service)
     $privileges=Run $sc @('qprivs',$service)
-    $failure=Run $sc @('qfailure',$service)
-    $failureFlag=Run $sc @('qfailureflag',$service)
+    $failureActionsVerification=Join-Path $evidence 'failure_actions_verification.json'
+    AssertStopped
+    Run $artifactTool @('verify-failure-actions-none',$service,'0',$failureActionsVerification)|Out-Null
+    AssertStopped
     $query=Run $sc @('queryex',$service)
-    $qcText=$qc.output -join "`n";$sidText=$sidType.output -join "`n";$privText=$privileges.output -join "`n";$failureText=$failure.output -join "`n";$failureFlagText=$failureFlag.output -join "`n";$queryText=$query.output -join "`n"
-    if($qcText -notmatch [regex]::Escape($expectedBinary) -or $qcText -notmatch 'DEMAND_START' -or $qcText -notmatch [regex]::Escape($account) -or $sidText -notmatch 'RESTRICTED' -or $privText -notmatch 'SeChangeNotifyPrivilege' -or $privText -match 'SeImpersonatePrivilege' -or $failureText -match 'RESTART|RUN COMMAND|REBOOT' -or $failureFlagText -notmatch 'FALSE' -or $queryText -notmatch 'STATE\s+: 1\s+STOPPED' -or $queryText -notmatch 'PID\s+: 0'){throw 'Stopped SCM boundary verification failed'}
+    $qcText=$qc.output -join "`n";$sidText=$sidType.output -join "`n";$privText=$privileges.output -join "`n";$queryText=$query.output -join "`n"
+    if($qcText -notmatch [regex]::Escape($expectedBinary) -or $qcText -notmatch 'DEMAND_START' -or $qcText -notmatch [regex]::Escape($account) -or $sidText -notmatch 'RESTRICTED' -or $privText -notmatch 'SeChangeNotifyPrivilege' -or $privText -match 'SeImpersonatePrivilege' -or $queryText -notmatch 'STATE\s+: 1\s+STOPPED' -or $queryText -notmatch 'PID\s+: 0'){throw 'Stopped SCM boundary verification failed'}
 
     $terminalServiceDacl=Run $sc @('sdshow','RandleTerminalAuthority')
     if(($terminalServiceDacl.output -join '') -match [regex]::Escape($sid)){throw 'Upgrade SID unexpectedly appears in terminal service DACL'}
@@ -243,7 +255,7 @@ try{
     AssertTerminalSnapshot $terminalAfter
     if([long]$terminalBefore.process_id -ne [long]$terminalAfter.process_id){throw 'Existing terminal service process changed'}
     AssertStopped
-    $record=[ordered]@{artifact_type='R7_UNIT2B_STOPPED_BOUNDARY_INSTALLATION_RECORD';build_manifest_sha256=$ExpectedBuildManifestSha256;existing_terminal_after=$terminalAfter;existing_terminal_before=$terminalBefore;failure_actions_disabled=$true;installed_files=@($physical);key_opened_for_signing=$false;ledger_created=$false;mutations=$mutations.ToArray();preflight_baseline_sha256=$preflightSha;private_key_exported=$false;provisioning_attestation_issued=$false;public_certificate_retained_sha256=(Hash $certTarget);repository_acl=$repositoryAcl;schema_version='1.0.0';service_name=$service;service_pid=0;service_started=$false;service_state='STOPPED';source_commit=$SourceCommit;status='PASS';terminal_boundary_acls=$terminalBoundaryAcls;terminal_transition_authorized=$false;utilities=@([ordered]@{role=[string]$scRow.role;sha256=[string]$scRow.measurement.sha256},[ordered]@{role=[string]$icaclsRow.role;sha256=[string]$icaclsRow.measurement.sha256},[ordered]@{role=[string]$powershellRow.role;sha256=[string]$powershellRow.measurement.sha256})}
+    $record=[ordered]@{artifact_type='R7_UNIT2B_STOPPED_BOUNDARY_INSTALLATION_RECORD';build_manifest_sha256=$ExpectedBuildManifestSha256;existing_terminal_after=$terminalAfter;existing_terminal_before=$terminalBefore;failure_actions_configuration_sha256=(Hash $failureActionsConfiguration);failure_actions_disabled=$true;failure_actions_prior_snapshot_sha256=(Hash $failureActionsSnapshot);failure_actions_verification_sha256=(Hash $failureActionsVerification);installed_files=@($physical);key_opened_for_signing=$false;ledger_created=$false;mutations=$mutations.ToArray();preflight_baseline_sha256=$preflightSha;private_key_exported=$false;provisioning_attestation_issued=$false;public_certificate_retained_sha256=(Hash $certTarget);repository_acl=$repositoryAcl;schema_version='1.0.0';service_name=$service;service_pid=0;service_started=$false;service_state='STOPPED';source_commit=$SourceCommit;status='PASS';terminal_boundary_acls=$terminalBoundaryAcls;terminal_transition_authorized=$false;utilities=@([ordered]@{role=[string]$scRow.role;sha256=[string]$scRow.measurement.sha256},[ordered]@{role=[string]$icaclsRow.role;sha256=[string]$icaclsRow.measurement.sha256},[ordered]@{role=[string]$powershellRow.role;sha256=[string]$powershellRow.measurement.sha256})}
     $rawRecord=Join-Path $evidence 'unit2b_installation_record.raw.json'
     $recordPath=Join-Path $evidence 'unit2b_installation_record.json'
     AssertStopped
@@ -260,12 +272,13 @@ catch{
     if($rightsMeasurement -and (Test-Path -LiteralPath $rightsMeasurement -PathType Leaf)){
         try{AssertStopped;$restorePath=Join-Path $evidence 'service_boundary_rights_restoration.json';Run $artifactTool @('restore-service-boundary',$rightsMeasurement,$restorePath)|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
-    if($failureActionsChanged){try{RunScMutation @('failure',$service,'reset=','86400','actions=','restart/5000') 'ROLLBACK_SCM_FAILURE_ACTIONS'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}}
+    if($failureActionsRestoreRequired -and $failureActionsSnapshot -and (Test-Path -LiteralPath $failureActionsSnapshot -PathType Leaf)){
+        try{AssertStopped;$failureRestorePath=Join-Path $evidence 'failure_actions_restoration.json';Run $artifactTool @('restore-failure-actions',$service,$failureActionsSnapshot,$failureRestorePath)|Out-Null;AssertStopped}catch{$rollbackErrors.Add($_.Exception.Message)}
+    }
     if($scmConfigurationChanged){
         try{RunScMutation @('config',$service,'binPath=',$expectedBinary,'start=','demand','obj=',$account) 'ROLLBACK_SCM_CONFIG'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
         try{RunScMutation @('sidtype',$service,'restricted') 'ROLLBACK_SCM_SID_TYPE'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
         try{RunScMutation @('privs',$service,'SeChangeNotifyPrivilege') 'ROLLBACK_SCM_PRIVILEGES'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
-        try{RunScMutation @('failureflag',$service,'0') 'ROLLBACK_SCM_FAILURE_FLAG'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
     foreach($path in @($createdFiles.ToArray()|Sort-Object -Descending)){
         try{AssertStopped;$resolved=[IO.Path]::GetFullPath($path);if(-not($resolved.StartsWith($install+'\',[StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith($config+'\',[StringComparison]::OrdinalIgnoreCase))){throw "Rollback path escaped Unit 2B roots: $resolved"};if(Test-Path -LiteralPath $resolved -PathType Leaf){Remove-Item -LiteralPath $resolved -Force}}catch{$rollbackErrors.Add($_.Exception.Message)}
