@@ -150,7 +150,7 @@ foreach ($required in @($compiler, $ildasm, $machineConfig, $serviceControlTool,
 }
 if ((Get-LowerHash $PSCommandPath) -cne $ExpectedOrchestratorScriptSha256) { throw 'Build orchestrator script identity mismatch.' }
 Assert-NewDirectory $output
-foreach ($directory in @('Bootstrap', 'BootstrapPassB', 'Generated', 'Generated\BuildInputClosures', 'Generated\ImmutableRepository', 'Measurements', 'PassA', 'PassB', 'FinalPassA', 'FinalPassB', 'NormalizedIL', 'Staging\bin', 'Staging\config', 'Staging\build', 'Staging\authority', 'UpgradeBootstrap')) { New-Item -ItemType Directory -Path (Join-Path $output $directory) -Force | Out-Null }
+foreach ($directory in @('Bootstrap', 'BootstrapPassB', 'OrchestratorBootstrap', 'OrchestratorBootstrapPassB', 'Generated', 'Generated\BuildInputClosures', 'Generated\ImmutableRepository', 'Generated\ImmutableOrchestratorRepository', 'Measurements', 'PassA', 'PassB', 'FinalPassA', 'FinalPassB', 'NormalizedIL', 'Staging\bin', 'Staging\config', 'Staging\build', 'Staging\authority', 'UpgradeBootstrap')) { New-Item -ItemType Directory -Path (Join-Path $output $directory) -Force | Out-Null }
 if ($output.StartsWith($repositoryRoot.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Build output must be outside the immutable source checkout.' }
 
 $workingPackageRoot = $packageRoot
@@ -184,6 +184,14 @@ foreach ($treeRow in @(Invoke-GovernedGit @('ls-tree','-r',$SourceCommit))) {
     $commitBlobMap[$Matches[3]] = $Matches[2]
     $commitModeMap[$Matches[3]] = $Matches[1]
 }
+$orchestratorBlobMap = @{}
+$orchestratorModeMap = @{}
+foreach ($treeRow in @(Invoke-GovernedGit @('ls-tree','-r',$OrchestratorCommit))) {
+    if ([string]$treeRow -notmatch '^(100644|100755) blob ([0-9a-f]{40})\t(.+)$') { continue }
+    if ($orchestratorBlobMap.ContainsKey($Matches[3])) { throw "Duplicate orchestrator path: $($Matches[3])" }
+    $orchestratorBlobMap[$Matches[3]] = $Matches[2]
+    $orchestratorModeMap[$Matches[3]] = $Matches[1]
+}
 $packageRelativeRoot = (Get-RelativePath $repositoryRoot $workingPackageRoot).Replace('\','/')
 $bootstrapProvisioningPath = $packageRelativeRoot + '/provision_upgrade_authority.ps1'
 $bootstrapProvisioningBlob = ([string](Invoke-GovernedGit @('rev-parse',($BootstrapSourceCommit + ':' + $bootstrapProvisioningPath)))).Trim()
@@ -205,10 +213,31 @@ foreach ($relativePath in @($commitBlobMap.Keys | Where-Object { $_ -eq $package
     $extractedPackageBlobs.Add([ordered]@{blob=$blob;extracted_path=$destination;path=$relativePath;raw_sha256=$rawSha256;size=$raw.Length})
 }
 if ($extractedPackageBlobs.Count -eq 0) { throw 'Immutable package extraction was empty.' }
+$orchestratorImmutableRepositoryRoot = Join-Path $output 'Generated\ImmutableOrchestratorRepository'
+$orchestratorPackageRoot = Join-Path $orchestratorImmutableRepositoryRoot $packageRelativeRoot.Replace('/','\')
+$orchestratorToolSourceReceipts = [Collections.Generic.List[object]]::new()
+$orchestratorRequiredPaths = @($orchestratorBlobMap.Keys | Where-Object { $_.StartsWith($packageRelativeRoot + '/Source/', [StringComparison]::Ordinal) -and $_.EndsWith('.cs', [StringComparison]::Ordinal) } | Sort-Object)
+$orchestratorRequiredPaths += ($packageRelativeRoot + '/BuildInputs/R7DevelopmentIdentity.g.cs')
+foreach ($relativePath in $orchestratorRequiredPaths) {
+    if (-not $orchestratorBlobMap.ContainsKey($relativePath)) { throw "Orchestrator tool source path is absent: $relativePath" }
+    $blob = [string]$orchestratorBlobMap[$relativePath]
+    $raw = Invoke-GovernedGitRaw @('cat-file','blob',$blob)
+    $destination = Join-Path $orchestratorImmutableRepositoryRoot $relativePath.Replace('/','\')
+    $parent = Split-Path -Parent $destination
+    if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+    if (Test-Path -LiteralPath $destination) { throw "Immutable orchestrator extraction collision: $relativePath" }
+    [IO.File]::WriteAllBytes($destination,$raw)
+    $rawSha256 = Get-ByteHash $raw
+    if ((Get-LowerHash $destination) -cne $rawSha256) { throw "Immutable orchestrator extraction verification failed: $relativePath" }
+    $orchestratorToolSourceReceipts.Add([ordered]@{blob=$blob;mode=[string]$orchestratorModeMap[$relativePath];path=$relativePath;raw_sha256=$rawSha256;size=$raw.Length})
+}
 $packageRoot = $immutablePackageRoot
 $sourcePaths = Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName
 $developmentIdentity = Join-Path $packageRoot 'BuildInputs\R7DevelopmentIdentity.g.cs'
 if ($sourcePaths.Count -eq 0 -or -not (Test-Path -LiteralPath $developmentIdentity -PathType Leaf)) { throw 'Immutable C# source extraction is incomplete.' }
+$orchestratorSourcePaths = Get-ChildItem -LiteralPath (Join-Path $orchestratorPackageRoot 'Source') -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName
+$orchestratorDevelopmentIdentity = Join-Path $orchestratorPackageRoot 'BuildInputs\R7DevelopmentIdentity.g.cs'
+if ($orchestratorSourcePaths.Count -eq 0 -or -not (Test-Path -LiteralPath $orchestratorDevelopmentIdentity -PathType Leaf)) { throw 'Immutable orchestrator tool source extraction is incomplete.' }
 $bootstrapTool = Join-Path $output 'Bootstrap\R7ArtifactTool.bootstrap.exe'
 $bootstrapToolPassB = Join-Path $output 'BootstrapPassB\R7ArtifactTool.bootstrap.exe'
 Invoke-Compiler 'RandleAI.R7Remediation.R7ArtifactToolProgram' '' $bootstrapTool $developmentIdentity
@@ -223,6 +252,29 @@ $bootstrapBinaryReceipt = [ordered]@{
     role='BOOTSTRAP_ARTIFACT_TOOL';file_name='R7ArtifactTool.bootstrap.exe';pass_a_sha256=(Get-LowerHash $bootstrapTool);pass_b_sha256=(Get-LowerHash $bootstrapToolPassB);
     normalized_il_sha256=$bootstrapLeftIlSha;normalized_il_equal=$true;raw_difference=(Get-RawDifference $bootstrapTool $bootstrapToolPassB);size=(Get-Item -LiteralPath $bootstrapTool).Length
 }
+$targetSourcePaths = $sourcePaths
+$sourcePaths = $orchestratorSourcePaths
+$orchestratorMetadataTool = Join-Path $output 'OrchestratorBootstrap\R7ProtectedMetadataTool.exe'
+$orchestratorMetadataToolPassB = Join-Path $output 'OrchestratorBootstrapPassB\R7ProtectedMetadataTool.exe'
+Invoke-Compiler 'RandleAI.R7Remediation.R7ArtifactToolProgram' '' $orchestratorMetadataTool $orchestratorDevelopmentIdentity
+Start-Sleep -Milliseconds 1100
+Invoke-Compiler 'RandleAI.R7Remediation.R7ArtifactToolProgram' '' $orchestratorMetadataToolPassB $orchestratorDevelopmentIdentity
+$orchestratorMetadataLeftIl = Join-Path $output 'NormalizedIL\R7ProtectedMetadataTool.pass-a.il'
+$orchestratorMetadataRightIl = Join-Path $output 'NormalizedIL\R7ProtectedMetadataTool.pass-b.il'
+$orchestratorMetadataLeftIlSha = Get-NormalizedIl $orchestratorMetadataTool $orchestratorMetadataLeftIl
+$orchestratorMetadataRightIlSha = Get-NormalizedIl $orchestratorMetadataToolPassB $orchestratorMetadataRightIl
+if ($orchestratorMetadataLeftIlSha -cne $orchestratorMetadataRightIlSha) { throw 'Normalized IL mismatch for protected metadata tool.' }
+$sourcePaths = $targetSourcePaths
+$orchestratorMetadataToolBuildReceiptPath = Join-Path $output 'Generated\protected_metadata_tool_build_receipt.json'
+$orchestratorMetadataToolBuildReceipt = [ordered]@{
+    artifact_type='R7_PROTECTED_METADATA_TOOL_BUILD_RECEIPT';compiler=[ordered]@{path=$compiler;raw_sha256=(Get-LowerHash $compiler);size=(Get-Item -LiteralPath $compiler).Length};
+    compiler_options=@('/noconfig','/target:exe','/platform:x64','/optimize+','/checked+','/debug-','/warn:4','/nostdlib+','/langversion:5','/filealign:512');
+    data_access_mask='FILE_READ_ATTRIBUTES|READ_CONTROL';framework_references=@($referencePaths | ForEach-Object { [ordered]@{path=$_;raw_sha256=(Get-LowerHash $_);size=(Get-Item -LiteralPath $_).Length} });
+    normalized_il_sha256=$orchestratorMetadataLeftIlSha;pass_a_sha256=(Get-LowerHash $orchestratorMetadataTool);pass_b_sha256=(Get-LowerHash $orchestratorMetadataToolPassB);
+    private_key_bytes_read=$false;schema_version='1.0.0';source_commit=$OrchestratorCommit;source_files=$orchestratorToolSourceReceipts.ToArray();source_tree=$orchestratorTree;
+    temporary_privilege='SeBackupPrivilege';tool_role='BUILD_TIME_PROTECTED_FILE_METADATA_ONLY'
+}
+Write-CanonicalJson $orchestratorMetadataToolBuildReceipt $orchestratorMetadataToolBuildReceiptPath $bootstrapTool
 
 $moduleSnapshotPath = Join-Path $output 'Generated\runtime_module_snapshot.json'
 & $bootstrapTool module-snapshot $moduleSnapshotPath ([IO.Path]::GetFullPath($TerminalPublicCertificate)) ([IO.Path]::GetFullPath($UpgradePublicCertificate))
@@ -308,17 +360,30 @@ if ($terminalCertificateSha -ne 'b84a4de14577580c64ff5b2446f120aa6f9ea60faa2cb54
 $volumeIdentity = [string]$moduleSnapshot.runtime_allowlist[0].volume_identity
 $upgradeKeyFile = Join-Path 'C:\ProgramData\Microsoft\Crypto\Keys' ([string]$bootstrap.key_unique_name)
 $terminalKeyMetadataPath = Join-Path $output 'Generated\terminal_key_file_metadata.json'
+$terminalKeyProtectedEvidencePath = Join-Path $output 'Generated\terminal_key_protected_metadata_evidence.json'
+$terminalKeyProtectedInvocationPath = Join-Path $output 'Generated\terminal_key_protected_metadata_invocation.json'
 $upgradeKeyMetadataPath = Join-Path $output 'Generated\upgrade_key_file_metadata.json'
-& $bootstrapTool measure-metadata $terminalKeyFile $terminalKeyMetadataPath
-if ($LASTEXITCODE -ne 0) { throw 'Terminal key metadata measurement failed.' }
+& $orchestratorMetadataTool measure-protected-metadata $terminalKeyFile $terminalKeyProtectedEvidencePath
+if ($LASTEXITCODE -ne 0) { throw 'Terminal key protected metadata measurement failed.' }
 & $bootstrapTool measure-metadata $upgradeKeyFile $upgradeKeyMetadataPath
 if ($LASTEXITCODE -ne 0) { throw 'Upgrade key metadata measurement failed.' }
-$terminalKeyMetadata = Get-Content -Raw -LiteralPath $terminalKeyMetadataPath | ConvertFrom-Json
+$terminalKeyProtectedEvidence = Get-Content -Raw -LiteralPath $terminalKeyProtectedEvidencePath | ConvertFrom-Json
+Assert-ExactPropertySet $terminalKeyProtectedEvidence @('artifact_type','data_access_requested','measurement','metadata_privilege','private_bytes_read','privilege_restored_before_evidence_write','schema_version') 'Terminal key protected metadata evidence'
+if ([string]$terminalKeyProtectedEvidence.artifact_type -cne 'R7_PROTECTED_FILE_METADATA_MEASUREMENT' -or [string]$terminalKeyProtectedEvidence.schema_version -cne '1.0.0' -or $terminalKeyProtectedEvidence.data_access_requested -ne $false -or $terminalKeyProtectedEvidence.private_bytes_read -ne $false -or $terminalKeyProtectedEvidence.privilege_restored_before_evidence_write -ne $true -or [string]$terminalKeyProtectedEvidence.metadata_privilege -cne 'SeBackupPrivilege') { throw 'Terminal key protected metadata evidence boundary is invalid.' }
+$terminalKeyMetadata = $terminalKeyProtectedEvidence.measurement
+Write-CanonicalJson $terminalKeyMetadata $terminalKeyMetadataPath $bootstrapTool
 $upgradeKeyMetadata = Get-Content -Raw -LiteralPath $upgradeKeyMetadataPath | ConvertFrom-Json
 foreach ($keyMetadata in @($terminalKeyMetadata,$upgradeKeyMetadata)) {
     if ($keyMetadata.owner_sid -ne 'S-1-5-18' -or [long]$keyMetadata.hard_link_count -ne 1 -or $keyMetadata.volume_identity -ne $volumeIdentity -or @($keyMetadata.streams).Count -ne 1 -or $keyMetadata.streams[0] -ne '::$DATA') { throw 'Signing key metadata violates the governed physical-identity policy.' }
 }
+if ([string]$terminalKeyMetadata.security_descriptor_sha256 -cne '2d117c2338cdc8cfb2bfabf2abf2c2730ef36b897a613d3624e46d128afb5e4d' -or [long]$terminalKeyMetadata.size -ne 2051 -or [string]$terminalKeyMetadata.canonical_path -cne $terminalKeyFile) { throw 'Terminal key protected metadata differs from the preserved independently captured ACL, size, or path.' }
 if ($upgradeKeyMetadata.security_descriptor_sha256 -ne [string]$bootstrap.key_file_acl_sha256) { throw 'Upgrade key ACL differs from the separately captured bootstrap identity.' }
+$terminalKeyProtectedInvocation = [ordered]@{
+    artifact_type='R7_PROTECTED_METADATA_TOOL_INVOCATION_RECEIPT';data_access_requested=$false;measurement_sha256=(Get-LowerHash $terminalKeyMetadataPath);
+    private_bytes_read=$false;protected_evidence_sha256=(Get-LowerHash $terminalKeyProtectedEvidencePath);schema_version='1.0.0';source_commit=$OrchestratorCommit;
+    source_tree=$orchestratorTree;tool_build_receipt_sha256=(Get-LowerHash $orchestratorMetadataToolBuildReceiptPath);tool_sha256=(Get-LowerHash $orchestratorMetadataTool)
+}
+Write-CanonicalJson $terminalKeyProtectedInvocation $terminalKeyProtectedInvocationPath $bootstrapTool
 $upgradeLedgerId = Get-StringHash ('R7_UPGRADE_LEDGER|' + $upgradeCertificateSha + '|899e4db2b5c0f4ad58a09c682324a2ee9e5d7e2f180822ce9300922e56741d52|' + $SourceCommit)
 
 $zeroSha256 = '0000000000000000000000000000000000000000000000000000000000000000'
@@ -530,6 +595,9 @@ Copy-New $dependencyManifestPath (Join-Path $staging 'config\dependency_manifest
 Copy-New $buildReceiptPath (Join-Path $staging 'build\build_receipt.json')
 Copy-New $bootstrapTool (Join-Path $staging 'build\R7ArtifactTool.bootstrap.exe')
 Copy-New $terminalKeyMetadataPath (Join-Path $staging 'build\terminal_key_file_metadata.json')
+Copy-New $terminalKeyProtectedEvidencePath (Join-Path $staging 'build\terminal_key_protected_metadata_evidence.json')
+Copy-New $terminalKeyProtectedInvocationPath (Join-Path $staging 'build\terminal_key_protected_metadata_invocation.json')
+Copy-New $orchestratorMetadataToolBuildReceiptPath (Join-Path $staging 'build\protected_metadata_tool_build_receipt.json')
 Copy-New $upgradeKeyMetadataPath (Join-Path $staging 'build\upgrade_key_file_metadata.json')
 foreach ($closureFile in Get-ChildItem -LiteralPath (Join-Path $output 'Generated\BuildInputClosures') -File | Sort-Object Name) { Copy-New $closureFile.FullName (Join-Path $staging ('build\BuildInputClosures\' + $closureFile.Name)) }
 foreach ($sourceReceipt in $sourceReceipts) {

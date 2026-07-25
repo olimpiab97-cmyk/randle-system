@@ -94,6 +94,11 @@ namespace RandleAI.R7Remediation
         private const uint DaclSecurityInformation = 0x00000004;
         private const int SeFileObject = 1;
         private const uint SddlRevision1 = 1;
+        private const uint TokenAdjustPrivileges = 0x00000020;
+        private const uint TokenQuery = 0x00000008;
+        private const uint SePrivilegeEnabled = 0x00000002;
+        private const int ErrorNotAllAssigned = 1300;
+        private const int FileStreamInfo = 7;
         private static readonly IntPtr InvalidFindHandle = new IntPtr(-1);
 
         [StructLayout(LayoutKind.Sequential)]
@@ -121,11 +126,29 @@ namespace RandleAI.R7Remediation
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 296)] public string StreamName;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Luid
+        {
+            public uint LowPart;
+            public int HighPart;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct TokenPrivileges
+        {
+            public uint PrivilegeCount;
+            public Luid Luid;
+            public uint Attributes;
+        }
+
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr templateFile);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out ByHandleFileInformation information);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetFileInformationByHandleEx(SafeFileHandle handle, int informationClass, IntPtr information, uint informationSize);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle, StringBuilder output, uint length, uint flags);
@@ -159,6 +182,68 @@ namespace RandleAI.R7Remediation
 
         [DllImport("kernel32.dll")]
         private static extern IntPtr LocalFree(IntPtr memory);
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetCurrentProcess();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool OpenProcessToken(IntPtr process, uint desiredAccess, out IntPtr token);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool LookupPrivilegeValue(string systemName, string name, out Luid luid);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAllPrivileges, ref TokenPrivileges newState, uint bufferLength, out TokenPrivileges previousState, out uint returnLength);
+
+        [DllImport("advapi32.dll", EntryPoint = "AdjustTokenPrivileges", SetLastError = true)]
+        private static extern bool RestoreTokenPrivileges(IntPtr token, bool disableAllPrivileges, ref TokenPrivileges newState, uint bufferLength, IntPtr previousState, IntPtr returnLength);
+
+        private sealed class BackupPrivilegeScope : IDisposable
+        {
+            private IntPtr token;
+            private TokenPrivileges previous;
+            private bool restore;
+
+            internal BackupPrivilegeScope()
+            {
+                if (!OpenProcessToken(GetCurrentProcess(), TokenAdjustPrivileges | TokenQuery, out token)) ThrowWin32("BACKUP_PRIVILEGE_TOKEN_OPEN_FAILED");
+                try
+                {
+                    Luid luid;
+                    if (!LookupPrivilegeValue(null, "SeBackupPrivilege", out luid)) ThrowWin32("BACKUP_PRIVILEGE_LOOKUP_FAILED");
+                    TokenPrivileges desired = new TokenPrivileges { PrivilegeCount = 1, Luid = luid, Attributes = SePrivilegeEnabled };
+                    uint returned;
+                    if (!AdjustTokenPrivileges(token, false, ref desired, (uint)Marshal.SizeOf(typeof(TokenPrivileges)), out previous, out returned)) ThrowWin32("BACKUP_PRIVILEGE_ENABLE_FAILED");
+                    int error = Marshal.GetLastWin32Error();
+                    if (error == ErrorNotAllAssigned) throw new R7ProtocolException("BACKUP_PRIVILEGE_NOT_ASSIGNED");
+                    if (error != 0) throw new R7ProtocolException("BACKUP_PRIVILEGE_ENABLE_FAILED", error.ToString(CultureInfo.InvariantCulture));
+                    restore = true;
+                }
+                catch
+                {
+                    CloseHandle(token);
+                    token = IntPtr.Zero;
+                    throw;
+                }
+            }
+
+            public void Dispose()
+            {
+                if (token == IntPtr.Zero) return;
+                try
+                {
+                    if (restore && !RestoreTokenPrivileges(token, false, ref previous, 0, IntPtr.Zero, IntPtr.Zero)) ThrowWin32("BACKUP_PRIVILEGE_RESTORE_FAILED");
+                }
+                finally
+                {
+                    CloseHandle(token);
+                    token = IntPtr.Zero;
+                }
+            }
+        }
 
         internal static R7VerifiedFile Open(
             string path,
@@ -399,6 +484,60 @@ namespace RandleAI.R7Remediation
             catch { handle.Dispose(); throw; }
         }
 
+        internal static R7VerifiedMetadataFile HoldProtectedMetadataFile(string path, string expectedCanonicalPath, string fixedRoot, string expectedOwnerSid, string expectedSecurityDescriptorSha256, string expectedVolumeIdentity, string expectedFileIdentity, uint expectedLinkCount)
+        {
+            string full = Path.GetFullPath(path);
+            string expected = Path.GetFullPath(expectedCanonicalPath);
+            string root = Path.GetFullPath(fixedRoot).TrimEnd(Path.DirectorySeparatorChar);
+            if (!String.Equals(full, expected, StringComparison.Ordinal)) throw new R7ProtocolException("CANONICAL_PATH_MISMATCH");
+            if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)) throw new R7ProtocolException("FIXED_ROOT_ESCAPE");
+            VerifyDirectoryChain(Path.GetDirectoryName(full));
+            using (BackupPrivilegeScope privilege = new BackupPrivilegeScope())
+            {
+                SafeFileHandle handle = CreateFileW(full, FileReadAttributes | ReadControl, FileShareRead, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
+                if (handle.IsInvalid) { int error = Marshal.GetLastWin32Error(); handle.Dispose(); throw new R7ProtocolException("PROTECTED_METADATA_SAFE_OPEN_FAILED", error.ToString(CultureInfo.InvariantCulture)); }
+                try
+                {
+                    ByHandleFileInformation information;
+                    if (!GetFileInformationByHandle(handle, out information)) ThrowWin32("FILE_INFORMATION_FAILED");
+                    if ((information.FileAttributes & FileAttributeReparsePoint) != 0) throw new R7ProtocolException("REPARSE_POINT_REJECTED");
+                    if (expectedLinkCount < 1 || information.NumberOfLinks != expectedLinkCount) throw new R7ProtocolException("HARD_LINK_COUNT_REJECTED", information.NumberOfLinks.ToString(CultureInfo.InvariantCulture));
+                    string final = FinalPath(handle);
+                    if (!String.Equals(final, @"\\?\" + expected, StringComparison.Ordinal)) throw new R7ProtocolException("FINAL_PATH_MISMATCH", final);
+                    if (!String.Equals(LongPath(full), expected, StringComparison.Ordinal)) throw new R7ProtocolException("PATH_ALIAS_REJECTED", full);
+                    string[] streams = StreamsByHandle(handle);
+                    if (streams.Length != 1 || streams[0] != "::$DATA") throw new R7ProtocolException("ALTERNATE_DATA_STREAM_REJECTED");
+                    string owner;
+                    string sddl;
+                    ReadSecurity(handle, out owner, out sddl);
+                    string sddlSha = R7Hash.Bytes(new UTF8Encoding(false, true).GetBytes(sddl));
+                    string volume = information.VolumeSerialNumber.ToString("x8", CultureInfo.InvariantCulture);
+                    string fileIdentity = volume + ":" + information.FileIndexHigh.ToString("x8", CultureInfo.InvariantCulture) + information.FileIndexLow.ToString("x8", CultureInfo.InvariantCulture);
+                    if (!String.IsNullOrEmpty(expectedOwnerSid) && owner != expectedOwnerSid) throw new R7ProtocolException("OWNER_IDENTITY_MISMATCH");
+                    if (!String.IsNullOrEmpty(expectedSecurityDescriptorSha256) && !R7Hash.FixedTimeEquals(sddlSha, expectedSecurityDescriptorSha256)) throw new R7ProtocolException("ACL_IDENTITY_MISMATCH");
+                    if (!String.IsNullOrEmpty(expectedVolumeIdentity) && volume != expectedVolumeIdentity) throw new R7ProtocolException("VOLUME_IDENTITY_MISMATCH");
+                    if (!String.IsNullOrEmpty(expectedFileIdentity) && fileIdentity != expectedFileIdentity) throw new R7ProtocolException("FILE_IDENTITY_MISMATCH");
+                    long size = ((long)information.FileSizeHigh << 32) | information.FileSizeLow;
+                    return new R7VerifiedMetadataFile(handle, new R7FileMeasurement
+                    {
+                        CanonicalPath = expected,
+                        CreationTime = FileTimeText(information.CreationTime),
+                        FileIdentity = fileIdentity,
+                        FinalNtPath = final,
+                        LinkCount = information.NumberOfLinks,
+                        OwnerSid = owner,
+                        SecurityDescriptorSha256 = sddlSha,
+                        Sha256 = String.Empty,
+                        ShortPath = ShortPath(full),
+                        Size = size,
+                        Streams = streams,
+                        VolumeIdentity = volume
+                    });
+                }
+                catch { handle.Dispose(); throw; }
+            }
+        }
+
         internal static R7VerifiedDirectory HoldDirectory(string path, string expectedCanonicalPath, string expectedOwnerSid, string expectedSecurityDescriptorSha256, string expectedVolumeIdentity)
         {
             string full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar);
@@ -574,6 +713,34 @@ namespace RandleAI.R7Remediation
             finally { FindClose(find); }
             streams.Sort(StringComparer.Ordinal);
             return streams.ToArray();
+        }
+
+        private static string[] StreamsByHandle(SafeFileHandle handle)
+        {
+            const int capacity = 65536;
+            IntPtr buffer = Marshal.AllocHGlobal(capacity);
+            try
+            {
+                if (!GetFileInformationByHandleEx(handle, FileStreamInfo, buffer, capacity)) ThrowWin32("STREAM_ENUMERATION_FAILED");
+                List<string> streams = new List<string>();
+                int offset = 0;
+                while (true)
+                {
+                    if (offset < 0 || offset > capacity - 24) throw new R7ProtocolException("STREAM_INFORMATION_BOUNDS_INVALID");
+                    int next = Marshal.ReadInt32(buffer, offset);
+                    int nameLength = Marshal.ReadInt32(buffer, offset + 4);
+                    if (nameLength < 0 || (nameLength & 1) != 0 || nameLength > capacity - offset - 24) throw new R7ProtocolException("STREAM_NAME_LENGTH_INVALID");
+                    string name = Marshal.PtrToStringUni(IntPtr.Add(buffer, offset + 24), nameLength / 2);
+                    if (String.IsNullOrEmpty(name)) throw new R7ProtocolException("STREAM_NAME_INVALID");
+                    streams.Add(name);
+                    if (next == 0) break;
+                    if (next < 24 || (next & 7) != 0 || offset > capacity - next) throw new R7ProtocolException("STREAM_INFORMATION_OFFSET_INVALID");
+                    offset += next;
+                }
+                streams.Sort(StringComparer.Ordinal);
+                return streams.ToArray();
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
         }
 
         private static void ReadSecurity(SafeFileHandle handle, out string ownerSid, out string sddl)

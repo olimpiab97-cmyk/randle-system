@@ -51,6 +51,20 @@ namespace RandleAI.R7Remediation
                     using (R7VerifiedMetadataFile file = R7SafeFile.HoldMetadataFile(source, source, Path.GetDirectoryName(source), null, null, null, null, 1)) WriteNew(args[2], R7Json.Encode(file.Measurement.ToJson()));
                     return 0;
                 }
+                if (args.Length == 3 && args[0] == "measure-protected-metadata")
+                {
+                    string source = Path.GetFullPath(args[1]);
+                    using (R7VerifiedMetadataFile file = R7SafeFile.HoldProtectedMetadataFile(source, source, Path.GetDirectoryName(source), null, null, null, null, 1))
+                        WriteNew(args[2], R7Json.Encode(R7Json.Object(
+                            "artifact_type", "R7_PROTECTED_FILE_METADATA_MEASUREMENT",
+                            "data_access_requested", false,
+                            "measurement", file.Measurement.ToJson(),
+                            "metadata_privilege", "SeBackupPrivilege",
+                            "private_bytes_read", false,
+                            "privilege_restored_before_evidence_write", true,
+                            "schema_version", "1.0.0")));
+                    return 0;
+                }
                 if (args.Length == 3 && args[0] == "durable-copy")
                 {
                     string source = Path.GetFullPath(args[1]);
@@ -100,7 +114,7 @@ namespace RandleAI.R7Remediation
                     WriteNew(args[8], R7Json.Encode(invocation));
                     return (long)invocation["exit_code"] == 0 ? 0 : 1;
                 }
-                throw new ArgumentException("usage: canonicalize <input> <output> | directory-manifest <root> <output> | durable-copy <source> <new-output> | measure-metadata <path> <output> | module-snapshot <output> [public-certificates...] | measure <path> <output> | restore-service-boundary <measurement> <output> | run-measured-utility <executable> <sha256> <owner-sid> <security-descriptor-sha256> <volume-identity> <link-count> <canonical-arguments> <output> | service-boundary <service> <expected-sid> <expected-binary> <output> | sha256 <path> | verify-envelope <envelope> <certificate> <certificate-sha256> <payload-output>");
+                throw new ArgumentException("usage: canonicalize <input> <output> | directory-manifest <root> <output> | durable-copy <source> <new-output> | measure-metadata <path> <output> | measure-protected-metadata <path> <output> | module-snapshot <output> [public-certificates...] | measure <path> <output> | restore-service-boundary <measurement> <output> | run-measured-utility <executable> <sha256> <owner-sid> <security-descriptor-sha256> <volume-identity> <link-count> <canonical-arguments> <output> | service-boundary <service> <expected-sid> <expected-binary> <output> | sha256 <path> | verify-envelope <envelope> <certificate> <certificate-sha256> <payload-output>");
             }
             catch (Exception exception)
             {
