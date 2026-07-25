@@ -363,16 +363,22 @@ $terminalKeyMetadataPath = Join-Path $output 'Generated\terminal_key_file_metada
 $terminalKeyProtectedEvidencePath = Join-Path $output 'Generated\terminal_key_protected_metadata_evidence.json'
 $terminalKeyProtectedInvocationPath = Join-Path $output 'Generated\terminal_key_protected_metadata_invocation.json'
 $upgradeKeyMetadataPath = Join-Path $output 'Generated\upgrade_key_file_metadata.json'
+$upgradeKeyProtectedEvidencePath = Join-Path $output 'Generated\upgrade_key_protected_metadata_evidence.json'
+$upgradeKeyProtectedInvocationPath = Join-Path $output 'Generated\upgrade_key_protected_metadata_invocation.json'
 & $orchestratorMetadataTool measure-protected-metadata $terminalKeyFile $terminalKeyProtectedEvidencePath
 if ($LASTEXITCODE -ne 0) { throw 'Terminal key protected metadata measurement failed.' }
-& $bootstrapTool measure-metadata $upgradeKeyFile $upgradeKeyMetadataPath
-if ($LASTEXITCODE -ne 0) { throw 'Upgrade key metadata measurement failed.' }
+& $orchestratorMetadataTool measure-protected-metadata $upgradeKeyFile $upgradeKeyProtectedEvidencePath
+if ($LASTEXITCODE -ne 0) { throw 'Upgrade key protected metadata measurement failed.' }
 $terminalKeyProtectedEvidence = Get-Content -Raw -LiteralPath $terminalKeyProtectedEvidencePath | ConvertFrom-Json
 Assert-ExactPropertySet $terminalKeyProtectedEvidence @('artifact_type','data_access_requested','measurement','metadata_privilege','private_bytes_read','privilege_restored_before_evidence_write','schema_version') 'Terminal key protected metadata evidence'
 if ([string]$terminalKeyProtectedEvidence.artifact_type -cne 'R7_PROTECTED_FILE_METADATA_MEASUREMENT' -or [string]$terminalKeyProtectedEvidence.schema_version -cne '1.0.0' -or $terminalKeyProtectedEvidence.data_access_requested -ne $false -or $terminalKeyProtectedEvidence.private_bytes_read -ne $false -or $terminalKeyProtectedEvidence.privilege_restored_before_evidence_write -ne $true -or [string]$terminalKeyProtectedEvidence.metadata_privilege -cne 'SeBackupPrivilege') { throw 'Terminal key protected metadata evidence boundary is invalid.' }
 $terminalKeyMetadata = $terminalKeyProtectedEvidence.measurement
 Write-CanonicalJson $terminalKeyMetadata $terminalKeyMetadataPath $bootstrapTool
-$upgradeKeyMetadata = Get-Content -Raw -LiteralPath $upgradeKeyMetadataPath | ConvertFrom-Json
+$upgradeKeyProtectedEvidence = Get-Content -Raw -LiteralPath $upgradeKeyProtectedEvidencePath | ConvertFrom-Json
+Assert-ExactPropertySet $upgradeKeyProtectedEvidence @('artifact_type','data_access_requested','measurement','metadata_privilege','private_bytes_read','privilege_restored_before_evidence_write','schema_version') 'Upgrade key protected metadata evidence'
+if ([string]$upgradeKeyProtectedEvidence.artifact_type -cne 'R7_PROTECTED_FILE_METADATA_MEASUREMENT' -or [string]$upgradeKeyProtectedEvidence.schema_version -cne '1.0.0' -or $upgradeKeyProtectedEvidence.data_access_requested -ne $false -or $upgradeKeyProtectedEvidence.private_bytes_read -ne $false -or $upgradeKeyProtectedEvidence.privilege_restored_before_evidence_write -ne $true -or [string]$upgradeKeyProtectedEvidence.metadata_privilege -cne 'SeBackupPrivilege') { throw 'Upgrade key protected metadata evidence boundary is invalid.' }
+$upgradeKeyMetadata = $upgradeKeyProtectedEvidence.measurement
+Write-CanonicalJson $upgradeKeyMetadata $upgradeKeyMetadataPath $bootstrapTool
 foreach ($keyMetadata in @($terminalKeyMetadata,$upgradeKeyMetadata)) {
     if ($keyMetadata.owner_sid -ne 'S-1-5-18' -or [long]$keyMetadata.hard_link_count -ne 1 -or $keyMetadata.volume_identity -ne $volumeIdentity -or @($keyMetadata.streams).Count -ne 1 -or $keyMetadata.streams[0] -ne '::$DATA') { throw 'Signing key metadata violates the governed physical-identity policy.' }
 }
@@ -384,6 +390,12 @@ $terminalKeyProtectedInvocation = [ordered]@{
     source_tree=$orchestratorTree;tool_build_receipt_sha256=(Get-LowerHash $orchestratorMetadataToolBuildReceiptPath);tool_sha256=(Get-LowerHash $orchestratorMetadataTool)
 }
 Write-CanonicalJson $terminalKeyProtectedInvocation $terminalKeyProtectedInvocationPath $bootstrapTool
+$upgradeKeyProtectedInvocation = [ordered]@{
+    artifact_type='R7_PROTECTED_METADATA_TOOL_INVOCATION_RECEIPT';data_access_requested=$false;measurement_sha256=(Get-LowerHash $upgradeKeyMetadataPath);
+    private_bytes_read=$false;protected_evidence_sha256=(Get-LowerHash $upgradeKeyProtectedEvidencePath);schema_version='1.0.0';source_commit=$OrchestratorCommit;
+    source_tree=$orchestratorTree;tool_build_receipt_sha256=(Get-LowerHash $orchestratorMetadataToolBuildReceiptPath);tool_sha256=(Get-LowerHash $orchestratorMetadataTool)
+}
+Write-CanonicalJson $upgradeKeyProtectedInvocation $upgradeKeyProtectedInvocationPath $bootstrapTool
 $upgradeLedgerId = Get-StringHash ('R7_UPGRADE_LEDGER|' + $upgradeCertificateSha + '|899e4db2b5c0f4ad58a09c682324a2ee9e5d7e2f180822ce9300922e56741d52|' + $SourceCommit)
 
 $zeroSha256 = '0000000000000000000000000000000000000000000000000000000000000000'
@@ -599,6 +611,8 @@ Copy-New $terminalKeyProtectedEvidencePath (Join-Path $staging 'build\terminal_k
 Copy-New $terminalKeyProtectedInvocationPath (Join-Path $staging 'build\terminal_key_protected_metadata_invocation.json')
 Copy-New $orchestratorMetadataToolBuildReceiptPath (Join-Path $staging 'build\protected_metadata_tool_build_receipt.json')
 Copy-New $upgradeKeyMetadataPath (Join-Path $staging 'build\upgrade_key_file_metadata.json')
+Copy-New $upgradeKeyProtectedEvidencePath (Join-Path $staging 'build\upgrade_key_protected_metadata_evidence.json')
+Copy-New $upgradeKeyProtectedInvocationPath (Join-Path $staging 'build\upgrade_key_protected_metadata_invocation.json')
 foreach ($closureFile in Get-ChildItem -LiteralPath (Join-Path $output 'Generated\BuildInputClosures') -File | Sort-Object Name) { Copy-New $closureFile.FullName (Join-Path $staging ('build\BuildInputClosures\' + $closureFile.Name)) }
 foreach ($sourceReceipt in $sourceReceipts) {
     $sourceInput = if ([string]$sourceReceipt.blob -ceq 'GENERATED_BUILD_INPUT') { $identitySource } else { Join-Path $immutableRepositoryRoot ([string]$sourceReceipt.path).Replace('/','\') }
