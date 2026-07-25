@@ -31,7 +31,9 @@ $createdFiles=[Collections.Generic.List[string]]::new()
 $createdEvidenceParent=$false
 $rightsMeasurement=$null
 $failureActionsChanged=$false
+$scmConfigurationChanged=$false
 $mutations=[Collections.Generic.List[object]]::new()
+$aclSnapshots=[Collections.Generic.List[object]]::new()
 
 function Hash([string]$Path){(Get-FileHash -LiteralPath ([IO.Path]::GetFullPath($Path)) -Algorithm SHA256).Hash.ToLowerInvariant()}
 function ReadJson([string]$Path){Get-Content -LiteralPath ([IO.Path]::GetFullPath($Path)) -Raw|ConvertFrom-Json}
@@ -137,8 +139,9 @@ if(@(Get-ChildItem -LiteralPath $config -Force).Count -ne 0){throw 'Upgrade conf
 if(Test-Path -LiteralPath $evidenceParent){throw 'Unit 2B evidence parent must not exist before installation'}
 $certTarget=Join-Path $trust 'upgrade_authority_public.cer'
 if((Hash $certTarget) -cne [string]$bootstrap.public_certificate_sha256){throw 'Preserved public certificate bytes drifted'}
-$certificateAcl=Get-Acl -LiteralPath $certTarget
-if([string]$certificateAcl.Sddl -cne [string]$bootstrap.public_certificate_file_acl_sddl){throw 'Preserved public certificate ACL drifted'}
+    $certificateAcl=Get-Acl -LiteralPath $certTarget
+    if([string]$certificateAcl.Sddl -cne [string]$bootstrap.public_certificate_file_acl_sddl){throw 'Preserved public certificate ACL drifted'}
+    foreach($snapshotPath in @($install,$config,$trust,$certTarget)){$aclSnapshots.Add([ordered]@{acl=(Get-Acl -LiteralPath $snapshotPath);path=$snapshotPath})}
 
 try{
     NewDirectory $evidenceParent
@@ -154,6 +157,7 @@ try{
     RunScMutation @('failure',$service,'reset=','0','actions=','') 'SCM_FAILURE_ACTIONS_CLEARED'|Out-Null
     $failureActionsChanged=$true
     RunScMutation @('failureflag',$service,'0') 'SCM_NONCRASH_FAILURE_ACTIONS_DISABLED'|Out-Null
+    $scmConfigurationChanged=$true
 
     $installInput=Join-Path $build 'Install'
     $installMap=@(
@@ -250,8 +254,17 @@ catch{
         try{AssertStopped;$restorePath=Join-Path $evidence 'service_boundary_rights_restoration.json';Run $artifactTool @('restore-service-boundary',$rightsMeasurement,$restorePath)|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
     if($failureActionsChanged){try{RunScMutation @('failure',$service,'reset=','86400','actions=','restart/5000') 'ROLLBACK_SCM_FAILURE_ACTIONS'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}}
+    if($scmConfigurationChanged){
+        try{RunScMutation @('config',$service,'binPath=',$expectedBinary,'start=','demand','obj=',$account) 'ROLLBACK_SCM_CONFIG'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
+        try{RunScMutation @('sidtype',$service,'restricted') 'ROLLBACK_SCM_SID_TYPE'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
+        try{RunScMutation @('privs',$service,'SeChangeNotifyPrivilege') 'ROLLBACK_SCM_PRIVILEGES'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
+        try{RunScMutation @('failureflag',$service,'0') 'ROLLBACK_SCM_FAILURE_FLAG'|Out-Null}catch{$rollbackErrors.Add($_.Exception.Message)}
+    }
     foreach($path in @($createdFiles.ToArray()|Sort-Object -Descending)){
         try{AssertStopped;$resolved=[IO.Path]::GetFullPath($path);if(-not($resolved.StartsWith($install+'\',[StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith($config+'\',[StringComparison]::OrdinalIgnoreCase))){throw "Rollback path escaped Unit 2B roots: $resolved"};if(Test-Path -LiteralPath $resolved -PathType Leaf){Remove-Item -LiteralPath $resolved -Force}}catch{$rollbackErrors.Add($_.Exception.Message)}
+    }
+    foreach($snapshot in @($aclSnapshots.ToArray()|Sort-Object{([string]$_.path).Length} -Descending)){
+        try{AssertStopped;if(Test-Path -LiteralPath ([string]$snapshot.path)){Set-Acl -LiteralPath ([string]$snapshot.path) -AclObject $snapshot.acl;AssertStopped}}catch{$rollbackErrors.Add($_.Exception.Message)}
     }
     $failure['rollback_errors']=$rollbackErrors.ToArray()
     $failure['rollback_complete']=($rollbackErrors.Count -eq 0)
