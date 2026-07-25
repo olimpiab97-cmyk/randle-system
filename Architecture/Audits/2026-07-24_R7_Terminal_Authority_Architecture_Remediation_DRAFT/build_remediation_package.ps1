@@ -75,7 +75,7 @@ function Write-RawJson([object]$Value, [string]$Path) {
 }
 function Write-CanonicalJson([object]$Value, [string]$Destination, [string]$Tool) {
     $raw = $Destination + '.raw'
-    if (Test-Path -LiteralPath $raw -or Test-Path -LiteralPath $Destination) { throw "Refusing artifact overwrite: $Destination" }
+    if ((Test-Path -LiteralPath $raw) -or (Test-Path -LiteralPath $Destination)) { throw "Refusing artifact overwrite: $Destination" }
     Write-RawJson $Value $raw
     & $Tool canonicalize $raw $Destination | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Canonicalization failed: $Destination" }

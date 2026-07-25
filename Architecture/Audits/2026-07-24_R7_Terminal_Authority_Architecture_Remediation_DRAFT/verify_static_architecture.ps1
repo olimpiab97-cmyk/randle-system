@@ -179,6 +179,9 @@ foreach ($script in $packageScripts) {
     foreach ($error in @(Parse-PowerShell $script.FullName)) { $scriptErrors.Add([ordered]@{ message = $error.Message; path = $script.FullName; line = $error.Extent.StartLineNumber }) }
 }
 Add-Check 'powershell-orchestrators-parse' ($scriptErrors.Count -eq 0) $scriptErrors.ToArray()
+$ambiguousTestPath=[Collections.Generic.List[object]]::new()
+foreach($script in $packageScripts){$text=Get-Content -LiteralPath $script.FullName -Raw;if($text -match 'Test-Path\s+-LiteralPath[^\r\n]+\s-(?:or|and)\s+Test-Path'){$ambiguousTestPath.Add([ordered]@{path=$script.Name})}}
+Add-Check 'powershell-test-path-boolean-expressions-are-unambiguous' ($ambiguousTestPath.Count -eq 0) $ambiguousTestPath.ToArray()
 $unit2bInstallerPath=Join-Path $packageRoot 'complete_unit2_upgrade_authority.ps1'
 $unit2bInstaller=Get-Content -LiteralPath $unit2bInstallerPath -Raw
 $unit2bForbidden=[Collections.Generic.List[string]]::new()
