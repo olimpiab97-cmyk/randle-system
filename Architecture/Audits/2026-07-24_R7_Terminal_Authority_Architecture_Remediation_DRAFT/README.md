@@ -2,7 +2,7 @@
 
 Status at this source boundary: the independent upgrade-authority implementation and governed Unit 2 provisioning/verification orchestration are prepared but not yet provisioned. Every `R7AR-B01` through `R7AR-B16` finding remains **PARTIAL**. This package does not accept R7, amend canonical authority, authorize merge, install or activate terminal v4, or authorize production/trading use.
 
-The first Unit 2 bootstrap invocation was preserved as nonauthority failure evidence after `sc.exe create` rejected its argument framing with exit 1639. It stopped before service, certificate, key, policy, ledger, or authorization creation and created only twelve empty dedicated directories. The corrected bootstrap requires the exact failure-evidence hash, binds it into the later authority payload, and is replayable only from a new immutable corrective commit.
+Two Unit 2 bootstrap invocations are preserved as nonauthority failure evidence. The first stopped when `sc.exe create` rejected its argument framing with exit 1639 and created only twelve empty dedicated directories. The second created the stopped, restricted service entry but stopped when the CNG software KSP rejected legacy `KeySpec Signature`; it created no certificate, key file, policy, ledger, or authorization. The corrected bootstrap requires both exact failure-evidence hashes, binds them into the later authority payload, resumes only the measured stopped service configuration, and uses CNG `KeySpec None` from a new immutable corrective commit.
 
 ## Exact authority and separated semantics
 

@@ -5,7 +5,9 @@ param(
     [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceTree,
     [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedScriptSha256,
     [Parameter(Mandatory = $true)][string]$PriorFailedAttemptEvidence,
-    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedPriorFailedAttemptSha256
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedPriorFailedAttemptSha256,
+    [Parameter(Mandatory = $true)][string]$SecondFailedAttemptEvidence,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedSecondFailedAttemptSha256
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,6 +88,15 @@ if ([string]$priorFailure.artifact_type -cne 'R7_UNIT2_FAILED_BOOTSTRAP_ATTEMPT'
     [bool]$priorFailure.service_exists -or [int]$priorFailure.certificate_count -ne 0 -or
     [int]$priorFailure.observed_file_count -ne 0 -or [int]@($priorFailure.observed_directories).Count -ne 12 -or
     [string]$priorFailure.terminal_authority_effect -cne 'NONE') { throw 'Prior failed-attempt evidence is not the governed safe pre-service failure.' }
+$secondFailurePath = [IO.Path]::GetFullPath($SecondFailedAttemptEvidence)
+if (-not (Test-Path -LiteralPath $secondFailurePath -PathType Leaf) -or (Get-LowerHash $secondFailurePath) -cne $ExpectedSecondFailedAttemptSha256) { throw 'Second failed-attempt evidence identity mismatch.' }
+$secondFailure = Get-Content -LiteralPath $secondFailurePath -Raw | ConvertFrom-Json
+if ([string]$secondFailure.artifact_type -cne 'R7_UNIT2_FAILED_BOOTSTRAP_ATTEMPT' -or
+    [string]$secondFailure.failure_classification -cne 'SAFE_POST_SERVICE_CREATE_CNG_KEYSPEC_COMPATIBILITY_FAILURE' -or
+    [string]$secondFailure.status -cne 'PRESERVED_NONAUTHORITY_FAILURE' -or
+    [string]$secondFailure.service.state -cne 'Stopped' -or [int]$secondFailure.certificate_count -ne 0 -or
+    [int]$secondFailure.new_authority_file_count -ne 0 -or [bool]$secondFailure.private_key_created -or
+    [string]$secondFailure.terminal_authority_effect -cne 'NONE') { throw 'Second failed-attempt evidence is not the governed stopped-service CNG compatibility failure.' }
 foreach ($required in @($powershellExecutable,$scExecutable,$icaclsExecutable,$pkiModuleManifest)) { if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Provisioning dependency missing: $required" } }
 $dependenciesBefore = @(Get-ProvisioningDependencies)
 $dependenciesBeforeIdentity = Get-DependencySetIdentity $dependenciesBefore
@@ -95,7 +106,7 @@ Import-Module -Name $pkiModuleManifest -Force -ErrorAction Stop
 
 $evidence = [IO.Path]::GetFullPath($EvidenceRoot)
 if (-not (Test-Path -LiteralPath $evidence)) { New-Item -ItemType Directory -Path $evidence | Out-Null }
-if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) { throw 'Upgrade authority service already exists; refusing bootstrap replay.' }
+if (-not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) { throw 'Preserved stopped upgrade service is absent; refusing discontinuous bootstrap.' }
 if (Test-Path -LiteralPath $certificatePath) { throw 'Upgrade public certificate already exists; refusing key replacement.' }
 Assert-DedicatedPath $installRoot 'C:\Program Files\RandleAI'
 Assert-DedicatedPath $stateRoot 'C:\ProgramData\RandleAI'
@@ -117,10 +128,10 @@ foreach ($directory in @(
     if (-not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory | Out-Null }
 }
 
-Invoke-Checked $scExecutable @('create', $serviceName, 'binPath=', $binaryPath, 'start=', 'demand', 'obj=', $serviceAccount)
-Invoke-Checked $scExecutable @('sidtype', $serviceName, 'restricted')
-Invoke-Checked $scExecutable @('privs', $serviceName, 'SeChangeNotifyPrivilege')
-Invoke-Checked $scExecutable @('failure', $serviceName, 'reset=', '86400', 'actions=', 'restart/5000')
+$existingService = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+if ($null -eq $existingService -or [string]$existingService.State -cne 'Stopped' -or [int64]$existingService.ProcessId -ne 0 -or
+    [string]$existingService.StartName -cne $serviceAccount -or [string]$existingService.PathName -cne $binaryPath -or
+    [string]$existingService.StartMode -cne 'Manual') { throw 'Preserved upgrade service configuration differs from the governed failed-attempt state.' }
 
 $sidOutput = Capture-Checked $scExecutable @('showsid',$serviceName)
 if ($sidOutput -notmatch [regex]::Escape($expectedSid)) { throw 'Resolved service SID does not match the governed principal identity.' }
@@ -133,7 +144,7 @@ $certificate = New-SelfSignedCertificate `
     -KeyLength 3072 `
     -HashAlgorithm SHA256 `
     -KeyExportPolicy NonExportable `
-    -KeySpec Signature `
+    -KeySpec None `
     -Provider 'Microsoft Software Key Storage Provider' `
     -NotAfter ([DateTimeOffset]::UtcNow.AddYears(10).UtcDateTime)
 if (-not $certificate.HasPrivateKey) { throw 'Upgrade authority certificate lacks a private key.' }
@@ -189,6 +200,8 @@ $record = [ordered]@{
     private_key_exported = $false
     prior_failed_attempt_sha256 = $ExpectedPriorFailedAttemptSha256
     prior_failed_attempt_status = 'PRESERVED_NONAUTHORITY_FAILURE'
+    second_failed_attempt_sha256 = $ExpectedSecondFailedAttemptSha256
+    second_failed_attempt_status = 'PRESERVED_NONAUTHORITY_FAILURE'
     provisioning_dependencies = $dependenciesBefore
     provisioning_dependency_set_sha256 = $dependenciesBeforeIdentity
     provisioning_script_sha256 = $ExpectedScriptSha256

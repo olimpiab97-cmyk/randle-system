@@ -2,7 +2,7 @@
 
 This remains proposal-only and cannot change canonical architecture or establish acceptance. The Unit 2 upgrade-authority source and governed host plan are prepared at this boundary, but no host provisioning is claimed here. All sixteen independent-review blockers remain partial.
 
-A preserved bootstrap attempt failed before service creation because its `sc.exe create` argument framing was invalid. The attempt produced no certificate, key, ledger, or authorization and left only empty dedicated directories. A new corrective commit must bind that failure-evidence identity before bootstrap can continue; prior commits are not amended.
+Two preserved bootstrap attempts remain explicit nonauthority evidence. The first failed before service creation because `sc.exe create` argument framing was invalid; the second created only the stopped restricted service configuration before the CNG software KSP rejected legacy `KeySpec Signature`. Neither produced a certificate, key file, ledger, or authorization. A new corrective commit must bind both failure identities and resume only that measured stopped configuration with CNG `KeySpec None`; prior commits are not amended.
 
 ## Proposed architecture
 
