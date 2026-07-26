@@ -54,6 +54,142 @@ function GitBlobIdentity([byte[]]$Bytes) {
         try{$stream.Write($prefix,0,$prefix.Length);$stream.Write($Bytes,0,$Bytes.Length);$stream.Position=0;return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-','').ToLowerInvariant()}finally{$stream.Dispose()}
     }finally{$sha.Dispose()}
 }
+function InitializeGitBatchProcessRuntime {
+    if('R7GitBatchProcessRunner'-as[type]){return}
+    Add-Type -Language CSharp -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Win32.SafeHandles;
+
+public sealed class R7GitExpectedObject {
+    public string Oid;
+    public string Path;
+    public long Size;
+}
+public sealed class R7GitAuthenticatedObject {
+    public byte[] Bytes;
+    public string ComputedOid;
+    public string Path;
+    public long Size;
+}
+public sealed class R7GitProcessResult {
+    public R7GitAuthenticatedObject[] Objects;
+    public int ParentPid;
+    public int[] ObservedProcessIds;
+    public long AggregateBudget;
+    public long ObservedStdoutBytes;
+    public long MaximumPayloadBytes;
+    public int MaximumRetainedStderrBytes;
+    public long ElapsedMilliseconds;
+    public long CleanupMilliseconds;
+    public bool StdoutCompleted;
+    public bool StderrCompleted;
+    public bool InputCompleted;
+    public bool ProcessExited;
+    public bool ProcessTreeTerminated;
+}
+public static class R7GitBatchProcessRunner {
+    const uint CREATE_SUSPENDED=0x00000004, CREATE_NO_WINDOW=0x08000000, STARTF_USESTDHANDLES=0x00000100;
+    const uint HANDLE_FLAG_INHERIT=0x00000001, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE=0x00002000;
+    const uint WAIT_OBJECT_0=0, WAIT_TIMEOUT=258, STILL_ACTIVE=259;
+    const int JobObjectBasicAccountingInformation=1, JobObjectExtendedLimitInformation=9;
+    const long MaximumObjectBytes=67108864L, MaximumAggregateBytes=268435456L;
+
+    [StructLayout(LayoutKind.Sequential)] struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; [MarshalAs(UnmanagedType.Bool)] public bool bInheritHandle; }
+    [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] struct STARTUPINFO { public int cb; public string lpReserved; public string lpDesktop; public string lpTitle; public int dwX; public int dwY; public int dwXSize; public int dwYSize; public int dwXCountChars; public int dwYCountChars; public int dwFillAttribute; public uint dwFlags; public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2; public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError; }
+    [StructLayout(LayoutKind.Sequential)] struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
+    [StructLayout(LayoutKind.Sequential)] struct IO_COUNTERS { public ulong ReadOperationCount,WriteOperationCount,OtherOperationCount,ReadTransferCount,WriteTransferCount,OtherTransferCount; }
+    [StructLayout(LayoutKind.Sequential)] struct JOBOBJECT_BASIC_LIMIT_INFORMATION { public long PerProcessUserTimeLimit,PerJobUserTimeLimit; public uint LimitFlags; public UIntPtr MinimumWorkingSetSize,MaximumWorkingSetSize; public uint ActiveProcessLimit; public UIntPtr Affinity; public uint PriorityClass,SchedulingClass; }
+    [StructLayout(LayoutKind.Sequential)] struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION { public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation; public IO_COUNTERS IoInfo; public UIntPtr ProcessMemoryLimit,JobMemoryLimit,PeakProcessMemoryUsed,PeakJobMemoryUsed; }
+    [StructLayout(LayoutKind.Sequential)] struct JOBOBJECT_BASIC_ACCOUNTING_INFORMATION { public long TotalUserTime,TotalKernelTime,ThisPeriodTotalUserTime,ThisPeriodTotalKernelTime; public uint TotalPageFaultCount,TotalProcesses,ActiveProcesses,TotalTerminatedProcesses; }
+
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool CreatePipe(out IntPtr read,out IntPtr write,ref SECURITY_ATTRIBUTES sa,int size);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool SetHandleInformation(IntPtr handle,uint mask,uint flags);
+    [DllImport("kernel32.dll",SetLastError=true,CharSet=CharSet.Unicode)] static extern bool CreateProcessW(string app,StringBuilder command,IntPtr processAttributes,IntPtr threadAttributes,bool inherit,uint flags,IntPtr environment,string currentDirectory,ref STARTUPINFO startup,out PROCESS_INFORMATION process);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern IntPtr CreateJobObject(IntPtr attributes,string name);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool SetInformationJobObject(IntPtr job,int infoClass,IntPtr info,int length);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool AssignProcessToJobObject(IntPtr job,IntPtr process);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool TerminateJobObject(IntPtr job,uint exitCode);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool QueryInformationJobObject(IntPtr job,int infoClass,IntPtr info,int length,out int returnedLength);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern uint ResumeThread(IntPtr thread);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern uint WaitForSingleObject(IntPtr handle,uint milliseconds);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr process,out uint exitCode);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool CloseHandle(IntPtr handle);
+
+    static void Fail(string code,string detail){throw new InvalidDataException(code+"|"+detail);}
+    static void Native(string operation){Fail("GIT_BATCH_PROCESS_FAILURE","operation="+operation+";win32="+Marshal.GetLastWin32Error().ToString(CultureInfo.InvariantCulture));}
+    static string Quote(string value){return "\""+value.Replace("\"","\\\"")+"\"";}
+    static string Oid(byte[] payload){
+        byte[] prefix=Encoding.ASCII.GetBytes("blob "+payload.LongLength.ToString(CultureInfo.InvariantCulture)+"\0");
+        using(SHA1 sha=SHA1.Create()){
+            sha.TransformBlock(prefix,0,prefix.Length,null,0);
+            if(payload.Length!=0)sha.TransformBlock(payload,0,payload.Length,null,0);
+            sha.TransformFinalBlock(new byte[0],0,0);
+            return BitConverter.ToString(sha.Hash).Replace("-","").ToLowerInvariant();
+        }
+    }
+    static long Budget(R7GitExpectedObject[] expected){
+        long total=0;
+        try{checked{foreach(R7GitExpectedObject row in expected){if(row==null||row.Size<0||row.Size>MaximumObjectBytes)Fail("GIT_BATCH_DECLARED_SIZE_INVALID","context=request;size="+(row==null?"<null>":row.Size.ToString(CultureInfo.InvariantCulture)));string size=row.Size.ToString(CultureInfo.InvariantCulture);total+=40+1+4+1+size.Length+1;total+=row.Size;total+=1;if(total>MaximumAggregateBytes)Fail("GIT_BATCH_AGGREGATE_OUTPUT_OVERFLOW","context=request-budget;observed="+total.ToString(CultureInfo.InvariantCulture)+";limit="+MaximumAggregateBytes.ToString(CultureInfo.InvariantCulture));}}}
+        catch(OverflowException){Fail("GIT_BATCH_AGGREGATE_OUTPUT_OVERFLOW","context=request-budget");}
+        return total;
+    }
+    static int ReadByte(Stream stream,ref long observed,long budget){int value=stream.ReadByte();if(value>=0){observed++;if(observed>budget)Fail("GIT_BATCH_AGGREGATE_OUTPUT_EXCEEDED","observed="+observed.ToString(CultureInfo.InvariantCulture)+";budget="+budget.ToString(CultureInfo.InvariantCulture));}return value;}
+    static Tuple<string,long> Header(Stream stream,int index,R7GitExpectedObject expected,ref long observed,long budget){
+        List<byte> bytes=new List<byte>(96);
+        while(true){int value=stream.ReadByte();if(value>=0)observed++;if(value<0)Fail("GIT_BATCH_HEADER_INVALID","index="+index+";requested="+expected.Oid+";reason="+(bytes.Count==0?"missing-header":"partial-header"));if(value==10)break;if(value==13||value==0||value>127)Fail("GIT_BATCH_HEADER_INVALID","index="+index+";requested="+expected.Oid+";reason=forbidden-header-byte;byte="+value);if(bytes.Count>=128)Fail("GIT_BATCH_HEADER_INVALID","index="+index+";requested="+expected.Oid+";reason=header-too-long");bytes.Add((byte)value);}
+        string header=Encoding.ASCII.GetString(bytes.ToArray());string[] fields=header.Split(' ');if(fields.Length!=3||fields[0].Length!=40||!LowerHex(fields[0])||fields[2].Length==0||(fields[2].Length>1&&fields[2][0]=='0'))Fail("GIT_BATCH_HEADER_INVALID","index="+index+";requested="+expected.Oid+";reason=grammar");if(fields[1]!="blob")Fail("GIT_BATCH_OBJECT_TYPE_MISMATCH","index="+index+";requested="+expected.Oid+";observed="+fields[0]+";type="+fields[1]);ulong size; if(!UInt64.TryParse(fields[2],NumberStyles.None,CultureInfo.InvariantCulture,out size)||size>MaximumObjectBytes)Fail("GIT_BATCH_DECLARED_SIZE_INVALID","index="+index+";requested="+expected.Oid+";observed="+fields[0]+";size="+fields[2]);if(fields[0]!=expected.Oid)Fail("GIT_BATCH_OBJECT_ORDER_MISMATCH","index="+index+";requested="+expected.Oid+";observed="+fields[0]);if((long)size!=expected.Size)Fail("GIT_BATCH_EXPECTED_SIZE_MISMATCH","index="+index+";requested="+expected.Oid+";expected="+expected.Size.ToString(CultureInfo.InvariantCulture)+";observed="+size.ToString(CultureInfo.InvariantCulture));if(observed>budget)Fail("GIT_BATCH_AGGREGATE_OUTPUT_EXCEEDED","observed="+observed.ToString(CultureInfo.InvariantCulture)+";budget="+budget.ToString(CultureInfo.InvariantCulture));return Tuple.Create(fields[0],(long)size);
+    }
+    static bool LowerHex(string value){for(int i=0;i<value.Length;i++){char c=value[i];if(!((c>='0'&&c<='9')||(c>='a'&&c<='f')))return false;}return true;}
+    static R7GitAuthenticatedObject[] Parse(Stream stream,R7GitExpectedObject[] expected,long budget,Action<long> observedSetter){
+        List<R7GitAuthenticatedObject> rows=new List<R7GitAuthenticatedObject>();long observed=0;
+        for(int index=0;index<expected.Length;index++){R7GitExpectedObject want=expected[index];if(want.Oid==null||want.Oid.Length!=40||!LowerHex(want.Oid))Fail("GIT_BATCH_OBJECT_ORDER_MISMATCH","index="+index+";reason=invalid-request-oid");Tuple<string,long> header=Header(stream,index,want,ref observed,budget);int size=checked((int)header.Item2);byte[] payload=new byte[size];int offset=0;while(offset<size){int take=Math.Min(65536,size-offset);int read=stream.Read(payload,offset,take);if(read<=0)Fail("GIT_BATCH_PAYLOAD_TRUNCATED","index="+index+";requested="+want.Oid+";declared="+size+";actual="+offset);offset+=read;observed+=read;if(observed>budget)Fail("GIT_BATCH_AGGREGATE_OUTPUT_EXCEEDED","observed="+observed+";budget="+budget);}int delimiter=ReadByte(stream,ref observed,budget);if(delimiter!=10)Fail("GIT_BATCH_PAYLOAD_DELIMITER_INVALID","index="+index+";requested="+want.Oid+";observed="+delimiter);string computed=Oid(payload);if(computed!=header.Item1||computed!=want.Oid)Fail("GIT_BATCH_BLOB_IDENTITY_MISMATCH","index="+index+";requested="+want.Oid+";observed="+header.Item1+";computed="+computed);rows.Add(new R7GitAuthenticatedObject{Bytes=payload,ComputedOid=computed,Path=want.Path,Size=payload.LongLength});}
+        int trailing=stream.ReadByte();if(trailing!=-1)Fail("GIT_BATCH_TRAILING_OUTPUT","index="+expected.Length+";observed_byte="+trailing);observedSetter(observed);return rows.ToArray();
+    }
+    sealed class StderrState { public byte[] Bytes; public long Total; }
+    static StderrState DrainStderr(Stream stream,int limit){using(MemoryStream kept=new MemoryStream(Math.Min(limit,4096))){byte[] buffer=new byte[4096];long total=0;while(true){int read=stream.Read(buffer,0,buffer.Length);if(read<=0)break;total+=read;if(total>limit)Fail("GIT_BATCH_STDERR_LIMIT_EXCEEDED","limit="+limit.ToString(CultureInfo.InvariantCulture)+";observed="+total.ToString(CultureInfo.InvariantCulture));kept.Write(buffer,0,read);}return new StderrState{Bytes=kept.ToArray(),Total=total};}}
+    static uint Active(IntPtr job){int size=Marshal.SizeOf(typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION));IntPtr ptr=Marshal.AllocHGlobal(size);try{int returned;if(!QueryInformationJobObject(job,JobObjectBasicAccountingInformation,ptr,size,out returned))Native("QueryInformationJobObject");return ((JOBOBJECT_BASIC_ACCOUNTING_INFORMATION)Marshal.PtrToStructure(ptr,typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION))).ActiveProcesses;}finally{Marshal.FreeHGlobal(ptr);}}
+    static Exception Failure(Task task){if(task==null||!task.IsFaulted)return null;AggregateException aggregate=task.Exception.Flatten();return aggregate.InnerExceptions.Count==0?aggregate:aggregate.InnerExceptions[0];}
+    static void ConfigureJob(IntPtr job){JOBOBJECT_EXTENDED_LIMIT_INFORMATION info=new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();info.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;int size=Marshal.SizeOf(info);IntPtr ptr=Marshal.AllocHGlobal(size);try{Marshal.StructureToPtr(info,ptr,false);if(!SetInformationJobObject(job,JobObjectExtendedLimitInformation,ptr,size))Native("SetInformationJobObject");}finally{Marshal.FreeHGlobal(ptr);}}
+    static string SafeStderr(byte[] bytes){if(bytes==null||bytes.Length==0)return "";string value=Encoding.UTF8.GetString(bytes);StringBuilder safe=new StringBuilder();foreach(char c in value){if(c>=32&&c!=127)safe.Append(c);else safe.Append(' ');if(safe.Length>=256)break;}return safe.ToString().Trim();}
+    static void Close(ref IntPtr handle){if(handle!=IntPtr.Zero){CloseHandle(handle);handle=IntPtr.Zero;}}
+
+    public static R7GitProcessResult Run(string executable,string arguments,string workingDirectory,byte[] standardInput,R7GitExpectedObject[] expected,int totalDeadlineMilliseconds,int cleanupReserveMilliseconds,int terminationConfirmationMilliseconds,int stderrLimit){
+        if(expected==null)throw new ArgumentNullException("expected");if(totalDeadlineMilliseconds<500||cleanupReserveMilliseconds<100||cleanupReserveMilliseconds>=totalDeadlineMilliseconds||terminationConfirmationMilliseconds<1||terminationConfirmationMilliseconds>cleanupReserveMilliseconds)Fail("GIT_BATCH_PROCESS_FAILURE","reason=invalid-deadline");if(stderrLimit<1||stderrLimit>1048576)Fail("GIT_BATCH_PROCESS_FAILURE","reason=invalid-stderr-limit");
+        long aggregate=Budget(expected),observedStdout=0,maximumPayload=0;foreach(R7GitExpectedObject row in expected)maximumPayload=Math.Max(maximumPayload,row.Size);
+        Stopwatch clock=Stopwatch.StartNew();long executionCutoff=totalDeadlineMilliseconds-cleanupReserveMilliseconds;IntPtr job=IntPtr.Zero,stdoutRead=IntPtr.Zero,stdoutWrite=IntPtr.Zero,stderrRead=IntPtr.Zero,stderrWrite=IntPtr.Zero,stdinRead=IntPtr.Zero,stdinWrite=IntPtr.Zero;PROCESS_INFORMATION pi=new PROCESS_INFORMATION();FileStream stdout=null,stderr=null,stdin=null;Task<R7GitAuthenticatedObject[]> stdoutTask=null;Task<StderrState> stderrTask=null;Task inputTask=null;Exception failure=null;long cleanupMs=0;bool processExited=false,treeTerminated=false;
+        try{
+            SECURITY_ATTRIBUTES sa=new SECURITY_ATTRIBUTES{nLength=Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES)),bInheritHandle=true};if(!CreatePipe(out stdoutRead,out stdoutWrite,ref sa,0)||!SetHandleInformation(stdoutRead,HANDLE_FLAG_INHERIT,0)||!CreatePipe(out stderrRead,out stderrWrite,ref sa,0)||!SetHandleInformation(stderrRead,HANDLE_FLAG_INHERIT,0)||!CreatePipe(out stdinRead,out stdinWrite,ref sa,0)||!SetHandleInformation(stdinWrite,HANDLE_FLAG_INHERIT,0))Native("CreatePipe");
+            job=CreateJobObject(IntPtr.Zero,null);if(job==IntPtr.Zero)Native("CreateJobObject");ConfigureJob(job);
+            STARTUPINFO si=new STARTUPINFO();si.cb=Marshal.SizeOf(typeof(STARTUPINFO));si.dwFlags=STARTF_USESTDHANDLES;si.hStdInput=stdinRead;si.hStdOutput=stdoutWrite;si.hStdError=stderrWrite;StringBuilder command=new StringBuilder(Quote(executable)+(String.IsNullOrEmpty(arguments)?"":" "+arguments));if(!CreateProcessW(executable,command,IntPtr.Zero,IntPtr.Zero,true,CREATE_SUSPENDED|CREATE_NO_WINDOW,IntPtr.Zero,workingDirectory,ref si,out pi))Native("CreateProcessW");if(!AssignProcessToJobObject(job,pi.hProcess))Native("AssignProcessToJobObject");if(ResumeThread(pi.hThread)==UInt32.MaxValue)Native("ResumeThread");Close(ref pi.hThread);Close(ref stdoutWrite);Close(ref stderrWrite);Close(ref stdinRead);
+            stdout=new FileStream(new SafeFileHandle(stdoutRead,true),FileAccess.Read,4096,false);stdoutRead=IntPtr.Zero;stderr=new FileStream(new SafeFileHandle(stderrRead,true),FileAccess.Read,4096,false);stderrRead=IntPtr.Zero;stdin=new FileStream(new SafeFileHandle(stdinWrite,true),FileAccess.Write,4096,false);stdinWrite=IntPtr.Zero;
+            Stream outLocal=stdout,errLocal=stderr,inLocal=stdin;stdoutTask=Task.Factory.StartNew<R7GitAuthenticatedObject[]>(delegate{return Parse(outLocal,expected,aggregate,delegate(long value){Interlocked.Exchange(ref observedStdout,value);});},CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);stderrTask=Task.Factory.StartNew<StderrState>(delegate{return DrainStderr(errLocal,stderrLimit);},CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);inputTask=Task.Factory.StartNew(delegate{if(standardInput!=null&&standardInput.Length!=0)inLocal.Write(standardInput,0,standardInput.Length);inLocal.Flush();inLocal.Dispose();},CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);
+            while(clock.ElapsedMilliseconds<executionCutoff){failure=Failure(stdoutTask)??Failure(stderrTask)??Failure(inputTask);if(failure!=null)break;processExited=WaitForSingleObject(pi.hProcess,0)==WAIT_OBJECT_0;uint active=Active(job);if(stdoutTask.IsCompleted&&stderrTask.IsCompleted&&inputTask.IsCompleted&&processExited&&active==0)break;Thread.Sleep(5);}
+            processExited=WaitForSingleObject(pi.hProcess,0)==WAIT_OBJECT_0;bool complete=stdoutTask.IsCompleted&&stderrTask.IsCompleted&&inputTask.IsCompleted&&processExited&&Active(job)==0;if(failure==null&&!complete)failure=new InvalidDataException("GIT_BATCH_PROCESS_TIMEOUT|stage=lifecycle;elapsed_ms="+clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
+            if(failure==null){uint exitCode;if(!GetExitCodeProcess(pi.hProcess,out exitCode))Native("GetExitCodeProcess");if(exitCode!=0)failure=new InvalidDataException("GIT_BATCH_PROCESS_FAILURE|context=process;exited=True;exit_code="+exitCode.ToString(CultureInfo.InvariantCulture)+";stderr="+SafeStderr(stderrTask.Result.Bytes));}
+            if(failure!=null){Stopwatch cleanup=Stopwatch.StartNew();if(Active(job)!=0)TerminateJobObject(job,222);try{if(stdin!=null)stdin.Dispose();}catch{};long primaryConfirmationEnd=Math.Min(totalDeadlineMilliseconds,clock.ElapsedMilliseconds+terminationConfirmationMilliseconds);while(clock.ElapsedMilliseconds<primaryConfirmationEnd){processExited=WaitForSingleObject(pi.hProcess,0)==WAIT_OBJECT_0;if(processExited&&Active(job)==0&&(stdoutTask==null||stdoutTask.IsCompleted)&&(stderrTask==null||stderrTask.IsCompleted)&&(inputTask==null||inputTask.IsCompleted))break;Thread.Sleep(1);}bool primaryConfirmed=Active(job)==0&&WaitForSingleObject(pi.hProcess,0)==WAIT_OBJECT_0&&(stdoutTask==null||stdoutTask.IsCompleted)&&(stderrTask==null||stderrTask.IsCompleted)&&(inputTask==null||inputTask.IsCompleted);while(clock.ElapsedMilliseconds<totalDeadlineMilliseconds){processExited=WaitForSingleObject(pi.hProcess,0)==WAIT_OBJECT_0;if(processExited&&Active(job)==0&&(stdoutTask==null||stdoutTask.IsCompleted)&&(stderrTask==null||stderrTask.IsCompleted)&&(inputTask==null||inputTask.IsCompleted))break;Thread.Sleep(5);}treeTerminated=Active(job)==0;processExited=WaitForSingleObject(pi.hProcess,0)==WAIT_OBJECT_0;try{if(stdout!=null)stdout.Dispose();}catch{};try{if(stderr!=null)stderr.Dispose();}catch{};cleanupMs=cleanup.ElapsedMilliseconds;if(!treeTerminated||!processExited||(stdoutTask!=null&&!stdoutTask.IsCompleted)||(stderrTask!=null&&!stderrTask.IsCompleted)||(inputTask!=null&&!inputTask.IsCompleted))Fail("GIT_BATCH_PROCESS_TREE_TERMINATION_FAILED","parent_pid="+pi.dwProcessId+";active="+Active(job)+";parent_exited="+processExited+";stdout_complete="+(stdoutTask==null||stdoutTask.IsCompleted)+";stderr_complete="+(stderrTask==null||stderrTask.IsCompleted)+";input_complete="+(inputTask==null||inputTask.IsCompleted)+";elapsed_ms="+clock.ElapsedMilliseconds+";cleanup_ms="+cleanupMs);string terminalDetail="parent_pid="+pi.dwProcessId+";elapsed_ms="+clock.ElapsedMilliseconds+";cleanup_ms="+cleanupMs+";tree_terminated="+treeTerminated+";stdout_complete="+(stdoutTask==null||stdoutTask.IsCompleted)+";stderr_complete="+(stderrTask==null||stderrTask.IsCompleted)+";input_complete="+(inputTask==null||inputTask.IsCompleted);if(!primaryConfirmed)Fail("GIT_BATCH_PROCESS_TREE_TERMINATION_FAILED","reason=primary-confirmation-deadline;"+terminalDetail);throw new InvalidDataException(failure.Message+";"+terminalDetail);}
+            treeTerminated=true;StderrState stderrState=stderrTask.Result;R7GitAuthenticatedObject[] objects=stdoutTask.Result;return new R7GitProcessResult{Objects=objects,ParentPid=pi.dwProcessId,ObservedProcessIds=new int[]{pi.dwProcessId},AggregateBudget=aggregate,ObservedStdoutBytes=observedStdout,MaximumPayloadBytes=maximumPayload,MaximumRetainedStderrBytes=stderrState.Bytes.Length,ElapsedMilliseconds=clock.ElapsedMilliseconds,CleanupMilliseconds=cleanupMs,StdoutCompleted=true,StderrCompleted=true,InputCompleted=true,ProcessExited=true,ProcessTreeTerminated=treeTerminated};
+        }finally{try{if(stdin!=null)stdin.Dispose();}catch{};try{if(stdout!=null)stdout.Dispose();}catch{};try{if(stderr!=null)stderr.Dispose();}catch{};Close(ref stdinRead);Close(ref stdinWrite);Close(ref stdoutRead);Close(ref stdoutWrite);Close(ref stderrRead);Close(ref stderrWrite);Close(ref pi.hThread);Close(ref pi.hProcess);Close(ref job);}
+    }
+}
+'@
+}
+function NewGitExpectedObject([string]$Oid,[string]$Path,[long]$Size) {
+    InitializeGitBatchProcessRuntime
+    $row=[R7GitExpectedObject]::new();$row.Oid=$Oid;$row.Path=$Path;$row.Size=$Size;return $row
+}
+function InvokeBoundedGitBatchProcess([string]$Executable,[string]$Arguments,[string]$WorkingDirectory,[byte[]]$StandardInput,[object[]]$ExpectedObjects,[int]$TotalDeadlineMilliseconds=30000,[int]$CleanupReserveMilliseconds=5000,[int]$StderrLimit=65536,[int]$TerminationConfirmationMilliseconds=$CleanupReserveMilliseconds) {
+    InitializeGitBatchProcessRuntime
+    try{return [R7GitBatchProcessRunner]::Run($Executable,$Arguments,$WorkingDirectory,$StandardInput,[R7GitExpectedObject[]]$ExpectedObjects,$TotalDeadlineMilliseconds,$CleanupReserveMilliseconds,$TerminationConfirmationMilliseconds,$StderrLimit)}catch{if($_.Exception.InnerException){throw $_.Exception.InnerException};throw}
+}
 function SafeGitBatchStderr([string]$Value) {
     if($null-eq$Value){return ''};$safe=($Value-replace'[\r\n\x00-\x1f]',' ').Trim();if($safe.Length-gt256){return $safe.Substring(0,256)};return $safe
 }
@@ -86,7 +222,7 @@ function ReadAuthenticatedGitBatch([IO.Stream]$Stream,[object[]]$ExpectedObjects
     for($index=0;$index-lt$ExpectedObjects.Count;$index++){
         $expected=$ExpectedObjects[$index];$requestedOid=[string]$expected.oid
         if($requestedOid-cnotmatch'^[0-9a-f]{40}$'){Fail 'GIT_BATCH_OBJECT_ORDER_MISMATCH' (('index={0};requested={1};reason=invalid-request-oid'-f$index,$requestedOid))}
-        $header=ReadStrictGitBatchHeader $Stream $index $requestedOid;$size=[int][long]$header.size;$payload=New-Object byte[] $size;$offset=0
+        $header=ReadStrictGitBatchHeader $Stream $index $requestedOid;if(HasField $expected 'size' -and [long]$header.size-ne[long]$expected.size){Fail 'GIT_BATCH_EXPECTED_SIZE_MISMATCH' (('index={0};requested={1};expected={2};observed={3}'-f$index,$requestedOid,[long]$expected.size,[long]$header.size))};$size=[int][long]$header.size;$payload=New-Object byte[] $size;$offset=0
         while($offset-lt$size){$read=$Stream.Read($payload,$offset,$size-$offset);if($read-le0){Fail 'GIT_BATCH_PAYLOAD_TRUNCATED' (('index={0};requested={1};declared={2};actual={3}'-f$index,$requestedOid,$size,$offset))};$offset+=$read}
         $delimiter=$Stream.ReadByte();if($delimiter-ne10){Fail 'GIT_BATCH_PAYLOAD_DELIMITER_INVALID' (('index={0};requested={1};observed={2}'-f$index,$requestedOid,$delimiter))}
         $computedOid=GitBlobIdentity $payload
@@ -98,14 +234,9 @@ function ReadAuthenticatedGitBatch([IO.Stream]$Stream,[object[]]$ExpectedObjects
 }
 function ReadGitBlobBytes([string]$Blob) {
     if($Blob-cnotmatch'^[0-9a-f]{40}$'){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' 'invalid-blob-id'}
-    if($null-ne(Get-Variable -Name gitBlobByteCache -Scope Script -ErrorAction SilentlyContinue)-and$script:gitBlobByteCache.ContainsKey($Blob)){return [byte[]]$script:gitBlobByteCache[$Blob]}
-    $safe=$repositoryRoot.Replace('\','/');$quotedRepository='"'+$repositoryRoot.Replace('"','\"')+'"';$quotedSafe='"safe.directory='+$safe.Replace('"','\"')+'"'
-    $psi=[Diagnostics.ProcessStartInfo]::new();$psi.FileName=$git;$psi.Arguments=('--no-pager -c '+$quotedSafe+' -c core.fsmonitor=false -c core.hooksPath=NUL -C '+$quotedRepository+' cat-file blob '+$Blob);$psi.UseShellExecute=$false;$psi.CreateNoWindow=$true;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
-    $process=[Diagnostics.Process]::new();$process.StartInfo=$psi
-    try{
-        if(-not$process.Start()){Fail 'GIT_BATCH_PROCESS_FAILURE' 'context=cat-file;reason=start'}
-        $stream=[IO.MemoryStream]::new();try{$copyTask=$process.StandardOutput.BaseStream.CopyToAsync($stream);$errorTask=$process.StandardError.ReadToEndAsync();$exited=$process.WaitForExit(30000);if(-not$exited){try{$process.Kill();$process.WaitForExit()}catch{};AssertGitBatchProcessResult $false -1 '' 'cat-file'};try{[void]$copyTask.GetAwaiter().GetResult()}catch{Fail 'GIT_BATCH_PROCESS_FAILURE' ('context=cat-file;reason=stdout-read;error='+$_.Exception.GetType().Name)};$errorText=$errorTask.GetAwaiter().GetResult();AssertGitBatchProcessResult $true $process.ExitCode $errorText 'cat-file';$bytes=$stream.ToArray();$computed=GitBlobIdentity $bytes;if($computed-cne$Blob){Fail 'GIT_BATCH_BLOB_IDENTITY_MISMATCH' ('index=0;requested='+$Blob+';observed=<direct>;computed='+$computed)};return $bytes}finally{$stream.Dispose()}
-    }finally{$process.Dispose()}
+    InitializeTreeAuthorityCache
+    if($script:gitBlobByteCache.ContainsKey($Blob)){return [byte[]]$script:gitBlobByteCache[$Blob]}
+    Fail 'GIT_OBJECT_AUTHORITY_FAILURE' ('unauthorized-or-uncached-blob='+$Blob)
 }
 function InitializeTreeAuthorityCache {
     if($null-eq(Get-Variable -Name treeAuthorityCacheKey -Scope Script -ErrorAction SilentlyContinue)){$script:treeAuthorityCacheKey='';$script:treeAuthorityCache=@{};$script:gitBlobByteCache=@{}}
@@ -113,16 +244,13 @@ function InitializeTreeAuthorityCache {
     $auditRoot=Join-Path $repositoryRoot $packageRelativeRoot.Replace('/','\');$paths=[Collections.Generic.List[string]]::new()
     foreach($path in @(Get-ChildItem -LiteralPath (Join-Path $auditRoot 'Source') -Filter '*.cs' -File|Sort-Object Name|ForEach-Object FullName)+@(Join-Path $auditRoot 'BuildInputs\R7BuildIdentityContract.cs')){$paths.Add((Relative $repositoryRoot $path))}
     $paths.Add($packageRelativeRoot+'/build_unit2_upgrade_authority.ps1');foreach($contract in @(ConfigurationContract)){if([string]$contract.class-ceq'COMMITTED'){$paths.Add([string]$contract.relative)}}
-    $required=@($paths|Sort-Object -Unique);$rows=@(GitArgs (@('ls-tree','--full-tree',$SourceCommit,'--')+$required));$tree=@{}
-    foreach($row in $rows){if([string]$row-notmatch'^(100644|100755) blob ([0-9a-f]{40})\t(.+)$'){Fail 'GIT_TREE_OBJECT_MISMATCH' 'unexpected-tree-row'};$tree[[string]$Matches[3]]=[ordered]@{blob=[string]$Matches[2];mode=[string]$Matches[1]}}
+    $required=@($paths|Sort-Object -Unique);$rows=@(GitArgs (@('ls-tree','-l','--full-tree',$SourceCommit,'--')+$required));$tree=@{}
+    foreach($row in $rows){if([string]$row-notmatch'^(100644|100755) blob ([0-9a-f]{40})\s+([0-9]+)\t(.+)$'){Fail 'GIT_TREE_OBJECT_MISMATCH' 'unexpected-tree-row'};$tree[[string]$Matches[4]]=[ordered]@{blob=[string]$Matches[2];mode=[string]$Matches[1];size=[long]$Matches[3]}}
     foreach($path in $required){if(-not$tree.ContainsKey($path)){Fail 'GIT_TREE_OBJECT_MISMATCH' ($path+'/missing-or-nonblob')}}
-    $safe=$repositoryRoot.Replace('\','/');$quotedRepository='"'+$repositoryRoot.Replace('"','\"')+'"';$quotedSafe='"safe.directory='+$safe.Replace('"','\"')+'"';$psi=[Diagnostics.ProcessStartInfo]::new();$psi.FileName=$git;$psi.Arguments=('--no-pager -c '+$quotedSafe+' -c core.fsmonitor=false -c core.hooksPath=NUL -C '+$quotedRepository+' cat-file --batch');$psi.UseShellExecute=$false;$psi.CreateNoWindow=$true;$psi.RedirectStandardInput=$true;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
-    $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;$authority=@{};$blobBytes=@{}
-    try{
-        if(-not$process.Start()){Fail 'GIT_BATCH_PROCESS_FAILURE' 'context=batch;reason=start'};$process.StandardInput.NewLine="`n";$expected=[Collections.Generic.List[object]]::new();foreach($path in $required){$blob=[string]$tree[$path].blob;$expected.Add([ordered]@{oid=$blob;path=$path});$process.StandardInput.WriteLine($blob)};$process.StandardInput.Close()
-        $batchOutput=[IO.MemoryStream]::new();try{$copyTask=$process.StandardOutput.BaseStream.CopyToAsync($batchOutput);$errorTask=$process.StandardError.ReadToEndAsync();$exited=$process.WaitForExit(30000);if(-not$exited){try{$process.Kill();$process.WaitForExit()}catch{};AssertGitBatchProcessResult $false -1 '' 'batch'};try{[void]$copyTask.GetAwaiter().GetResult()}catch{Fail 'GIT_BATCH_PROCESS_FAILURE' ('context=batch;reason=stdout-read;error='+$_.Exception.GetType().Name)};$errorText=$errorTask.GetAwaiter().GetResult();AssertGitBatchProcessResult $true $process.ExitCode $errorText 'batch';$batchOutput.Position=0;$frames=@(ReadAuthenticatedGitBatch $batchOutput $expected.ToArray())}finally{$batchOutput.Dispose()}
-        for($index=0;$index-lt$required.Count;$index++){$path=[string]$required[$index];$expectedBlob=[string]$tree[$path].blob;$bytes=[byte[]]$frames[$index].bytes;$authority[$path]=[ordered]@{git_blob_identity=$expectedBlob;mode=[string]$tree[$path].mode;path=$path;raw_sha256=(BytesHash $bytes);size=[long]$bytes.Length};$blobBytes[$expectedBlob]=$bytes}
-    }finally{$process.Dispose()}
+    $safe=$repositoryRoot.Replace('\','/');$quotedRepository='"'+$repositoryRoot.Replace('"','\"')+'"';$quotedSafe='"safe.directory='+$safe.Replace('"','\"')+'"';$arguments='--no-pager -c '+$quotedSafe+' -c core.fsmonitor=false -c core.hooksPath=NUL -C '+$quotedRepository+' cat-file --batch';$authority=@{};$blobBytes=@{};$expected=[Collections.Generic.List[object]]::new();$request=[Text.StringBuilder]::new()
+    foreach($path in $required){$blob=[string]$tree[$path].blob;$expected.Add((NewGitExpectedObject $blob $path ([long]$tree[$path].size)));[void]$request.Append($blob).Append("`n")}
+    $execution=InvokeBoundedGitBatchProcess $git $arguments $repositoryRoot ([Text.Encoding]::ASCII.GetBytes($request.ToString())) $expected.ToArray()
+    $frames=@($execution.Objects);for($index=0;$index-lt$required.Count;$index++){$path=[string]$required[$index];$expectedBlob=[string]$tree[$path].blob;$bytes=[byte[]]$frames[$index].Bytes;$authority[$path]=[ordered]@{git_blob_identity=$expectedBlob;mode=[string]$tree[$path].mode;path=$path;raw_sha256=(BytesHash $bytes);size=[long]$bytes.Length};$blobBytes[$expectedBlob]=$bytes}
     $script:treeAuthorityCacheKey=$cacheKey;$script:treeAuthorityCache=$authority;$script:gitBlobByteCache=$blobBytes
 }
 function ExactTreeBlobAuthority([string]$RelativePath) {
@@ -552,10 +680,65 @@ function InvokeGitBatchParserFixture([string]$Mutation) {
     try{$result=@(ReadAuthenticatedGitBatch $stream $expected);if($runProcessCheck){AssertGitBatchProcessResult $true 17 'fixture nonzero process' 'fixture'};return $result}finally{$stream.Dispose()}
 }
 
+function EncodeLifecycleCommand([string]$Value){return [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Value))}
+function InvokeGitBatchLifecycleFixture([string]$Mutation) {
+    if($null-eq(Get-Variable -Name gitLifecycleFixtureEvidence -Scope Script -ErrorAction SilentlyContinue)){$script:gitLifecycleFixtureEvidence=[Collections.Generic.List[object]]::new()}
+    $fixtureExe=(Get-Process -Id $PID).Path;$payload=[byte[]](65,66,67);$oid=GitBlobIdentity $payload;$frame=JoinFixtureBytes @((AsciiFixtureBytes ($oid+' blob 3'+"`n")),$payload,[byte[]](10));$frame64=[Convert]::ToBase64String($frame);$writeFrame='$b=[Convert]::FromBase64String("'+$frame64+'");$o=[Console]::OpenStandardOutput();$o.Write($b,0,$b.Length);$o.Flush();'
+    $expected=@(NewGitExpectedObject $oid 'fixture/object' 3);$deadline=1800;$reserve=600;$terminationConfirmation=$reserve;$stderrLimit=1024;$pidFile=Join-Path ([IO.Path]::GetTempPath()) ('r7_u2b3o_'+[Guid]::NewGuid().ToString('N')+'.pid');$childPid=0
+    $childCode='Start-Sleep -Seconds 30';$childEncoded=EncodeLifecycleCommand $childCode;$escapedExe=$fixtureExe.Replace("'","''");$escapedPid=$pidFile.Replace("'","''")
+    $spawnPrefix='$p=[Diagnostics.ProcessStartInfo]::new();$p.FileName='''+$escapedExe+''';$p.Arguments=''-NoProfile -NonInteractive -EncodedCommand '+$childEncoded+''';$p.UseShellExecute=$false;$p.CreateNoWindow=$true;'
+    $code='';$arguments='';$input=[byte[]]@()
+    switch($Mutation){
+        'LIFECYCLE_OVERSIZED_DECLARED_PAYLOAD'{$code='$o=[Console]::OpenStandardOutput();$b=[Text.Encoding]::ASCII.GetBytes("'+$oid+' blob 67108865`n");$o.Write($b,0,$b.Length);$o.Flush();Start-Sleep -Seconds 30'}
+        'LIFECYCLE_AGGREGATE_BUDGET_EXCEEDED'{$expected=@();foreach($index in 1..5){$expected+=NewGitExpectedObject $oid ('fixture/'+$index) 67108864};$code='exit 0'}
+        'LIFECYCLE_SUSTAINED_STDOUT'{$code=$writeFrame+'$o=[Console]::OpenStandardOutput();$b=New-Object byte[] 4096;while($true){$o.Write($b,0,$b.Length);$o.Flush()}'}
+        'LIFECYCLE_STDERR_LIMIT_EXCEEDED'{$code='$e=[Console]::OpenStandardError();$b=New-Object byte[] 2048;$e.Write($b,0,$b.Length);$e.Flush();Start-Sleep -Seconds 30'}
+        'LIFECYCLE_CONCURRENT_STREAMS_NONZERO'{$code='$e=[Console]::OpenStandardError();$b=New-Object byte[] 512;$e.Write($b,0,$b.Length);$e.Flush();'+$writeFrame+'exit 7'}
+        'LIFECYCLE_CHILD_HOLDS_STDOUT'{$expected=@();$code=$spawnPrefix+'$p.RedirectStandardError=$true;$c=[Diagnostics.Process]::Start($p);[IO.File]::WriteAllText('''+$escapedPid+''',$c.Id.ToString());exit 0'}
+        'LIFECYCLE_CHILD_HOLDS_STDERR'{$expected=@();$code=$spawnPrefix+'$p.RedirectStandardOutput=$true;$c=[Diagnostics.Process]::Start($p);[IO.File]::WriteAllText('''+$escapedPid+''',$c.Id.ToString());exit 0'}
+        'LIFECYCLE_CHILD_HOLDS_BOTH_PIPES'{$expected=@();$code=$spawnPrefix+'$c=[Diagnostics.Process]::Start($p);[IO.File]::WriteAllText('''+$escapedPid+''',$c.Id.ToString());exit 0'}
+        'LIFECYCLE_PARENT_HANGS_AFTER_FRAMES'{$code=$writeFrame+'Start-Sleep -Seconds 30'}
+        'LIFECYCLE_CHILD_ALIVE_AFTER_PARENT_EXIT'{$expected=@();$code=$spawnPrefix+'$p.RedirectStandardOutput=$true;$p.RedirectStandardError=$true;$c=[Diagnostics.Process]::Start($p);[IO.File]::WriteAllText('''+$escapedPid+''',$c.Id.ToString());exit 0'}
+        'LIFECYCLE_CHILD_ALIVE_AFTER_PARENT_TIMEOUT'{$expected=@();$code=$spawnPrefix+'$p.RedirectStandardOutput=$true;$p.RedirectStandardError=$true;$c=[Diagnostics.Process]::Start($p);[IO.File]::WriteAllText('''+$escapedPid+''',$c.Id.ToString());Start-Sleep -Seconds 30'}
+        'LIFECYCLE_DELAYED_TRAILING_STDOUT'{$code=$writeFrame+'Start-Sleep -Milliseconds 200;$o=[Console]::OpenStandardOutput();$o.WriteByte(88);$o.Flush()'}
+        'LIFECYCLE_VALID_FRAMES_NONZERO_EXIT'{$code=$writeFrame+'exit 17'}
+        'LIFECYCLE_EXIT_BEFORE_REQUIRED_FRAMES'{$code='exit 0'}
+        'LIFECYCLE_TIMEOUT_HEADER_READ'{$code='Start-Sleep -Seconds 30'}
+        'LIFECYCLE_TIMEOUT_PAYLOAD_READ'{$code='$o=[Console]::OpenStandardOutput();$b=[Text.Encoding]::ASCII.GetBytes("'+$oid+' blob 3`nA");$o.Write($b,0,$b.Length);$o.Flush();Start-Sleep -Seconds 30'}
+        'LIFECYCLE_TIMEOUT_EXACT_EOF'{$code=$writeFrame+'Start-Sleep -Seconds 30'}
+        'LIFECYCLE_TIMEOUT_STDERR_COMPLETION'{$code=$writeFrame+$spawnPrefix+'$p.RedirectStandardOutput=$true;$c=[Diagnostics.Process]::Start($p);[IO.File]::WriteAllText('''+$escapedPid+''',$c.Id.ToString());exit 0'}
+        'LIFECYCLE_CLEANUP_DEADLINE_EXCEEDED'{$expected=@();$terminationConfirmation=1;$code=$spawnPrefix+'$children=@();foreach($i in 1..50){$children+=[Diagnostics.Process]::Start($p)};[IO.File]::WriteAllText('''+$escapedPid+''',$children[-1].Id.ToString());Start-Sleep -Seconds 30'}
+        'LIFECYCLE_TREE_TERMINATION_UNCONFIRMED'{$expected=@();$terminationConfirmation=1;$code=$spawnPrefix+'$children=@();foreach($i in 1..20){$children+=[Diagnostics.Process]::Start($p)};[IO.File]::WriteAllText('''+$escapedPid+''',$children[-1].Id.ToString());Start-Sleep -Seconds 30'}
+        'LIFECYCLE_EXPECTED_SIZE_MISMATCH'{$expected=@(NewGitExpectedObject $oid 'fixture/object' 4);$code=$writeFrame+'Start-Sleep -Seconds 30'}
+        'LIFECYCLE_AGGREGATE_ARITHMETIC_OVERFLOW'{$expected=@();foreach($index in 1..5){$expected+=NewGitExpectedObject $oid ('fixture/overflow/'+$index) 67108864};$code='exit 0'}
+        default{throw 'Unknown Git lifecycle fixture mutation: '+$Mutation}
+    }
+    $arguments='-NoProfile -NonInteractive -EncodedCommand '+(EncodeLifecycleCommand $code);$clock=[Diagnostics.Stopwatch]::StartNew();$observed='PASS';$detail='';$result=$null
+    try{$result=InvokeBoundedGitBatchProcess $fixtureExe $arguments ([IO.Path]::GetTempPath()) $input $expected $deadline $reserve $stderrLimit $terminationConfirmation;return $result}catch{$message=$(if($_.Exception.InnerException){$_.Exception.InnerException.Message}else{$_.Exception.Message});$parts=$message-split'\|',2;$observed=$parts[0];if($parts.Count-gt1){$detail=$parts[1]};throw ([IO.InvalidDataException]::new($message))}finally{
+        if(Test-Path -LiteralPath $pidFile){$raw=(Get-Content -LiteralPath $pidFile -Raw).Trim();if($raw-match'^[0-9]+$'){$childPid=[int]$raw};Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue}
+        $survivor=$false;if($childPid-gt0){$survivor=$null-ne(Get-Process -Id $childPid -ErrorAction SilentlyContinue);if($survivor){Stop-Process -Id $childPid -Force -ErrorAction SilentlyContinue}}
+        $script:gitLifecycleFixtureEvidence.Add([ordered]@{mutation=$Mutation;observed=$observed;detail=$detail;elapsed_ms=$clock.ElapsedMilliseconds;child_pid=$childPid;child_survived_return=$survivor;maximum_payload_bytes=$(if($result){[long]$result.MaximumPayloadBytes}else{0});maximum_stderr_bytes=$(if($result){[int]$result.MaximumRetainedStderrBytes}else{$stderrLimit});stdout_complete=$(if($result){[bool]$result.StdoutCompleted}else{$detail-match'stdout_complete=True'});stderr_complete=$(if($result){[bool]$result.StderrCompleted}else{$detail-match'stderr_complete=True'});tree_terminated=$(if($result){[bool]$result.ProcessTreeTerminated}else{$detail-match'tree_terminated=True'})})
+        if($survivor){throw ([IO.InvalidDataException]::new('GIT_BATCH_PROCESS_TREE_TERMINATION_FAILED|fixture-survivor='+$childPid))}
+        if($clock.ElapsedMilliseconds-gt($deadline+1500)){throw ([IO.InvalidDataException]::new('GIT_BATCH_PROCESS_TIMEOUT|fixture-return-bound-exceeded='+$clock.ElapsedMilliseconds))}
+    }
+}
+function InvokeGitBatchLifecyclePositiveCases([object]$Registry) {
+    $results=[Collections.Generic.List[object]]::new();$fixtureExe=(Get-Process -Id $PID).Path;$stderrLimit=1024
+    foreach($case in @($Registry.lifecycle_positive_cases)){
+        $p0=[byte[]](65,66,67);$o0=GitBlobIdentity $p0;$f0=JoinFixtureBytes @((AsciiFixtureBytes ($o0+' blob 3'+"`n")),$p0,[byte[]](10));$expected=@(NewGitExpectedObject $o0 'fixture/positive-0' 3);$code=''
+        if([string]$case.mutation-ceq'LIFECYCLE_VALID_BOUNDED_STDERR'){$f64=[Convert]::ToBase64String($f0);$code='$e=[Console]::OpenStandardError();$d=New-Object byte[] 512;$e.Write($d,0,$d.Length);$e.Flush();$b=[Convert]::FromBase64String("'+$f64+'");$o=[Console]::OpenStandardOutput();$o.Write($b,0,$b.Length);$o.Flush()'}
+        elseif([string]$case.mutation-ceq'LIFECYCLE_VALID_AUTHENTIC_MULTI_OBJECT'){$p1=[byte[]](88,10,0,89);$o1=GitBlobIdentity $p1;$f1=JoinFixtureBytes @((AsciiFixtureBytes ($o1+' blob 4'+"`n")),$p1,[byte[]](10));$expected+=NewGitExpectedObject $o1 'fixture/positive-1' 4;$all=[Convert]::ToBase64String((JoinFixtureBytes @($f0,$f1)));$code='$b=[Convert]::FromBase64String("'+$all+'");$o=[Console]::OpenStandardOutput();$o.Write($b,0,$b.Length);$o.Flush()'}
+        else{throw 'Unknown lifecycle positive mutation: '+[string]$case.mutation}
+        $arguments='-NoProfile -NonInteractive -EncodedCommand '+(EncodeLifecycleCommand $code);if([string]$case.mutation-ceq'LIFECYCLE_VALID_BOUNDED_STDERR'){$measurement=InvokeBoundedGitBatchProcess $fixtureExe $arguments ([IO.Path]::GetTempPath()) ([byte[]]@()) $expected 3000 800 4096;$stderrLimit=[int]$measurement.MaximumRetainedStderrBytes};$clock=[Diagnostics.Stopwatch]::StartNew();$result=InvokeBoundedGitBatchProcess $fixtureExe $arguments ([IO.Path]::GetTempPath()) ([byte[]]@()) $expected 3000 800 $stderrLimit
+        $results.Add([ordered]@{case_id=[string]$case.case_id;mutation=[string]$case.mutation;status='PASS';elapsed_ms=$clock.ElapsedMilliseconds;aggregate_budget=[long]$result.AggregateBudget;maximum_payload_bytes=[long]$result.MaximumPayloadBytes;maximum_stderr_bytes=[int]$result.MaximumRetainedStderrBytes;tree_terminated=[bool]$result.ProcessTreeTerminated})
+    }
+    return $results.ToArray()
+}
+
 function InvokeNegativeCases([object]$Receipt,[object]$Determinism,[object]$NegativeRegistry) {
     $negativeResults=[Collections.Generic.List[object]]::new()
     foreach($case in @($NegativeRegistry.cases)){
-        $mutated=Clone $Receipt;$detMutated=Clone $Determinism;$overrides=@{};$provenance=@{};$role=$mutated.roles[0];$directParserMutation=$null
+        $mutated=Clone $Receipt;$detMutated=Clone $Determinism;$overrides=@{};$provenance=@{};$role=$mutated.roles[0];$directParserMutation=$null;$directLifecycleMutation=$null
         switch([string]$case.mutation){
             'OMIT_COMMITTED_COMPILER_INPUT'{$role.compiler_inputs=@($role.compiler_inputs|Select-Object -Skip 1)}
             'OMIT_GENERATED_COMPILER_INPUT'{$role.compiler_inputs=@($role.compiler_inputs|Where-Object{[string]$_.path-notlike'Generated/*'})}
@@ -609,10 +792,11 @@ function InvokeNegativeCases([object]$Receipt,[object]$Determinism,[object]$Nega
             'CLOSURE_SERIALIZATION_ORDER_CHANGED'{$provenance.closure_reorder=$true}
             'FORGED_RECEIPTS_ORIGINAL_GENERATED_OUTPUT'{$oldClosure=[string]$mutated.build_input_closure_sha256;$oldPolicy=[string]$mutated.policy_sha256;$mutated.build_input_closure_sha256='7'*64;$detMutated.build_input_closure_sha256=$mutated.build_input_closure_sha256;$mutated.policy_sha256='6'*64;foreach($container in @($mutated.generated_sources)+@($detMutated.generated_sources)){foreach($inputRecord in @($container.source_inputs)){if([string]$inputRecord.role-ceq'BUILD_INPUT_CLOSURE'-and[string]$inputRecord.identity-ceq$oldClosure){$inputRecord.identity=$mutated.build_input_closure_sha256};if([string]$inputRecord.role-ceq'COMPLETED_UNIT2_POLICY'-and[string]$inputRecord.identity-ceq$oldPolicy){$inputRecord.identity=$mutated.policy_sha256}}}}
             {$_ -like 'BATCH_*'}{$directParserMutation=[string]$_}
+            {$_ -like 'LIFECYCLE_*'}{$directLifecycleMutation=[string]$_}
             default{throw "Unknown negative mutation: $($case.mutation)"}
         }
         $observed=$null;$observedDetail=''
-        try{if($null-ne$directParserMutation){[void](InvokeGitBatchParserFixture $directParserMutation)}else{ValidateModel $mutated $detMutated $overrides $provenance};throw 'NEGATIVE_CASE_UNEXPECTED_PASS'}catch{if($_.Exception.Message-ceq'NEGATIVE_CASE_UNEXPECTED_PASS'){throw};$parts=$_.Exception.Message-split'\|',2;$observed=$parts[0];if($parts.Count-gt1){$observedDetail=$parts[1]}}
+        try{if($null-ne$directParserMutation){[void](InvokeGitBatchParserFixture $directParserMutation)}elseif($null-ne$directLifecycleMutation){[void](InvokeGitBatchLifecycleFixture $directLifecycleMutation)}else{ValidateModel $mutated $detMutated $overrides $provenance};throw 'NEGATIVE_CASE_UNEXPECTED_PASS'}catch{if($_.Exception.Message-ceq'NEGATIVE_CASE_UNEXPECTED_PASS'){throw};$parts=$_.Exception.Message-split'\|',2;$observed=$parts[0];if($parts.Count-gt1){$observedDetail=$parts[1]}}
         if($observed-cne[string]$case.expected_error){throw "Negative case wrong rejection: $($case.case_id) expected $($case.expected_error) observed $observed"}
         if(HasField $case 'expected_detail_pattern'){if($observedDetail-cnotmatch[string]$case.expected_detail_pattern){throw "Negative case wrong detail: $($case.case_id) observed $observedDetail"}}
         $negativeResults.Add([ordered]@{case_id=[string]$case.case_id;expected_detail=$observedDetail;expected_error=[string]$case.expected_error;mutation=[string]$case.mutation;observed_error=$observed;status='PASS'})
@@ -672,8 +856,8 @@ $manifestActual=@($manifestActual|Sort-Object{[string](FieldValue $_ 'path')})
 if($manifestDeclared.Count-ne$manifestActual.Count){throw 'Package manifest file count mismatch'}
 for($index=0;$index-lt$manifestActual.Count;$index++){foreach($field in @('path','raw_sha256','size')){$declaredValue=[string](FieldValue $manifestDeclared[$index] $field);$actualValue=[string](FieldValue $manifestActual[$index] $field);if($declaredValue-cne$actualValue){throw "Package manifest mismatch: $($manifestActual[$index].path)/$field"}};if([string]$manifestActual[$index].path-match'(^|/)\.\.(/|$)'){throw 'Package manifest path escape'}}
 
-$negativeRegistry=ReadJson $negativePath;$negativeResults=@(InvokeNegativeCases $receipt $determinism $negativeRegistry)
+$negativeRegistry=ReadJson $negativePath;$negativeResults=@(InvokeNegativeCases $receipt $determinism $negativeRegistry);$lifecyclePositiveResults=@(InvokeGitBatchLifecyclePositiveCases $negativeRegistry)
 
-$result=[ordered]@{artifact_type='R7_UNIT2_BUILD_CLOSURE_VERIFICATION';build_manifest_sha256=(Hash $manifestPath);build_receipt_sha256=(Hash $receiptPath);determinism_receipt_sha256=(Hash $determinismPath);generated_source_count=$receipt.generated_sources.Count;negative_results=$negativeResults;negative_test_count=$negativeResults.Count;role_count=$receipt.roles.Count;schema_version='1.0.0';source_commit=$SourceCommit;source_identity_class=[string]$receipt.source_identity_class;source_tree=[string]$receipt.source_tree;status='PASS'}
+$result=[ordered]@{artifact_type='R7_UNIT2_BUILD_CLOSURE_VERIFICATION';build_manifest_sha256=(Hash $manifestPath);build_receipt_sha256=(Hash $receiptPath);determinism_receipt_sha256=(Hash $determinismPath);generated_source_count=$receipt.generated_sources.Count;lifecycle_fixture_evidence=@($script:gitLifecycleFixtureEvidence);lifecycle_positive_results=$lifecyclePositiveResults;negative_results=$negativeResults;negative_test_count=$negativeResults.Count;role_count=$receipt.roles.Count;schema_version='1.0.0';source_commit=$SourceCommit;source_identity_class=[string]$receipt.source_identity_class;source_tree=[string]$receipt.source_tree;status='PASS'}
 if(Test-Path -LiteralPath $output){throw "Verification output exists: $output"};$parent=Split-Path -Parent $output;if(-not(Test-Path -LiteralPath $parent)){New-Item -ItemType Directory -Path $parent|Out-Null};[IO.File]::WriteAllText($output,($result|ConvertTo-Json -Depth 100),[Text.UTF8Encoding]::new($false))
 [ordered]@{negative_test_count=$negativeResults.Count;output=$output;raw_sha256=(Hash $output);role_count=$receipt.roles.Count;status='PASS'}|ConvertTo-Json

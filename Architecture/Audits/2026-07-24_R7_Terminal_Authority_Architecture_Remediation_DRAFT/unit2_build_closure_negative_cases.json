@@ -75,7 +75,33 @@
     {"case_id":"U2BC-N072","mutation":"BATCH_EXTRA_VALID_FRAME","expected_error":"GIT_BATCH_TRAILING_OUTPUT","expected_detail_pattern":"index=1;observed_byte="},
     {"case_id":"U2BC-N073","mutation":"BATCH_DECLARED_SIZE_OVERFLOW","expected_error":"GIT_BATCH_DECLARED_SIZE_INVALID","expected_detail_pattern":"index=0;requested=.*size=18446744073709551616"},
     {"case_id":"U2BC-N074","mutation":"BATCH_HEADER_PARTIAL_EOF","expected_error":"GIT_BATCH_HEADER_INVALID","expected_detail_pattern":"index=0;requested=.*reason=partial-header"},
-    {"case_id":"U2BC-N075","mutation":"BATCH_PROCESS_NONZERO","expected_error":"GIT_BATCH_PROCESS_FAILURE","expected_detail_pattern":"context=fixture;exited=True;exit_code=17"}
+    {"case_id":"U2BC-N075","mutation":"BATCH_PROCESS_NONZERO","expected_error":"GIT_BATCH_PROCESS_FAILURE","expected_detail_pattern":"context=fixture;exited=True;exit_code=17"},
+    {"case_id":"U2BC-N076","mutation":"LIFECYCLE_OVERSIZED_DECLARED_PAYLOAD","expected_error":"GIT_BATCH_DECLARED_SIZE_INVALID","expected_detail_pattern":"size=67108865.*tree_terminated=True"},
+    {"case_id":"U2BC-N077","mutation":"LIFECYCLE_AGGREGATE_BUDGET_EXCEEDED","expected_error":"GIT_BATCH_AGGREGATE_OUTPUT_OVERFLOW","expected_detail_pattern":"request-budget"},
+    {"case_id":"U2BC-N078","mutation":"LIFECYCLE_SUSTAINED_STDOUT","expected_error":"GIT_BATCH_TRAILING_OUTPUT","expected_detail_pattern":"observed_byte=.*tree_terminated=True"},
+    {"case_id":"U2BC-N079","mutation":"LIFECYCLE_STDERR_LIMIT_EXCEEDED","expected_error":"GIT_BATCH_STDERR_LIMIT_EXCEEDED","expected_detail_pattern":"limit=1024.*tree_terminated=True"},
+    {"case_id":"U2BC-N080","mutation":"LIFECYCLE_CONCURRENT_STREAMS_NONZERO","expected_error":"GIT_BATCH_PROCESS_FAILURE","expected_detail_pattern":"exit_code=7.*tree_terminated=True"},
+    {"case_id":"U2BC-N081","mutation":"LIFECYCLE_CHILD_HOLDS_STDOUT","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True.*stdout_complete=True"},
+    {"case_id":"U2BC-N082","mutation":"LIFECYCLE_CHILD_HOLDS_STDERR","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True.*stderr_complete=True"},
+    {"case_id":"U2BC-N083","mutation":"LIFECYCLE_CHILD_HOLDS_BOTH_PIPES","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True"},
+    {"case_id":"U2BC-N084","mutation":"LIFECYCLE_PARENT_HANGS_AFTER_FRAMES","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True"},
+    {"case_id":"U2BC-N085","mutation":"LIFECYCLE_CHILD_ALIVE_AFTER_PARENT_EXIT","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True"},
+    {"case_id":"U2BC-N086","mutation":"LIFECYCLE_CHILD_ALIVE_AFTER_PARENT_TIMEOUT","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True"},
+    {"case_id":"U2BC-N087","mutation":"LIFECYCLE_DELAYED_TRAILING_STDOUT","expected_error":"GIT_BATCH_TRAILING_OUTPUT","expected_detail_pattern":"observed_byte=88.*tree_terminated=True"},
+    {"case_id":"U2BC-N088","mutation":"LIFECYCLE_VALID_FRAMES_NONZERO_EXIT","expected_error":"GIT_BATCH_PROCESS_FAILURE","expected_detail_pattern":"exit_code=17.*tree_terminated=True"},
+    {"case_id":"U2BC-N089","mutation":"LIFECYCLE_EXIT_BEFORE_REQUIRED_FRAMES","expected_error":"GIT_BATCH_HEADER_INVALID","expected_detail_pattern":"missing-header.*tree_terminated=True"},
+    {"case_id":"U2BC-N090","mutation":"LIFECYCLE_TIMEOUT_HEADER_READ","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True"},
+    {"case_id":"U2BC-N091","mutation":"LIFECYCLE_TIMEOUT_PAYLOAD_READ","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True"},
+    {"case_id":"U2BC-N092","mutation":"LIFECYCLE_TIMEOUT_EXACT_EOF","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True"},
+    {"case_id":"U2BC-N093","mutation":"LIFECYCLE_TIMEOUT_STDERR_COMPLETION","expected_error":"GIT_BATCH_PROCESS_TIMEOUT","expected_detail_pattern":"stage=lifecycle.*tree_terminated=True"},
+    {"case_id":"U2BC-N094","mutation":"LIFECYCLE_CLEANUP_DEADLINE_EXCEEDED","expected_error":"GIT_BATCH_PROCESS_TREE_TERMINATION_FAILED","expected_detail_pattern":"cleanup_ms="},
+    {"case_id":"U2BC-N095","mutation":"LIFECYCLE_TREE_TERMINATION_UNCONFIRMED","expected_error":"GIT_BATCH_PROCESS_TREE_TERMINATION_FAILED","expected_detail_pattern":"primary-confirmation-deadline.*tree_terminated=True"},
+    {"case_id":"U2BC-N096","mutation":"LIFECYCLE_EXPECTED_SIZE_MISMATCH","expected_error":"GIT_BATCH_EXPECTED_SIZE_MISMATCH","expected_detail_pattern":"expected=4;observed=3.*tree_terminated=True"},
+    {"case_id":"U2BC-N097","mutation":"LIFECYCLE_AGGREGATE_ARITHMETIC_OVERFLOW","expected_error":"GIT_BATCH_AGGREGATE_OUTPUT_OVERFLOW","expected_detail_pattern":"request-budget"}
+  ],
+  "lifecycle_positive_cases": [
+    {"case_id":"U2BC-P001","mutation":"LIFECYCLE_VALID_BOUNDED_STDERR"},
+    {"case_id":"U2BC-P002","mutation":"LIFECYCLE_VALID_AUTHENTIC_MULTI_OBJECT"}
   ],
   "schema_version": "1.0.0"
 }
