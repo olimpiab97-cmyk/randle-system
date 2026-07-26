@@ -23,16 +23,63 @@ $requiredSwitches = @('/nologo','/noconfig','/target:exe','/platform:x64','/opti
 $requiredRoles = @('BUILD_BOOTSTRAP_ARTIFACT_TOOL','BUILD_BOOTSTRAP_PROTECTED_METADATA_TOOL','PACKAGED_ARTIFACT_TOOL','PACKAGED_PROTECTED_METADATA_TOOL','UPGRADE_AUTHORITY','UPGRADE_CLIENT','UPGRADE_PROTOCOL_PROBE','UPGRADE_PUBLIC_VERIFIER')
 
 function Hash([string]$Path) { return (Get-FileHash -LiteralPath ([IO.Path]::GetFullPath($Path)) -Algorithm SHA256).Hash.ToLowerInvariant() }
+function BytesHash([byte[]]$Bytes) {
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try{return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}
+}
+function TextHash([string]$Value){return BytesHash ([Text.UTF8Encoding]::new($false).GetBytes($Value))}
+function CrLfFixtureBytes([byte[]]$Bytes) {
+    $stream=[IO.MemoryStream]::new();try{for($index=0;$index-lt$Bytes.Length;$index++){if($Bytes[$index]-eq10-and($index-eq0-or$Bytes[$index-1]-ne13)){$stream.WriteByte(13)};$stream.WriteByte($Bytes[$index])};return $stream.ToArray()}finally{$stream.Dispose()}
+}
+function UntrustedFixtureBlobIdentity([byte[]]$Bytes) {
+    $header=[Text.Encoding]::ASCII.GetBytes(('blob '+$Bytes.Length+[char]0));$all=New-Object byte[] ($header.Length+$Bytes.Length);[Buffer]::BlockCopy($header,0,$all,0,$header.Length);[Buffer]::BlockCopy($Bytes,0,$all,$header.Length,$Bytes.Length);$sha=[Security.Cryptography.SHA1]::Create();try{return ([BitConverter]::ToString($sha.ComputeHash($all))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}
+}
 function ReadJson([string]$Path) { return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json }
 function Clone([object]$Value) { return ($Value | ConvertTo-Json -Depth 100 | ConvertFrom-Json) }
 function Relative([string]$Base,[string]$Path) {
     $baseFull = [IO.Path]::GetFullPath($Base).TrimEnd('\') + '\'
     return [Uri]::UnescapeDataString(([Uri]$baseFull).MakeRelativeUri([Uri][IO.Path]::GetFullPath($Path)).ToString()).Replace('\','/')
 }
-function GitBlob([string]$Path) {
-    $bytes = [IO.File]::ReadAllBytes([IO.Path]::GetFullPath($Path));$header=[Text.Encoding]::ASCII.GetBytes(('blob '+$bytes.Length+[char]0));$all=New-Object byte[] ($header.Length+$bytes.Length)
-    [Buffer]::BlockCopy($header,0,$all,0,$header.Length);[Buffer]::BlockCopy($bytes,0,$all,$header.Length,$bytes.Length);$sha=[Security.Cryptography.SHA1]::Create()
-    try{return ([BitConverter]::ToString($sha.ComputeHash($all))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}
+function GitArgs([string[]]$Arguments) {
+    $safe=$repositoryRoot.Replace('\','/');$result=@(& $git --no-pager -c "safe.directory=$safe" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot @Arguments)
+    if($LASTEXITCODE-ne0){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' ($Arguments-join' ')}
+    return $result
+}
+function ReadGitBlobBytes([string]$Blob) {
+    if($Blob-cnotmatch'^[0-9a-f]{40}$'){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' 'invalid-blob-id'}
+    if($null-ne(Get-Variable -Name gitBlobByteCache -Scope Script -ErrorAction SilentlyContinue)-and$script:gitBlobByteCache.ContainsKey($Blob)){return [byte[]]$script:gitBlobByteCache[$Blob]}
+    $safe=$repositoryRoot.Replace('\','/');$quotedRepository='"'+$repositoryRoot.Replace('"','\"')+'"';$quotedSafe='"safe.directory='+$safe.Replace('"','\"')+'"'
+    $psi=[Diagnostics.ProcessStartInfo]::new();$psi.FileName=$git;$psi.Arguments=('--no-pager -c '+$quotedSafe+' -c core.fsmonitor=false -c core.hooksPath=NUL -C '+$quotedRepository+' cat-file blob '+$Blob);$psi.UseShellExecute=$false;$psi.CreateNoWindow=$true;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
+    $process=[Diagnostics.Process]::new();$process.StartInfo=$psi
+    try{
+        if(-not$process.Start()){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' 'cat-file-start'}
+        $stream=[IO.MemoryStream]::new();try{$process.StandardOutput.BaseStream.CopyTo($stream);$errorText=$process.StandardError.ReadToEnd();$process.WaitForExit();if($process.ExitCode-ne0){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' ('cat-file/'+$errorText.Trim())};return $stream.ToArray()}finally{$stream.Dispose()}
+    }finally{$process.Dispose()}
+}
+function ReadBinaryLine([IO.Stream]$Stream) {
+    $bytes=[Collections.Generic.List[byte]]::new();while($true){$value=$Stream.ReadByte();if($value-lt0){if($bytes.Count-eq0){return $null};break};if($value-eq10){break};if($value-ne13){$bytes.Add([byte]$value)}};return [Text.Encoding]::ASCII.GetString($bytes.ToArray())
+}
+function InitializeTreeAuthorityCache {
+    if($null-eq(Get-Variable -Name treeAuthorityCacheKey -Scope Script -ErrorAction SilentlyContinue)){$script:treeAuthorityCacheKey='';$script:treeAuthorityCache=@{};$script:gitBlobByteCache=@{}}
+    $cacheKey=$repositoryRoot+'|'+$SourceCommit;if($script:treeAuthorityCacheKey-ceq$cacheKey){return}
+    $auditRoot=Join-Path $repositoryRoot $packageRelativeRoot.Replace('/','\');$paths=[Collections.Generic.List[string]]::new()
+    foreach($path in @(Get-ChildItem -LiteralPath (Join-Path $auditRoot 'Source') -Filter '*.cs' -File|Sort-Object Name|ForEach-Object FullName)+@(Join-Path $auditRoot 'BuildInputs\R7BuildIdentityContract.cs')){$paths.Add((Relative $repositoryRoot $path))}
+    $paths.Add($packageRelativeRoot+'/build_unit2_upgrade_authority.ps1');foreach($contract in @(ConfigurationContract)){if([string]$contract.class-ceq'COMMITTED'){$paths.Add([string]$contract.relative)}}
+    $required=@($paths|Sort-Object -Unique);$rows=@(GitArgs (@('ls-tree','--full-tree',$SourceCommit,'--')+$required));$tree=@{}
+    foreach($row in $rows){if([string]$row-notmatch'^(100644|100755) blob ([0-9a-f]{40})\t(.+)$'){Fail 'GIT_TREE_OBJECT_MISMATCH' 'unexpected-tree-row'};$tree[[string]$Matches[3]]=[ordered]@{blob=[string]$Matches[2];mode=[string]$Matches[1]}}
+    foreach($path in $required){if(-not$tree.ContainsKey($path)){Fail 'GIT_TREE_OBJECT_MISMATCH' ($path+'/missing-or-nonblob')}}
+    $safe=$repositoryRoot.Replace('\','/');$quotedRepository='"'+$repositoryRoot.Replace('"','\"')+'"';$quotedSafe='"safe.directory='+$safe.Replace('"','\"')+'"';$psi=[Diagnostics.ProcessStartInfo]::new();$psi.FileName=$git;$psi.Arguments=('--no-pager -c '+$quotedSafe+' -c core.fsmonitor=false -c core.hooksPath=NUL -C '+$quotedRepository+' cat-file --batch');$psi.UseShellExecute=$false;$psi.CreateNoWindow=$true;$psi.RedirectStandardInput=$true;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
+    $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;$authority=@{};$blobBytes=@{}
+    try{
+        if(-not$process.Start()){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' 'batch-start'};foreach($path in $required){$process.StandardInput.WriteLine([string]$tree[$path].blob)};$process.StandardInput.Close();$stream=$process.StandardOutput.BaseStream
+        foreach($path in $required){$header=ReadBinaryLine $stream;$expectedBlob=[string]$tree[$path].blob;if($header-notmatch'^([0-9a-f]{40}) blob ([0-9]+)$'-or[string]$Matches[1]-cne$expectedBlob){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' ($path+'/batch-header')};$size=[long]$Matches[2];$bytes=New-Object byte[] $size;$offset=0;while($offset-lt$size){$read=$stream.Read($bytes,$offset,[int]($size-$offset));if($read-le0){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' ($path+'/truncated')};$offset+=$read};if($stream.ReadByte()-ne10){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' ($path+'/delimiter')};$authority[$path]=[ordered]@{git_blob_identity=$expectedBlob;mode=[string]$tree[$path].mode;path=$path;raw_sha256=(BytesHash $bytes);size=$size};$blobBytes[$expectedBlob]=$bytes
+        }
+        $errorText=$process.StandardError.ReadToEnd();$process.WaitForExit();if($process.ExitCode-ne0){Fail 'GIT_OBJECT_AUTHORITY_FAILURE' ('batch/'+$errorText.Trim())}
+    }finally{$process.Dispose()}
+    $script:treeAuthorityCacheKey=$cacheKey;$script:treeAuthorityCache=$authority;$script:gitBlobByteCache=$blobBytes
+}
+function ExactTreeBlobAuthority([string]$RelativePath) {
+    $path=AssertCanonicalInputPath $RelativePath 'git-tree';InitializeTreeAuthorityCache;if(-not$script:treeAuthorityCache.ContainsKey($path)){Fail 'GIT_TREE_OBJECT_MISMATCH' ($path+'/unauthorized')};return $script:treeAuthorityCache[$path]
 }
 function Fail([string]$Code,[string]$Detail) { throw ([IO.InvalidDataException]::new($Code + '|' + $Detail)) }
 function HasField([object]$Value,[string]$Name) {
@@ -120,10 +167,26 @@ function AssertCompilerInputSchema([string]$Role,[object]$InputRecord) {
     foreach($field in $required){if($observed-cnotcontains$field){Fail 'COMPILER_INPUT_SCHEMA_MISMATCH' (('role={0};input={1};missing={2}'-f$Role,$path,$field))}}
     foreach($field in $observed){if($required-cnotcontains$field){Fail 'COMPILER_INPUT_SCHEMA_MISMATCH' (('role={0};input={1};unknown={2}'-f$Role,$path,$field))}}
 }
-function CommittedAuthorityRows {
+function Derive([string]$Domain,[string[]]$Values) {
+    $builder=[Text.StringBuilder]::new();[void]$builder.Append($Domain.Length).Append(':').Append($Domain)
+    foreach($value in $Values){$item=if($null-eq$value){''}else{[string]$value};[void]$builder.Append('|').Append($item.Length).Append(':').Append($item)}
+    return TextHash $builder.ToString()
+}
+function MeasuredFileRow([string]$Path) {
+    $full=[IO.Path]::GetFullPath($Path);if(-not(Test-Path -LiteralPath $full -PathType Leaf)){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' ($full+'/missing')}
+    if(((Get-Item -LiteralPath $full -Force).Attributes-band[IO.FileAttributes]::ReparsePoint)-ne0){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' ($full+'/reparse')}
+    return [ordered]@{path=$full;raw_sha256=(Hash $full);size=[long](Get-Item -LiteralPath $full).Length}
+}
+function CommittedAuthorityRows([hashtable]$Overrides) {
     $auditRoot=Join-Path $repositoryRoot $packageRelativeRoot.Replace('/','\');$sourceRoot=Join-Path $auditRoot 'Source';$identityContract=Join-Path $auditRoot 'BuildInputs\R7BuildIdentityContract.cs'
     $paths=@(Get-ChildItem -LiteralPath $sourceRoot -Filter '*.cs' -File|Sort-Object Name|ForEach-Object FullName)+$identityContract
-    return @($paths|ForEach-Object{[ordered]@{git_blob_identity=(GitBlob $_);mode='100644';path=(Relative $repositoryRoot $_);raw_sha256=(Hash $_);size=[long](Get-Item -LiteralPath $_).Length}})
+    return @($paths|ForEach-Object{
+        $relative=Relative $repositoryRoot $_;$committed=ExactTreeBlobAuthority $relative
+        $compilerSha=if($Overrides.ContainsKey('compiler_sha256:'+ $relative)){[string]$Overrides['compiler_sha256:'+ $relative]}else{Hash $_}
+        $compilerSize=if($Overrides.ContainsKey('compiler_size:'+ $relative)){[long]$Overrides['compiler_size:'+ $relative]}else{[long](Get-Item -LiteralPath $_).Length}
+        if($compilerSha-cne[string]$committed.raw_sha256-or$compilerSize-ne[long]$committed.size){Fail 'COMPILER_SOURCE_MATERIALIZATION_MISMATCH' ($relative+'/EXACT_GIT_BLOB_BYTES_REQUIRED')}
+        $committed
+    })
 }
 function GeneratedSourceContract {
     return @(
@@ -133,22 +196,111 @@ function GeneratedSourceContract {
         [ordered]@{path='Generated/R7PackagedTools.g.cs';generation_rule='R7_UNIT2_PACKAGED_TOOLS_IDENTITY_V2';policy_input=$true;roles=@('PACKAGED_ARTIFACT_TOOL','PACKAGED_PROTECTED_METADATA_TOOL')}
     )
 }
-function GroundedGeneratorAuthority {
+function GroundedGeneratorAuthority([hashtable]$Overrides) {
     $relative=$packageRelativeRoot+'/build_unit2_upgrade_authority.ps1';$path=Join-Path $repositoryRoot $relative.Replace('/','\')
     if(-not(Test-Path -LiteralPath $path -PathType Leaf)){Fail 'GENERATED_SOURCE_AUTHORITY_MISMATCH' ($relative+'/missing')}
-    return [ordered]@{git_blob_identity=(GitBlob $path);path=$relative;raw_sha256=(Hash $path)}
+    $committed=ExactTreeBlobAuthority $relative
+    $materializedSha=if($Overrides.ContainsKey('generator_sha256')){[string]$Overrides.generator_sha256}else{Hash $path};$materializedSize=if($Overrides.ContainsKey('generator_size')){[long]$Overrides.generator_size}else{[long](Get-Item -LiteralPath $path).Length}
+    if($materializedSha-cne[string]$committed.raw_sha256-or$materializedSize-ne[long]$committed.size){Fail 'GENERATOR_MATERIALIZATION_MISMATCH' ($relative+'/EXACT_GIT_BLOB_BYTES_REQUIRED')}
+    return [ordered]@{git_blob_identity=$committed.git_blob_identity;path=$relative;raw_sha256=$committed.raw_sha256}
 }
-function ExpectedGeneratedSourceInputs([object]$Receipt,[object[]]$CommittedRows,[object]$Generator,[bool]$PolicyInput) {
+function ConfigurationContract {
+    return @(
+        [ordered]@{role='AUTHORITY_SOURCE_MANIFEST';class='COMMITTED';relative=$packageRelativeRoot+'/AuthoritySources/authority_source_manifest.json'},
+        [ordered]@{role='BOOTSTRAP_RECORD';class='BOOTSTRAP';leaf='upgrade_authority_bootstrap_record.json'},
+        [ordered]@{role='CASE_DEFINITIONS';class='COMMITTED';relative=$packageRelativeRoot+'/immutable_case_definitions.json'},
+        [ordered]@{role='COVERAGE_PROOF';class='COMMITTED';relative=$packageRelativeRoot+'/exact_byte_coverage_proof.json'},
+        [ordered]@{role='DEPENDENCY_MANIFEST';class='TARGET';suffix='Generated/dependency_manifest.json'},
+        [ordered]@{role='EXPECTATIONS';class='COMMITTED';relative=$packageRelativeRoot+'/immutable_expectations.json'},
+        [ordered]@{role='HISTORICAL_CLASSIFICATION_REGISTRY';class='COMMITTED';relative=$packageRelativeRoot+'/historical_classification_registry.json'},
+        [ordered]@{role='NEGATIVE_CASE_REGISTRY';class='COMMITTED';relative=$packageRelativeRoot+'/unit2_build_closure_negative_cases.json'},
+        [ordered]@{role='PREFLIGHT_HOST_STATE';class='PREFLIGHT';leaf='host-state.json'},
+        [ordered]@{role='PRINCIPAL_REGISTRY';class='COMMITTED';relative=$packageRelativeRoot+'/service_principal_registry.json'},
+        [ordered]@{role='REQUIREMENT_REGISTRY';class='COMMITTED';relative=$packageRelativeRoot+'/governed_requirement_registry.json'},
+        [ordered]@{role='SCRIPT_REGISTRY';class='COMMITTED';relative=$packageRelativeRoot+'/governed_script_registry.json'},
+        [ordered]@{role='TARGET_AUTHORITY_PACKAGE_MANIFEST';class='TARGET';suffix='Generated/authority_package_manifest.json'},
+        [ordered]@{role='TARGET_BUILD_ORCHESTRATOR_RECEIPT';class='TARGET';suffix='Generated/build_orchestrator_receipt.json'},
+        [ordered]@{role='TARGET_BUILD_RECEIPT';class='TARGET';suffix='Generated/build_receipt.json'},
+        [ordered]@{role='TARGET_BUILD_SUMMARY';class='TARGET';suffix='build_summary.json'},
+        [ordered]@{role='TARGET_POLICY';class='TARGET';suffix='Generated/terminal_authority_v4_policy.json'},
+        [ordered]@{role='TARGET_TRANSITION_TEMPLATE';class='TARGET';suffix='Generated/transition_request_template.json'},
+        [ordered]@{role='TERMINAL_KEY_METADATA';class='TARGET';suffix='Generated/terminal_key_file_metadata.json'},
+        [ordered]@{role='UNIT2_AUTHORIZATION_SCOPE';class='COMMITTED';relative=$packageRelativeRoot+'/unit2_authorization_scope.json'},
+        [ordered]@{role='UNIT2_COMPLETION_SCRIPT';class='COMMITTED';relative=$packageRelativeRoot+'/complete_unit2_upgrade_authority.ps1'},
+        [ordered]@{role='UNIT2_STOPPED_INSTALL_CONTRACT';class='COMMITTED';relative=$packageRelativeRoot+'/unit2_stopped_install_contract.json'},
+        [ordered]@{role='UPGRADE_KEY_METADATA';class='TARGET';suffix='Generated/upgrade_key_file_metadata.json'},
+        [ordered]@{role='UPGRADE_PUBLIC_CERTIFICATE';class='BOOTSTRAP';leaf='upgrade_authority_public_from_store.cer'},
+        [ordered]@{role='UTILITY_REGISTRY';class='COMMITTED';relative=$packageRelativeRoot+'/external_utility_registry.json'}
+    )
+}
+function AssertConfigurationSchema([object]$Row,[string]$Context) {
+    if((JsonKind $Row)-cne'OBJECT'){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' ($Context+'/not-object')};$required=@('path','raw_sha256','role','size');$names=@(FieldNames $Row)
+    if($names.Count-ne$required.Count-or@($required|Where-Object{$names-cnotcontains$_}).Count-ne0){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' ($Context+'/schema')}
+    AssertKind 'CONFIGURATION_AUTHORITY' $Context 'path' $Row.path 'STRING';AssertSha256 'CONFIGURATION_AUTHORITY' $Context 'raw_sha256' $Row.raw_sha256;AssertKind 'CONFIGURATION_AUTHORITY' $Context 'role' $Row.role 'STRING';AssertKind 'CONFIGURATION_AUTHORITY' $Context 'size' $Row.size 'INTEGER'
+}
+function GroundedConfigurationInventory([object]$Receipt) {
+    if((JsonKind $Receipt.configuration_inputs)-cne'ARRAY'){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'inventory/not-array'}
+    $contracts=@(ConfigurationContract);$observed=@($Receipt.configuration_inputs);if($observed.Count-ne$contracts.Count){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'inventory/count'}
+    $summaryRows=@($observed|Where-Object{(JsonKind $_.role)-ceq'STRING'-and[string]$_.role-ceq'TARGET_BUILD_SUMMARY'});if($summaryRows.Count-ne1-or(JsonKind $summaryRows[0].path)-cne'STRING'){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'TARGET_BUILD_SUMMARY/locator'}
+    $targetRoot=[IO.Path]::GetFullPath((Split-Path -Parent ([string]$summaryRows[0].path)));$temp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')+'\';if(-not$targetRoot.StartsWith($temp,[StringComparison]::OrdinalIgnoreCase)){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'target-root/not-temp'}
+    $bootstrapRows=@($observed|Where-Object{(JsonKind $_.role)-ceq'STRING'-and[string]$_.role-ceq'BOOTSTRAP_RECORD'});if($bootstrapRows.Count-ne1-or(JsonKind $bootstrapRows[0].path)-cne'STRING'){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'BOOTSTRAP_RECORD/locator'};$bootstrapRoot=[IO.Path]::GetFullPath((Split-Path -Parent ([string]$bootstrapRows[0].path)))
+    $grounded=[Collections.Generic.List[object]]::new()
+    for($index=0;$index-lt$contracts.Count;$index++){
+        $contract=$contracts[$index];$row=$observed[$index];$role=[string]$contract.role;AssertConfigurationSchema $row $role
+        if([string]$row.role-cne$role){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' ($role+'/order')}
+        switch([string]$contract.class){
+            'COMMITTED'{$tree=ExactTreeBlobAuthority ([string]$contract.relative);$expectedPath=[IO.Path]::GetFullPath((Join-Path $repositoryRoot ([string]$contract.relative).Replace('/','\')));$measured=MeasuredFileRow $expectedPath;if([string]$measured.raw_sha256-cne[string]$tree.raw_sha256-or[long]$measured.size-ne[long]$tree.size){Fail 'CONFIGURATION_INPUT_MATERIALIZATION_MISMATCH' ($role+'/EXACT_GIT_BLOB_BYTES_REQUIRED')}}
+            'TARGET'{$expectedPath=[IO.Path]::GetFullPath((Join-Path $targetRoot ([string]$contract.suffix).Replace('/','\')));$measured=MeasuredFileRow $expectedPath}
+            'BOOTSTRAP'{$expectedPath=[IO.Path]::GetFullPath((Join-Path $bootstrapRoot ([string]$contract.leaf)));$measured=MeasuredFileRow $expectedPath}
+            'PREFLIGHT'{$actualPath=[IO.Path]::GetFullPath([string]$row.path);if([IO.Path]::GetFileName($actualPath)-cne[string]$contract.leaf-or-not$actualPath.StartsWith($temp,[StringComparison]::OrdinalIgnoreCase)){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' ($role+'/path')};$expectedPath=$actualPath;$measured=MeasuredFileRow $expectedPath}
+            default{Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' ($role+'/classification')}
+        }
+        $expected=[ordered]@{path=$expectedPath;raw_sha256=$measured.raw_sha256;role=$role;size=$measured.size};if(-not(ExactJsonEqual $expected $row)){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' $role};$grounded.Add($expected)
+    }
+    $byRole=@{};foreach($row in $grounded){$byRole[[string]$row.role]=$row}
+    if([string]$byRole.UPGRADE_PUBLIC_CERTIFICATE.raw_sha256-cne'2ef057a2c09d53da7096d92a09774b68986cf26c5d44000e1ec804d8ce837d7b'){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'UPGRADE_PUBLIC_CERTIFICATE/fixed-identity'}
+    $summary=ReadJson ([string]$byRole.TARGET_BUILD_SUMMARY.path);if([string]$summary.source_commit-cne'd22610e96496f7a9209edff36442be843f06fed4'-or[string]$summary.source_tree-cne'8a627b54537e4c26835345907fc5181205ce496f'){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'TARGET_BUILD_SUMMARY/source'}
+    $bootstrap=ReadJson ([string]$byRole.BOOTSTRAP_RECORD.path);if([string]$bootstrap.source_commit-cne'b07fd42a20ed612d53070aa1d1ae1bda6ace1e93'-or[string]$bootstrap.source_tree-cne'7d0d92000192b913f9ff3fba6e57ce7308d2f3be'-or[string]$bootstrap.public_certificate_sha256-cne[string]$byRole.UPGRADE_PUBLIC_CERTIFICATE.raw_sha256){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'BOOTSTRAP_RECORD/source'}
+    $preflight=ReadJson ([string]$byRole.PREFLIGHT_HOST_STATE.path);if([string]$preflight.artifact_type-cne'R7_REMEDIATION_HOST_STATE_CAPTURE'-or[string]$preflight.phase-cne'PRECHANGE'-or[int64]$preflight.ledger_entry_file_count-ne678){Fail 'CONFIGURATION_INPUT_AUTHORITY_MISMATCH' 'PREFLIGHT_HOST_STATE/semantics'}
+    return $grounded.ToArray()
+}
+function GroundedUtility([string]$Role,[object]$Registry) {
+    $rows=@($Registry.utilities|Where-Object{[string]$_.role-ceq$Role});if($rows.Count-ne1){Fail 'BUILD_INPUT_CLOSURE_MISMATCH' ('utility/'+$Role+'/authority')};$row=$rows[0];$path=[IO.Path]::GetFullPath([string]$row.path)
+    if(-not(Test-Path -LiteralPath $path -PathType Leaf)-or(Hash $path)-cne[string]$row.measurement.sha256-or[long](Get-Item -LiteralPath $path).Length-ne[long]$row.measurement.size){Fail 'BUILD_INPUT_CLOSURE_MISMATCH' ('utility/'+$Role+'/measurement')};return $row
+}
+function RecomputeBuildInputClosure([object[]]$CommittedRows,[object[]]$ConfigurationRows,[hashtable]$Overrides) {
+    $sourceParts=@($CommittedRows|ForEach-Object{[string]$_.path+'|'+[string]$_.git_blob_identity+'|'+[string]$_.raw_sha256+'|'+[string]$_.size+'|'+[string]$_.mode})
+    $configurationParts=@($ConfigurationRows|ForEach-Object{[string]$_.role+'|'+[string]$_.raw_sha256+'|'+[string]$_.size})
+    $registry=ReadJson (Join-Path $repositoryRoot ($packageRelativeRoot+'/external_utility_registry.json').Replace('/','\'));$toolchainParts=[Collections.Generic.List[string]]::new()
+    foreach($tool in @(@('CSC','CSC_COMPILER'),@('ILDASM','ILDASM_TOOL'),@('GIT','GIT_BUILD_AND_VERIFICATION'),@('POWERSHELL','POWERSHELL_ORCHESTRATOR'))){$row=GroundedUtility $tool[1] $registry;$toolchainParts.Add(([string]$tool[0]+'|'+[string]$row.measurement.sha256+'|'+[string]$row.measurement.size))}
+    foreach($role in @('COMPILER_REFERENCE_mscorlib.dll','COMPILER_REFERENCE_System.dll','COMPILER_REFERENCE_System.Core.dll','COMPILER_REFERENCE_System.Security.dll','COMPILER_REFERENCE_System.ServiceProcess.dll')){$row=GroundedUtility $role $registry;$toolchainParts.Add('REFERENCE|'+[string]$row.measurement.sha256+'|'+[string]$row.measurement.size)}
+    $roleDefinitions=@(
+        @('BUILD_BOOTSTRAP_ARTIFACT_TOOL','RandleAI.R7Remediation.R7ArtifactToolProgram','UNIT2_BUILD_BOOTSTRAP_ARTIFACT_TOOL','R7ArtifactTool.build-bootstrap.exe','DISPOSABLE_BUILD_ONLY'),@('BUILD_BOOTSTRAP_PROTECTED_METADATA_TOOL','RandleAI.R7Remediation.R7ArtifactToolProgram','UNIT2_BUILD_BOOTSTRAP_PROTECTED_METADATA_TOOL','R7ProtectedMetadataTool.build-bootstrap.exe','DISPOSABLE_BUILD_ONLY'),@('UPGRADE_CLIENT','RandleAI.R7Remediation.R7Unit2UpgradeClientProgram','UNIT2_CLIENT','RandleTerminalUpgradeClient.exe','C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeClient.exe'),@('UPGRADE_PUBLIC_VERIFIER','RandleAI.R7Remediation.R7Unit2UpgradePublicVerifierProgram','UNIT2_PUBLIC_VERIFIER','RandleTerminalUpgradePublicVerifier.exe','C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradePublicVerifier.exe'),@('UPGRADE_PROTOCOL_PROBE','RandleAI.R7Remediation.R7Unit2UpgradeProbeProgram','UNIT2_PROTOCOL_PROBE','RandleTerminalUpgradeProtocolProbe.exe','C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeProtocolProbe.exe'),@('UPGRADE_AUTHORITY','RandleAI.R7Remediation.R7Unit2UpgradeServiceProgram','UNIT2_SERVICE','RandleTerminalUpgradeAuthority.exe','C:\Program Files\RandleAI\TerminalUpgradeAuthority\RandleTerminalUpgradeAuthority.exe'),@('PACKAGED_ARTIFACT_TOOL','RandleAI.R7Remediation.R7ArtifactToolProgram','UNIT2_PACKAGED_ARTIFACT_TOOL','R7ArtifactTool.exe','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\BuildTools\R7ArtifactTool.exe'),@('PACKAGED_PROTECTED_METADATA_TOOL','RandleAI.R7Remediation.R7ArtifactToolProgram','UNIT2_PACKAGED_PROTECTED_METADATA_TOOL','R7ProtectedMetadataTool.exe','C:\ProgramData\RandleAI\TerminalUpgradeAuthority\BuildTools\R7ProtectedMetadataTool.exe'))
+    $roleParts=@($roleDefinitions|ForEach-Object{$_[0]+'|'+$_[1]+'|'+$_[2]+'|'+$_[3]+'|'+$_[4]})
+    $configByRole=@{};foreach($row in $ConfigurationRows){$configByRole[[string]$row.role]=$row};$template=ReadJson ([string]$configByRole.TARGET_TRANSITION_TEMPLATE.path);$targetManifest=ReadJson ([string]$configByRole.TARGET_AUTHORITY_PACKAGE_MANIFEST.path);$components=[Collections.Generic.List[object]]::new();$paths=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach($component in @($template.components)){$components.Add([ordered]@{final_path=[string]$component.final_path;role=[string]$component.role;sha256=[string]$component.sha256;staging_relative_path=[string]$component.staging_relative_path});[void]$paths.Add([string]$component.staging_relative_path)}
+    $extra=0;foreach($file in @($targetManifest.files|Sort-Object staging_relative_path)){if($paths.Contains([string]$file.staging_relative_path)){continue};$components.Add([ordered]@{final_path=[string]$file.final_path;role=('PACKAGE_FILE_'+$extra.ToString('D4')+'_'+([string]$file.raw_sha256).Substring(0,16));sha256=[string]$file.raw_sha256;staging_relative_path=[string]$file.staging_relative_path});[void]$paths.Add([string]$file.staging_relative_path);$extra++}
+    $componentParts=@($components|Sort-Object role|ForEach-Object{[string]$_.role+'|'+[string]$_.staging_relative_path+'|'+[string]$_.sha256+'|'+[string]$_.final_path})
+    $closureInputs=@($sourceParts+$configurationParts+$toolchainParts.ToArray()+$requiredSwitches+$roleParts+$componentParts)
+    if($Overrides.ContainsKey('closure_reorder')-and$closureInputs.Count-gt1){$value=$closureInputs[0];$closureInputs[0]=$closureInputs[1];$closureInputs[1]=$value}
+    return Derive 'R7_UNIT2_BUILD_INPUT_CLOSURE_V2' $closureInputs
+}
+function GroundedPolicyAuthority([object]$Receipt,[string]$Closure,[hashtable]$Overrides) {
+    $path=if($Overrides.ContainsKey('policy_path')){[string]$Overrides.policy_path}else{Join-Path $build 'Generated\unit2_upgrade_policy.json'}
+    if(-not(Test-Path -LiteralPath $path -PathType Leaf)){Fail 'POLICY_INPUT_AUTHORITY_MISMATCH' 'artifact/missing'};$measured=MeasuredFileRow $path;$policy=ReadJson $path
+    if([string]$policy.artifact_type-cne'R7_UNIT2_SEPARATE_UPGRADE_AUTHORITY_POLICY'-or[string]$policy.source_bindings.provisioning_commit-cne[string]$Receipt.source_commit-or[string]$policy.source_bindings.provisioning_tree-cne[string]$Receipt.source_tree-or[string]$policy.source_bindings.target_commit-cne'd22610e96496f7a9209edff36442be843f06fed4'-or[string]$policy.source_bindings.target_tree-cne'8a627b54537e4c26835345907fc5181205ce496f'){Fail 'POLICY_INPUT_AUTHORITY_MISMATCH' 'source-binding'}
+    $manifest=ReadJson (Join-Path $build 'unit2_build_manifest.json');$installPath=Join-Path $build 'Install\unit2_upgrade_policy.json'
+    if([string]$Receipt.policy_sha256-cne[string]$measured.raw_sha256-or[string]$manifest.policy_sha256-cne[string]$measured.raw_sha256-or-not(Test-Path -LiteralPath $installPath -PathType Leaf)-or(Hash $installPath)-cne[string]$measured.raw_sha256-or[long](Get-Item -LiteralPath $installPath).Length-ne[long]$measured.size){Fail 'POLICY_INPUT_AUTHORITY_MISMATCH' 'receipt/hash'}
+    return [ordered]@{path=$measured.path;raw_sha256=$measured.raw_sha256;size=$measured.size}
+}
+function ExpectedGeneratedSourceInputs([object[]]$ConfigurationRows,[object[]]$CommittedRows,[object]$Generator,[string]$Closure,[object]$Policy,[bool]$PolicyInput) {
     $inputs=[Collections.Generic.List[object]]::new()
-    foreach($row in @($Receipt.configuration_inputs)){
-        if((JsonKind $row)-cne'OBJECT'-or(JsonKind $row.role)-cne'STRING'){Fail 'GENERATED_SOURCE_AUTHORITY_MISMATCH' 'configuration-input-schema'}
-        AssertSha256 'GENERATED_AUTHORITY' ([string]$row.role) 'raw_sha256' $row.raw_sha256
+    foreach($row in $ConfigurationRows){
         $inputs.Add([ordered]@{identity=[string]$row.raw_sha256;role=[string]$row.role})
     }
     foreach($row in $CommittedRows){$inputs.Add([ordered]@{identity=[string]$row.raw_sha256;role=('COMPILER_SOURCE:'+[string]$row.path)})}
-    AssertSha256 'GENERATED_AUTHORITY' 'BUILD_INPUT_CLOSURE' 'build_input_closure_sha256' $Receipt.build_input_closure_sha256
-    $inputs.Add([ordered]@{identity=[string]$Receipt.build_input_closure_sha256;role='BUILD_INPUT_CLOSURE'});$inputs.Add([ordered]@{identity=[string]$Generator.raw_sha256;role='GENERATOR_SCRIPT'})
-    if($PolicyInput){AssertSha256 'GENERATED_AUTHORITY' 'COMPLETED_UNIT2_POLICY' 'policy_sha256' $Receipt.policy_sha256;$inputs.Add([ordered]@{identity=[string]$Receipt.policy_sha256;role='COMPLETED_UNIT2_POLICY'})}
+    $inputs.Add([ordered]@{identity=$Closure;role='BUILD_INPUT_CLOSURE'});$inputs.Add([ordered]@{identity=[string]$Generator.raw_sha256;role='GENERATOR_SCRIPT'})
+    if($PolicyInput){$inputs.Add([ordered]@{identity=[string]$Policy.raw_sha256;role='COMPLETED_UNIT2_POLICY'})}
     return $inputs.ToArray()
 }
 function AssertSourceAuthority([object]$Observed,[object]$Expected,[string]$Context) {
@@ -158,9 +310,17 @@ function AssertSourceAuthority([object]$Observed,[object]$Expected,[string]$Cont
     AssertGitBlob 'COMMITTED_AUTHORITY' $Context 'git_blob_identity' $Observed.git_blob_identity;AssertKind 'COMMITTED_AUTHORITY' $Context 'mode' $Observed.mode 'STRING';AssertKind 'COMMITTED_AUTHORITY' $Context 'path' $Observed.path 'STRING';AssertSha256 'COMMITTED_AUTHORITY' $Context 'raw_sha256' $Observed.raw_sha256;AssertKind 'COMMITTED_AUTHORITY' $Context 'size' $Observed.size 'INTEGER'
     if(-not(ExactJsonEqual $Expected $Observed)){Fail 'COMMITTED_SOURCE_AUTHORITY_MISMATCH' $Context}
 }
-function CanonicalCompilerInputIndex([object]$Receipt) {
+function AssertGeneratedOutputAuthority([string]$Path,[string]$Closure,[object]$Policy,[bool]$PolicyInput,[string]$SourceCommitValue,[string]$SourceTreeValue) {
+    $text=[IO.File]::ReadAllText($Path)
+    foreach($binding in @([ordered]@{field='BuildInputClosureSha256';value=$Closure},[ordered]@{field='SourceCommit';value=$SourceCommitValue},[ordered]@{field='SourceTree';value=$SourceTreeValue})){
+        $matches=[regex]::Matches($text,('internal const string '+[regex]::Escape([string]$binding.field)+' = "([0-9a-f]+)";'))
+        if($matches.Count-eq0-or@($matches|Where-Object{$_.Groups[1].Value-cne[string]$binding.value}).Count-ne0){Fail 'GENERATED_OUTPUT_AUTHORITY_MISMATCH' ((Split-Path -Leaf $Path)+'/'+[string]$binding.field)}
+    }
+    if($PolicyInput){foreach($field in @('UpgradePolicySha256','PolicySha256')){$matches=[regex]::Matches($text,('internal const string '+$field+' = "([0-9a-f]{64})";'));if($matches.Count-eq0-or@($matches|Where-Object{$_.Groups[1].Value-cne[string]$Policy.raw_sha256}).Count-ne0){Fail 'GENERATED_OUTPUT_AUTHORITY_MISMATCH' ((Split-Path -Leaf $Path)+'/'+$field)}}}
+}
+function CanonicalCompilerInputIndex([object]$Receipt,[object]$Determinism,[hashtable]$Overrides) {
     $index=@{}
-    $committed=@(CommittedAuthorityRows);$observedSources=@($Receipt.source_files)
+    $committed=@(CommittedAuthorityRows $Overrides);$observedSources=@($Receipt.source_files)
     if((JsonKind $Receipt.source_files)-cne'ARRAY'-or$observedSources.Count-ne$committed.Count){Fail 'COMMITTED_SOURCE_AUTHORITY_MISMATCH' 'inventory'}
     for($sourceIndex=0;$sourceIndex-lt$committed.Count;$sourceIndex++){
         AssertSourceAuthority $observedSources[$sourceIndex] $committed[$sourceIndex] ([string]$committed[$sourceIndex].path);$source=$committed[$sourceIndex]
@@ -168,18 +328,21 @@ function CanonicalCompilerInputIndex([object]$Receipt) {
         if($index.ContainsKey($path)){Fail 'COMPILER_INPUT_AUTHORITY_AMBIGUOUS' $path}
         $index[$path]=[ordered]@{classification='COMMITTED';record=[ordered]@{generation_rule=$null;generator=$null;git_blob_identity=$source.git_blob_identity;mode=$source.mode;path=$path;raw_sha256=$source.raw_sha256;size=$source.size}}
     }
-    $generator=GroundedGeneratorAuthority;$contracts=@(GeneratedSourceContract);$observedGenerated=@($Receipt.generated_sources)
+    $configuration=@(GroundedConfigurationInventory $Receipt);$closure=RecomputeBuildInputClosure $committed $configuration $Overrides
+    if([string]$Receipt.build_input_closure_sha256-cne$closure-or[string]$Determinism.build_input_closure_sha256-cne$closure){Fail 'BUILD_INPUT_CLOSURE_MISMATCH' ('expected='+$closure+';receipt='+[string]$Receipt.build_input_closure_sha256+';determinism='+[string]$Determinism.build_input_closure_sha256)}
+    $policy=GroundedPolicyAuthority $Receipt $closure $Overrides;$generator=GroundedGeneratorAuthority $Overrides;$contracts=@(GeneratedSourceContract);$observedGenerated=@($Receipt.generated_sources)
     if((JsonKind $Receipt.generated_sources)-cne'ARRAY'-or$observedGenerated.Count-ne$contracts.Count){Fail 'GENERATED_SOURCE_AUTHORITY_MISMATCH' 'inventory'}
     for($generatedIndex=0;$generatedIndex-lt$contracts.Count;$generatedIndex++){
         $contract=$contracts[$generatedIndex];$generated=$observedGenerated[$generatedIndex];$path=[string]$contract.path;$actualPath=Join-Path $build $path.Replace('/','\')
         if(-not(Test-Path -LiteralPath $actualPath -PathType Leaf)){Fail 'GENERATED_SOURCE_AUTHORITY_MISMATCH' ($path+'/missing-output')}
-        $expected=[ordered]@{generation_rule=[string]$contract.generation_rule;generator=$generator;output_identity=(Hash $actualPath);path=$path;raw_sha256=(Hash $actualPath);size=[long](Get-Item -LiteralPath $actualPath).Length;source_inputs=(ExpectedGeneratedSourceInputs $Receipt $committed $generator ([bool]$contract.policy_input))}
+        AssertGeneratedOutputAuthority $actualPath $closure $policy ([bool]$contract.policy_input) ([string]$Receipt.source_commit) ([string]$Receipt.source_tree)
+        $expected=[ordered]@{generation_rule=[string]$contract.generation_rule;generator=$generator;output_identity=(Hash $actualPath);path=$path;raw_sha256=(Hash $actualPath);size=[long](Get-Item -LiteralPath $actualPath).Length;source_inputs=(ExpectedGeneratedSourceInputs $configuration $committed $generator $closure $policy ([bool]$contract.policy_input))}
         if((JsonKind $generated)-cne'OBJECT'-or-not(ExactJsonEqual $expected $generated)){Fail 'GENERATED_SOURCE_AUTHORITY_MISMATCH' $path}
         $path=AssertCanonicalInputPath $path 'generated-authority'
         if($index.ContainsKey($path)){Fail 'COMPILER_INPUT_AUTHORITY_AMBIGUOUS' $path}
         $index[$path]=[ordered]@{classification='GENERATED';record=[ordered]@{generation_rule=$expected.generation_rule;generator=$generator;git_blob_identity=$null;mode=$null;path=$path;raw_sha256=$expected.raw_sha256;size=$expected.size}}
     }
-    return $index
+    return [ordered]@{build_input_closure_sha256=$closure;configuration_inputs=$configuration;index=$index;policy=$policy}
 }
 function AssertCompilerInputBinding([string]$Role,[object]$InputRecord,[hashtable]$CanonicalIndex) {
     AssertCompilerInputSchema $Role $InputRecord
@@ -236,8 +399,10 @@ function AssertDeterminismCompilerInputs([object]$Receipt,[object]$Determinism,[
         if(-not(ExactJsonEqual $receiptRole.compiler_arguments.pass_a $detRole.compiler_arguments.pass_a)-or-not(ExactJsonEqual $receiptRole.compiler_arguments.pass_b $detRole.compiler_arguments.pass_b)){Fail 'DETERMINISM_COMPILER_ARGUMENT_MISMATCH' $roleName}
     }
 }
-function ValidateModel([object]$Receipt,[object]$Determinism,[hashtable]$GeneratedTextOverrides) {
-    $canonicalInputs=CanonicalCompilerInputIndex $Receipt
+function ValidateModel([object]$Receipt,[object]$Determinism,[hashtable]$GeneratedTextOverrides,[hashtable]$ProvenanceOverrides=@{}) {
+    $actualTree=[string](@(GitArgs @('show','-s','--format=%T',$SourceCommit))[0])
+    if([string]$Receipt.source_commit-cne$SourceCommit-or[string]$Determinism.source_commit-cne$SourceCommit-or[string]$Receipt.source_tree-cne$actualTree-or[string]$Determinism.source_tree-cne$actualTree){Fail 'SOURCE_COMMIT_TREE_AUTHORITY_MISMATCH' 'receipt-or-determinism'}
+    $authority=CanonicalCompilerInputIndex $Receipt $Determinism $ProvenanceOverrides;$canonicalInputs=$authority.index
     $declaredSourcePaths=@($Receipt.source_files|ForEach-Object{[string]$_.path})
     foreach($generated in @($Receipt.generated_sources)){
         $generatedPath=Join-Path $build ([string]$generated.path).Replace('/','\')
@@ -296,7 +461,7 @@ function ValidateModel([object]$Receipt,[object]$Determinism,[hashtable]$Generat
 function InvokeNegativeCases([object]$Receipt,[object]$Determinism,[object]$NegativeRegistry) {
     $negativeResults=[Collections.Generic.List[object]]::new()
     foreach($case in @($NegativeRegistry.cases)){
-        $mutated=Clone $Receipt;$detMutated=Clone $Determinism;$overrides=@{};$role=$mutated.roles[0]
+        $mutated=Clone $Receipt;$detMutated=Clone $Determinism;$overrides=@{};$provenance=@{};$role=$mutated.roles[0]
         switch([string]$case.mutation){
             'OMIT_COMMITTED_COMPILER_INPUT'{$role.compiler_inputs=@($role.compiler_inputs|Select-Object -Skip 1)}
             'OMIT_GENERATED_COMPILER_INPUT'{$role.compiler_inputs=@($role.compiler_inputs|Where-Object{[string]$_.path-notlike'Generated/*'})}
@@ -331,10 +496,28 @@ function InvokeNegativeCases([object]$Receipt,[object]$Determinism,[object]$Nega
             'UNAUTHORIZED_GENERATED_SOURCE_ROLE_ASSIGNMENT'{$donor=@($mutated.roles|Where-Object{[string]$_.role-ceq'PACKAGED_ARTIFACT_TOOL'})[0];$donorInput=Clone @($donor.compiler_inputs|Where-Object{[string]$_.path-like'Generated/*'})[0];$inputIndex=0;for(;$inputIndex-lt$role.compiler_inputs.Count;$inputIndex++){if([string]$role.compiler_inputs[$inputIndex].path-like'Generated/*'){break}};$role.compiler_inputs[$inputIndex]=$donorInput}
             'MISSING_FIELD_REPLACES_EXPLICIT_NULL'{$inputRecord=@($role.compiler_inputs|Where-Object{[string]$_.path-notlike'Generated/*'})[0];$inputRecord.PSObject.Properties.Remove('generation_rule')}
             'UNKNOWN_COMPILER_INPUT_FIELD'{$inputRecord=@($role.compiler_inputs|Where-Object{[string]$_.path-notlike'Generated/*'})[0];$inputRecord|Add-Member -NotePropertyName ungoverned_identity -NotePropertyValue 'forbidden'}
+            'CRLF_COMPILER_MATERIALIZATION'{$source=$mutated.source_files[0];$authority=ExactTreeBlobAuthority ([string]$source.path);$crlf=CrLfFixtureBytes (ReadGitBlobBytes ([string]$authority.git_blob_identity));$provenance['compiler_sha256:'+[string]$source.path]=BytesHash $crlf;$provenance['compiler_size:'+[string]$source.path]=[long]$crlf.Length}
+            'WORKTREE_PSEUDO_BLOB_FOR_TREE_BLOB'{$source=$mutated.source_files[0];$authority=ExactTreeBlobAuthority ([string]$source.path);$crlf=CrLfFixtureBytes (ReadGitBlobBytes ([string]$authority.git_blob_identity));$source.git_blob_identity=UntrustedFixtureBlobIdentity $crlf;foreach($consumer in @($mutated.roles)+@($detMutated.role_determinism)){foreach($inputRecord in @($consumer.compiler_inputs|Where-Object{[string]$_.path-ceq[string]$source.path})){$inputRecord.git_blob_identity=$source.git_blob_identity}}}
+            'WORKTREE_SHA_FOR_COMMITTED_SHA'{$source=$mutated.source_files[0];$authority=ExactTreeBlobAuthority ([string]$source.path);$crlf=CrLfFixtureBytes (ReadGitBlobBytes ([string]$authority.git_blob_identity));$source.raw_sha256=BytesHash $crlf;$source.size=[long]$crlf.Length;foreach($consumer in @($mutated.roles)+@($detMutated.role_determinism)){foreach($inputRecord in @($consumer.compiler_inputs|Where-Object{[string]$_.path-ceq[string]$source.path})){$inputRecord.raw_sha256=$source.raw_sha256;$inputRecord.size=$source.size}}}
+            'WORKTREE_SIZE_FOR_COMMITTED_SIZE'{$source=$mutated.source_files[0];$source.size=[long]$source.size+1;foreach($consumer in @($mutated.roles)+@($detMutated.role_determinism)){foreach($inputRecord in @($consumer.compiler_inputs|Where-Object{[string]$_.path-ceq[string]$source.path})){$inputRecord.size=$source.size}}}
+            'UNGOVERNED_COMPILER_BYTE_MUTATION'{$source=$mutated.source_files[0];$provenance['compiler_sha256:'+[string]$source.path]='e'*64}
+            'COORDINATED_CONFIGURATION_HASH_AND_CONSUMERS'{$config=$mutated.configuration_inputs[0];$old=[string]$config.raw_sha256;$config.raw_sha256='e'*64;foreach($generated in @($mutated.generated_sources)){foreach($inputRecord in @($generated.source_inputs)){if([string]$inputRecord.role-ceq[string]$config.role-and[string]$inputRecord.identity-ceq$old){$inputRecord.identity=$config.raw_sha256}}}}
+            'COORDINATED_CONFIGURATION_PATH_SIZE_AND_CONSUMERS'{$config=$mutated.configuration_inputs[0];$old=[string]$config.raw_sha256;$config.path='C:\Temp\forged-authority-source-manifest.json';$config.raw_sha256='d'*64;$config.size=[long]$config.size+17;foreach($generated in @($mutated.generated_sources)){foreach($inputRecord in @($generated.source_inputs)){if([string]$inputRecord.role-ceq[string]$config.role-and[string]$inputRecord.identity-ceq$old){$inputRecord.identity=$config.raw_sha256}}}}
+            'CONFIGURATION_INPUT_REMOVED'{$mutated.configuration_inputs=@($mutated.configuration_inputs|Select-Object -Skip 1)}
+            'CONFIGURATION_INPUT_INSERTED'{$mutated.configuration_inputs=@(Clone $mutated.configuration_inputs[0])+@($mutated.configuration_inputs)}
+            'CONFIGURATION_INPUTS_REORDERED'{$rows=@($mutated.configuration_inputs);$value=$rows[0];$rows[0]=$rows[1];$rows[1]=$value;$mutated.configuration_inputs=$rows}
+            'COORDINATED_CLOSURE_AND_CONSUMERS'{$old=[string]$mutated.build_input_closure_sha256;$mutated.build_input_closure_sha256='f'*64;$detMutated.build_input_closure_sha256=$mutated.build_input_closure_sha256;foreach($generated in @($mutated.generated_sources)){foreach($inputRecord in @($generated.source_inputs)){if([string]$inputRecord.role-ceq'BUILD_INPUT_CLOSURE'-and[string]$inputRecord.identity-ceq$old){$inputRecord.identity=$mutated.build_input_closure_sha256}}}}
+            'COORDINATED_POLICY_AND_CONSUMERS'{$old=[string]$mutated.policy_sha256;$mutated.policy_sha256='9'*64;foreach($generated in @($mutated.generated_sources)){foreach($inputRecord in @($generated.source_inputs)){if([string]$inputRecord.role-ceq'COMPLETED_UNIT2_POLICY'-and[string]$inputRecord.identity-ceq$old){$inputRecord.identity=$mutated.policy_sha256}}}}
+            'POLICY_ARTIFACT_PATH_SUBSTITUTED'{$provenance.policy_path=Join-Path $build 'Generated\forged_unit2_upgrade_policy.json'}
+            'COORDINATED_GENERATED_SOURCE_INPUTS_ALL_RECEIPTS'{$config=$mutated.configuration_inputs[0];$old=[string]$config.raw_sha256;$config.raw_sha256='8'*64;foreach($container in @($mutated.generated_sources)+@($detMutated.generated_sources)){foreach($inputRecord in @($container.source_inputs)){if([string]$inputRecord.role-ceq[string]$config.role-and[string]$inputRecord.identity-ceq$old){$inputRecord.identity=$config.raw_sha256}}}}
+            'SOURCE_COMMIT_RETAINING_CONSUMERS'{$mutated.source_commit='a'*40;$detMutated.source_commit=$mutated.source_commit}
+            'TREE_BLOB_CHANGED_WITH_ALL_CONSUMERS'{$source=$mutated.source_files[0];$source.git_blob_identity='c'*40;foreach($consumer in @($mutated.roles)+@($detMutated.role_determinism)){foreach($inputRecord in @($consumer.compiler_inputs|Where-Object{[string]$_.path-ceq[string]$source.path})){$inputRecord.git_blob_identity=$source.git_blob_identity}}}
+            'CLOSURE_SERIALIZATION_ORDER_CHANGED'{$provenance.closure_reorder=$true}
+            'FORGED_RECEIPTS_ORIGINAL_GENERATED_OUTPUT'{$oldClosure=[string]$mutated.build_input_closure_sha256;$oldPolicy=[string]$mutated.policy_sha256;$mutated.build_input_closure_sha256='7'*64;$detMutated.build_input_closure_sha256=$mutated.build_input_closure_sha256;$mutated.policy_sha256='6'*64;foreach($container in @($mutated.generated_sources)+@($detMutated.generated_sources)){foreach($inputRecord in @($container.source_inputs)){if([string]$inputRecord.role-ceq'BUILD_INPUT_CLOSURE'-and[string]$inputRecord.identity-ceq$oldClosure){$inputRecord.identity=$mutated.build_input_closure_sha256};if([string]$inputRecord.role-ceq'COMPLETED_UNIT2_POLICY'-and[string]$inputRecord.identity-ceq$oldPolicy){$inputRecord.identity=$mutated.policy_sha256}}}}
             default{throw "Unknown negative mutation: $($case.mutation)"}
         }
         $observed=$null;$observedDetail=''
-        try{ValidateModel $mutated $detMutated $overrides;throw 'NEGATIVE_CASE_UNEXPECTED_PASS'}catch{if($_.Exception.Message-ceq'NEGATIVE_CASE_UNEXPECTED_PASS'){throw};$parts=$_.Exception.Message-split'\|',2;$observed=$parts[0];if($parts.Count-gt1){$observedDetail=$parts[1]}}
+        try{ValidateModel $mutated $detMutated $overrides $provenance;throw 'NEGATIVE_CASE_UNEXPECTED_PASS'}catch{if($_.Exception.Message-ceq'NEGATIVE_CASE_UNEXPECTED_PASS'){throw};$parts=$_.Exception.Message-split'\|',2;$observed=$parts[0];if($parts.Count-gt1){$observedDetail=$parts[1]}}
         if($observed-cne[string]$case.expected_error){throw "Negative case wrong rejection: $($case.case_id) expected $($case.expected_error) observed $observed"}
         if(HasField $case 'expected_detail_pattern'){if($observedDetail-cnotmatch[string]$case.expected_detail_pattern){throw "Negative case wrong detail: $($case.case_id) observed $observedDetail"}}
         $negativeResults.Add([ordered]@{case_id=[string]$case.case_id;expected_detail=$observedDetail;expected_error=[string]$case.expected_error;mutation=[string]$case.mutation;observed_error=$observed;status='PASS'})
@@ -356,7 +539,7 @@ $status=@(& $git --no-pager -c "safe.directory=$safe" -C $repositoryRoot status 
 if(-not $CandidateWorktree){$tree=(& $git --no-pager -c "safe.directory=$safe" -C $repositoryRoot show -s --format=%T $SourceCommit).Trim();if([string]$receipt.source_tree-cne $tree -or [string]$determinism.source_tree-cne $tree){throw 'Exact source tree binding invalid'}}
 
 $actualSources=@(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Source') -Filter '*.cs' -File|Sort-Object Name|ForEach-Object FullName)+$contractPath
-$expectedSourceRows=@($actualSources|ForEach-Object{[ordered]@{git_blob_identity=(GitBlob $_);mode='100644';path=(Relative $repositoryRoot $_);raw_sha256=(Hash $_);size=(Get-Item -LiteralPath $_).Length}})
+$expectedSourceRows=@(CommittedAuthorityRows @{})
 $receiptSourceRows=@($receipt.source_files)
 if($expectedSourceRows.Count-ne $receiptSourceRows.Count){throw 'Exact source inventory count mismatch'}
 for($index=0;$index-lt $expectedSourceRows.Count;$index++){foreach($field in @('git_blob_identity','mode','path','raw_sha256','size')){$expectedValue=[string](FieldValue $expectedSourceRows[$index] $field);$actualValue=[string](FieldValue $receiptSourceRows[$index] $field);if($expectedValue-cne$actualValue){throw "Exact source inventory mismatch: $($expectedSourceRows[$index].path)/$field"}}}

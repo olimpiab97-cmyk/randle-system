@@ -33,7 +33,25 @@
     {"case_id":"U2BC-N030","mutation":"COORDINATED_GENERATED_PRODUCER_ALL_RECEIPTS","expected_error":"GENERATED_SOURCE_AUTHORITY_MISMATCH","expected_detail_pattern":"Generated/R7Unit2BuildBootstrap.g.cs"},
     {"case_id":"U2BC-N031","mutation":"UNAUTHORIZED_GENERATED_SOURCE_ROLE_ASSIGNMENT","expected_error":"ROLE_GENERATED_SOURCE_MISMATCH","expected_detail_pattern":"UPGRADE_AUTHORITY/Generated/R7PackagedTools.g.cs/Generated/R7Unit2Service.g.cs"},
     {"case_id":"U2BC-N032","mutation":"MISSING_FIELD_REPLACES_EXPLICIT_NULL","expected_error":"COMPILER_INPUT_SCHEMA_MISMATCH","expected_detail_pattern":"missing=generation_rule"},
-    {"case_id":"U2BC-N033","mutation":"UNKNOWN_COMPILER_INPUT_FIELD","expected_error":"COMPILER_INPUT_SCHEMA_MISMATCH","expected_detail_pattern":"unknown=ungoverned_identity"}
+    {"case_id":"U2BC-N033","mutation":"UNKNOWN_COMPILER_INPUT_FIELD","expected_error":"COMPILER_INPUT_SCHEMA_MISMATCH","expected_detail_pattern":"unknown=ungoverned_identity"},
+    {"case_id":"U2BC-N034","mutation":"CRLF_COMPILER_MATERIALIZATION","expected_error":"COMPILER_SOURCE_MATERIALIZATION_MISMATCH","expected_detail_pattern":"EXACT_GIT_BLOB_BYTES_REQUIRED"},
+    {"case_id":"U2BC-N035","mutation":"WORKTREE_PSEUDO_BLOB_FOR_TREE_BLOB","expected_error":"COMMITTED_SOURCE_AUTHORITY_MISMATCH","expected_detail_pattern":"R7AdversarialHarness.cs"},
+    {"case_id":"U2BC-N036","mutation":"WORKTREE_SHA_FOR_COMMITTED_SHA","expected_error":"COMMITTED_SOURCE_AUTHORITY_MISMATCH","expected_detail_pattern":"R7AdversarialHarness.cs"},
+    {"case_id":"U2BC-N037","mutation":"WORKTREE_SIZE_FOR_COMMITTED_SIZE","expected_error":"COMMITTED_SOURCE_AUTHORITY_MISMATCH","expected_detail_pattern":"R7AdversarialHarness.cs"},
+    {"case_id":"U2BC-N038","mutation":"UNGOVERNED_COMPILER_BYTE_MUTATION","expected_error":"COMPILER_SOURCE_MATERIALIZATION_MISMATCH","expected_detail_pattern":"EXACT_GIT_BLOB_BYTES_REQUIRED"},
+    {"case_id":"U2BC-N039","mutation":"COORDINATED_CONFIGURATION_HASH_AND_CONSUMERS","expected_error":"CONFIGURATION_INPUT_AUTHORITY_MISMATCH","expected_detail_pattern":"AUTHORITY_SOURCE_MANIFEST"},
+    {"case_id":"U2BC-N040","mutation":"COORDINATED_CONFIGURATION_PATH_SIZE_AND_CONSUMERS","expected_error":"CONFIGURATION_INPUT_AUTHORITY_MISMATCH","expected_detail_pattern":"AUTHORITY_SOURCE_MANIFEST"},
+    {"case_id":"U2BC-N041","mutation":"CONFIGURATION_INPUT_REMOVED","expected_error":"CONFIGURATION_INPUT_AUTHORITY_MISMATCH","expected_detail_pattern":"inventory/count"},
+    {"case_id":"U2BC-N042","mutation":"CONFIGURATION_INPUT_INSERTED","expected_error":"CONFIGURATION_INPUT_AUTHORITY_MISMATCH","expected_detail_pattern":"inventory/count"},
+    {"case_id":"U2BC-N043","mutation":"CONFIGURATION_INPUTS_REORDERED","expected_error":"CONFIGURATION_INPUT_AUTHORITY_MISMATCH","expected_detail_pattern":"order"},
+    {"case_id":"U2BC-N044","mutation":"COORDINATED_CLOSURE_AND_CONSUMERS","expected_error":"BUILD_INPUT_CLOSURE_MISMATCH","expected_detail_pattern":"expected="},
+    {"case_id":"U2BC-N045","mutation":"COORDINATED_POLICY_AND_CONSUMERS","expected_error":"POLICY_INPUT_AUTHORITY_MISMATCH","expected_detail_pattern":"receipt/hash"},
+    {"case_id":"U2BC-N046","mutation":"POLICY_ARTIFACT_PATH_SUBSTITUTED","expected_error":"POLICY_INPUT_AUTHORITY_MISMATCH","expected_detail_pattern":"artifact/missing"},
+    {"case_id":"U2BC-N047","mutation":"COORDINATED_GENERATED_SOURCE_INPUTS_ALL_RECEIPTS","expected_error":"CONFIGURATION_INPUT_AUTHORITY_MISMATCH","expected_detail_pattern":"AUTHORITY_SOURCE_MANIFEST"},
+    {"case_id":"U2BC-N048","mutation":"SOURCE_COMMIT_RETAINING_CONSUMERS","expected_error":"SOURCE_COMMIT_TREE_AUTHORITY_MISMATCH","expected_detail_pattern":"receipt-or-determinism"},
+    {"case_id":"U2BC-N049","mutation":"TREE_BLOB_CHANGED_WITH_ALL_CONSUMERS","expected_error":"COMMITTED_SOURCE_AUTHORITY_MISMATCH","expected_detail_pattern":"R7AdversarialHarness.cs"},
+    {"case_id":"U2BC-N050","mutation":"CLOSURE_SERIALIZATION_ORDER_CHANGED","expected_error":"BUILD_INPUT_CLOSURE_MISMATCH","expected_detail_pattern":"expected="},
+    {"case_id":"U2BC-N051","mutation":"FORGED_RECEIPTS_ORIGINAL_GENERATED_OUTPUT","expected_error":"BUILD_INPUT_CLOSURE_MISMATCH","expected_detail_pattern":"expected="}
   ],
   "schema_version": "1.0.0"
 }
