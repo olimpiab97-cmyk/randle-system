@@ -9,7 +9,15 @@
     {"case_id":"U2BC-N006","mutation":"TOKEN_IN_NONCOMPILED_SOURCE_REGION","expected_error":"GENERATED_SOURCE_TOKEN_INVALID"},
     {"case_id":"U2BC-N007","mutation":"PACKAGED_TOOL_DIAGNOSTIC_IDENTITY","expected_error":"PACKAGED_TOOL_IDENTITY_INVALID"},
     {"case_id":"U2BC-N008","mutation":"RECEIPT_SOURCE_NOT_IN_ARGUMENT_VECTOR","expected_error":"COMPILER_INPUT_SET_MISMATCH"},
-    {"case_id":"U2BC-N009","mutation":"ARGUMENT_SOURCE_NOT_IN_RECEIPT","expected_error":"COMPILER_INPUT_SET_MISMATCH"}
+    {"case_id":"U2BC-N009","mutation":"ARGUMENT_SOURCE_NOT_IN_RECEIPT","expected_error":"COMPILER_INPUT_SET_MISMATCH"},
+    {"case_id":"U2BC-N010","mutation":"REORDER_COMPILER_ARGUMENTS","expected_error":"COMPILER_ARGUMENT_VECTOR_MISMATCH"},
+    {"case_id":"U2BC-N011","mutation":"SUBSTITUTE_COMPILER_ARGUMENT","expected_error":"COMPILER_ARGUMENT_VECTOR_MISMATCH"},
+    {"case_id":"U2BC-N012","mutation":"DUPLICATE_COMPILER_ARGUMENT","expected_error":"COMPILER_ARGUMENT_VECTOR_MISMATCH"},
+    {"case_id":"U2BC-N013","mutation":"SUBSTITUTE_COMPILER_INPUT_RAW_SHA256","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"},
+    {"case_id":"U2BC-N014","mutation":"SUBSTITUTE_COMPILER_INPUT_SIZE","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"},
+    {"case_id":"U2BC-N015","mutation":"SUBSTITUTE_COMMITTED_GIT_BLOB","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"},
+    {"case_id":"U2BC-N016","mutation":"SUBSTITUTE_COMPILER_INPUT_MODE","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"},
+    {"case_id":"U2BC-N017","mutation":"SUBSTITUTE_GENERATED_INPUT_AUTHORITY","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"}
   ],
   "schema_version": "1.0.0"
 }
