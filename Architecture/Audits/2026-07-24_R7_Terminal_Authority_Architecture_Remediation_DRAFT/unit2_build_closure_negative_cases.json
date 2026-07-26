@@ -17,7 +17,23 @@
     {"case_id":"U2BC-N014","mutation":"SUBSTITUTE_COMPILER_INPUT_SIZE","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"},
     {"case_id":"U2BC-N015","mutation":"SUBSTITUTE_COMMITTED_GIT_BLOB","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"},
     {"case_id":"U2BC-N016","mutation":"SUBSTITUTE_COMPILER_INPUT_MODE","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"},
-    {"case_id":"U2BC-N017","mutation":"SUBSTITUTE_GENERATED_INPUT_AUTHORITY","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"}
+    {"case_id":"U2BC-N017","mutation":"SUBSTITUTE_GENERATED_INPUT_AUTHORITY","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH"},
+    {"case_id":"U2BC-N018","mutation":"COMPILER_INPUT_SIZE_NUMBER_TO_STRING","expected_error":"COMPILER_INPUT_TYPE_MISMATCH","expected_detail_pattern":"field=size;expected_type=INTEGER"},
+    {"case_id":"U2BC-N019","mutation":"COMPILER_INPUT_MODE_STRING_TO_NUMBER","expected_error":"COMPILER_INPUT_TYPE_MISMATCH","expected_detail_pattern":"field=mode;expected_type=STRING"},
+    {"case_id":"U2BC-N020","mutation":"COMMITTED_NULL_GENERATION_RULE_TO_SENTINEL","expected_error":"COMPILER_INPUT_TYPE_MISMATCH","expected_detail_pattern":"field=generation_rule;expected_type=NULL"},
+    {"case_id":"U2BC-N021","mutation":"COMMITTED_NULL_GENERATOR_TO_SENTINEL","expected_error":"COMPILER_INPUT_TYPE_MISMATCH","expected_detail_pattern":"field=generator;expected_type=NULL"},
+    {"case_id":"U2BC-N022","mutation":"GENERATED_NULL_GIT_BLOB_TO_SENTINEL","expected_error":"COMPILER_INPUT_TYPE_MISMATCH","expected_detail_pattern":"field=git_blob_identity;expected_type=NULL"},
+    {"case_id":"U2BC-N023","mutation":"GENERATED_NULL_MODE_TO_SENTINEL","expected_error":"COMPILER_INPUT_TYPE_MISMATCH","expected_detail_pattern":"field=mode;expected_type=NULL"},
+    {"case_id":"U2BC-N024","mutation":"DETERMINISM_COMPILER_INPUT_HASH_CHANGED","expected_error":"COMPILER_INPUT_IDENTITY_MISMATCH","expected_detail_pattern":"role=DETERMINISM:UPGRADE_AUTHORITY;.*field=raw_sha256"},
+    {"case_id":"U2BC-N025","mutation":"DETERMINISM_COMPILER_INPUT_REMOVED","expected_error":"DETERMINISM_COMPILER_INPUT_MISMATCH","expected_detail_pattern":"UPGRADE_AUTHORITY/input-count"},
+    {"case_id":"U2BC-N026","mutation":"DETERMINISM_COMPILER_INPUT_ADDED","expected_error":"DETERMINISM_COMPILER_INPUT_MISMATCH","expected_detail_pattern":"UPGRADE_AUTHORITY/input-count"},
+    {"case_id":"U2BC-N027","mutation":"DETERMINISM_COMPILER_INPUTS_REORDERED","expected_error":"DETERMINISM_COMPILER_INPUT_MISMATCH","expected_detail_pattern":"UPGRADE_AUTHORITY/input/0"},
+    {"case_id":"U2BC-N028","mutation":"DETERMINISM_COMPILER_INPUT_SIZE_NUMBER_TO_STRING","expected_error":"COMPILER_INPUT_TYPE_MISMATCH","expected_detail_pattern":"role=DETERMINISM:UPGRADE_AUTHORITY;.*field=size;expected_type=INTEGER"},
+    {"case_id":"U2BC-N029","mutation":"COORDINATED_GENERATED_PRODUCER_AUTHORITY_AND_ROLE","expected_error":"GENERATED_SOURCE_AUTHORITY_MISMATCH","expected_detail_pattern":"Generated/R7Unit2BuildBootstrap.g.cs"},
+    {"case_id":"U2BC-N030","mutation":"COORDINATED_GENERATED_PRODUCER_ALL_RECEIPTS","expected_error":"GENERATED_SOURCE_AUTHORITY_MISMATCH","expected_detail_pattern":"Generated/R7Unit2BuildBootstrap.g.cs"},
+    {"case_id":"U2BC-N031","mutation":"UNAUTHORIZED_GENERATED_SOURCE_ROLE_ASSIGNMENT","expected_error":"ROLE_GENERATED_SOURCE_MISMATCH","expected_detail_pattern":"UPGRADE_AUTHORITY/Generated/R7PackagedTools.g.cs/Generated/R7Unit2Service.g.cs"},
+    {"case_id":"U2BC-N032","mutation":"MISSING_FIELD_REPLACES_EXPLICIT_NULL","expected_error":"COMPILER_INPUT_SCHEMA_MISMATCH","expected_detail_pattern":"missing=generation_rule"},
+    {"case_id":"U2BC-N033","mutation":"UNKNOWN_COMPILER_INPUT_FIELD","expected_error":"COMPILER_INPUT_SCHEMA_MISMATCH","expected_detail_pattern":"unknown=ungoverned_identity"}
   ],
   "schema_version": "1.0.0"
 }
