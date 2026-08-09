@@ -45,16 +45,142 @@ function BytesHash([byte[]]$Bytes) {
     try { return ([BitConverter]::ToString($algorithm.ComputeHash($Bytes))).Replace('-','').ToLowerInvariant() }
     finally { $algorithm.Dispose() }
 }
-function TextHash([string]$Value) { return BytesHash ([Text.UTF8Encoding]::new($false).GetBytes($Value)) }
-function GitBlob([string]$Path) {
-    $bytes = [IO.File]::ReadAllBytes([IO.Path]::GetFullPath($Path))
-    $header = [Text.Encoding]::ASCII.GetBytes(('blob ' + $bytes.Length + [char]0))
-    $all = New-Object byte[] ($header.Length + $bytes.Length)
+function GitBlobBytes([byte[]]$Bytes) {
+    $header = [Text.Encoding]::ASCII.GetBytes(('blob ' + $Bytes.Length + [char]0))
+    $all = New-Object byte[] ($header.Length + $Bytes.Length)
     [Buffer]::BlockCopy($header,0,$all,0,$header.Length)
-    [Buffer]::BlockCopy($bytes,0,$all,$header.Length,$bytes.Length)
+    [Buffer]::BlockCopy($Bytes,0,$all,$header.Length,$Bytes.Length)
     $algorithm = [Security.Cryptography.SHA1]::Create()
     try { return ([BitConverter]::ToString($algorithm.ComputeHash($all))).Replace('-','').ToLowerInvariant() }
     finally { $algorithm.Dispose() }
+}
+function TextHash([string]$Value) { return BytesHash ([Text.UTF8Encoding]::new($false).GetBytes($Value)) }
+function GitBlob([string]$Path) {
+    $bytes = [IO.File]::ReadAllBytes([IO.Path]::GetFullPath($Path))
+    return GitBlobBytes $bytes
+}
+function ByteEqual([byte[]]$Left,[byte[]]$Right) {
+    if ($null -eq $Left -or $null -eq $Right -or $Left.Length -ne $Right.Length) { return $false }
+    for ($index=0; $index -lt $Left.Length; $index++) { if ($Left[$index] -ne $Right[$index]) { return $false } }
+    return $true
+}
+function NormalizeCrlf([byte[]]$Bytes) {
+    $stream=[IO.MemoryStream]::new();$loneCr=$false
+    try {
+        for($index=0;$index-lt$Bytes.Length;$index++){
+            if($Bytes[$index]-eq13){
+                if($index+1-lt$Bytes.Length-and$Bytes[$index+1]-eq10){continue}
+                $loneCr=$true
+            }
+            $stream.WriteByte($Bytes[$index])
+        }
+        return [ordered]@{bytes=$stream.ToArray();lone_cr=$loneCr}
+    } finally { $stream.Dispose() }
+}
+function EolClass([byte[]]$Bytes) {
+    $crlf=0;$lf=0;$cr=0
+    for($index=0;$index-lt$Bytes.Length;$index++){
+        if($Bytes[$index]-eq13){if($index+1-lt$Bytes.Length-and$Bytes[$index+1]-eq10){$crlf++;$index++}else{$cr++}}
+        elseif($Bytes[$index]-eq10){$lf++}
+    }
+    if($cr-gt0){return 'LONE_CR_OR_MIXED'}
+    if($crlf-gt0-and$lf-gt0){return 'MIXED_CRLF_LF'}
+    if($crlf-gt0){return 'CRLF'}
+    if($lf-gt0){return 'LF'}
+    return 'NONE'
+}
+function EncodingClass([byte[]]$Bytes) {
+    if($Bytes.Length-ge3-and$Bytes[0]-eq239-and$Bytes[1]-eq187-and$Bytes[2]-eq191){return 'UTF8_BOM'}
+    try{[void]([Text.UTF8Encoding]::new($false,$true).GetString($Bytes));return 'UTF8_NO_BOM'}catch{return 'NON_UTF8'}
+}
+function RecordHas([object]$Record,[string]$Name) {
+    if($null-eq$Record){return $false};if($Record-is[Collections.IDictionary]){return $Record.Contains($Name)};return $null-ne$Record.PSObject.Properties[$Name]
+}
+function TestExactCheckoutIdentityRecord([object]$Record,[bool]$AllowCandidate) {
+    $required=@('schema_version','source_identity_class','path','git_blob_identity','mode','tree_size','raw_worktree_blob_identity','raw_sha256','size','clean_filtered_worktree_blob_identity','raw_tree_exact_equal','clean_filtered_tree_equal','eol_normalized_tree_equal','eol_only_exception','non_eol_difference','raw_eol','index_eol','worktree_eol','encoding','text_attribute','eol_attribute','filter_attribute','working_tree_encoding_attribute','custom_filter_present','external_filter_required','approved_file_type','tracked_path','tree_entry_present','repository_clean','index_clean','staged_mutation','unstaged_semantic_mutation','untracked_replacement','symlink_substitution','path_redirection','candidate_worktree','final_newline_matches','bom_matches','compiler_input_authority','rejection_reason')
+    foreach($field in $required){if(-not(RecordHas $Record $field)){return $false}}
+    $exactMode=([string]$Record.source_identity_class-ceq'EXACT_COMMIT_AND_TREE'-and-not[bool]$Record.candidate_worktree-and[bool]$Record.repository_clean-and[bool]$Record.index_clean)
+    $candidateMode=($AllowCandidate-and[string]$Record.source_identity_class-ceq'CANDIDATE_CONTENT_DERIVATION_V1'-and[bool]$Record.candidate_worktree-and[bool]$Record.index_clean)
+    $rawExact=[bool]$Record.raw_tree_exact_equal;$eolOnly=[bool]$Record.eol_only_exception
+    $rawContract=($rawExact-and-not$eolOnly-and[string]$Record.raw_worktree_blob_identity-ceq[string]$Record.git_blob_identity)-or(-not$rawExact-and$eolOnly-and[string]$Record.raw_worktree_blob_identity-cne[string]$Record.git_blob_identity-and[bool]$Record.eol_normalized_tree_equal-and-not[bool]$Record.non_eol_difference)
+    return (($exactMode-or$candidateMode)-and[string]$Record.schema_version-ceq'2.1.0'-and[string]$Record.path-cmatch'^[^\\/:]+(?:/[^\\/:]+)+$'-and[string]$Record.git_blob_identity-cmatch'^[0-9a-f]{40}$'-and[string]$Record.raw_worktree_blob_identity-cmatch'^[0-9a-f]{40}$'-and[string]$Record.clean_filtered_worktree_blob_identity-ceq[string]$Record.git_blob_identity-and[string]$Record.raw_sha256-cmatch'^[0-9a-f]{64}$'-and[long]$Record.tree_size-ge0-and[long]$Record.size-ge0-and[bool]$Record.clean_filtered_tree_equal-and$rawContract-and[bool]$Record.tracked_path-and[bool]$Record.tree_entry_present-and[bool]$Record.approved_file_type-and-not[bool]$Record.custom_filter_present-and-not[bool]$Record.external_filter_required-and[string]$Record.filter_attribute-in@('unspecified','unset','')-and[string]$Record.working_tree_encoding_attribute-in@('unspecified','unset','')-and-not[bool]$Record.staged_mutation-and-not[bool]$Record.unstaged_semantic_mutation-and-not[bool]$Record.untracked_replacement-and-not[bool]$Record.symlink_substitution-and-not[bool]$Record.path_redirection-and[bool]$Record.final_newline_matches-and[bool]$Record.bom_matches-and[bool]$Record.compiler_input_authority-and[string]$Record.rejection_reason-ceq'')
+}
+function ReadGitObjectBytes([string]$Oid) {
+    if($Oid-cnotmatch'^[0-9a-f]{40}$'){throw 'Invalid Git blob identity'}
+    $info=[Diagnostics.ProcessStartInfo]::new();$info.FileName=$git;$info.Arguments=('--no-pager -c "safe.directory='+$safeRepository+'" -c core.fsmonitor=false -c core.hooksPath=NUL -C "'+$repositoryRoot+'" cat-file blob '+$Oid);$info.UseShellExecute=$false;$info.CreateNoWindow=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
+    $process=[Diagnostics.Process]::new();$process.StartInfo=$info
+    try{if(-not$process.Start()){throw 'Git blob reader launch failed'};$memory=[IO.MemoryStream]::new();try{$process.StandardOutput.BaseStream.CopyTo($memory);$errorText=$process.StandardError.ReadToEnd();$process.WaitForExit();if($process.ExitCode-ne0){throw ('Git blob reader failed: '+$errorText)};return $memory.ToArray()}finally{$memory.Dispose()}}finally{$process.Dispose()}
+}
+function EffectiveGitAttributes([string]$Relative) {
+    $values=[ordered]@{text='unspecified';eol='unspecified';filter='unspecified';working_tree_encoding='unspecified'}
+    foreach($line in @(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot check-attr text eol filter working-tree-encoding -- $Relative)){
+        if($line-match'^[^:]+: ([^:]+): (.*)$'){$name=$Matches[1].Replace('-','_');if($values.Contains($name)){$values[$name]=$Matches[2]}}
+    }
+    if($LASTEXITCODE-ne0){throw "Git attribute query failed: $Relative"}
+    return $values
+}
+function ExactCheckoutCompilerInput([string]$Path,[string]$Relative,[string]$TreeBlob,[string]$Mode,[long]$TreeSize) {
+    $full=[IO.Path]::GetFullPath($Path);$repoPrefix=$repositoryRoot.TrimEnd('\')+'\'
+    $raw=[IO.File]::ReadAllBytes($full);$treeBytes=ReadGitObjectBytes $TreeBlob;$normalized=NormalizeCrlf $raw
+    $cleanBlob=(@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot hash-object ("--path=$Relative") -- $full))[0].Trim()
+    if($LASTEXITCODE-ne0-or$cleanBlob-cnotmatch'^[0-9a-f]{40}$'){throw "Path-aware clean-filter identity failed: $Relative"}
+    $trackedOutput=@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot ls-files --error-unmatch -- $Relative);$tracked=($LASTEXITCODE-eq0-and$trackedOutput.Count-eq1)
+    $eolLine=(@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot ls-files --eol -- $Relative))[0]
+    if($LASTEXITCODE-ne0-or$eolLine-cnotmatch'^i/([^ ]+)\s+w/([^ ]+)\s+attr/.*\t') { throw "Git EOL authority failed: $Relative" }
+    $indexEol=$Matches[1];$worktreeEol=$Matches[2];$attributes=EffectiveGitAttributes $Relative
+    $rawBlob=GitBlob $full;$rawExact=(ByteEqual $raw $treeBytes);$cleanEqual=$cleanBlob-ceq$TreeBlob;$normalizedEqual=ByteEqual ([byte[]]$normalized.bytes) $treeBytes
+    $filterValue=[string]$attributes.filter;$encodingValue=[string]$attributes.working_tree_encoding
+    $customFilter=($filterValue-cnotin@('unspecified','unset',''))
+    $encodingConversion=($encodingValue-cnotin@('unspecified','unset',''))
+    $approvedType=($Mode-ceq'100644'-and((Get-Item -LiteralPath $full -Force).Attributes-band[IO.FileAttributes]::ReparsePoint)-eq0-and$full.StartsWith($repoPrefix,[StringComparison]::OrdinalIgnoreCase))
+    $bomRaw=($raw.Length-ge3-and$raw[0]-eq239-and$raw[1]-eq187-and$raw[2]-eq191);$bomTree=($treeBytes.Length-ge3-and$treeBytes[0]-eq239-and$treeBytes[1]-eq187-and$treeBytes[2]-eq191)
+    $eolOnly=(-not$rawExact-and$cleanEqual-and$normalizedEqual-and-not[bool]$normalized.lone_cr-and-not$customFilter-and-not$encodingConversion-and$approvedType-and$tracked-and$raw.Length-ge$treeBytes.Length)
+    $modeAuthority=if($CandidateWorktree){$sourceIdentityClass-ceq'CANDIDATE_CONTENT_DERIVATION_V1'-and$indexClean}else{$sourceIdentityClass-ceq'EXACT_COMMIT_AND_TREE'-and$repositoryClean-and$indexClean}
+    $record=[ordered]@{schema_version='2.1.0';source_identity_class=$sourceIdentityClass;path=$Relative;git_blob_identity=$TreeBlob;mode=$Mode;tree_size=$TreeSize;raw_worktree_blob_identity=$rawBlob;raw_sha256=(BytesHash $raw);size=[long]$raw.Length;clean_filtered_worktree_blob_identity=$cleanBlob;raw_tree_exact_equal=$rawExact;clean_filtered_tree_equal=$cleanEqual;eol_normalized_tree_equal=$normalizedEqual;eol_only_exception=$eolOnly;non_eol_difference=(-not$rawExact-and-not$normalizedEqual);raw_eol=(EolClass $raw);index_eol=$indexEol;worktree_eol=$worktreeEol;encoding=(EncodingClass $raw);text_attribute=[string]$attributes.text;eol_attribute=[string]$attributes.eol;filter_attribute=$filterValue;working_tree_encoding_attribute=$encodingValue;custom_filter_present=$customFilter;external_filter_required=$false;approved_file_type=$approvedType;tracked_path=$tracked;tree_entry_present=$true;repository_clean=$repositoryClean;index_clean=$indexClean;staged_mutation=$false;unstaged_semantic_mutation=$false;untracked_replacement=$false;symlink_substitution=$false;path_redirection=$false;candidate_worktree=[bool]$CandidateWorktree;final_newline_matches=$normalizedEqual;bom_matches=($bomRaw-eq$bomTree);compiler_input_authority=$true;rejection_reason=''}
+    $authority=TestExactCheckoutIdentityRecord $record ([bool]$CandidateWorktree);$record.compiler_input_authority=$authority
+    $record.rejection_reason=if($authority){''}elseif(-not$tracked){'UNTRACKED_PATH'}elseif(-not$approvedType){'UNAPPROVED_FILE_TYPE'}elseif(-not$cleanEqual){'CLEAN_FILTER_TREE_MISMATCH'}elseif($customFilter){'CUSTOM_FILTER_PRESENT'}elseif($encodingConversion){'WORKING_TREE_ENCODING_PRESENT'}elseif(-not($rawExact-or$eolOnly)){'NON_EOL_RAW_DIFFERENCE'}else{'SOURCE_MODE_OR_CLEAN_STATE_INVALID'}
+    return $record
+}
+function TestGovernedScriptIdentityRecord([object]$Record) {
+    $required=@('schema_version','source_identity_class','path','registry_shape_valid','tracked_path','approved_file_type','tree_mode','registry_mode','object_type','raw_worktree_blob_identity','independent_raw_no_filter_blob_identity','raw_sha256','registry_raw_sha256','raw_size','registry_raw_size','clean_filtered_worktree_blob_identity','canonical_blob_identity','registry_canonical_blob_identity','registry_canonical_recomputed_blob_identity','canonical_sha256','registry_canonical_sha256','canonical_size','registry_canonical_size','raw_canonical_equal','eol_normalized_canonical_equal','eol_only_authority','non_eol_difference','final_newline_matches','index_eol','worktree_eol','filter_attribute','working_tree_encoding_attribute','custom_filter_present','encoding_conversion_present','candidate_worktree','repository_clean','index_clean')
+    foreach($field in $required){if(-not(RecordHas $Record $field)){return $false}}
+    $candidateMode=([bool]$Record.candidate_worktree-and[string]$Record.source_identity_class-ceq'CANDIDATE_CONTENT_DERIVATION_V1'-and[bool]$Record.index_clean)
+    $exactMode=(-not[bool]$Record.candidate_worktree-and[string]$Record.source_identity_class-ceq'EXACT_COMMIT_AND_TREE'-and[bool]$Record.repository_clean-and[bool]$Record.index_clean)
+    $rawAuthority=([string]$Record.raw_worktree_blob_identity-ceq[string]$Record.independent_raw_no_filter_blob_identity-and[string]$Record.raw_sha256-ceq[string]$Record.registry_raw_sha256-and[long]$Record.raw_size-eq[long]$Record.registry_raw_size)
+    $canonicalAuthority=([string]$Record.clean_filtered_worktree_blob_identity-ceq[string]$Record.canonical_blob_identity-and[string]$Record.canonical_blob_identity-ceq[string]$Record.registry_canonical_blob_identity-and[string]$Record.registry_canonical_blob_identity-ceq[string]$Record.registry_canonical_recomputed_blob_identity-and[string]$Record.canonical_sha256-ceq[string]$Record.registry_canonical_sha256-and[long]$Record.canonical_size-eq[long]$Record.registry_canonical_size)
+    $rawExact=([string]$Record.raw_worktree_blob_identity-ceq[string]$Record.canonical_blob_identity-and[string]$Record.raw_sha256-ceq[string]$Record.canonical_sha256-and[long]$Record.raw_size-eq[long]$Record.canonical_size)
+    $domainAuthority=([bool]$Record.raw_canonical_equal-eq$rawExact)-and(($rawExact-and-not[bool]$Record.eol_only_authority)-or(-not$rawExact-and[bool]$Record.eol_only_authority-and[bool]$Record.eol_normalized_canonical_equal-and-not[bool]$Record.non_eol_difference))
+    return ([string]$Record.schema_version-ceq'GOVERNED_SCRIPT_IDENTITY_DOMAIN_V1'-and($candidateMode-or$exactMode)-and[bool]$Record.registry_shape_valid-and[string]$Record.path-cmatch'^[^\\/:]+(?:/[^\\/:]+)+$'-and[bool]$Record.tracked_path-and[bool]$Record.approved_file_type-and[string]$Record.tree_mode-ceq'100644'-and[string]$Record.registry_mode-ceq'100644'-and[string]$Record.object_type-ceq'blob'-and[string]$Record.raw_worktree_blob_identity-cmatch'^[0-9a-f]{40}$'-and[string]$Record.independent_raw_no_filter_blob_identity-cmatch'^[0-9a-f]{40}$'-and[string]$Record.raw_sha256-cmatch'^[0-9a-f]{64}$'-and[string]$Record.registry_raw_sha256-cmatch'^[0-9a-f]{64}$'-and[string]$Record.clean_filtered_worktree_blob_identity-cmatch'^[0-9a-f]{40}$'-and[string]$Record.canonical_blob_identity-cmatch'^[0-9a-f]{40}$'-and[string]$Record.registry_canonical_blob_identity-cmatch'^[0-9a-f]{40}$'-and[string]$Record.canonical_sha256-cmatch'^[0-9a-f]{64}$'-and[string]$Record.registry_canonical_sha256-cmatch'^[0-9a-f]{64}$'-and[long]$Record.raw_size-ge0-and[long]$Record.registry_raw_size-ge0-and[long]$Record.canonical_size-ge0-and[long]$Record.registry_canonical_size-ge0-and$rawAuthority-and$canonicalAuthority-and$domainAuthority-and[bool]$Record.final_newline_matches-and-not[bool]$Record.custom_filter_present-and-not[bool]$Record.encoding_conversion_present-and[string]$Record.filter_attribute-in@('unspecified','unset','')-and[string]$Record.working_tree_encoding_attribute-in@('unspecified','unset',''))
+}
+function GovernedScriptIdentity([object]$Row) {
+    $expectedFields=@('allowed_invocation_stages','authority_classification','dependencies','execution_class','git_blob_identity','mode','path','raw_sha256','role','size')|Sort-Object
+    $actualFields=@($Row.PSObject.Properties.Name)|Sort-Object
+    if(($actualFields-join"`n")-cne($expectedFields-join"`n")){throw 'Governed script registry object shape invalid'}
+    $relative=[string]$Row.path
+    if($relative-cnotmatch'^[^\\/:]+(?:/[^\\/:]+)+$'){throw "Governed script registry path invalid: $relative"}
+    $full=[IO.Path]::GetFullPath((Join-Path $repositoryRoot $relative.Replace('/','\')));$repoPrefix=$repositoryRoot.TrimEnd('\')+'\'
+    if(-not$full.StartsWith($repoPrefix,[StringComparison]::OrdinalIgnoreCase)-or(Relative $repositoryRoot $full)-cne$relative-or-not(Test-Path -LiteralPath $full -PathType Leaf)){throw "Governed script registry path authority failed: $relative"}
+    $trackedOutput=@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot ls-files --error-unmatch -- $relative);$tracked=($LASTEXITCODE-eq0-and$trackedOutput.Count-eq1-and[string]$trackedOutput[0]-ceq$relative)
+    $stageOutput=@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot ls-files --stage -- $relative);$treeMode=if($LASTEXITCODE-eq0-and$stageOutput.Count-eq1-and[string]$stageOutput[0]-match'^(\d{6}) [0-9a-f]{40} \d+\t'){$Matches[1]}else{''}
+    $approvedType=(((Get-Item -LiteralPath $full -Force).Attributes-band[IO.FileAttributes]::ReparsePoint)-eq0)
+    $attributes=EffectiveGitAttributes $relative;$filterValue=[string]$attributes.filter;$encodingValue=[string]$attributes.working_tree_encoding;$customFilter=$filterValue-cnotin@('unspecified','unset','');$encodingConversion=$encodingValue-cnotin@('unspecified','unset','')
+    $eolLine=(@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot ls-files --eol -- $relative))[0]
+    if($LASTEXITCODE-ne0-or$eolLine-cnotmatch'^i/([^ ]+)\s+w/([^ ]+)\s+attr/.*\t'){throw "Governed script EOL authority failed: $relative"};$indexEol=$Matches[1];$worktreeEol=$Matches[2]
+    $raw=[IO.File]::ReadAllBytes($full);try{[void]([Text.UTF8Encoding]::new($false,$true).GetString($raw))}catch{throw "Governed script encoding invalid: $relative"}
+    if($raw.Length-ge3-and$raw[0]-eq239-and$raw[1]-eq187-and$raw[2]-eq191){throw "Governed script BOM invalid: $relative"}
+    $rawBlob=GitBlobBytes $raw;$rawNoFilter=(@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot hash-object --no-filters -- $full))[0].Trim()
+    if($LASTEXITCODE-ne0-or$rawNoFilter-cnotmatch'^[0-9a-f]{40}$'){throw "Governed script raw identity failed: $relative"}
+    $cleanBlob=(@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot hash-object ("--path=$relative") -- $full))[0].Trim()
+    if($LASTEXITCODE-ne0-or$cleanBlob-cnotmatch'^[0-9a-f]{40}$'){throw "Governed script path-aware clean identity failed: $relative"}
+    $normalized=NormalizeCrlf $raw;$normalizedBlob=GitBlobBytes ([byte[]]$normalized.bytes);$rawCanonical=$rawBlob-ceq$cleanBlob;$normalizedCanonical=$normalizedBlob-ceq$cleanBlob
+    $finalNewlineMatches=(($raw.Length-gt0-and$raw[$raw.Length-1]-eq10)-eq($normalized.bytes.Length-gt0-and$normalized.bytes[$normalized.bytes.Length-1]-eq10))
+    $eolOnly=(-not$rawCanonical-and$normalizedCanonical-and-not[bool]$normalized.lone_cr-and$finalNewlineMatches);$canonicalBytes=if($rawCanonical){$raw}elseif($eolOnly){[byte[]]$normalized.bytes}else{[byte[]]@()};$canonicalBlob=GitBlobBytes $canonicalBytes
+    $objectType=(@(& $git --no-pager -c "safe.directory=$safeRepository" -c core.fsmonitor=false -c core.hooksPath=NUL -C $repositoryRoot cat-file -t ([string]$Row.git_blob_identity)))[0].Trim()
+    if($LASTEXITCODE-ne0-or$objectType-cne'blob'){throw "Governed script canonical object type invalid: $relative"}
+    $registryCanonicalBytes=ReadGitObjectBytes ([string]$Row.git_blob_identity)
+    $record=[ordered]@{schema_version='GOVERNED_SCRIPT_IDENTITY_DOMAIN_V1';source_identity_class=$sourceIdentityClass;path=$relative;registry_shape_valid=$true;tracked_path=$tracked;approved_file_type=$approvedType;tree_mode=$treeMode;registry_mode=[string]$Row.mode;object_type=$objectType;raw_worktree_blob_identity=$rawBlob;independent_raw_no_filter_blob_identity=$rawNoFilter;raw_sha256=(BytesHash $raw);registry_raw_sha256=[string]$Row.raw_sha256;raw_size=[long]$raw.Length;registry_raw_size=[long]$Row.size;clean_filtered_worktree_blob_identity=$cleanBlob;canonical_blob_identity=$canonicalBlob;registry_canonical_blob_identity=[string]$Row.git_blob_identity;registry_canonical_recomputed_blob_identity=(GitBlobBytes $registryCanonicalBytes);canonical_sha256=(BytesHash $canonicalBytes);registry_canonical_sha256=(BytesHash $registryCanonicalBytes);canonical_size=[long]$canonicalBytes.Length;registry_canonical_size=[long]$registryCanonicalBytes.Length;raw_canonical_equal=$rawCanonical;eol_normalized_canonical_equal=$normalizedCanonical;eol_only_authority=$eolOnly;non_eol_difference=(-not$rawCanonical-and-not$normalizedCanonical);final_newline_matches=$finalNewlineMatches;index_eol=$indexEol;worktree_eol=$worktreeEol;filter_attribute=$filterValue;working_tree_encoding_attribute=$encodingValue;custom_filter_present=$customFilter;encoding_conversion_present=$encodingConversion;candidate_worktree=[bool]$CandidateWorktree;repository_clean=$repositoryClean;index_clean=$indexClean}
+    if(-not(TestGovernedScriptIdentityRecord $record)){throw ("Governed script registry identity-domain mismatch: $relative; raw_sha256=$($record.raw_sha256); raw_size=$($record.raw_size); raw_no_filter_blob=$($record.raw_worktree_blob_identity); clean_filtered_blob=$($record.clean_filtered_worktree_blob_identity); registry_canonical_blob=$($record.registry_canonical_blob_identity); canonical_sha256=$($record.canonical_sha256); canonical_size=$($record.canonical_size)")}
+    return $record
 }
 function ReadJson([string]$Path) { return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json }
 function WriteRaw([object]$Value,[string]$Path) { [IO.File]::WriteAllText($Path,($Value | ConvertTo-Json -Depth 100),[Text.UTF8Encoding]::new($false)) }
@@ -215,6 +341,10 @@ $head = (& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoo
 if ($LASTEXITCODE -ne 0 -or $head -cne $SourceCommit) { throw 'Source HEAD mismatch' }
 $status = @(& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot status --porcelain=v1 --untracked-files=all)
 if (-not $CandidateWorktree -and $status.Count -ne 0) { throw 'Exact source checkout is not clean' }
+$repositoryClean = $status.Count -eq 0
+& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot diff --cached --quiet
+$indexClean = $LASTEXITCODE -eq 0
+if (-not $indexClean) { throw 'Cached index is not clean' }
 $sourceIdentityClass = if ($CandidateWorktree) { 'CANDIDATE_CONTENT_DERIVATION_V1' } else { 'EXACT_COMMIT_AND_TREE' }
 $tree = if ($CandidateWorktree) { '' } else { (& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot show -s --format=%T $SourceCommit).Trim() }
 
@@ -226,17 +356,13 @@ $sourceRows = [Collections.Generic.List[object]]::new()
 $sourceClosureParts = [Collections.Generic.List[string]]::new()
 foreach ($path in $committedCompilerPaths) {
     $relative = (Relative $repositoryRoot $path)
-    $blob = GitBlob $path
-    $mode = '100644'
-    if (-not $CandidateWorktree) {
-        $treeRow = @(& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot ls-tree $SourceCommit -- $relative)
-        if ($treeRow.Count -ne 1 -or [string]$treeRow[0] -notmatch '^(100644|100755) blob ([0-9a-f]{40})\t') { throw "Committed compiler input absent: $relative" }
-        $mode = $Matches[1]
-        if ($Matches[2] -cne $blob) { throw "Committed compiler input differs from Git: $relative" }
-    }
-    $row = [ordered]@{git_blob_identity=$blob;mode=$mode;path=$relative;raw_sha256=(Hash $path);size=(Get-Item -LiteralPath $path).Length}
+    $treeRow = @(& $git --no-pager -c "safe.directory=$safeRepository" -C $repositoryRoot ls-tree -l $SourceCommit -- $relative)
+    if ($treeRow.Count -ne 1 -or [string]$treeRow[0] -notmatch '^(100644) blob ([0-9a-f]{40})\s+([0-9]+)\t') { throw "Committed compiler input absent or non-regular: $relative" }
+    $mode=$Matches[1];$treeBlob=$Matches[2];$treeSize=[long]$Matches[3]
+    $row = ExactCheckoutCompilerInput $path $relative $treeBlob $mode $treeSize
+    if(-not[bool]$row.compiler_input_authority){throw ("Committed compiler input authority failed: $relative/$($row.rejection_reason)")}
     $sourceRows.Add($row)
-    $sourceClosureParts.Add(($relative + '|' + $blob + '|' + $row.raw_sha256 + '|' + $row.size + '|' + $mode))
+    $sourceClosureParts.Add(($relative+'|'+$treeBlob+'|'+$row.raw_worktree_blob_identity+'|'+$row.raw_sha256+'|'+$row.size+'|'+$row.tree_size+'|'+$row.clean_filtered_worktree_blob_identity+'|'+$row.raw_tree_exact_equal+'|'+$row.clean_filtered_tree_equal+'|'+$row.eol_normalized_tree_equal+'|'+$row.eol_only_exception+'|'+$mode))
 }
 if ($CandidateWorktree) { $tree = (Derive 'R7_UNIT2_CANDIDATE_TREE_V1' @($sourceClosureParts.ToArray())).Substring(0,40) }
 
@@ -416,7 +542,7 @@ function BuildRole([object]$Role,[string]$IdentityPath,[object]$ExpectedIdentity
     if ($ilA -cne $ilB) { throw "Normalized IL mismatch: $($Role.role)" }
     $embedded = ExtractIdentity $passA
     AssertIdentity $ExpectedIdentity $ExpectedUnit2 $embedded ([string]$Role.role)
-    $inputRows = @($sourceRows | ForEach-Object { [ordered]@{generation_rule=$null;generator=$null;git_blob_identity=[string]$_.git_blob_identity;mode=[string]$_.mode;path=[string]$_.path;raw_sha256=[string]$_.raw_sha256;size=[long]$_.size} })
+    $inputRows = @($sourceRows | ForEach-Object { [ordered]@{generation_rule=$null;generator=$null;schema_version=[string]$_.schema_version;source_identity_class=[string]$_.source_identity_class;git_blob_identity=[string]$_.git_blob_identity;mode=[string]$_.mode;path=[string]$_.path;tree_size=[long]$_.tree_size;raw_worktree_blob_identity=[string]$_.raw_worktree_blob_identity;raw_sha256=[string]$_.raw_sha256;size=[long]$_.size;clean_filtered_worktree_blob_identity=[string]$_.clean_filtered_worktree_blob_identity;raw_tree_exact_equal=[bool]$_.raw_tree_exact_equal;clean_filtered_tree_equal=[bool]$_.clean_filtered_tree_equal;eol_normalized_tree_equal=[bool]$_.eol_normalized_tree_equal;eol_only_exception=[bool]$_.eol_only_exception;non_eol_difference=[bool]$_.non_eol_difference;raw_eol=[string]$_.raw_eol;index_eol=[string]$_.index_eol;worktree_eol=[string]$_.worktree_eol;encoding=[string]$_.encoding;text_attribute=[string]$_.text_attribute;eol_attribute=[string]$_.eol_attribute;filter_attribute=[string]$_.filter_attribute;working_tree_encoding_attribute=[string]$_.working_tree_encoding_attribute;custom_filter_present=[bool]$_.custom_filter_present;external_filter_required=[bool]$_.external_filter_required;approved_file_type=[bool]$_.approved_file_type;tracked_path=[bool]$_.tracked_path;tree_entry_present=[bool]$_.tree_entry_present;repository_clean=[bool]$_.repository_clean;index_clean=[bool]$_.index_clean;staged_mutation=[bool]$_.staged_mutation;unstaged_semantic_mutation=[bool]$_.unstaged_semantic_mutation;untracked_replacement=[bool]$_.untracked_replacement;symlink_substitution=[bool]$_.symlink_substitution;path_redirection=[bool]$_.path_redirection;candidate_worktree=[bool]$_.candidate_worktree;final_newline_matches=[bool]$_.final_newline_matches;bom_matches=[bool]$_.bom_matches;compiler_input_authority=[bool]$_.compiler_input_authority;rejection_reason=[string]$_.rejection_reason} })
     $inputRows += [ordered]@{generation_rule=[string]$GeneratedSourceRow.generation_rule;generator=$GeneratedSourceRow.generator;git_blob_identity=$null;mode=$null;path=[string]$GeneratedSourceRow.path;raw_sha256=[string]$GeneratedSourceRow.raw_sha256;size=[long]$GeneratedSourceRow.size}
     $result = [ordered]@{
         architecture='x64';compiler_arguments=[ordered]@{pass_a=@($argumentsA);pass_b=@($argumentsB)};compiler_inputs=$inputRows;define=[string]$Role.define;
@@ -499,7 +625,7 @@ $scriptRegistry = ReadJson $scriptRegistryPath
 $governedScripts = [Collections.Generic.List[object]]::new()
 foreach ($row in @($scriptRegistry.scripts | Sort-Object path)) {
     $path = Join-Path $repositoryRoot ([string]$row.path).Replace('/','\')
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Hash $path) -cne [string]$row.raw_sha256 -or (GitBlob $path) -cne [string]$row.git_blob_identity -or (Get-Item -LiteralPath $path).Length -ne [long]$row.size) { throw "Governed script registry mismatch: $($row.path)" }
+    [void](GovernedScriptIdentity $row)
     $governedScripts.Add([ordered]@{git_blob_identity=[string]$row.git_blob_identity;mode=[string]$row.mode;path=[string]$row.path;raw_sha256=[string]$row.raw_sha256;role=[string]$row.role;size=[long]$row.size})
 }
 $generatedSources = @($bootstrapGeneratedRow,$clientGeneratedRow,$serviceGeneratedRow,$toolsGeneratedRow)
@@ -510,12 +636,12 @@ $nonCircular = [ordered]@{algorithm='SHA256_UTF8_LENGTH_PREFIXED_FIELDS_V1';buil
 $receipt = [ordered]@{
     artifact_type='R7_UNIT2_UPGRADE_AUTHORITY_SOURCE_TO_BINARY_RECEIPT';build_input_closure_sha256=$buildInputClosureSha;compiler=$compilerIdentity;configuration_inputs=$configurationRows.ToArray();dependency_manifest_sha256=$dependencySha;
     framework_references=$frameworkReferences;generated_sources=$generatedSources;governed_scripts=$governedScripts.ToArray();noncircular_derivations=$nonCircular;policy_sha256=$policySha;roles=@($roleResults | Sort-Object role);
-    schema_version='2.0.0';source_commit=$SourceCommit;source_files=$sourceRows.ToArray();source_identity_class=$sourceIdentityClass;source_tree=$tree;target_build_receipt_sha256=$targetReceiptSha;target_packaged_executables=$targetPackagedExecutables.ToArray();target_source_commit=$unit1Commit;target_source_tree=$unit1Tree;toolchain=$toolchain
+    schema_version='2.1.0';source_commit=$SourceCommit;source_files=$sourceRows.ToArray();source_identity_class=$sourceIdentityClass;source_tree=$tree;target_build_receipt_sha256=$targetReceiptSha;target_packaged_executables=$targetPackagedExecutables.ToArray();target_source_commit=$unit1Commit;target_source_tree=$unit1Tree;toolchain=$toolchain
 }
 $receiptPath = Join-Path $output 'Generated\unit2_build_receipt.json'
 Canonical $receipt $receiptPath $artifactFinal
 $determinismRoles = @($roleResults | Sort-Object role | ForEach-Object { [ordered]@{compiler_arguments=$_.compiler_arguments;compiler_inputs=$_.compiler_inputs;file_name=$_.file_name;generated_source_sha256=$_.generated_source_sha256;normalized_il_equal=$_.normalized_il_equal;normalized_il_sha256=$_.normalized_il_sha256;pass_a_sha256=$_.pass_a_sha256;pass_b_sha256=$_.pass_b_sha256;preprocessor_symbols=$_.preprocessor_symbols;resource_files=$_.resource_files;response_files=$_.response_files;role=$_.role;size=$_.size} })
-$determinismReceipt = [ordered]@{artifact_type='R7_UNIT2B_BUILD_DETERMINISM_RECEIPT';build_input_closure_sha256=$buildInputClosureSha;compiler=$compilerIdentity;framework_references=$frameworkReferences;generated_sources=$generatedSources;noncircular_derivations=$nonCircular;role_determinism=$determinismRoles;schema_version='2.0.0';source_commit=$SourceCommit;source_files=$sourceRows.ToArray();source_identity_class=$sourceIdentityClass;source_tree=$tree;status='PASS';target_build_orchestrator_receipt_sha256=$targetOrchestratorReceiptSha;target_packaged_executables=$targetPackagedExecutables.ToArray()}
+$determinismReceipt = [ordered]@{artifact_type='R7_UNIT2B_BUILD_DETERMINISM_RECEIPT';build_input_closure_sha256=$buildInputClosureSha;compiler=$compilerIdentity;framework_references=$frameworkReferences;generated_sources=$generatedSources;noncircular_derivations=$nonCircular;role_determinism=$determinismRoles;schema_version='2.1.0';source_commit=$SourceCommit;source_files=$sourceRows.ToArray();source_identity_class=$sourceIdentityClass;source_tree=$tree;status='PASS';target_build_orchestrator_receipt_sha256=$targetOrchestratorReceiptSha;target_packaged_executables=$targetPackagedExecutables.ToArray()}
 $determinismPath = Join-Path $output 'Generated\unit2_build_determinism_receipt.json'
 Canonical $determinismReceipt $determinismPath $artifactFinal
 
@@ -532,7 +658,7 @@ Copy-Item -LiteralPath ([string]$roleState.PACKAGED_PROTECTED_METADATA_TOOL.pass
 foreach ($item in Get-ChildItem -LiteralPath (Join-Path $target 'Staging') -Force) { Copy-Item -LiteralPath $item.FullName -Destination (Join-Path $output 'TargetStaging') -Recurse }
 
 $manifestRows = @(Get-ChildItem -LiteralPath $output -File -Recurse | Where-Object { $_.FullName -notlike '*.raw' -and $_.FullName -notlike '*.raw.il' } | Sort-Object FullName | ForEach-Object { [ordered]@{path=$_.FullName.Substring($output.Length + 1).Replace('\','/');raw_sha256=(Hash $_.FullName);size=$_.Length} })
-$manifest = [ordered]@{artifact_type='R7_UNIT2_BUILD_OUTPUT_MANIFEST';build_determinism_receipt_sha256=(Hash $determinismPath);build_receipt_sha256=(Hash $receiptPath);files=$manifestRows;policy_sha256=$policySha;prohibited_source_dependency_count=0;schema_version='2.0.0';self_exclusion='unit2_build_manifest.json';source_commit=$SourceCommit;source_identity_class=$sourceIdentityClass;source_tree=$tree;status='PASS';target_source_commit=$unit1Commit;transition_plan_sha256=$planSha}
+$manifest = [ordered]@{artifact_type='R7_UNIT2_BUILD_OUTPUT_MANIFEST';build_determinism_receipt_sha256=(Hash $determinismPath);build_receipt_sha256=(Hash $receiptPath);files=$manifestRows;policy_sha256=$policySha;prohibited_source_dependency_count=0;schema_version='2.1.0';self_exclusion='unit2_build_manifest.json';source_commit=$SourceCommit;source_identity_class=$sourceIdentityClass;source_tree=$tree;status='PASS';target_source_commit=$unit1Commit;transition_plan_sha256=$planSha}
 $manifestPath = Join-Path $output 'unit2_build_manifest.json'
 Canonical $manifest $manifestPath $artifactFinal
 [ordered]@{build_determinism_receipt_sha256=(Hash $determinismPath);build_input_closure_sha256=$buildInputClosureSha;build_manifest_sha256=(Hash $manifestPath);build_receipt_sha256=(Hash $receiptPath);output_root=$output;policy_sha256=$policySha;role_count=$roleResults.Count;source_commit=$SourceCommit;source_identity_class=$sourceIdentityClass;source_tree=$tree;status='PASS'} | ConvertTo-Json

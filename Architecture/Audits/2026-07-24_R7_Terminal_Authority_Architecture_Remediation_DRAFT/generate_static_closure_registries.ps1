@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$ArtifactTool,
+    [switch]$GenerateGovernedScriptRegistry,
     [switch]$GenerateRegistries,
     [switch]$GeneratePackageManifest,
     [string]$ExternalMeasurementRoot,
@@ -15,6 +16,7 @@ $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $packageRoot '..\..\..'))
 $packageRelativeRoot = 'Architecture/Audits/2026-07-24_R7_Terminal_Authority_Architecture_Remediation_DRAFT'
 $artifactToolFull = [IO.Path]::GetFullPath($ArtifactTool)
 $measurementRoot = if ([string]::IsNullOrWhiteSpace($ExternalMeasurementRoot)) { Join-Path $packageRoot ('Build\StaticRegistryMeasurements_' + [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')) } else { [IO.Path]::GetFullPath($ExternalMeasurementRoot) }
+$canonicalWriteQueue = New-Object 'System.Collections.Generic.List[object]'
 
 function Get-LowerHash([string]$Path) { return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant() }
 function Get-RelativePath([string]$Base, [string]$Path) {
@@ -32,6 +34,124 @@ function Get-GitBlobIdentity([string]$Path) {
     try { return ([BitConverter]::ToString($sha.ComputeHash($all))).Replace('-','').ToLowerInvariant() }
     finally { $sha.Dispose() }
 }
+function Get-Sha256Bytes([byte[]]$Bytes) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-','').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+}
+function Get-GitBlobIdentityBytes([byte[]]$Bytes) {
+    $header = [Text.Encoding]::ASCII.GetBytes(('blob ' + $Bytes.Length + [char]0))
+    $all = New-Object byte[] ($header.Length + $Bytes.Length)
+    [Buffer]::BlockCopy($header,0,$all,0,$header.Length)
+    [Buffer]::BlockCopy($Bytes,0,$all,$header.Length,$Bytes.Length)
+    $sha = [Security.Cryptography.SHA1]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($all))).Replace('-','').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+}
+function Invoke-GitText([string[]]$Arguments, [string]$FailureReason) {
+    $safeRoot = $repositoryRoot.Replace('\','/')
+    $output = @(& git.exe -c "safe.directory=$safeRoot" -C $repositoryRoot @Arguments)
+    if ($LASTEXITCODE -ne 0) { throw $FailureReason }
+    return @($output)
+}
+function Get-StrictLfBytes([byte[]]$RawBytes) {
+    $bytes = New-Object 'System.Collections.Generic.List[byte]' ($RawBytes.Length)
+    $removed = 0
+    $lone = 0
+    for ($index = 0; $index -lt $RawBytes.Length; $index++) {
+        if ($RawBytes[$index] -eq 13) {
+            if ($index + 1 -lt $RawBytes.Length -and $RawBytes[$index + 1] -eq 10) { $removed++; continue }
+            $lone++
+        }
+        $bytes.Add($RawBytes[$index])
+    }
+    return [ordered]@{ bytes=$bytes.ToArray(); lone_cr=$lone; removed_crlf_cr=$removed }
+}
+function Get-CanonicalRepositoryIdentity([string]$Path, [string]$InputClass, [bool]$AllowCandidateContent) {
+    $full = [IO.Path]::GetFullPath($Path)
+    $rootPrefix = $repositoryRoot.TrimEnd('\') + '\'
+    if (-not $full.StartsWith($rootPrefix,[StringComparison]::OrdinalIgnoreCase)) { throw "IDENTITY_PATH_OUTSIDE_REPOSITORY: $full" }
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "IDENTITY_INPUT_ABSENT: $full" }
+    $relative = Get-RelativePath $repositoryRoot $full
+    if ($relative.StartsWith('../',[StringComparison]::Ordinal) -or [IO.Path]::IsPathRooted($relative)) { throw "IDENTITY_PATH_REDIRECTION: $relative" }
+
+    [void](Invoke-GitText @('ls-files','--error-unmatch','--',$relative) "IDENTITY_UNTRACKED_PATH: $relative")
+    $treeLine = @(Invoke-GitText @('ls-tree','HEAD','--',$relative) "IDENTITY_TREE_LOOKUP_FAILED: $relative")
+    if ($treeLine.Count -ne 1 -or [string]$treeLine[0] -notmatch '^(\d{6})\s+(\w+)\s+([0-9a-f]{40})\t(.+)$') { throw "IDENTITY_TREE_ENTRY_MISSING: $relative" }
+    $treeMode = $Matches[1]; $treeType = $Matches[2]; $treeBlob = $Matches[3]; $treePath = $Matches[4]
+    if ($treeMode -cne '100644' -or $treeType -cne 'blob' -or $treePath -cne $relative) { throw "IDENTITY_TREE_OBJECT_NOT_APPROVED: $relative" }
+
+    [void](& git.exe -c "safe.directory=$($repositoryRoot.Replace('\','/'))" -C $repositoryRoot diff --cached --quiet -- $relative)
+    if ($LASTEXITCODE -eq 1) { throw "IDENTITY_STAGED_MUTATION: $relative" }
+    if ($LASTEXITCODE -ne 0) { throw "IDENTITY_INDEX_QUERY_FAILED: $relative" }
+
+    $attributes = @{}
+    foreach ($line in @(Invoke-GitText @('check-attr','text','eol','filter','working-tree-encoding','--',$relative) "IDENTITY_ATTRIBUTE_QUERY_FAILED: $relative")) {
+        if ([string]$line -match '^.*?: ([^:]+): (.*)$') { $attributes[$Matches[1]] = $Matches[2] }
+    }
+    foreach ($required in @('text','eol','filter','working-tree-encoding')) { if (-not $attributes.ContainsKey($required)) { throw "IDENTITY_DIAGNOSTIC_MISSING_${required}: $relative" } }
+    if ([string]$attributes.filter -notin @('unspecified','unset')) { throw "IDENTITY_CUSTOM_FILTER_REJECTED: $relative" }
+    if ([string]$attributes.'working-tree-encoding' -notin @('unspecified','unset')) { throw "IDENTITY_WORKING_TREE_ENCODING_REJECTED: $relative" }
+
+    $raw = [IO.File]::ReadAllBytes($full)
+    try { [void]([Text.UTF8Encoding]::new($false,$true).GetString($raw)) }
+    catch { throw "IDENTITY_UNAUTHORIZED_ENCODING: $relative" }
+    $rawBom = $raw.Length -ge 3 -and $raw[0] -eq 239 -and $raw[1] -eq 187 -and $raw[2] -eq 191
+    if ($rawBom) { throw "IDENTITY_BOM_REJECTED: $relative" }
+    $rawBlob = Get-GitBlobIdentityBytes $raw
+    $rawSha256 = Get-Sha256Bytes $raw
+    $filtered = @(Invoke-GitText @('hash-object',("--path=" + $relative),'--',$full) "IDENTITY_CLEAN_FILTER_FAILED: $relative")
+    if ($filtered.Count -ne 1 -or [string]$filtered[0] -notmatch '^[0-9a-f]{40}$') { throw "IDENTITY_FILTERED_DIAGNOSTIC_INVALID: $relative" }
+    $filteredBlob = [string]$filtered[0]
+    $normalized = Get-StrictLfBytes $raw
+    $normalizedBlob = Get-GitBlobIdentityBytes ([byte[]]$normalized.bytes)
+    $normalizedSha256 = Get-Sha256Bytes ([byte[]]$normalized.bytes)
+    $rawTreeEqual = $rawBlob -ceq $treeBlob
+    $filteredTreeEqual = $filteredBlob -ceq $treeBlob
+    $normalizedFilteredEqual = $normalizedBlob -ceq $filteredBlob
+    $rawFilteredEqual = $rawBlob -ceq $filteredBlob
+    $finalNewlineMatches = (($raw.Length -gt 0 -and $raw[$raw.Length - 1] -eq 10) -eq ($normalized.bytes.Length -gt 0 -and $normalized.bytes[$normalized.bytes.Length - 1] -eq 10))
+    $eolOnly = (-not $rawFilteredEqual) -and $normalizedFilteredEqual -and [long]$normalized.lone_cr -eq 0 -and [long]$normalized.removed_crlf_cr -gt 0 -and $finalNewlineMatches
+    if (-not $rawFilteredEqual -and -not $eolOnly) { throw "IDENTITY_NON_EOL_DIFFERENCE: $relative" }
+    if (-not $filteredTreeEqual -and -not $AllowCandidateContent) { throw "IDENTITY_UNSTAGED_SEMANTIC_MUTATION: $relative" }
+    if (($rawFilteredEqual -and $eolOnly) -or (-not $rawFilteredEqual -and -not $normalizedFilteredEqual)) { throw "IDENTITY_CONTRADICTORY_TUPLE: $relative" }
+
+    $canonicalBytes = if ($rawFilteredEqual) { $raw } else { [byte[]]$normalized.bytes }
+    $canonicalBlob = Get-GitBlobIdentityBytes $canonicalBytes
+    if ($canonicalBlob -cne $filteredBlob) { throw "IDENTITY_CANONICAL_FILTER_DISAGREEMENT: $relative" }
+    return [ordered]@{
+        approved_file_type=$true; canonical_blob=$canonicalBlob; canonical_sha256=(Get-Sha256Bytes $canonicalBytes); canonical_size=[long]$canonicalBytes.Length
+        clean_filtered_blob=$filteredBlob; clean_filtered_tree_equal=$filteredTreeEqual; eol_normalized_canonical_equal=$normalizedFilteredEqual; eol_normalized_sha256=$normalizedSha256; eol_normalized_tree_equal=($normalizedBlob -ceq $treeBlob)
+        eol_only_authority=$eolOnly; eol_attribute=[string]$attributes.eol; filter_attribute=[string]$attributes.filter; final_newline_matches=$finalNewlineMatches
+        final_identity_authority=$true; input_class=$InputClass; non_eol_difference=$false; path=$relative; raw_blob=$rawBlob; raw_canonical_equal=$rawFilteredEqual; raw_sha256=$rawSha256; raw_size=[long]$raw.Length
+        raw_tree_equal=$rawTreeEqual; text_attribute=[string]$attributes.text; tracked_path=$true; tree_blob=$treeBlob; tree_mode=$treeMode
+        working_tree_encoding=[string]$attributes.'working-tree-encoding'
+    }
+}
+function Assert-GovernedScriptRegistryTuple([object]$Identity,[object]$Row) {
+    foreach ($field in @('approved_file_type','canonical_blob','canonical_sha256','canonical_size','clean_filtered_blob','eol_normalized_canonical_equal','eol_only_authority','final_identity_authority','non_eol_difference','path','raw_blob','raw_canonical_equal','raw_sha256','raw_size','tracked_path','tree_mode')) {
+        if ($null -eq $Identity.$field) { throw "IDENTITY_TUPLE_FIELD_MISSING_${field}" }
+    }
+    $expectedFields=@('allowed_invocation_stages','authority_classification','dependencies','execution_class','git_blob_identity','mode','path','raw_sha256','role','size')|Sort-Object;$actualFields=@($Row.Keys)|Sort-Object
+    if(($actualFields-join"`n")-cne($expectedFields-join"`n")){throw 'IDENTITY_REGISTRY_PROPERTY_SET_INVALID'}
+    if([string]$Row.mode-cne'100644'-or[string]$Row.path-cne[string]$Identity.path-or[string]$Row.git_blob_identity-notmatch'^[0-9a-f]{40}$'-or[string]$Row.raw_sha256-notmatch'^[0-9a-f]{64}$'-or[long]$Row.size-lt0){throw 'IDENTITY_REGISTRY_TUPLE_INVALID'}
+    $rawExact = ([string]$Identity.raw_blob -ceq [string]$Identity.canonical_blob) -and ([string]$Identity.raw_sha256 -ceq [string]$Identity.canonical_sha256) -and ([long]$Identity.raw_size -eq [long]$Identity.canonical_size)
+    if ([bool]$Identity.raw_canonical_equal -ne $rawExact -or [string]$Identity.clean_filtered_blob -cne [string]$Identity.canonical_blob) { throw "IDENTITY_TUPLE_CANONICAL_CONTRADICTION: $($Identity.path)" }
+    if (($rawExact -and [bool]$Identity.eol_only_authority) -or (-not $rawExact -and (-not [bool]$Identity.eol_only_authority -or -not [bool]$Identity.eol_normalized_canonical_equal))) { throw "IDENTITY_TUPLE_EOL_CONTRADICTION: $($Identity.path)" }
+    if (-not [bool]$Identity.approved_file_type -or -not [bool]$Identity.tracked_path -or [string]$Identity.tree_mode -cne '100644' -or [bool]$Identity.non_eol_difference -or -not [bool]$Identity.final_identity_authority) { throw "IDENTITY_TUPLE_AUTHORITY_FAILED: $($Identity.path)" }
+    if ([string]$Row.git_blob_identity -cne [string]$Identity.canonical_blob -or [string]$Row.raw_sha256 -cne [string]$Identity.raw_sha256 -or [long]$Row.size -ne [long]$Identity.raw_size) { throw "IDENTITY_REGISTRY_FIELD_SEMANTICS_MISMATCH: $($Identity.path)" }
+}
+function Assert-GovernedOutputScope([string[]]$Paths) {
+    $allowed = @('governed_script_registry.json','source_role_registry.json','external_utility_registry.json','static_package_file_manifest.json')
+    $seen = @{}
+    foreach ($path in $Paths) {
+        $full = [IO.Path]::GetFullPath($path)
+        if (-not $full.StartsWith(($packageRoot.TrimEnd('\') + '\'),[StringComparison]::OrdinalIgnoreCase)) { throw "OUTPUT_SCOPE_ESCAPE: $full" }
+        if ($allowed -notcontains [IO.Path]::GetFileName($full)) { throw "OUTPUT_SCOPE_UNAUTHORIZED: $full" }
+        if ($seen.ContainsKey($full)) { throw "OUTPUT_SCOPE_DUPLICATE: $full" }
+        $seen[$full] = $true
+    }
+}
 function Write-CanonicalNew([object]$Value, [string]$Path, [string]$Label) {
     $full = [IO.Path]::GetFullPath($Path)
     if ((Test-Path -LiteralPath $full) -and -not $ReplaceExisting) { throw "$Label already exists: $full" }
@@ -42,8 +162,21 @@ function Write-CanonicalNew([object]$Value, [string]$Path, [string]$Label) {
     [IO.File]::WriteAllText($raw, ($Value | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false))
     & $artifactToolFull canonicalize $raw $canonical | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $canonical -PathType Leaf)) { throw "Canonical registry generation failed: $Label" }
-    [IO.File]::WriteAllBytes($full,[IO.File]::ReadAllBytes($canonical))
+    $pending = Join-Path (Split-Path -Parent $full) ('.' + [IO.Path]::GetFileName($full) + '.pending.' + [Guid]::NewGuid().ToString('N'))
+    $backup = Join-Path (Split-Path -Parent $full) ('.' + [IO.Path]::GetFileName($full) + '.backup.' + [Guid]::NewGuid().ToString('N'))
+    try {
+        [IO.File]::WriteAllBytes($pending,[IO.File]::ReadAllBytes($canonical))
+        if (Test-Path -LiteralPath $full) { [IO.File]::Replace($pending,$full,$backup,$true) }
+        else { [IO.File]::Move($pending,$full) }
+    }
+    finally {
+        if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending -Force }
+        if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Force }
+    }
     if (-not (Test-Path -LiteralPath $full -PathType Leaf) -or (Get-LowerHash $full) -cne (Get-LowerHash $canonical)) { throw "Canonical registry write failed: $Label" }
+}
+function Queue-CanonicalWrite([object]$Value, [string]$Path, [string]$Label) {
+    $canonicalWriteQueue.Add([ordered]@{ label=$Label; path=[IO.Path]::GetFullPath($Path); value=$Value })
 }
 function New-ScriptDefinition([string]$Name,[string]$Role,[string[]]$Stages,[string]$ExecutionClass,[string[]]$Dependencies,[string]$AuthorityClass) {
     return [ordered]@{ authority_classification=$AuthorityClass; dependencies=$Dependencies; execution_class=$ExecutionClass; name=$Name; role=$Role; stages=$Stages }
@@ -55,10 +188,16 @@ function New-UtilityDefinition([string]$Role,[string]$Path,[string[]]$Stages,[st
     return [ordered]@{ authority_classification=$Classification; closure_class=$ClosureClass; commands=$Commands; path=$Path; required_by_scripts=$Scripts; restriction=$Restriction; role=$Role; stages=$Stages }
 }
 
-if (-not $GenerateRegistries -and -not $GeneratePackageManifest) { throw 'Select GenerateRegistries or GeneratePackageManifest.' }
+if (-not $GenerateGovernedScriptRegistry -and -not $GenerateRegistries -and -not $GeneratePackageManifest) { throw 'Select GenerateGovernedScriptRegistry, GenerateRegistries, or GeneratePackageManifest.' }
+if ($GenerateGovernedScriptRegistry -and ($GenerateRegistries -or $GeneratePackageManifest)) { throw 'GenerateGovernedScriptRegistry is an isolated mode and cannot be combined with another generation mode.' }
 if (-not (Test-Path -LiteralPath $artifactToolFull -PathType Leaf)) { throw 'Artifact tool is absent.' }
+$plannedOutputs = @()
+if ($GenerateGovernedScriptRegistry) { $plannedOutputs += Join-Path $packageRoot 'governed_script_registry.json' }
+if ($GenerateRegistries) { $plannedOutputs += @((Join-Path $packageRoot 'governed_script_registry.json'),(Join-Path $packageRoot 'external_utility_registry.json'),(Join-Path $packageRoot 'source_role_registry.json')) }
+if ($GeneratePackageManifest) { $plannedOutputs += Join-Path $packageRoot 'static_package_file_manifest.json' }
+Assert-GovernedOutputScope $plannedOutputs
 
-if ($GenerateRegistries) {
+if ($GenerateGovernedScriptRegistry -or $GenerateRegistries) {
     $scriptDefinitions = @(
         (New-ScriptDefinition 'author_cases.ps1' 'CASE_AUTHORING' @('PRECOMMIT_AUTHORITY_GENERATION') 'BUILD_TIME' @('POWERSHELL_ORCHESTRATOR') 'NONAUTHORITATIVE_GOVERNANCE_DERIVATION'),
         (New-ScriptDefinition 'author_expectations.ps1' 'EXPECTATION_AUTHORING' @('PRECOMMIT_AUTHORITY_GENERATION') 'BUILD_TIME' @('POWERSHELL_ORCHESTRATOR') 'NONAUTHORITATIVE_INDEPENDENT_EXPECTATION_DERIVATION'),
@@ -88,22 +227,27 @@ if ($GenerateRegistries) {
     if (($declaredScriptNames -join "`n") -cne ($actualScriptNames -join "`n")) { throw 'Governed script definition set does not equal the package script set.' }
     $scriptRows = foreach ($definition in $scriptDefinitions | Sort-Object name) {
         $file = Get-Item -LiteralPath (Join-Path $packageRoot $definition.name)
-        [ordered]@{
+        $identity = Get-CanonicalRepositoryIdentity $file.FullName 'GOVERNED_SCRIPT' $true
+        $row = [ordered]@{
             allowed_invocation_stages = $definition.stages
             authority_classification = $definition.authority_classification
             dependencies = $definition.dependencies
             execution_class = $definition.execution_class
-            git_blob_identity = Get-GitBlobIdentity $file.FullName
+            git_blob_identity = [string]$identity.canonical_blob
             mode = '100644'
             path = ($packageRelativeRoot + '/' + $file.Name)
-            raw_sha256 = Get-LowerHash $file.FullName
+            raw_sha256 = [string]$identity.raw_sha256
             role = $definition.role
-            size = $file.Length
+            size = [long]$identity.raw_size
         }
+        Assert-GovernedScriptRegistryTuple $identity $row
+        $row
     }
     $scriptArtifact = [ordered]@{ artifact_type='R7_GOVERNED_SCRIPT_REGISTRY'; authority_classification='NONAUTHORITATIVE_STATIC_PACKAGE_CLOSURE'; generated_from_current_bytes=$true; schema_version='1.0.0'; script_count=@($scriptRows).Count; scripts=@($scriptRows); status='STATIC_CLOSED_POSTCOMMIT_BLOB_VERIFICATION_REQUIRED' }
-    Write-CanonicalNew $scriptArtifact (Join-Path $packageRoot 'governed_script_registry.json') 'governed-script-registry'
+    Queue-CanonicalWrite $scriptArtifact (Join-Path $packageRoot 'governed_script_registry.json') 'governed-script-registry'
+}
 
+if ($GenerateRegistries) {
     $managementAssembly = 'C:\Windows\Microsoft.Net\assembly\GAC_MSIL\Microsoft.PowerShell.Commands.Management\v4.0_3.0.0.0__31bf3856ad364e35\Microsoft.PowerShell.Commands.Management.dll'
     $jobAssembly = 'C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll'
     $utilityModuleManifest = 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1'
@@ -139,6 +283,7 @@ if ($GenerateRegistries) {
         $utilityIndex++
         & $artifactToolFull measure $full $measurementPath | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "External utility measurement failed: $($definition.role)" }
+        $identity = Get-CanonicalRepositoryIdentity $file.FullName 'SOURCE_ROLE' $false
         [ordered]@{
             allowed_invocation_stages = $definition.stages
             authority_classification = $definition.authority_classification
@@ -154,7 +299,7 @@ if ($GenerateRegistries) {
         }
     }
     $utilityArtifact = [ordered]@{ artifact_type='R7_EXTERNAL_UTILITY_REGISTRY'; authority_classification='NONAUTHORITATIVE_STATIC_DEPENDENCY_CLOSURE'; schema_version='1.0.0'; status='STATIC_CONTENT_BOUND_HOST_SPECIFIC_POSTCOMMIT_REVALIDATION_REQUIRED'; utility_count=@($utilityRows).Count; utilities=@($utilityRows) }
-    Write-CanonicalNew $utilityArtifact (Join-Path $packageRoot 'external_utility_registry.json') 'external-utility-registry'
+    Queue-CanonicalWrite $utilityArtifact (Join-Path $packageRoot 'external_utility_registry.json') 'external-utility-registry'
 
     $targets = @(
         [ordered]@{authority_classification='UNIT2_UPGRADE_DISPOSITION_AUTHORITY_AFTER_PROVISIONING';define='UNIT2_SERVICE';file_name='RandleTerminalUpgradeAuthority.exe';installed_role=$true;main='RandleAI.R7Remediation.R7Unit2UpgradeServiceProgram';role='UNIT2_UPGRADE_AUTHORITY'},
@@ -210,6 +355,7 @@ if ($GenerateRegistries) {
     $knownRequirements = @{}; foreach ($row in @($requirements.requirements)) { $knownRequirements[[string]$row.requirement_id] = $true }
     $sourceRows = foreach ($definition in $sourceDefinitions | Sort-Object name) {
         $file = Get-Item -LiteralPath (Join-Path $packageRoot ('Source\' + $definition.name))
+        $identity = Get-CanonicalRepositoryIdentity $file.FullName 'SOURCE_ROLE' $false
         $requirementIds = @($definition.blockers | ForEach-Object { 'R7RM-AR-' + $_.Substring(5) } | Sort-Object -Unique)
         foreach ($id in $requirementIds) { if (-not $knownRequirements.ContainsKey($id)) { throw "Source routing requirement is absent: $id" } }
         [ordered]@{
@@ -218,19 +364,19 @@ if ($GenerateRegistries) {
             compiled_into_roles = $allCompiledRoles
             current_static_unit_authority = 'NONAUTHORITATIVE_UNINSTALLED_SOURCE'
             expected_verification = $definition.verification
-            git_blob_identity = Get-GitBlobIdentity $file.FullName
+            git_blob_identity = [string]$identity.canonical_blob
             implementation_surfaces = $definition.implementation_surfaces
             intended_runtime_authority = $definition.intended_authority
             mode = '100644'
             path = ('Source/' + $file.Name)
             primary_architectural_consumers = $definition.consumers
-            raw_sha256 = Get-LowerHash $file.FullName
+            raw_sha256 = [string]$identity.canonical_sha256
             requirement_ids = $requirementIds
-            size = $file.Length
+            size = [long]$identity.canonical_size
         }
     }
     $sourceArtifact = [ordered]@{ artifact_type='R7_SOURCE_ROLE_REGISTRY'; current_authority='NONAUTHORITATIVE_STATIC_PROPOSAL'; executable_role_count=$targets.Count; executable_roles=$targets; schema_version='1.0.0'; source_count=@($sourceRows).Count; sources=@($sourceRows); status='STATIC_CLOSED_POSTCOMMIT_BLOB_VERIFICATION_REQUIRED' }
-    Write-CanonicalNew $sourceArtifact (Join-Path $packageRoot 'source_role_registry.json') 'source-role-registry'
+    Queue-CanonicalWrite $sourceArtifact (Join-Path $packageRoot 'source_role_registry.json') 'source-role-registry'
 }
 
 if ($GeneratePackageManifest) {
@@ -238,10 +384,13 @@ if ($GeneratePackageManifest) {
     $excluded = @('static_package_file_manifest.json')
     $files = @(Get-ChildItem -LiteralPath $packageRoot -Recurse -File -Force | Where-Object { $_.FullName -notlike ((Join-Path $packageRoot 'Build') + '\*') -and $excluded -notcontains $_.Name } | Sort-Object FullName)
     $rows = foreach ($file in $files) {
-        [ordered]@{ git_blob_identity=(Get-GitBlobIdentity $file.FullName); mode='100644'; path=(Get-RelativePath $repositoryRoot $file.FullName); raw_sha256=(Get-LowerHash $file.FullName); size=$file.Length }
+        $identity = Get-CanonicalRepositoryIdentity $file.FullName 'STATIC_PACKAGE_MANIFEST' $true
+        [ordered]@{ git_blob_identity=[string]$identity.canonical_blob; mode='100644'; path=(Get-RelativePath $repositoryRoot $file.FullName); raw_sha256=[string]$identity.canonical_sha256; size=[long]$identity.canonical_size }
     }
     $artifact = [ordered]@{ artifact_type='R7_STATIC_PACKAGE_FILE_MANIFEST'; authority_classification='NONAUTHORITATIVE_STATIC_STAGED_DELTA_MANIFEST'; excluded_self_path=($packageRelativeRoot + '/static_package_file_manifest.json'); file_count=@($rows).Count; files=@($rows); schema_version='1.0.0'; status='COMPLETE_EXCEPT_EXPLICIT_SELF_EXCLUSION' }
-    Write-CanonicalNew $artifact $manifestPath 'static-package-file-manifest'
+    Queue-CanonicalWrite $artifact $manifestPath 'static-package-file-manifest'
 }
 
-[ordered]@{ artifact_tool_sha256=(Get-LowerHash $artifactToolFull); generated_package_manifest=[bool]$GeneratePackageManifest; generated_registries=[bool]$GenerateRegistries; measurement_root=$measurementRoot; status='PASS' } | ConvertTo-Json
+foreach ($write in $canonicalWriteQueue) { Write-CanonicalNew $write.value $write.path $write.label }
+
+[ordered]@{ artifact_tool_sha256=(Get-LowerHash $artifactToolFull); generated_governed_script_registry=[bool]($GenerateGovernedScriptRegistry -or $GenerateRegistries); generated_package_manifest=[bool]$GeneratePackageManifest; generated_registries=[bool]$GenerateRegistries; measurement_root=$measurementRoot; status='PASS' } | ConvertTo-Json
