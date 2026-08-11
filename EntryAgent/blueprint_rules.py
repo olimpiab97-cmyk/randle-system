@@ -5,17 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 UPPER_LIQUIDITY_LEVELS = {
-    "YH": 1,
     "ONH": 2,
     "LH": 3,
     "PMH": 4,
 }
 LOWER_LIQUIDITY_LEVELS = {
-    "YL": 1,
     "ONL": 2,
     "LL": 3,
     "PML": 4,
 }
+ROAMING_LIQUIDITY_LEVELS = {"YH", "YL"}
+ROAMING_LIQUIDITY_PRIORITY = {"YH": 1, "YL": 1}
 TICK_SIZES = {"NQ": 0.25, "RTY": 0.10}
 
 
@@ -60,7 +60,48 @@ def optional_float(value: Any) -> float | None:
         return None
 
 
-def detect_rejection_mode(latest_bar: dict[str, Any] | None, levels: dict[str, Any], symbol: str = "NQ") -> dict[str, Any]:
+def side_for_level_price(
+    level_name: str | None,
+    level_price: Any = None,
+    session_lock_price: Any = None,
+    *,
+    tolerance: float = 0.0,
+) -> str | None:
+    """Return frozen liquidity ownership without name-only roaming assumptions."""
+    normalized_name = str(level_name or "").strip().upper()
+    price = optional_float(level_price)
+    reference = optional_float(session_lock_price)
+    if normalized_name in UPPER_LIQUIDITY_LEVELS:
+        if price is None:
+            return "upper" if reference is None else None
+        if reference is None:
+            return "upper"
+        if abs(price - reference) <= max(0.0, float(tolerance)):
+            return "touch"
+        return "upper" if price > reference else None
+    if normalized_name in LOWER_LIQUIDITY_LEVELS:
+        if price is None:
+            return "lower" if reference is None else None
+        if reference is None:
+            return "lower"
+        if abs(price - reference) <= max(0.0, float(tolerance)):
+            return "touch"
+        return "lower" if price < reference else None
+    if normalized_name not in ROAMING_LIQUIDITY_LEVELS:
+        return None
+    if price is None or reference is None:
+        return None
+    if abs(price - reference) <= max(0.0, float(tolerance)):
+        return "touch"
+    return "upper" if price > reference else "lower"
+
+
+def detect_rejection_mode(
+    latest_bar: dict[str, Any] | None,
+    levels: dict[str, Any],
+    symbol: str = "NQ",
+    session_lock_price: Any = None,
+) -> dict[str, Any]:
     """Detect Rejection Mode Engine v1 from a completed 1-minute bar close."""
     if not isinstance(latest_bar, dict):
         return rejection_off("No latest completed 1-minute bar available.")
@@ -74,7 +115,11 @@ def detect_rejection_mode(latest_bar: dict[str, Any] | None, levels: dict[str, A
 
     for level_name, priority in UPPER_LIQUIDITY_LEVELS.items():
         level_price = optional_float(levels.get(level_name))
-        if level_price is not None and close >= level_price + tick_size:
+        if (
+            level_price is not None
+            and side_for_level_price(level_name, level_price, session_lock_price) == "upper"
+            and close >= level_price + tick_size
+        ):
             qualified.append(
                 {
                     "watch_side": "SHORT",
@@ -87,7 +132,35 @@ def detect_rejection_mode(latest_bar: dict[str, Any] | None, levels: dict[str, A
 
     for level_name, priority in LOWER_LIQUIDITY_LEVELS.items():
         level_price = optional_float(levels.get(level_name))
-        if level_price is not None and close <= level_price - tick_size:
+        if (
+            level_price is not None
+            and side_for_level_price(level_name, level_price, session_lock_price) == "lower"
+            and close <= level_price - tick_size
+        ):
+            qualified.append(
+                {
+                    "watch_side": "LONG",
+                    "trigger_level": level_name,
+                    "trigger_price": level_price,
+                    "trigger_priority": priority,
+                    "distance": abs(close - level_price),
+                }
+            )
+
+    for level_name, priority in ROAMING_LIQUIDITY_PRIORITY.items():
+        level_price = optional_float(levels.get(level_name))
+        side = side_for_level_price(level_name, level_price, session_lock_price)
+        if level_price is not None and side == "upper" and close >= level_price + tick_size:
+            qualified.append(
+                {
+                    "watch_side": "SHORT",
+                    "trigger_level": level_name,
+                    "trigger_price": level_price,
+                    "trigger_priority": priority,
+                    "distance": abs(close - level_price),
+                }
+            )
+        elif level_price is not None and side == "lower" and close <= level_price - tick_size:
             qualified.append(
                 {
                     "watch_side": "LONG",

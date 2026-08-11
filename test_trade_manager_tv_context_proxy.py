@@ -1,4 +1,7 @@
 import importlib.util
+import json
+import os
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -17,6 +20,9 @@ class TradeManagerTvContextProxyTests(unittest.TestCase):
         return module
 
     def test_tv_context_proxy_forwards_payload_to_entry_agent(self):
+        os.environ["TV_WEBHOOK_INGRESS_TOKEN"] = "test-public-token"
+        os.environ["TV_CONTEXT_INTERNAL_RELAY_TOKEN"] = "test-internal-token"
+        os.environ["TV_CONTEXT_SPOOL_DIR"] = tempfile.mkdtemp(prefix="oa-r2-proxy-")
         manager = self._load_manager()
         calls = []
 
@@ -27,20 +33,16 @@ class TradeManagerTvContextProxyTests(unittest.TestCase):
             def json(self):
                 return {"ok": True, "context": {"normalized_symbol": "YM"}}
 
-        def fake_post(url, json=None, timeout=None):
-            calls.append({"url": url, "json": json, "timeout": timeout})
+        def fake_post(url, json=None, headers=None, timeout=None):
+            calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
             return FakeResponse()
 
         original_post = manager.requests.post
         manager.requests.post = fake_post
         try:
             response = manager.app.test_client().post(
-                "/webhook/tv-context",
-                json={
-                    "source": "tradingview_level_helper",
-                    "symbol": "CBOT_MINI:YM1!",
-                    "ONH": 50100,
-                },
+                "/webhook/tv-context?token=test-public-token",
+                json=json.loads((ROOT / "tests" / "fixtures" / "tradingview" / "v14_canonical_liquidity_sender_ym_stacked_yh.json").read_text(encoding="utf-8")),
             )
         finally:
             manager.requests.post = original_post
@@ -52,6 +54,7 @@ class TradeManagerTvContextProxyTests(unittest.TestCase):
         self.assertEqual(calls[0]["url"], manager.ENTRY_AGENT_TV_CONTEXT_URL)
         self.assertEqual(calls[0]["json"]["source"], "tradingview_level_helper")
         self.assertEqual(calls[0]["timeout"], 1.0)
+        self.assertEqual(calls[0]["headers"]["X-Randle-Relay-Token"], "test-internal-token")
 
     def test_internal_service_urls_default_to_ipv4_loopback(self):
         manager = self._load_manager()

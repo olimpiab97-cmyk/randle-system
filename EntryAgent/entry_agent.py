@@ -26,11 +26,10 @@ if str(ROOT_DIR) not in sys.path:
 from data_paths import data_path, feed_health_data_path, local_or_shared_path, log_active_data_root
 
 from blueprint_rules import (
-    LOWER_LIQUIDITY_LEVELS,
-    UPPER_LIQUIDITY_LEVELS,
     detect_rejection_mode,
     evaluate_step_2_1a_candle,
     optional_float,
+    side_for_level_price,
     step_2_1a_initial_state,
 )
 from gateway_engine import evaluate_gateway
@@ -1321,13 +1320,13 @@ def tv_context_freshness_status(tv_context: dict[str, Any] | None, max_age_secon
     return "TV_CONTEXT_LIVE" if age_seconds <= max_age_seconds else "TV_CONTEXT_STALE"
 
 
-def side_for_level(level_name: str | None) -> str | None:
-    """Return Step 2.1A side for a named liquidity level."""
-    if level_name in UPPER_LIQUIDITY_LEVELS:
-        return "upper"
-    if level_name in LOWER_LIQUIDITY_LEVELS:
-        return "lower"
-    return None
+def side_for_level(
+    level_name: str | None,
+    level_price: Any = None,
+    session_lock_price: Any = None,
+) -> str | None:
+    """Return frozen level ownership; YH/YL require price and lock authority."""
+    return side_for_level_price(level_name, level_price, session_lock_price)
 
 
 def active_levels_from_tv_context(tv_context: dict[str, Any] | None) -> dict[str, float]:
@@ -1362,12 +1361,13 @@ def selected_active_liquidity_from_context(
     except (TypeError, ValueError):
         return None
     ohlc = latest_ohlc if isinstance(latest_ohlc, dict) else {}
+    session_reference_price = stack_reference_price_from_context(tv_context)
 
     def level_interacted(level_name: str, level_price: float) -> bool:
         close = optional_float(ohlc.get("close"))
         high = optional_float(ohlc.get("high"))
         low = optional_float(ohlc.get("low"))
-        side = side_for_level(level_name)
+        side = side_for_level(level_name, level_price, session_reference_price)
         if side == "upper":
             return (close is not None and close >= level_price) or (high is not None and high >= level_price + tick_size)
         if side == "lower":
@@ -1458,7 +1458,7 @@ def selected_active_liquidity_from_context(
                 "name": name,
                 "price": price,
                 "priority": ACTIVE_LIQUIDITY_PRIORITY[name],
-                "side": side_for_level(name),
+                "side": side_for_level(name, price, session_reference_price),
             }
         )
 
@@ -1543,8 +1543,12 @@ def rotated_active_liquidity_after_inactive_acceptance(
     if not isinstance(persisted_liquidity, dict):
         return None
     previous_name = str(persisted_liquidity.get("name") or "").strip()
-    previous_side = side_for_level(previous_name)
     previous_price = optional_float(persisted_liquidity.get("price"))
+    session_reference_price = stack_reference_price_from_context(tv_context)
+    previous_side = (
+        str(persisted_liquidity.get("side") or "").strip().lower()
+        or side_for_level(previous_name, previous_price, session_reference_price)
+    )
     close = optional_float((latest_ohlc or {}).get("close") if isinstance(latest_ohlc, dict) else None)
     if previous_side is None or previous_price is None or close is None:
         return None
@@ -1568,10 +1572,10 @@ def rotated_active_liquidity_after_inactive_acceptance(
             continue
         if str(details.get("status") or "").upper() != "ACTIVE":
             continue
-        if side_for_level(name) != previous_side:
-            continue
         price = optional_float(details.get("price"))
         if price is None:
+            continue
+        if side_for_level(name, price, session_reference_price) != previous_side:
             continue
         if previous_side == "lower" and price >= previous_price:
             continue
@@ -1771,8 +1775,11 @@ def active_levels_payload_from_tv_context(tv_context: dict[str, Any] | None) -> 
         payload[name] = {
             "price": price,
             "status": "ACTIVE",
-            "stack_group": stack_groups[0] if len(stack_groups) == 1 else None if stack_groups else "NONE",
+            # Keep the first canonical membership as the deterministic legacy
+            # scalar while stack_groups remains the complete authority.
+            "stack_group": stack_groups[0] if stack_groups else "NONE",
             "stack_groups": stack_groups,
+            "stack_display": " + ".join(stack_groups) if stack_groups else "NONE",
         }
     return payload
 
@@ -2654,7 +2661,8 @@ def frozen_session_contract_payload(
             extreme_boundary = level_price
             close_boundary_name = name
             extreme_boundary_name = name
-        side = side_for_level(name)
+        session_reference_price = stack_reference_price_from_context(locked_liquidity)
+        side = side_for_level(name, level_price, session_reference_price)
         level_side_by_name[name] = side
         rows.append(
             {
@@ -3563,14 +3571,14 @@ def active_liquidity_groups_from_context(tv_context: dict[str, Any] | None) -> l
                 },
             )
             declared_stack_side = stack_group_side(stack_group) if stack_group else None
-            if declared_stack_side == "high":
-                component_side = "upper"
-            elif declared_stack_side == "low":
-                component_side = "lower"
-            elif reference_price is not None:
-                component_side = "upper" if price > reference_price else "lower" if price < reference_price else None
-            else:
-                component_side = side_for_level(name)
+            component_side = side_for_level(name, price, reference_price)
+            if component_side not in {"upper", "lower"}:
+                continue
+            if (
+                declared_stack_side in {"high", "low"}
+                and component_side != ("upper" if declared_stack_side == "high" else "lower")
+            ):
+                continue
             group["components"].append(
                 {
                     "name": name,
@@ -4546,7 +4554,15 @@ def evaluate_live_step_2_1a(
             selected_liquidity["pre_open_observed_extreme"] = observed_extreme
             if isinstance(selected_liquidity.get("group"), dict):
                 selected_liquidity["group"] = stack_group_with_pre_open_wick_boundary(selected_liquidity.get("group"), observed_extreme)
-    side = side_for_level(active_level)
+    side = (
+        selected_liquidity.get("side")
+        if isinstance(selected_liquidity, dict)
+        else None
+    ) or side_for_level(
+        active_level,
+        level_price,
+        stack_reference_price_from_context(locked_tv_context),
+    )
     if not active_level or level_price is None or side is None:
         return {
             "available": False,
@@ -5216,8 +5232,13 @@ def next_same_side_liquidity_target(
     if not isinstance(previous, dict):
         return None
     previous_name = str(previous.get("name") or "").strip()
-    previous_side = previous.get("side") or side_for_level(previous_name)
     previous_price = optional_float(previous.get("price"))
+    session_reference_price = stack_reference_price_from_context(tv_context)
+    previous_side = previous.get("side") or side_for_level(
+        previous_name,
+        previous_price,
+        session_reference_price,
+    )
     if previous_side not in {"lower", "upper"} or previous_price is None:
         return None
 
@@ -5234,10 +5255,10 @@ def next_same_side_liquidity_target(
             continue
         if str(details.get("status") or "").upper() != "ACTIVE":
             continue
-        if side_for_level(name) != previous_side:
-            continue
         price = optional_float(details.get("price"))
         if price is None:
+            continue
+        if side_for_level(name, price, session_reference_price) != previous_side:
             continue
         if previous_side == "lower" and price >= previous_price:
             continue
@@ -5474,7 +5495,12 @@ def record_exhausted_liquidity(
     if not key:
         return consumed
 
-    previous_side = previous.get("side") or side_for_level(str(previous.get("name") or ""))
+    session_reference_price = stack_reference_price_from_context(tv_context)
+    previous_side = previous.get("side") or side_for_level(
+        str(previous.get("name") or ""),
+        previous.get("price"),
+        session_reference_price,
+    )
     previous_group = previous.get("group") if isinstance(previous.get("group"), dict) else active_stack_from_context(tv_context, str(previous.get("name") or ""))
     selected_group = selected.get("group") if isinstance(selected.get("group"), dict) else active_stack_from_context(tv_context, str(selected.get("name") or ""))
     selected_component_names = set()
@@ -5511,12 +5537,12 @@ def record_exhausted_liquidity(
                 continue
             if str(details.get("status") or "").upper() != "ACTIVE":
                 continue
-            if side_for_level(name) != previous_side:
-                continue
             if name in selected_component_names:
                 continue
             level_price = optional_float(details.get("price"))
             if level_price is None:
+                continue
+            if side_for_level(name, level_price, session_reference_price) != previous_side:
                 continue
             if previous_side == "upper":
                 if lower_bound <= level_price < selected_price:
@@ -5582,13 +5608,21 @@ def active_stack_from_context(tv_context: dict[str, Any] | None, active_level: s
                             "name": name,
                             "price": price,
                             "priority": ACTIVE_LIQUIDITY_PRIORITY[name],
-                            "side": side_for_level(name),
+                            "side": side_for_level(
+                                name,
+                                price,
+                                stack_reference_price_from_context(tv_context),
+                            ),
                         }
                     )
                 components = sorted(components, key=lambda item: (item["priority"], item["name"]))
                 if components:
                     prices = [component["price"] for component in components]
-                    side = components[0].get("side") or side_for_level(active_level)
+                    side = components[0].get("side") or side_for_level(
+                        active_level,
+                        components[0].get("price"),
+                        stack_reference_price_from_context(tv_context),
+                    )
                     if side == "upper":
                         close_boundary = min(prices)
                         extreme_boundary = max(prices)
@@ -6290,10 +6324,12 @@ def nearest_opposing_liquidity(
     if desired_side and isinstance(levels, dict):
         candidates: list[dict[str, Any]] = []
         for name, details in levels.items():
-            if side_for_level(str(name)) != desired_side or not isinstance(details, dict):
+            if not isinstance(details, dict):
                 continue
             price = optional_float(details.get("price"))
             if price is None:
+                continue
+            if side_for_level(str(name), price, stack_reference_price_from_context(tv_context)) != desired_side:
                 continue
             if desired_side == "lower" and active_price is not None and price >= active_price:
                 continue

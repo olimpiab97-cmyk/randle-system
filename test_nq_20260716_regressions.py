@@ -307,6 +307,7 @@ def test_nq_percentage_anchor_correction_does_not_change_ym_target_priority():
     context = nq_context()
     context["symbol"] = "CBOT_MINI:YM1!"
     context["normalized_symbol"] = "YM"
+    context["session_lock_price"] = 29400.0
     target = entry_agent.next_same_side_liquidity_target(
         context,
         {"name": "PMH", "price": 29457.25, "side": "upper"},

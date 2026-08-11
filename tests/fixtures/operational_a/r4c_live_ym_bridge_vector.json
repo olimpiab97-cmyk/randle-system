@@ -1,0 +1,46 @@
+{
+  "schema": "OPERATIONAL_A_OVERLAPPING_STACK_REGRESSION_VECTOR_V1",
+  "authority": "USER-OBSERVED LIVE YM TRADINGVIEW STATE; PRESERVED AS MANDATORY DIAGNOSTIC REGRESSION INPUT",
+  "authoritative_candidate": false,
+  "symbol": "YM",
+  "stack_threshold": 69,
+  "side": "HIGH",
+  "levels": {
+    "PMH": 54125,
+    "LH": 54152,
+    "ONH": 54170,
+    "YH": 54199
+  },
+  "observed_display": {
+    "PMH": ["HIGH 1"],
+    "LH": ["HIGH 1"],
+    "ONH": ["HIGH 1"],
+    "YH": []
+  },
+  "distance_checks": {
+    "ONH_minus_PMH": {"distance": 45, "qualifies": true},
+    "YH_minus_PMH": {"distance": 74, "qualifies": false},
+    "YH_minus_ONH": {"distance": 29, "qualifies": true}
+  },
+  "expected_stacks": [
+    {"id": "HIGH 1", "members": ["PMH", "LH", "ONH"]},
+    {"id": "HIGH 2", "members": ["ONH", "YH"]}
+  ],
+  "expected_membership": {
+    "PMH": ["HIGH 1"],
+    "LH": ["HIGH 1"],
+    "ONH": ["HIGH 1", "HIGH 2"],
+    "YH": ["HIGH 2"]
+  },
+  "classification": "BRIDGE_OVERLAPPING_STACK",
+  "required_next_unit_questions": [
+    "stack construction versus stack_groups/stack_group/stack_display versus rendering",
+    "YH and YL roaming participation",
+    "non-overlapping greedy clustering defect",
+    "terminal qualifying member carry-forward bridge rule",
+    "canonical payload versus table parity",
+    "Entry Agent receipt of both ONH memberships",
+    "analogous LOW-side overlap",
+    "coverage gap in D001-D009, 32/32, and 18-vector tests"
+  ]
+}

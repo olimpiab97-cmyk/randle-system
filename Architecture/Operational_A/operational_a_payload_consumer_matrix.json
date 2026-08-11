@@ -1,0 +1,183 @@
+{
+  "schema_version": "operational_a_r4_payload_consumer_matrix_v1",
+  "payload_top_level_field_count": 26,
+  "canonical_levels": ["PMH", "PML", "LH", "LL", "ONH", "ONL", "YH", "YL"],
+  "nested_schema": {
+    "levels_each": ["price", "status", "stack_group", "stack_groups", "stack_display"],
+    "liquidity_map_level_each": ["name", "price", "status", "stack_group", "stack_groups", "stack_display"],
+    "stack_each": ["id", "side", "members", "innermost_price", "outermost_price"],
+    "midpoints": "dynamic frozen gap-name to numeric midpoint",
+    "exhaustion_boundaries_each": ["side", "mid_50", "remaining_25"]
+  },
+  "required_live_fields": [],
+  "matrix": [
+    {
+      "field": "source",
+      "mutability": "METADATA_ONLY",
+      "use": "VALIDATION_ONLY",
+      "consumers": ["Engines.trade_manager._validate_tv_context_envelope", "EntryAgent.tv_context_server.validate_canonical_liquidity_payload", "receiver routing/audit"]
+    },
+    {
+      "field": "version",
+      "mutability": "METADATA_ONLY",
+      "use": "VALIDATION_ONLY",
+      "consumers": ["Trade Manager strict envelope", "Entry Agent canonical-profile selection and strict validation"]
+    },
+    {
+      "field": "context_mode",
+      "mutability": "METADATA_ONLY",
+      "use": "VALIDATION_ONLY",
+      "consumers": ["Trade Manager strict envelope", "Entry Agent strict canonical validator", "frozen context audit"]
+    },
+    {
+      "field": "timestamp",
+      "mutability": "POST_FREEZE_MUTABLE",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["message identity", "freshness/order validator", "lock timestamp", "audit ledger"]
+    },
+    {
+      "field": "session_date",
+      "mutability": "FROZEN_AT_0615",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["message identity", "session lock selection", "new-session replacement", "Entry Agent session authority"]
+    },
+    {
+      "field": "session_locked",
+      "mutability": "FROZEN_AT_0615",
+      "use": "VALIDATION_ONLY",
+      "consumers": ["Trade Manager envelope", "Entry Agent canonical validator", "test projection lock marker"]
+    },
+    {
+      "field": "locked",
+      "mutability": "FROZEN_AT_0615",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["strict validation", "frozen lock construction", "Entry Agent actionability"]
+    },
+    {
+      "field": "is_premarket_end",
+      "mutability": "POST_FREEZE_MUTABLE",
+      "use": "DIAGNOSTIC_ONLY",
+      "consumers": ["receiver validation projection lock hint"],
+      "r4_value": "true at normal lock and false for late-start catch-up"
+    },
+    {
+      "field": "is_recurring_update",
+      "mutability": "METADATA_ONLY",
+      "use": "UNUSED",
+      "consumers": [],
+      "r4_value": false
+    },
+    {
+      "field": "price_is_true_level",
+      "mutability": "METADATA_ONLY",
+      "use": "VALIDATION_ONLY",
+      "consumers": ["Trade Manager envelope", "Entry Agent canonical validator"]
+    },
+    {
+      "field": "display_offsets_applied_to_chart_only",
+      "mutability": "METADATA_ONLY",
+      "use": "VALIDATION_ONLY",
+      "consumers": ["Trade Manager envelope", "Entry Agent canonical validator"]
+    },
+    {
+      "field": "symbol",
+      "mutability": "METADATA_ONLY",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["Trade Manager root normalization", "spool partitioning", "Entry Agent state partitioning", "Command Center-facing state"]
+    },
+    {
+      "field": "time_zone",
+      "mutability": "METADATA_ONLY",
+      "use": "VALIDATION_ONLY",
+      "consumers": ["Trade Manager strict envelope", "Entry Agent strict canonical validator", "audit"]
+    },
+    {
+      "field": "timeframe",
+      "mutability": "METADATA_ONLY",
+      "use": "VALIDATION_ONLY",
+      "consumers": ["Trade Manager strict envelope", "Entry Agent strict canonical validator"]
+    },
+    {
+      "field": "atr_1m_14",
+      "mutability": "POST_FREEZE_MUTABLE",
+      "use": "DIAGNOSTIC_ONLY",
+      "consumers": ["raw/frozen context telemetry", "replay fixtures"],
+      "not_authority_for": "Entry Agent live ATR; atr_from_snapshot accepts only canonical Rithmic snapshot. Trade Manager Level Map relay does not populate TRADINGVIEW_ATR_CACHE."
+    },
+    {
+      "field": "daily_atr14",
+      "mutability": "POST_FREEZE_MUTABLE",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["frozen session structure filters", "frozen threshold fallback", "Command Center diagnostics"],
+      "receiver_behavior": "first valid lock value is preserved; later payload values are overwritten from locked_liquidity_context"
+    },
+    {
+      "field": "stack_threshold",
+      "mutability": "FROZEN_AT_0615",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["strict validation", "stack structure validation", "frozen Entry Agent ladder"]
+    },
+    {
+      "field": "stack_threshold_pct",
+      "mutability": "METADATA_ONLY",
+      "use": "UNUSED",
+      "consumers": []
+    },
+    {
+      "field": "session_lock_price",
+      "mutability": "FROZEN_AT_0615",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["strict validation", "YH/YL side ownership", "frozen stack validation", "Entry Agent consumers"]
+    },
+    {
+      "field": "pm_atr_pct",
+      "mutability": "POST_FREEZE_MUTABLE",
+      "use": "DIAGNOSTIC_ONLY",
+      "consumers": ["receiver event archive", "Entry Agent textual diagnostics"]
+    },
+    {
+      "field": "daily_range_pct",
+      "mutability": "POST_FREEZE_MUTABLE",
+      "use": "DIAGNOSTIC_ONLY",
+      "consumers": ["receiver event archive", "Entry Agent textual diagnostics"]
+    },
+    {
+      "field": "levels",
+      "mutability": "FROZEN_AT_0615",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["Trade Manager completeness/parity validation", "Entry Agent frozen ladder", "blueprint rules", "entry logic", "replay", "synthetic runner", "Command Center-facing state"]
+    },
+    {
+      "field": "stacks",
+      "mutability": "DERIVED_FROM_FROZEN_STATE",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["Trade Manager parity validation", "Entry Agent stack structure validation", "blueprint/entry ownership"]
+    },
+    {
+      "field": "liquidity_map",
+      "mutability": "DERIVED_FROM_FROZEN_STATE",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["strict eight-row parity validation", "normalized frozen map", "replay/synthetic projection", "Command Center-facing state"]
+    },
+    {
+      "field": "midpoints",
+      "mutability": "DERIVED_FROM_FROZEN_STATE",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["frozen Entry Agent context", "entry logic", "replay", "Command Center-facing state"]
+    },
+    {
+      "field": "exhaustion_boundaries",
+      "mutability": "DERIVED_FROM_FROZEN_STATE",
+      "use": "REQUIRED_ONLY_AT_LOCK",
+      "consumers": ["frozen Entry Agent context", "entry logic", "replay", "Command Center-facing state"]
+    }
+  ],
+  "classification_counts": {
+    "REQUIRED_LIVE": 0,
+    "REQUIRED_ONLY_AT_LOCK": 12,
+    "VALIDATION_ONLY": 8,
+    "DIAGNOSTIC_ONLY": 4,
+    "UNUSED": 2
+  },
+  "result": "PASS — all 26 top-level fields and all nested schemas classified"
+}

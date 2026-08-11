@@ -23,7 +23,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from data_paths import data_path, local_or_shared_path
 
-from blueprint_rules import LOWER_LIQUIDITY_LEVELS, UPPER_LIQUIDITY_LEVELS, optional_float
+from blueprint_rules import optional_float, side_for_level_price
 from levels import root_symbol
 
 DATA_DIR = data_path()
@@ -213,12 +213,8 @@ def active_levels(tv_context: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return active
 
 
-def level_side(name: str) -> str | None:
-    if name in UPPER_LIQUIDITY_LEVELS:
-        return "upper"
-    if name in LOWER_LIQUIDITY_LEVELS:
-        return "lower"
-    return None
+def level_side(name: str, price: Any = None, reference_price: Any = None) -> str | None:
+    return side_for_level_price(name, price, reference_price)
 
 
 def expected_active_liquidity(record: dict[str, Any], tv_context: dict[str, Any] | None) -> str | None:
@@ -233,7 +229,7 @@ def expected_active_liquidity(record: dict[str, Any], tv_context: dict[str, Any]
         price = optional_float(details.get("price"))
         if price is None:
             continue
-        side = level_side(name)
+        side = level_side(name, price, tv_context.get("session_lock_price"))
         if side == "upper" and close >= price:
             candidates.append((abs(close - price), ACTIVE_PRIORITY[name], name))
         elif side == "lower" and close <= price:

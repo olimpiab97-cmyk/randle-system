@@ -1,0 +1,73 @@
+{
+  "schema_version": "operational_a_r3b_retry_cutover_v1",
+  "authority": {
+    "r2b_worktree_designation": "OPERATIONAL_A_R2B_AUTHORIZED_CUTOVER_WORKTREE",
+    "r2_parent_designation": "OPERATIONAL_A_R2_AUTHORIZED_CUTOVER_WORKTREE",
+    "bucket_0_parent_commit": "cb62bcc2eef4e113962f39c050c7d66191575d20",
+    "live_cutover_performed_in_r2b": false
+  },
+  "final_pine": {
+    "path": "TradingView/indicators/Randle_AI_Level_Map_Helper.pine",
+    "sha256": "f55ea1bf669afb7dff78082d25d59db18ab2ee4c798c36552331788e3908d316",
+    "size_bytes": 75978,
+    "logical_lines": 1950,
+    "encoding": "UTF-8",
+    "bom": false,
+    "eol": "CRLF",
+    "pine_version": 6,
+    "indicator_title": "Randle AI - Level Map Helper v14 Canonical",
+    "payload_source": "tradingview_level_helper",
+    "payload_version": "v14_canonical_liquidity_sender",
+    "serializer_correction": "remove unsupported Pine carriage-return replacement; reject actual U+000D using proven regex reference",
+    "runtime_literal_gate": "source/version/context_mode/time_zone exact and unexpected JSON carriage-return escape absent",
+    "timezone_required_value": "America/Los_Angeles",
+    "timezone_required_u000d_count": 0
+  },
+  "ym": {
+    "symbol": "YM1!",
+    "action": "REPLACE SOURCE AND RECREATE/UPDATE ALERT",
+    "final_interval": "1m",
+    "final_trigger": "Any alert() function call",
+    "required_pine_sha256": "f55ea1bf669afb7dff78082d25d59db18ab2ee4c798c36552331788e3908d316"
+  },
+  "nq": {
+    "symbol": "NQ1!",
+    "action": "REPLACE SOURCE AND RECREATE/UPDATE ALERT",
+    "final_interval": "1m",
+    "final_trigger": "Any alert() function call",
+    "required_pine_sha256": "f55ea1bf669afb7dff78082d25d59db18ab2ee4c798c36552331788e3908d316"
+  },
+  "same_source_requirement": {
+    "ym_and_nq_exact_pine_bytes_equal": true,
+    "required_sha256": "f55ea1bf669afb7dff78082d25d59db18ab2ee4c798c36552331788e3908d316"
+  },
+  "security": {
+    "public_ingress_token": "generate fresh TV_WEBHOOK_INGRESS_TOKEN before operator rebinding",
+    "internal_relay_token": "configure fresh TV_CONTEXT_INTERNAL_RELAY_TOKEN for the deployed retry runtime",
+    "operator_rebinding": "preserve the configured public token through both YM and NQ alert rebinding",
+    "secret_values_in_manifest": false
+  },
+  "required_environment_variables": [
+    "TV_WEBHOOK_INGRESS_TOKEN",
+    "TV_CONTEXT_INTERNAL_RELAY_TOKEN",
+    "TV_CONTEXT_SPOOL_DIR",
+    "TV_CONTEXT_ACCEPTANCE_LEDGER_PATH",
+    "ENTRY_AGENT_TV_CONTEXT_URL"
+  ],
+  "deployment_order": [
+    "Authenticate the exact R2B candidate and final Pine identity",
+    "Create and persist fresh ingress and relay credentials without logging plaintext",
+    "Deploy the exact R2B runtime candidate",
+    "Rebind YM and NQ to identical final Pine bytes and authenticated webhook contract",
+    "Start Entry Agent, then Trade Manager, then ngrok",
+    "Require live time_zone decode equality and U+000D count zero before ladder acceptance",
+    "Require one authenticated canonical YM and NQ payload with 8/8 parity"
+  ],
+  "rollback": [
+    "Disable retry alerts before runtime rollback",
+    "Stop only Trade Manager and Entry Agent in governed order",
+    "Preserve spool and ledger for audit",
+    "Restore the authenticated pre-cutover runtime bundle and environment state",
+    "Keep runtime stopped until rollback identities are verified"
+  ]
+}

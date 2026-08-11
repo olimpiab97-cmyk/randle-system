@@ -1,0 +1,7 @@
+[
+  {"id":"R4E-E2E-001","case":"initial_lock_delivery","expected":"DELIVERED"},
+  {"id":"R4E-E2E-002","case":"byte_identical_replay","expected":"DUPLICATE_NOOP"},
+  {"id":"R4E-E2E-003","case":"offline_at_lock_recovery","expected":"DELIVERED"},
+  {"id":"R4E-E2E-004","case":"same_day_restart","expected":"RESTORED"},
+  {"id":"R4E-E2E-005","case":"prior_day_rejection","expected":"REJECTED"}
+]

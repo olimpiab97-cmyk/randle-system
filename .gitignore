@@ -9,6 +9,7 @@ credential*/
 *credentials*
 *secret*
 *token*
+!Architecture/Operational_A/operational_a_public_credential_log_sink_inventory.json
 *.key
 *.pem
 *.pfx

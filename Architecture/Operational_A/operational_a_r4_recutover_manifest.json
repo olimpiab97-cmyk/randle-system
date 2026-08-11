@@ -1,0 +1,68 @@
+{
+  "schema_version": "operational_a_r4_recutover_manifest_v1",
+  "authorization": "OPERATIONAL_A_R4_AUTHORIZED_RECUTOVER_WORKTREE",
+  "worktree": "C:\\Users\\Trader\\AppData\\Local\\Temp\\OPERATIONAL_A_R4_20260809_213623_467D32B1",
+  "cadence": {
+    "decision": "LOCK_SNAPSHOT_ONLY",
+    "context_mode": "locked_levels_session_snapshot",
+    "normal_send_count_per_symbol_session": 1,
+    "trigger": "canonicalPayloadReady and not sessionTableSent",
+    "late_start": "one catch-up snapshot",
+    "reload": "one idempotent catch-up snapshot per fresh script instance",
+    "next_day": "sessionTableSent resets and one new snapshot is authorized"
+  },
+  "pine": {
+    "repository_path": "TradingView/indicators/Randle_AI_Level_Map_Helper.pine",
+    "operator_copy": "C:\\Users\\Trader\\Downloads\\Randle_AI_Level_Map_Helper_OPERATIONAL_A_R4_FINAL.pine",
+    "sha256": "a192378bb8662ab608a4baa3e09ae57047815604887996eef79a58d29c768d72",
+    "size_bytes": 76363,
+    "lines": 1958,
+    "encoding": "UTF-8",
+    "eol": "CRLF",
+    "bom": false,
+    "rebind_required": true
+  },
+  "production_compatibility_paths": [
+    {
+      "path": "Engines/trade_manager.py",
+      "change": "strict canonical context_mode expected value only"
+    },
+    {
+      "path": "EntryAgent/tv_context_server.py",
+      "change": "strict canonical context_mode expected value only"
+    }
+  ],
+  "runtime_semantics_unchanged": [
+    "public and internal authentication",
+    "atomic durable spool and bounded relay retry",
+    "acceptance ledger identity/order rules",
+    "first valid 06:15 frozen lock",
+    "duplicate no-op",
+    "YH/YL price-derived frozen ownership",
+    "credential log redaction"
+  ],
+  "operator_actions": {
+    "YM1!": "replace the full Pine source with the exact R4 operator copy and recreate/update exactly one 1m Any alert() function call binding",
+    "NQ1!": "replace the full Pine source with the identical R4 operator copy and recreate/update exactly one 1m Any alert() function call binding"
+  },
+  "runtime_deployment_order": [
+    "authenticate rollback authority",
+    "deploy exact R4 candidate while stopped",
+    "start Entry Agent",
+    "start Trade Manager",
+    "start/restore ngrok",
+    "prove readiness and synthetic cadence",
+    "observe one natural lock/catch-up snapshot for YM and NQ"
+  ],
+  "live_acceptance": [
+    "one canonical snapshot per symbol/session under normal operation",
+    "context_mode locked_levels_session_snapshot",
+    "timezone America/Los_Angeles with U+000D zero",
+    "8/8 payload-to-normalized parity",
+    "no post-lock minute recurrence",
+    "duplicate no-op",
+    "zero plaintext credential persistence",
+    "zero trading side effects"
+  ],
+  "secret_values": 0
+}

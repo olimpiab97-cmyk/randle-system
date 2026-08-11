@@ -1,5 +1,7 @@
 import uuid
 from datetime import datetime, timezone
+import hashlib
+import hmac
 import math
 import requests
 import os
@@ -9,9 +11,11 @@ import shutil
 import re
 import threading
 import tempfile
+import time
 from zoneinfo import ZoneInfo
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.serving import WSGIRequestHandler
 
 app = Flask(__name__)
 CORS(app)
@@ -51,6 +55,11 @@ ENTRY_AGENT_TV_CONTEXT_URL = os.getenv(
     "ENTRY_AGENT_TV_CONTEXT_URL",
     "http://127.0.0.1:7002/webhook/tv-context",
 ).strip() or "http://127.0.0.1:7002/webhook/tv-context"
+TV_WEBHOOK_INGRESS_TOKEN_ENV = "TV_WEBHOOK_INGRESS_TOKEN"
+TV_CONTEXT_INTERNAL_RELAY_TOKEN_ENV = "TV_CONTEXT_INTERNAL_RELAY_TOKEN"
+TV_CONTEXT_INTERNAL_RELAY_HEADER = "X-Randle-Relay-Token"
+TV_CONTEXT_CANONICAL_LEVELS = ("PMH", "PML", "LH", "LL", "ONH", "ONL", "YH", "YL")
+TV_CONTEXT_SPOOL_LOCK = threading.RLock()
 RITHMIC_ATR_SNAPSHOT_MAX_AGE_SECONDS = 180
 TRADINGVIEW_ATR_MAX_AGE_SECONDS = 180
 ATR_PERIOD = 14
@@ -5458,68 +5467,323 @@ def tradingview_webhook_route():
         return jsonify({"ok": False, "source": "tradingview", "error": str(e)}), 500
 
 
+def _tv_duplicate_rejecting_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _redact_tv_access_requestline(value):
+    """Redact every query value before a request target reaches any handler."""
+    return re.sub(
+        r"([?&][^=&\s]+)=([^&\s]*)",
+        lambda match: f"{match.group(1)}=<REDACTED>",
+        str(value or ""),
+    )
+
+
+class RedactedCredentialRequestHandler(WSGIRequestHandler):
+    """Keep the environment-managed TradingView token out of Flask access logs."""
+
+    def log_request(self, code="-", size="-"):
+        # Werkzeug 3.x formats access messages from ``self.path``. Older
+        # releases and malformed-request fallbacks use ``self.requestline``.
+        # Sanitize both before delegating so no console or file handler can
+        # observe a credential-bearing target.
+        original_path = getattr(self, "path", None)
+        original_requestline = getattr(self, "requestline", None)
+        if original_path is not None:
+            self.path = _redact_tv_access_requestline(original_path)
+        if original_requestline is not None:
+            self.requestline = _redact_tv_access_requestline(original_requestline)
+        try:
+            super().log_request(code, size)
+        finally:
+            if original_path is not None:
+                self.path = original_path
+            if original_requestline is not None:
+                self.requestline = original_requestline
+
+
+def _tv_canonical_bytes(payload):
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+
+
+def _tv_normalized_symbol(value):
+    normalized = normalize_symbol_root(str(value or ""))
+    return normalized if normalized in {"NQ", "YM"} else None
+
+
+def _validate_tv_context_envelope(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be a JSON object")
+    exact = {
+        "source": "tradingview_level_helper",
+        "version": "v14_canonical_liquidity_sender",
+        "context_mode": "locked_levels_session_snapshot",
+        "time_zone": "America/Los_Angeles",
+        "timeframe": "1",
+    }
+    for field, expected in exact.items():
+        if payload.get(field) != expected:
+            raise ValueError(f"{field} must equal {expected}")
+    for field in ("timestamp", "session_date"):
+        if not isinstance(payload.get(field), str) or not payload[field].strip():
+            raise ValueError(f"{field} is required")
+    for field in ("session_locked", "locked", "price_is_true_level", "display_offsets_applied_to_chart_only"):
+        if payload.get(field) is not True:
+            raise ValueError(f"{field} must be true")
+    symbol = _tv_normalized_symbol(payload.get("symbol"))
+    if symbol is None:
+        raise ValueError("symbol must normalize to NQ or YM")
+    for field in ("session_lock_price", "stack_threshold"):
+        value = payload.get(field)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+            raise ValueError(f"{field} must be a finite number")
+    levels = payload.get("levels")
+    if not isinstance(levels, dict) or set(levels) != set(TV_CONTEXT_CANONICAL_LEVELS):
+        raise ValueError("levels must contain exactly the eight canonical names")
+    liquidity_map = payload.get("liquidity_map")
+    rows = liquidity_map.get("levels") if isinstance(liquidity_map, dict) else None
+    if not isinstance(payload.get("stacks"), list) or not isinstance(liquidity_map, dict) or payload.get("stacks") != liquidity_map.get("stacks"):
+        raise ValueError("stacks/liquidity_map.stacks parity mismatch")
+    if not isinstance(rows, list) or len(rows) != 8:
+        raise ValueError("liquidity_map.levels must contain exactly eight rows")
+    mapped = {}
+    parity_fields = ("price", "status", "stack_group", "stack_groups", "stack_display")
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"liquidity_map.levels[{index}] must be an object")
+        name = str(row.get("name") or "").strip().upper()
+        if name not in TV_CONTEXT_CANONICAL_LEVELS:
+            raise ValueError(f"liquidity_map.levels[{index}] has unknown name")
+        if name in mapped:
+            raise ValueError(f"liquidity_map.levels contains duplicate name {name}")
+        mapped[name] = row
+    if set(mapped) != set(TV_CONTEXT_CANONICAL_LEVELS):
+        raise ValueError("liquidity_map.levels is incomplete")
+    for name in TV_CONTEXT_CANONICAL_LEVELS:
+        details = levels.get(name)
+        if not isinstance(details, dict):
+            raise ValueError(f"levels.{name} must be an object")
+        if any(details.get(field) != mapped[name].get(field) for field in parity_fields):
+            raise ValueError(f"levels/liquidity_map parity mismatch for {name}")
+    return symbol
+
+
+def _tv_message_identity(payload, normalized_symbol):
+    payload_sha = hashlib.sha256(_tv_canonical_bytes(payload)).hexdigest()
+    authority = "|".join((normalized_symbol, payload["session_date"], payload["timestamp"], payload_sha)).encode("utf-8")
+    return hashlib.sha256(authority).hexdigest(), payload_sha
+
+
+def _tv_spool_dir():
+    configured = os.getenv("TV_CONTEXT_SPOOL_DIR", "").strip()
+    return configured or os.path.join(BASE_DIR, "Data", "tv_context_spool")
+
+
+def _tv_spool_path(message_identity):
+    return os.path.join(_tv_spool_dir(), f"{message_identity}.json")
+
+
+def _write_tv_spool_record(record):
+    directory = _tv_spool_dir()
+    os.makedirs(directory, exist_ok=True)
+    target = _tv_spool_path(record["message_identity"])
+    fd, temporary = tempfile.mkstemp(prefix=".tv-context-", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(record, handle, indent=2, sort_keys=True, allow_nan=False)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def _load_tv_spool_record(message_identity):
+    try:
+        with open(_tv_spool_path(message_identity), "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+        return value if isinstance(value, dict) else None
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return None
+
+
+def _deliver_tv_spool_record(record):
+    relay_token = os.getenv(TV_CONTEXT_INTERNAL_RELAY_TOKEN_ENV, "")
+    if not relay_token:
+        record.update({"state": "PENDING", "last_error": "internal relay authentication is not configured"})
+        _write_tv_spool_record(record)
+        return None, {"error": record["last_error"]}, "PENDING"
+    attempts = max(1, min(5, int(os.getenv("TV_CONTEXT_RELAY_MAX_ATTEMPTS", "3"))))
+    timeout_seconds = max(0.1, min(5.0, float(os.getenv("TV_CONTEXT_RELAY_TIMEOUT_SECONDS", "1.0"))))
+    backoff_seconds = max(0.0, min(2.0, float(os.getenv("TV_CONTEXT_RELAY_BACKOFF_SECONDS", "0.1"))))
+    headers = {TV_CONTEXT_INTERNAL_RELAY_HEADER: relay_token}
+    last_response_payload = None
+    for attempt in range(1, attempts + 1):
+        record["attempts"] = int(record.get("attempts") or 0) + 1
+        record["last_attempt_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            response = requests.post(ENTRY_AGENT_TV_CONTEXT_URL, json=record["payload"], headers=headers, timeout=timeout_seconds)
+            try:
+                last_response_payload = response.json()
+            except ValueError:
+                last_response_payload = {"raw_response": response.text}
+            record["downstream_status_code"] = response.status_code
+            record["downstream_response"] = last_response_payload
+            if 200 <= response.status_code < 300:
+                record.update({"state": "DELIVERED", "delivered_at": datetime.now(timezone.utc).isoformat(), "last_error": None})
+                _write_tv_spool_record(record)
+                return response.status_code, last_response_payload, "DELIVERED"
+            if 400 <= response.status_code < 500:
+                record.update({"state": "REJECTED", "rejected_at": datetime.now(timezone.utc).isoformat(), "last_error": last_response_payload})
+                _write_tv_spool_record(record)
+                return response.status_code, last_response_payload, "REJECTED"
+            record["last_error"] = last_response_payload
+        except requests.RequestException as exc:
+            record["last_error"] = f"{type(exc).__name__}: {exc}"
+        _write_tv_spool_record(record)
+        if attempt < attempts and backoff_seconds:
+            time.sleep(backoff_seconds * attempt)
+    record["state"] = "PENDING"
+    _write_tv_spool_record(record)
+    return None, {"error": "accepted payload is durably queued for retry"}, "PENDING"
+
+
+def recover_pending_tv_context_deliveries(limit=100):
+    directory = _tv_spool_dir()
+    if not os.path.isdir(directory):
+        return {"attempted": 0, "delivered": 0, "pending": 0, "rejected": 0}
+    summary = {"attempted": 0, "delivered": 0, "pending": 0, "rejected": 0}
+    for name in sorted(os.listdir(directory)):
+        if summary["attempted"] >= limit or not name.endswith(".json"):
+            break
+        path = os.path.join(directory, name)
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                record = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(record, dict) or record.get("state") != "PENDING":
+            continue
+        summary["attempted"] += 1
+        with TV_CONTEXT_SPOOL_LOCK:
+            latest = _load_tv_spool_record(str(record.get("message_identity") or ""))
+            if not isinstance(latest, dict) or latest.get("state") != "PENDING":
+                continue
+            _status, _body, state = _deliver_tv_spool_record(latest)
+        summary[state.lower()] += 1
+    return summary
+
+
 @app.route("/webhook/tv-context", methods=["POST"])
 def tradingview_context_proxy_route():
-    """Forward TradingView level/context payloads to EntryAgent; not price truth."""
+    """Authenticate, durably accept, and reliably relay canonical TradingView context."""
+    expected_token = os.getenv(TV_WEBHOOK_INGRESS_TOKEN_ENV, "")
+    supplied_token = request.args.get("token", "")
+    if not expected_token:
+        print("PUBLIC_INGRESS_AUTH_REJECTED reason=not_configured")
+        return jsonify({"ok": False, "error": "TradingView ingress authentication is not configured"}), 503
+    if not supplied_token:
+        print("PUBLIC_INGRESS_AUTH_REJECTED reason=missing")
+        return jsonify({"ok": False, "error": "TradingView ingress authentication failed"}), 401
+    if not hmac.compare_digest(supplied_token.encode("utf-8"), expected_token.encode("utf-8")):
+        print("PUBLIC_INGRESS_AUTH_REJECTED reason=invalid")
+        return jsonify({"ok": False, "error": "TradingView ingress authentication failed"}), 401
     try:
-        payload = request.get_json(force=True)
+        payload = json.loads(request.get_data(cache=True, as_text=True), object_pairs_hook=_tv_duplicate_rejecting_object)
         if not isinstance(payload, dict):
             raise ValueError("payload must be a JSON object")
+        if payload.get("source") == "startup_liquidity_relay_probe":
+            receipt_id = str(payload.get("receipt_id") or "").strip()
+            if not receipt_id or len(receipt_id) > 128:
+                raise ValueError("valid receipt_id is required")
+            relay_token = os.getenv(TV_CONTEXT_INTERNAL_RELAY_TOKEN_ENV, "")
+            if not relay_token:
+                return jsonify({"ok": False, "error": "internal relay authentication is not configured"}), 503
+            response = requests.post(
+                ENTRY_AGENT_TV_CONTEXT_URL,
+                json=payload,
+                headers={TV_CONTEXT_INTERNAL_RELAY_HEADER: relay_token},
+                timeout=1.0,
+            )
+            try:
+                response_payload = response.json()
+            except ValueError:
+                response_payload = {"raw_response": response.text}
+            return jsonify({
+                "ok": 200 <= response.status_code < 300,
+                "source": "tradingview_level_context_proxy",
+                "entry_agent_status_code": response.status_code,
+                "entry_agent_response": response_payload,
+            }), response.status_code
+        normalized_symbol = _validate_tv_context_envelope(payload)
+        message_identity, payload_sha = _tv_message_identity(payload, normalized_symbol)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        return jsonify({"ok": False, "source": "tradingview_level_context_proxy", "error": str(exc)}), 400
 
-        response = requests.post(ENTRY_AGENT_TV_CONTEXT_URL, json=payload, timeout=1.0)
-        try:
-            response_payload = response.json()
-        except ValueError:
-            response_payload = {"raw_response": response.text}
+    with TV_CONTEXT_SPOOL_LOCK:
+        record = _load_tv_spool_record(message_identity)
+        if isinstance(record, dict) and record.get("state") == "DELIVERED":
+            return jsonify({
+                "ok": True,
+                "source": "tradingview_level_context_proxy",
+                "message_identity": message_identity,
+                "delivery_state": "DUPLICATE_NOOP",
+                "durably_accepted": True,
+            }), 200
+        if isinstance(record, dict) and record.get("state") == "REJECTED":
+            return jsonify({
+                "ok": False,
+                "source": "tradingview_level_context_proxy",
+                "message_identity": message_identity,
+                "delivery_state": "REJECTED",
+                "entry_agent_response": record.get("downstream_response"),
+            }), int(record.get("downstream_status_code") or 400)
+        if not isinstance(record, dict):
+            record = {
+                "schema_version": "tv_context_spool_v1",
+                "message_identity": message_identity,
+                "canonical_payload_sha256": payload_sha,
+                "normalized_symbol": normalized_symbol,
+                "session_date": payload["session_date"],
+                "source_timestamp": payload["timestamp"],
+                "accepted_at": datetime.now(timezone.utc).isoformat(),
+                "state": "PENDING",
+                "attempts": 0,
+                "payload": payload,
+            }
+            _write_tv_spool_record(record)
 
-        ok = 200 <= response.status_code < 300
-        TV_CONTEXT_PROXY_STATE.update({
-            "last_forwarded_at": datetime.now(timezone.utc).isoformat(),
-            "last_status_code": response.status_code,
-            "last_ok": ok,
-            "last_error": None if ok else response_payload,
-            "last_symbol": payload.get("symbol"),
-            "target_url": ENTRY_AGENT_TV_CONTEXT_URL,
-        })
-        print(
-            "TV CONTEXT PROXY "
-            f"symbol={payload.get('symbol')} status={response.status_code} "
-            f"target={ENTRY_AGENT_TV_CONTEXT_URL}"
-        )
-        return jsonify({
-            "ok": ok,
-            "source": "tradingview_level_context_proxy",
-            "price_truth": "Rithmic",
-            "target_url": ENTRY_AGENT_TV_CONTEXT_URL,
-            "entry_agent_status_code": response.status_code,
-            "entry_agent_response": response_payload,
-        }), response.status_code
-    except ValueError as e:
-        TV_CONTEXT_PROXY_STATE.update({
-            "last_forwarded_at": datetime.now(timezone.utc).isoformat(),
-            "last_status_code": None,
-            "last_ok": False,
-            "last_error": str(e),
-            "target_url": ENTRY_AGENT_TV_CONTEXT_URL,
-        })
-        return jsonify({"ok": False, "source": "tradingview_level_context_proxy", "error": str(e)}), 400
-    except requests.RequestException as e:
-        TV_CONTEXT_PROXY_STATE.update({
-            "last_forwarded_at": datetime.now(timezone.utc).isoformat(),
-            "last_status_code": None,
-            "last_ok": False,
-            "last_error": str(e),
-            "last_symbol": (payload or {}).get("symbol") if isinstance(locals().get("payload"), dict) else None,
-            "target_url": ENTRY_AGENT_TV_CONTEXT_URL,
-        })
-        print(f"TV CONTEXT PROXY failed target={ENTRY_AGENT_TV_CONTEXT_URL} error={e}")
-        return jsonify({
-            "ok": False,
-            "source": "tradingview_level_context_proxy",
-            "price_truth": "Rithmic",
-            "target_url": ENTRY_AGENT_TV_CONTEXT_URL,
-            "error": str(e),
-        }), 502
+        downstream_status, downstream_payload, state = _deliver_tv_spool_record(record)
+    ok = state == "DELIVERED"
+    TV_CONTEXT_PROXY_STATE.update({
+        "last_forwarded_at": datetime.now(timezone.utc).isoformat(),
+        "last_status_code": downstream_status,
+        "last_ok": ok,
+        "last_error": None if ok else downstream_payload,
+        "last_symbol": payload.get("symbol"),
+        "target_url": ENTRY_AGENT_TV_CONTEXT_URL,
+        "last_message_identity": message_identity,
+        "last_delivery_state": state,
+    })
+    response_status = downstream_status if state == "REJECTED" else 200 if ok else 202
+    return jsonify({
+        "ok": ok or state == "PENDING",
+        "source": "tradingview_level_context_proxy",
+        "price_truth": "Rithmic",
+        "message_identity": message_identity,
+        "durably_accepted": True,
+        "delivery_state": state,
+        "entry_agent_status_code": downstream_status,
+        "entry_agent_response": downstream_payload,
+    }), response_status
 
 
 @app.route("/debug/tv-context-proxy", methods=["GET"])
@@ -6919,6 +7183,13 @@ def run_qa_harness():
 
 if __name__ == "__main__":
     bootstrap_trade_manager()
+    print("TV CONTEXT RECOVERY:", recover_pending_tv_context_deliveries())
     run_qa_checks(label="startup")
     print("TRADE MANAGER PRICE SERVER RUNNING ON http://127.0.0.1:7001")
-    app.run(host="127.0.0.1", port=7001, debug=False, use_reloader=False)
+    app.run(
+        host="127.0.0.1",
+        port=7001,
+        debug=False,
+        use_reloader=False,
+        request_handler=RedactedCredentialRequestHandler,
+    )

@@ -1,0 +1,120 @@
+{
+  "schema_version": "operational_a_r3e_cutover_v1",
+  "authority": {
+    "candidate_designation": "OPERATIONAL_A_R2C_AUTHORIZED_CUTOVER_WORKTREE",
+    "parent_designation": "OPERATIONAL_A_R2B_AUTHORIZED_CUTOVER_WORKTREE",
+    "bucket_0_parent_commit": "cb62bcc2eef4e113962f39c050c7d66191575d20",
+    "live_cutover_performed_in_r2c": false
+  },
+  "production_candidate": [
+    {
+      "path": "TradingView/indicators/Randle_AI_Level_Map_Helper.pine",
+      "sha256": "f55ea1bf669afb7dff78082d25d59db18ab2ee4c798c36552331788e3908d316",
+      "size_bytes": 75978
+    },
+    {
+      "path": "Engines/trade_manager.py",
+      "sha256": "94d34e5f99038fab7e672dde30d84b0f890e5984f636ce3fe409d3e881da1d5f",
+      "size_bytes": 270181
+    },
+    {
+      "path": "EntryAgent/tv_context_server.py",
+      "sha256": "22da1f4a78737a11255878f2e1683a7608efafb77396ab4ada922d1fd3aa23b3",
+      "size_bytes": 153422
+    },
+    {
+      "path": "EntryAgent/blueprint_rules.py",
+      "sha256": "10c24039da778416df549da745f1d3b8d51e7f891c29973b12ed169b1b4b0a97",
+      "size_bytes": 15664
+    },
+    {
+      "path": "EntryAgent/entry_agent.py",
+      "sha256": "470036af7f1eff0096014340a9fcb62f0374f65e61a3fe88a6150a4acb9abab5",
+      "size_bytes": 642754
+    },
+    {
+      "path": "EntryAgent/replay_audit.py",
+      "sha256": "62320ed2b70b17cd859dc765b1f37421ef12153ef95be774473c34e7b8b757e9",
+      "size_bytes": 42552
+    },
+    {
+      "path": "EntryAgent/synthetic_scenario_runner.py",
+      "sha256": "261125e1e4924c3409765bef99b7a32b40871b02137d158b650bfc3c7ef632ea",
+      "size_bytes": 16556
+    },
+    {
+      "path": "launch_all.ps1",
+      "sha256": "152da744d1be6774898058ca4bd787a6b3c00820bcbe8ed8ed5513d1c61e411a",
+      "size_bytes": 98296
+    },
+    {
+      "path": "startup_public_health_check.py",
+      "sha256": "a9ab52113477bcb58c7b60930881af3928623a78065148926a53323cf0c0bced",
+      "size_bytes": 2407
+    }
+  ],
+  "pine": {
+    "unchanged_from_r2b": true,
+    "sha256": "f55ea1bf669afb7dff78082d25d59db18ab2ee4c798c36552331788e3908d316",
+    "source_recreation_required": false,
+    "reason": "YM and NQ already run the exact R2B Pine bytes; R2C changes only credential-safe runtime logging and launch configuration."
+  },
+  "logging_redaction": {
+    "architecture": "sanitize both Werkzeug request path and request line before every access-log handler invocation, then restore in-memory request attributes",
+    "query_policy": "retain parameter names and replace every query value with <REDACTED>",
+    "invalid_auth_audit": "emit PUBLIC_INGRESS_AUTH_REJECTED with nonsecret reason only",
+    "ngrok_local_inspection": false,
+    "plaintext_public_or_internal_credentials_permitted": false
+  },
+  "security": {
+    "fresh_public_ingress_token_required": true,
+    "fresh_internal_relay_token_required": true,
+    "required_environment_variables": [
+      "TV_WEBHOOK_INGRESS_TOKEN",
+      "TV_CONTEXT_INTERNAL_RELAY_TOKEN",
+      "TV_CONTEXT_SPOOL_DIR",
+      "TV_CONTEXT_ACCEPTANCE_LEDGER_PATH",
+      "ENTRY_AGENT_TV_CONTEXT_URL"
+    ],
+    "secret_values_in_manifest": false
+  },
+  "tradingview": {
+    "ym_source_rebind_required": false,
+    "nq_source_rebind_required": false,
+    "ym_webhook_url_rebind_required": true,
+    "nq_webhook_url_rebind_required": true,
+    "reason": "fresh R3E public ingress credentials are mandatory while the exact accepted R2B Pine source remains unchanged"
+  },
+  "deployment_order": [
+    "Authenticate the exact R2C candidate, unchanged Pine identity, and rollback authority",
+    "Capture a fresh byte-exact live rollback bundle while runtime processes remain stopped",
+    "Deploy the exact R2C production candidate",
+    "Generate and persist fresh independent public-ingress and internal-relay credentials without plaintext logging",
+    "Rebind the YM and NQ webhook URLs to the same fresh authenticated contract; do not recreate unchanged Pine source",
+    "Start Entry Agent, then Trade Manager, then ngrok with local inspection disabled",
+    "Require readiness and isolated synthetic acceptance",
+    "Require one natural authenticated canonical YM and NQ message with exact timezone and 8/8 parity",
+    "Require duplicate-noop, zero trading side effects, and whole-artifact plaintext credential scan count zero"
+  ],
+  "readiness_gates": [
+    "Entry Agent authenticated receiver and acceptance ledger writable",
+    "Trade Manager public authentication, durable spool, and internal relay ready",
+    "ngrok HTTPS route forwards only to Trade Manager and local request inspection is disabled",
+    "running file identities equal the R2C manifest"
+  ],
+  "live_acceptance_gates": [
+    "time_zone decodes exactly as America/Los_Angeles with U+000D count zero",
+    "YM and NQ each preserve all eight canonical levels into normalized state",
+    "YH and YL ownership derives from true price versus frozen session_lock_price",
+    "captured duplicate is a governed no-op",
+    "all project-controlled logs and state contain zero plaintext credential occurrences",
+    "orders, trades, position changes, and broker configuration changes attributable to acceptance remain zero"
+  ],
+  "rollback": [
+    "Disable or pause the new credential-bearing alerts before rollback",
+    "Stop ngrok, Trade Manager, and Entry Agent in governed order",
+    "Preserve logs, spool, and ledger for secret-safe audit",
+    "Restore the fresh authenticated R3E pre-cutover file and environment authority",
+    "Keep runtime stopped until restored identities and ports are verified"
+  ]
+}

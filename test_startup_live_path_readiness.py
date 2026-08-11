@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -30,6 +31,7 @@ class StartupPublicHealthHelperTests(unittest.TestCase):
                 5,
                 method="POST",
                 payload={"source": "startup_liquidity_relay_probe"},
+                query_token="test-query-token",
             )
 
         self.assertTrue(result["ok"])
@@ -40,12 +42,22 @@ class StartupPublicHealthHelperTests(unittest.TestCase):
             verify=True,
             headers={"ngrok-skip-browser-warning": "1"},
             json={"source": "startup_liquidity_relay_probe"},
+            params={"token": "test-query-token"},
         )
+
+    def test_request_exception_redacts_environment_managed_query_token(self):
+        detail = public_check.redacted_exception_detail(
+            RuntimeError("request failed for ?token=never-log-this"),
+            "never-log-this",
+        )
+        self.assertNotIn("never-log-this", detail)
+        self.assertIn("token=<redacted>", detail)
 
 
 class EntryRelayReceiptTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        os.environ["TV_CONTEXT_INTERNAL_RELAY_TOKEN"] = "startup-test-relay-token"
         spec = importlib.util.spec_from_file_location(
             "entry_relay_receipt_under_test",
             ROOT / "EntryAgent" / "tv_context_server.py",
@@ -59,6 +71,7 @@ class EntryRelayReceiptTests(unittest.TestCase):
 
         response = self.server.app.test_client().post(
             "/webhook/tv-context",
+            headers={"X-Randle-Relay-Token": "startup-test-relay-token"},
             json={
                 "source": "startup_liquidity_relay_probe",
                 "receipt_id": "startup-receipt-2",
@@ -76,6 +89,7 @@ class EntryRelayReceiptTests(unittest.TestCase):
     def test_probe_requires_a_receipt_id(self):
         response = self.server.app.test_client().post(
             "/webhook/tv-context",
+            headers={"X-Randle-Relay-Token": "startup-test-relay-token"},
             json={"source": "startup_liquidity_relay_probe"},
         )
         self.assertEqual(response.status_code, 400)
@@ -100,6 +114,8 @@ class LauncherReadinessContractTests(unittest.TestCase):
         self.assertNotIn('Start-ManagedProcess "Ngrok"', script)
         self.assertIn("startup_public_health_check.py", script)
         self.assertIn("Invoke-BoundedPublicHealthJson", script)
+        self.assertIn('"--query-token-env", $QueryTokenEnvironment', script)
+        self.assertNotIn("authenticatedProbeUrl", script)
         self.assertIn("-WorkingDirectory $script:repositoryRoot", script)
         self.assertIn("Ensure-ListenerBridge\n    Ensure-EntryAgentAndRelay\n    Ensure-Ngrok", script)
         self.assertIn("current_canonical_completed_candles_confirmed", script)

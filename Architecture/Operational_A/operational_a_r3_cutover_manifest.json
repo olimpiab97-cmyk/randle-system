@@ -1,0 +1,94 @@
+{
+  "schema_version": "operational_a_r3_cutover_v1",
+  "authority": {
+    "r2_worktree_designation": "OPERATIONAL_A_R2_AUTHORIZED_CUTOVER_WORKTREE",
+    "bucket_0_parent_commit": "cb62bcc2eef4e113962f39c050c7d66191575d20",
+    "live_cutover_performed_in_r2": false
+  },
+  "final_pine": {
+    "path": "TradingView/indicators/Randle_AI_Level_Map_Helper.pine",
+    "sha256": "e955ffd5b89d38f73f865eb25cb70ef14f67a4c62b616f09645bd6632dd88a87",
+    "size_bytes": 74854,
+    "logical_lines": 1931,
+    "encoding": "UTF-8",
+    "bom": false,
+    "eol": "CRLF",
+    "pine_version": 6,
+    "indicator_title": "Randle AI - Level Map Helper v14 Canonical",
+    "payload_source": "tradingview_level_helper",
+    "payload_version": "v14_canonical_liquidity_sender"
+  },
+  "ym": {
+    "symbol": "YM1!",
+    "current_indicator": "Randle AI - Level Map Helper v14 Canonical",
+    "current_interval": "1m",
+    "current_trigger": "Any alert() function call",
+    "current_message_label": "YM v14 Canonical 0a40f582",
+    "action": "UPDATE_OR_RECREATE_TO_FINAL_R2_SOURCE",
+    "final_interval": "1m",
+    "final_trigger": "Any alert() function call",
+    "required_pine_sha256": "e955ffd5b89d38f73f865eb25cb70ef14f67a4c62b616f09645bd6632dd88a87"
+  },
+  "nq": {
+    "symbol": "NQ1!",
+    "state": "STALE",
+    "stale_by_design": true,
+    "action": "RECREATE",
+    "final_interval": "1m",
+    "final_trigger": "Any alert() function call",
+    "required_pine_sha256": "e955ffd5b89d38f73f865eb25cb70ef14f67a4c62b616f09645bd6632dd88a87"
+  },
+  "webhook_contract": {
+    "route": "/webhook/tv-context",
+    "external_auth": "query token sourced from TV_WEBHOOK_INGRESS_TOKEN",
+    "internal_auth": "X-Randle-Relay-Token sourced from TV_CONTEXT_INTERNAL_RELAY_TOKEN",
+    "custom_tradingview_headers_required": false,
+    "secret_values_in_manifest": false
+  },
+  "required_environment_variables": [
+    "TV_WEBHOOK_INGRESS_TOKEN",
+    "TV_CONTEXT_INTERNAL_RELAY_TOKEN",
+    "TV_CONTEXT_SPOOL_DIR",
+    "TV_CONTEXT_ACCEPTANCE_LEDGER_PATH",
+    "ENTRY_AGENT_TV_CONTEXT_URL"
+  ],
+  "optional_bounded_delivery_environment_variables": [
+    "TV_CONTEXT_RELAY_MAX_ATTEMPTS",
+    "TV_CONTEXT_RELAY_TIMEOUT_SECONDS",
+    "TV_CONTEXT_RELAY_BACKOFF_SECONDS"
+  ],
+  "durable_state": {
+    "spool_contract": "atomic one-record-per-message JSON",
+    "default_spool_relative_path": "Data/tv_context_spool",
+    "acceptance_ledger_contract": "atomic per-symbol latest canonical identity",
+    "default_acceptance_ledger_relative_path": "EntryAgent/tv_context_acceptance_ledger.json",
+    "preserve_across_restart": true
+  },
+  "restart_order": [
+    "Configure environment-managed secret and durable-path values without recording secret values",
+    "Start or restart Entry Agent and require authenticated loopback receiver readiness",
+    "Start or restart Trade Manager and require pending-spool recovery to terminal state",
+    "Validate the existing ngrok route without changing it",
+    "Update or recreate YM from the final Pine bytes",
+    "Recreate NQ from the identical final Pine bytes"
+  ],
+  "readiness_checks": [
+    "Public request missing or using the wrong ingress token is rejected",
+    "Authenticated startup relay probe reaches Entry Agent with internal relay authentication",
+    "No PENDING spool record remains without an explicit retry disposition",
+    "YM and NQ alerts both report the exact final Pine SHA and canonical payload version",
+    "One live payload per symbol contains exactly eight canonical names with list/map parity",
+    "Entry Agent normalized YH/YL side matches frozen session_lock_price",
+    "Duplicate live delivery is an idempotent no-op",
+    "Older payload cannot overwrite newer normalized state"
+  ],
+  "rollback": [
+    "Disable the newly recreated alerts before changing runtime components",
+    "Stop only Trade Manager and Entry Agent in governed order",
+    "Preserve spool and acceptance ledger for audit; do not discard pending records",
+    "Restore the pre-cutover repository/runtime package and prior environment configuration",
+    "Restore the prior YM alert only after its exact source identity is reauthenticated",
+    "Leave NQ disabled if no authenticated prior source exists",
+    "Restart Entry Agent then Trade Manager and repeat authenticated readiness checks"
+  ]
+}

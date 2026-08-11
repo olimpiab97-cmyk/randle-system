@@ -22,10 +22,6 @@ from entry_agent import (
 from step25_engine import evaluate_step25
 
 
-UPPER_LEVELS = {"YH", "ONH", "LH", "PMH"}
-LOWER_LEVELS = {"YL", "ONL", "LL", "PML"}
-
-
 def load_scenario(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -69,6 +65,7 @@ def build_tv_context(scenario: dict[str, Any]) -> dict[str, Any]:
     context = {
         "normalized_symbol": str(scenario.get("symbol") or "NQ").upper(),
         "daily_atr14": scenario.get("daily_atr"),
+        "session_lock_price": scenario.get("session_lock_price", scenario.get("reference_price")),
         "levels": levels,
     }
     return context
@@ -82,8 +79,8 @@ def level_price_map(tv_context: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def side_level_type(level_name: str | None) -> str | None:
-    side = side_for_level(str(level_name or ""))
+def side_level_type(level_name: str | None, side: str | None = None) -> str | None:
+    side = side or side_for_level(str(level_name or ""))
     if side == "upper":
         return "LH"
     if side == "lower":
@@ -159,7 +156,7 @@ def build_step25_interaction(
         return None
     active_level = step2_state.get("active_level")
     level_price = step2_state.get("level_price")
-    level_type = side_level_type(str(active_level or ""))
+    level_type = side_level_type(str(active_level or ""), str(step2_state.get("side") or "") or None)
     if level_price is None or level_type is None:
         return None
     prev = previous_candle or step2_state.get("candle_a") or current_candle
@@ -270,7 +267,11 @@ class SyntheticScenarioRunner:
             return self.step2_state
         name = active_liquidity.get("name")
         price = active_liquidity.get("price")
-        side = side_for_level(str(name or ""))
+        side = active_liquidity.get("side") or side_for_level(
+            str(name or ""),
+            price,
+            self.tv_context.get("session_lock_price"),
+        )
         if name is None or price is None or side is None:
             return self.step2_state
         if self.step2_state is None or self.step2_state.get("active_level") != name:

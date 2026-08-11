@@ -10,10 +10,14 @@ Invoke-RestMethod -Method Post `
 from __future__ import annotations
 
 import copy
+import hashlib
+import hmac
 import json
+import math
 import os
 import shutil
 import sys
+import tempfile
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -32,6 +36,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from data_paths import data_path, local_or_shared_path
+from blueprint_rules import side_for_level_price
 from liquidity_stack_validation import (
     normalize_stack_group_label,
     stack_group_side,
@@ -81,6 +86,20 @@ SYMBOL_ALIASES = {
 RANDLE_TAYLOR_MAP_SOURCE = "randle_taylor_map"
 CANONICAL_LIQUIDITY_SOURCE = "tradingview_level_helper"
 CANONICAL_LIQUIDITY_VERSION = "v14_canonical_liquidity_sender"
+CANONICAL_LIQUIDITY_CONTEXT_MODE = "locked_levels_session_snapshot"
+CANONICAL_LIQUIDITY_TIMEZONE = "America/Los_Angeles"
+CANONICAL_LIQUIDITY_TIMEFRAME = "1"
+CANONICAL_LEVEL_STATUSES = {"ACTIVE", "INACTIVE", "REACTIVATED"}
+ISOLATED_LEGACY_LIQUIDITY_VERSIONS = {
+    None,
+    "",
+    "v14_overlapping_stack_smoke",
+    "preopen",
+    "locked-1",
+    "later",
+}
+INTERNAL_RELAY_TOKEN_ENV = "TV_CONTEXT_INTERNAL_RELAY_TOKEN"
+INTERNAL_RELAY_HEADER = "X-Randle-Relay-Token"
 CANONICAL_LOCK_RECONSTRUCTION_REASON = "legacy_lock_missing_canonical_frozen_reference"
 CANONICAL_LOCK_RECONSTRUCTION_MAX_AGE_SECONDS = 180
 TAYLOR_CONTEXT_KEYS = ("t_plus", "yesterday_close", "t_minus")
@@ -96,7 +115,7 @@ CORS(
     app,
     resources={r"/*": {"origins": "*"}},
     methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", INTERNAL_RELAY_HEADER],
     send_wildcard=True,
 )
 LATEST_TV_CONTEXT_BY_SYMBOL: dict[str, dict[str, Any]] = {}
@@ -1086,6 +1105,173 @@ def context_session_date(timestamp_value: Any, fallback: datetime | None = None)
     return parsed.astimezone(LOCAL_MARKET_TIMEZONE).date().isoformat()
 
 
+def _finite_number(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    converted = float(value)
+    return converted if math.isfinite(converted) else None
+
+
+def canonical_payload_bytes(payload: dict[str, Any]) -> bytes:
+    """Return deterministic immutable sender bytes for delivery identity."""
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def canonical_message_identity(payload: dict[str, Any], normalized_symbol: str) -> tuple[str, str]:
+    payload_sha = hashlib.sha256(canonical_payload_bytes(payload)).hexdigest()
+    authority = "|".join(
+        (
+            normalized_symbol,
+            str(payload.get("session_date") or ""),
+            str(payload.get("timestamp") or ""),
+            payload_sha,
+        )
+    ).encode("utf-8")
+    return hashlib.sha256(authority).hexdigest(), payload_sha
+
+
+def _canonical_level_semantics(raw: Any, field: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if not isinstance(raw, dict):
+        return None, {"error": f"{field} must be an object"}
+    price = raw.get("price")
+    if price is not None and _finite_number(price) is None:
+        return None, {"error": f"{field}.price must be a finite number or null"}
+    status = str(raw.get("status") or "").strip().upper()
+    if status not in CANONICAL_LEVEL_STATUSES:
+        return None, {"error": f"{field}.status is invalid"}
+    stack_group = str(raw.get("stack_group") or "").strip()
+    if not stack_group:
+        return None, {"error": f"{field}.stack_group is required"}
+    stack_groups = raw.get("stack_groups")
+    if not isinstance(stack_groups, list) or any(not isinstance(value, str) or not value.strip() for value in stack_groups):
+        return None, {"error": f"{field}.stack_groups must be an array of non-empty strings"}
+    if len(stack_groups) != len(set(stack_groups)):
+        return None, {"error": f"{field}.stack_groups contains duplicates"}
+    stack_display = raw.get("stack_display")
+    if not isinstance(stack_display, str) or not stack_display.strip():
+        return None, {"error": f"{field}.stack_display is required"}
+    return {
+        "price": None if price is None else float(price),
+        "status": status,
+        "stack_group": stack_group,
+        "stack_groups": list(stack_groups),
+        "stack_display": stack_display,
+    }, None
+
+
+def validate_canonical_liquidity_payload(
+    payload: dict[str, Any],
+    normalized_symbol: str,
+) -> tuple[dict[str, dict[str, Any]] | None, dict[str, Any] | None]:
+    """Fail closed on the exact canonical v14 sender and duplicate/parity contract."""
+    exact_fields = {
+        "source": CANONICAL_LIQUIDITY_SOURCE,
+        "version": CANONICAL_LIQUIDITY_VERSION,
+        "context_mode": CANONICAL_LIQUIDITY_CONTEXT_MODE,
+        "time_zone": CANONICAL_LIQUIDITY_TIMEZONE,
+        "timeframe": CANONICAL_LIQUIDITY_TIMEFRAME,
+    }
+    for field, expected in exact_fields.items():
+        if payload.get(field) != expected:
+            return None, {"error": f"{field} must equal {expected}"}
+    timestamp = payload.get("timestamp")
+    parsed_timestamp = parse_timestamp_value(timestamp)
+    try:
+        source_timestamp = datetime.fromisoformat(str(timestamp).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        source_timestamp = None
+    if (
+        not isinstance(timestamp, str)
+        or parsed_timestamp is None
+        or source_timestamp is None
+        or source_timestamp.tzinfo is None
+        or source_timestamp.utcoffset() != timedelta(0)
+    ):
+        return None, {"error": "timestamp must be a valid UTC timestamp"}
+    session_date = payload.get("session_date")
+    try:
+        parsed_session_date = datetime.strptime(str(session_date), "%Y-%m-%d").date().isoformat()
+    except (TypeError, ValueError):
+        return None, {"error": "session_date must be a valid YYYY-MM-DD date"}
+    if str(session_date) != parsed_session_date:
+        return None, {"error": "session_date must be canonical YYYY-MM-DD"}
+    for field in ("session_locked", "locked", "price_is_true_level", "display_offsets_applied_to_chart_only"):
+        if payload.get(field) is not True:
+            return None, {"error": f"{field} must be true"}
+    if not str(payload.get("symbol") or "").strip() or normalized_symbol not in {"NQ", "YM"}:
+        return None, {"error": "symbol must normalize to NQ or YM"}
+    for field in ("session_lock_price", "stack_threshold"):
+        if _finite_number(payload.get(field)) is None:
+            return None, {"error": f"{field} must be a finite number"}
+
+    raw_levels = payload.get("levels")
+    if not isinstance(raw_levels, dict):
+        return None, {"error": "levels must be an object"}
+    level_names = set(raw_levels)
+    expected_names = set(LEVEL_FIELDS)
+    if level_names != expected_names:
+        return None, {
+            "error": "levels must contain each canonical name exactly once",
+            "missing": sorted(expected_names - level_names),
+            "unknown": sorted(level_names - expected_names),
+        }
+    normalized: dict[str, dict[str, Any]] = {}
+    for name in LEVEL_FIELDS:
+        row, row_error = _canonical_level_semantics(raw_levels.get(name), f"levels.{name}")
+        if row_error is not None:
+            return None, row_error
+        normalized[name] = row or {}
+
+    liquidity_map = payload.get("liquidity_map")
+    if not isinstance(liquidity_map, dict):
+        return None, {"error": "liquidity_map is required"}
+    if not isinstance(payload.get("stacks"), list) or not isinstance(liquidity_map.get("stacks"), list):
+        return None, {"error": "stacks and liquidity_map.stacks must be arrays"}
+    if payload.get("stacks") != liquidity_map.get("stacks"):
+        return None, {"error": "stacks/liquidity_map.stacks parity mismatch"}
+    map_rows = liquidity_map.get("levels")
+    if not isinstance(map_rows, list) or len(map_rows) != len(LEVEL_FIELDS):
+        return None, {"error": "liquidity_map.levels must contain exactly eight rows"}
+    mapped: dict[str, dict[str, Any]] = {}
+    for index, raw_row in enumerate(map_rows):
+        if not isinstance(raw_row, dict):
+            return None, {"error": f"liquidity_map.levels[{index}] must be an object"}
+        name = str(raw_row.get("name") or "").strip().upper()
+        if name not in expected_names:
+            return None, {"error": f"liquidity_map.levels[{index}].name is unknown"}
+        if name in mapped:
+            return None, {"error": f"liquidity_map.levels contains duplicate name {name}"}
+        row, row_error = _canonical_level_semantics(raw_row, f"liquidity_map.levels[{index}]")
+        if row_error is not None:
+            return None, row_error
+        mapped[name] = row or {}
+    if set(mapped) != expected_names:
+        return None, {"error": "liquidity_map.levels is missing canonical names"}
+    for name in LEVEL_FIELDS:
+        if normalized[name] != mapped[name]:
+            return None, {"error": f"levels/liquidity_map parity mismatch for {name}"}
+
+    reference = float(payload["session_lock_price"])
+    for name, row in normalized.items():
+        row["side"] = side_for_level_price(name, row.get("price"), reference)
+    return normalized, None
+
+
+def _duplicate_rejecting_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
 def derived_liquidity_stacks(levels: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Derive the frozen stack ladder from authoritative level labels."""
     if not isinstance(levels, dict):
@@ -1489,6 +1675,30 @@ def build_context(payload: dict[str, Any], force: bool = False) -> tuple[dict[st
     context["force"] = force
     source = str(context.get("source") or "").strip()
 
+    supplied_version = context.get("version")
+    if context.get("version") == CANONICAL_LIQUIDITY_VERSION or (
+        source == CANONICAL_LIQUIDITY_SOURCE
+        and supplied_version not in ISOLATED_LEGACY_LIQUIDITY_VERSIONS
+    ):
+        canonical_levels, canonical_error = validate_canonical_liquidity_payload(payload, normalized_symbol)
+        if canonical_error is not None:
+            return None, canonical_error
+        received_at = parse_timestamp_value(payload.get("timestamp"))
+        if received_at is None:
+            return None, {"error": "timestamp must be a valid UTC timestamp"}
+        context["received_at"] = received_at.isoformat().replace("+00:00", "Z")
+        context["session_date"] = str(payload.get("session_date"))
+        context["levels"] = canonical_levels
+        context["liquidity_map"] = copy.deepcopy(payload["liquidity_map"])
+        message_identity, payload_sha = canonical_message_identity(payload, normalized_symbol)
+        context["message_identity"] = message_identity
+        context["canonical_payload_sha256"] = payload_sha
+        context["canonical_validation"] = "PASS"
+        structure_error = liquidity_stack_structure_error(context)
+        if structure_error is not None:
+            return None, structure_error
+        return context, None
+
     if source == RANDLE_TAYLOR_MAP_SOURCE:
         missing_field = missing_required_context_field(payload)
         if missing_field is not None:
@@ -1519,6 +1729,9 @@ def build_context(payload: dict[str, Any], force: bool = False) -> tuple[dict[st
     if session_date is None or (isinstance(session_date, str) and not session_date.strip()):
         session_date = context_session_date(payload.get("timestamp"), fallback=received_at)
     context["session_date"] = str(session_date)
+    if source == CANONICAL_LIQUIDITY_SOURCE:
+        context["receiver_profile"] = "LEGACY_TRADINGVIEW_LEVEL_HELPER_ISOLATED"
+        context["canonical_validation"] = "NOT_CLAIMED"
 
     if not isinstance(context.get("levels"), dict):
         return None, {"error": "levels is required"}
@@ -2009,11 +2222,129 @@ def build_levels(context: dict[str, Any]) -> dict[str, Any]:
 TV_CONTEXT_DIAGNOSTIC_RECEIPT: dict[str, Any] = {}
 
 
+def internal_relay_auth_error() -> tuple[dict[str, Any], int] | None:
+    expected = os.getenv(INTERNAL_RELAY_TOKEN_ENV, "")
+    if not expected:
+        return {"error": "internal relay authentication is not configured"}, 503
+    supplied = request.headers.get(INTERNAL_RELAY_HEADER, "")
+    if not supplied or not hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
+        return {"error": "internal relay authentication failed"}, 401
+    return None
+
+
+def canonical_acceptance_ledger_path() -> Path:
+    configured = os.getenv("TV_CONTEXT_ACCEPTANCE_LEDGER_PATH", "").strip()
+    return Path(configured) if configured else local_or_shared_path(
+        BASE_DIR,
+        "tv_context_acceptance_ledger.json",
+        shared_prefix="entry_agent",
+    )
+
+
+def load_canonical_acceptance_ledger() -> dict[str, Any]:
+    path = canonical_acceptance_ledger_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {"schema_version": "tv_context_acceptance_v1", "symbols": {}}
+    if not isinstance(data, dict) or not isinstance(data.get("symbols"), dict):
+        return {"schema_version": "tv_context_acceptance_v1", "symbols": {}}
+    return data
+
+
+def write_canonical_acceptance_ledger(ledger: dict[str, Any]) -> None:
+    path = canonical_acceptance_ledger_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(ledger, handle, indent=2, sort_keys=True, allow_nan=False)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def persisted_canonical_acceptance(symbol: str) -> dict[str, Any] | None:
+    """Return the newest ledger or normalized-context identity after a restart."""
+    candidates: list[tuple[str, datetime, int, dict[str, Any]]] = []
+    ledger = load_canonical_acceptance_ledger()
+    ledger_row = ledger.get("symbols", {}).get(symbol)
+    if isinstance(ledger_row, dict):
+        timestamp = parse_timestamp_value(ledger_row.get("timestamp"))
+        if timestamp is not None:
+            candidates.append((str(ledger_row.get("session_date") or ""), timestamp, 0, ledger_row))
+    try:
+        context_store = json.loads(TV_CONTEXT_BY_SYMBOL_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        context_store = {}
+    stored = context_store.get("symbols", {}).get(symbol) if isinstance(context_store, dict) else None
+    if isinstance(stored, dict) and stored.get("source") == CANONICAL_LIQUIDITY_SOURCE:
+        timestamp = parse_timestamp_value(stored.get("timestamp"))
+        if timestamp is not None and stored.get("message_identity"):
+            candidates.append((str(stored.get("session_date") or ""), timestamp, 1, stored))
+    return max(candidates, key=lambda item: item[:3])[3] if candidates else None
+
+
+def canonical_delivery_disposition(context: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
+    """Enforce identity, replay, session freshness, and source ordering across restarts."""
+    if context.get("source") != CANONICAL_LIQUIDITY_SOURCE:
+        return "ACCEPT", None
+    symbol = str(context.get("normalized_symbol") or "")
+    latest = persisted_canonical_acceptance(symbol)
+    if not isinstance(latest, dict):
+        return "ACCEPT", None
+    identity = str(context.get("message_identity") or "")
+    payload_sha = str(context.get("canonical_payload_sha256") or "")
+    if identity and identity == str(latest.get("message_identity") or ""):
+        return "DUPLICATE", None
+    incoming_session = str(context.get("session_date") or "")
+    latest_session = str(latest.get("session_date") or "")
+    if incoming_session < latest_session:
+        return "STALE", {"error": "canonical payload belongs to an older session", "disposition": "STALE"}
+    incoming_time = parse_timestamp_value(context.get("timestamp"))
+    latest_time = parse_timestamp_value(latest.get("timestamp"))
+    if incoming_session == latest_session and incoming_time is not None and latest_time is not None:
+        if incoming_time < latest_time:
+            return "OUT_OF_ORDER", {"error": "canonical payload is older than accepted state", "disposition": "OUT_OF_ORDER"}
+        if incoming_time == latest_time and payload_sha != str(latest.get("canonical_payload_sha256") or ""):
+            return "ALTERED_SAME_TIMESTAMP", {
+                "error": "canonical timestamp was reused with altered payload bytes",
+                "disposition": "ALTERED_SAME_TIMESTAMP",
+            }
+    return "ACCEPT", None
+
+
+def record_canonical_acceptance(context: dict[str, Any]) -> None:
+    if context.get("source") != CANONICAL_LIQUIDITY_SOURCE:
+        return
+    ledger = load_canonical_acceptance_ledger()
+    symbols = ledger.setdefault("symbols", {})
+    symbols[str(context["normalized_symbol"])] = {
+        "message_identity": context.get("message_identity"),
+        "canonical_payload_sha256": context.get("canonical_payload_sha256"),
+        "timestamp": context.get("timestamp"),
+        "session_date": context.get("session_date"),
+        "accepted_at": utc_timestamp(),
+    }
+    write_canonical_acceptance_ledger(ledger)
+
+
 @app.post("/webhook/tv-context")
 @entry_state_transaction
 def receive_tv_context() -> tuple[Any, int]:
     """Receive full TradingView table context for EntryAgent."""
-    payload = request.get_json(silent=True)
+    auth_error = internal_relay_auth_error()
+    if auth_error is not None:
+        body, status = auth_error
+        return jsonify(body), status
+    try:
+        payload = json.loads(request.get_data(cache=True, as_text=True), object_pairs_hook=_duplicate_rejecting_object)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        return jsonify({"error": f"invalid JSON object: {exc}"}), 400
     if not isinstance(payload, dict):
         return jsonify({"error": "invalid JSON object"}), 400
 
@@ -2061,6 +2392,22 @@ def receive_tv_context() -> tuple[Any, int]:
                 "persistence_error": str(exc),
             }), 503
         return jsonify(error), 400
+
+    delivery_disposition, delivery_error = canonical_delivery_disposition(context)
+    if delivery_disposition == "DUPLICATE":
+        return jsonify({
+            "ok": True,
+            "normalized_symbol": context["normalized_symbol"],
+            "message_identity": context.get("message_identity"),
+            "delivery_disposition": "DUPLICATE_NOOP",
+            "liquidity_state_changed": False,
+        }), 200
+    if delivery_error is not None:
+        try:
+            append_rejected_context_event(payload, request.remote_addr, delivery_error)
+        except OSError as exc:
+            return jsonify({"error": "ordering rejection could not be archived", "persistence_error": str(exc)}), 503
+        return jsonify(delivery_error), 409
 
     try:
         capture_tv_ladder_validation_projection(payload, context=context)
@@ -2134,7 +2481,6 @@ def receive_tv_context() -> tuple[Any, int]:
             }), 503
         return jsonify(merged_rejection), 409
     levels = build_levels(stored_payload)
-    LATEST_TV_CONTEXT_BY_SYMBOL[str(context["normalized_symbol"])] = stored_payload
     persistence_error = None
     lifecycle_processing_error = None
     lifecycle_processed_candle = None
@@ -2150,6 +2496,8 @@ def receive_tv_context() -> tuple[Any, int]:
             with ENTRY_STATE_LOCK:
                 _write_json(ENTRY_AGENT_STATE_PATH, replacement_state)
         append_context_event(stored_payload, request.remote_addr, received_payload=payload)
+        record_canonical_acceptance(context)
+        LATEST_TV_CONTEXT_BY_SYMBOL[str(context["normalized_symbol"])] = stored_payload
     except OSError as exc:
         persistence_error = str(exc)
         print(f"ENTRY TV CONTEXT persistence_error={persistence_error}")
@@ -2168,7 +2516,9 @@ def receive_tv_context() -> tuple[Any, int]:
         "persistence_error": persistence_error,
         "lifecycle_processed_candle": lifecycle_processed_candle,
         "lifecycle_processing_error": lifecycle_processing_error,
-    }), 503 if lifecycle_processing_error else 200
+        "message_identity": context.get("message_identity"),
+        "delivery_disposition": "ACCEPTED",
+    }), 503 if persistence_error or lifecycle_processing_error else 200
 
 
 @app.get("/debug/tv-context-receipt")

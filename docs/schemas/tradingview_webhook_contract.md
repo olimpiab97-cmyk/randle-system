@@ -1,6 +1,6 @@
 # TradingView Webhook Contract
 
-Version: 1.5
+Version: 1.6
 
 Status: Canonical Runtime Contract
 
@@ -14,17 +14,22 @@ Scope:
 - `06:15-06:29 PT` pre-open observation behavior
 - `06:30+ PT` first Step 2 eligibility
 - accepted-payload archival and replay evidence
+- authenticated TradingView ingress and authenticated local relay
+- durable local delivery, replay identity, freshness, and ordering
 
 Out of scope:
 - HTF table contract
-- Trade Manager
 - Dynamic Risk Reset
+- live credential provisioning and TradingView alert cutover
 
-## 1. Endpoint
+## 1. Endpoints and Authentication
 
-- `POST /webhook/tv-context`
+- Public TradingView ingress: `POST /webhook/tv-context?token=<managed value>` on Trade Manager.
+- Authenticated local relay: `POST /webhook/tv-context` on Entry Agent with `X-Randle-Relay-Token`.
 
 The payload is the authoritative TradingView session context feed for Entry Agent.
+
+The public credential is read from `TV_WEBHOOK_INGRESS_TOKEN`. The internal relay credential is read from `TV_CONTEXT_INTERNAL_RELAY_TOKEN`. Neither value may appear in Pine source, Git, logs, or evidence. Missing or incorrect credentials fail closed. Trade Manager validates the canonical envelope and durably spools it before downstream delivery.
 
 ## 2. Supported Symbols
 
@@ -103,7 +108,9 @@ The liquidity-only profile must include:
 - all eight named level rows in `liquidity_map.levels`;
 - complete finalized stacks in both the top-level `stacks` compatibility projection and `liquidity_map.stacks`;
 - `midpoints` and `exhaustion_boundaries`; and
-- the existing status, recurring-update, true-price, display-offset, premarket-range, and daily-range fields.
+- the frozen status, snapshot-trigger, true-price, display-offset, premarket-range, and daily-range fields.
+
+Canonical v14 acceptance is strict: each representation must contain exactly one row for each of `PMH`, `PML`, `LH`, `LL`, `ONH`, `ONL`, `YH`, and `YL`; unknown, missing, or duplicate names are rejected. Top-level `levels` and `liquidity_map.levels` must agree semantically for name, price, status, `stack_group`, `stack_groups`, and `stack_display`. Conflicting duplicates must never be hidden by dictionary last-write-wins behavior.
 
 The sender must not call `alert()` unless every required source/session/frozen/numeric authority above is available and the current bar's trading-day identity equals the trading-day identity captured with the frozen lock.
 
@@ -201,6 +208,10 @@ Receiver validation:
 Ownership constraint:
 
 - `INACTIVE` levels from the locked table cannot become owners later in the session
+- PMH, LH, and ONH have fixed-high semantics; PML, LL, and ONL have fixed-low semantics.
+- YH and YL are roaming levels. Their frozen side is derived from their true level price relative to the frozen `session_lock_price`, never from their name and never from a later market price.
+- a level strictly above the frozen reference is `HIGH`, a level strictly below it is `LOW`, and an equal-within-tolerance level is `TOUCH`.
+- `TOUCH` appears once next to the chart PRICE row and belongs to neither target ladder.
 
 ## 7. 06:15 PT Lock Contract
 
@@ -213,9 +224,18 @@ At `06:15 PT`, the first valid session payload must lock:
 
 Once locked:
 
-- later webhook updates cannot mutate the locked session table
-- later webhook updates cannot promote an `INACTIVE` locked level into ownership eligibility
-- reload, late-start reconstruction, or derived-stack projection must preserve valid YH/YL membership and must reject structurally invalid frozen membership
+- the canonical sender uses `context_mode = locked_levels_session_snapshot`;
+- the normal-session sender emits exactly one full canonical snapshot;
+- a script that starts or reloads after the lock boundary emits one idempotent catch-up snapshot;
+- confirmed bars after the successful snapshot do not emit recurring full-ladder messages;
+- later webhook deliveries cannot mutate the locked session table;
+- later webhook deliveries cannot promote an `INACTIVE` locked level into ownership eligibility; and
+- reload, late-start reconstruction, or derived-stack projection must preserve valid YH/YL membership and must reject structurally invalid frozen membership.
+
+The sender cannot observe the HTTP delivery result. Durable retry begins only
+after Trade Manager has accepted and spooled the snapshot. If public ingress is
+unavailable at the one lock event, recovery requires the governed late-start or
+script-reload catch-up and must not be represented as automatic sender retry.
 
 ## 8. 06:15-06:29 PT Observation Contract
 
@@ -317,12 +337,20 @@ When the sender supplies level rows with frozen `stack_group` membership but omi
 
 Receipt archival does not prove TradingView sent a field that was absent. Historical events created before this contract that retained only flattened fields must be reported as incomplete evidence and must not be described as exact original webhook bodies.
 
-## 12. Expected Implementation and Verification
+## 12. Durable Delivery, Freshness, and Replay
+
+Trade Manager creates a deterministic identity from normalized symbol, session date, source timestamp, and canonical payload hash. It atomically persists a validated message before attempting the local relay. Transient transport failures use bounded backoff and remain recoverable after restart; canonical receiver rejections are terminal and are not retried as transport failures.
+
+Entry Agent durably records accepted identity metadata. An exact duplicate is an idempotent success/no-op. An older same-session message cannot replace newer state. A stale-session message is rejected. Reusing a timestamp with altered canonical bytes is rejected. A newer valid message advances state. These rules survive process restart.
+
+## 13. Expected Implementation and Verification
 
 ### Expected Implementation Areas
 
 - the shared Entry Agent Liquidity Level stack validator for complete-span, market-side, membership, numbering, and overlap invariants; and
 - `EntryAgent/tv_context_server.py` `POST /webhook/tv-context` acceptance, complete receipt archival, structural validation, locked-context projection, and deterministic derived-stack labeling; and
+- `Engines/trade_manager.py` authenticated public ingress, canonical prevalidation, durable spool, bounded delivery, and restart recovery; and
+- `EntryAgent/blueprint_rules.py` frozen-price side classification for fixed and roaming levels; and
 - `EntryAgent/entry_agent.py` completed-candle observation selection, monotonic observed-wick merge, persistence, and `06:30 PT` projection into the matching frozen group; and
 - `EntryAgent/entry_agent.py` session-lock, reload, rehydration, repair, force, manual, and legacy defense-in-depth validation; and
 - archive readers and replay tools that distinguish sender-supplied fields from deterministic derivation.
@@ -337,7 +365,7 @@ Receipt archival does not prove TradingView sent a field that was absent. Histor
 
 ### Compatibility note
 
-The complete Level Map sender advances its payload identity from the incomplete v13/replacement-tail condition to `v14_canonical_liquidity_sender`. Existing field meanings, stack rules, and receiver structural invariants are unchanged. The additive `timestamp`, `session_date`, `locked`, `atr_1m_14`, complete `liquidity_map.levels`, and separately frozen `session_lock_price` fields complete the documented liquidity-only profile. Receivers remain compatible with structurally conforming historical v13 payloads during the existing compatibility period; this does not authorize new v13 publication or permit receipt time to substitute for source identity in the v14 sender. Coordinated TradingView compilation, publication, and alert cutover remain separately governed.
+The complete Level Map sender advances its payload identity from the incomplete v13/replacement-tail condition to `v14_canonical_liquidity_sender`. Existing field meanings, stack rules, and receiver structural invariants are unchanged. The additive `timestamp`, `session_date`, `locked`, `atr_1m_14`, complete `liquidity_map.levels`, and separately frozen `session_lock_price` fields complete the documented liquidity-only profile. Legacy helper payloads, where explicitly retained, use an isolated legacy profile and cannot claim canonical v14 acceptance. This does not authorize new legacy publication or permit receipt time to substitute for source identity in the v14 sender. Coordinated TradingView compilation, credential provisioning, publication, and alert cutover remain separately governed.
 
 ### Traceability Record
 

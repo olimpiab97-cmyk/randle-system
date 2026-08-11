@@ -106,8 +106,13 @@ def test_tv_context_webhook_rejects_rty_symbol() -> None:
             tv_context_server.ENTRY_DECISIONS_LOG_PATH = tv_context_server.ENTRY_LOG_DIR / "entry_decisions.jsonl"
             tv_context_server.LATEST_TV_CONTEXT_BY_SYMBOL.clear()
 
-            with tv_context_server.app.test_client() as client:
-                response = client.post("/webhook/tv-context", json=_valid_webhook_payload(symbol="RTY1!"))
+            with patch.dict(os.environ, {"TV_CONTEXT_INTERNAL_RELAY_TOKEN": "session-runtime-test-token"}, clear=False):
+                with tv_context_server.app.test_client() as client:
+                    response = client.post(
+                        "/webhook/tv-context",
+                        json=_valid_webhook_payload(symbol="RTY1!"),
+                        headers={"X-Randle-Relay-Token": "session-runtime-test-token"},
+                    )
                 assert response.status_code == 400
                 assert response.get_json()["error"] == "unsupported symbol"
     finally:
@@ -128,8 +133,13 @@ def test_tv_context_webhook_rejects_missing_required_fields() -> None:
     payload = _valid_webhook_payload()
     payload.pop("timestamp")
 
-    with tv_context_server.app.test_client() as client:
-        response = client.post("/webhook/tv-context", json=payload)
+    with patch.dict(os.environ, {"TV_CONTEXT_INTERNAL_RELAY_TOKEN": "session-runtime-test-token"}, clear=False):
+        with tv_context_server.app.test_client() as client:
+            response = client.post(
+                "/webhook/tv-context",
+                json=payload,
+                headers={"X-Randle-Relay-Token": "session-runtime-test-token"},
+            )
         assert response.status_code == 400
         assert response.get_json()["error"] == "timestamp is required"
 

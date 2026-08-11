@@ -60,10 +60,10 @@ def captured_ym_payload(*, symbol: str = "YM1!", include_reference: bool = False
     payload: dict[str, object] = {
         "source": "tradingview_level_helper",
         "version": "v14_overlapping_stack_smoke",
-        "context_mode": "locked_levels_recurring_status",
+        "context_mode": "locked_levels_session_snapshot",
         "session_locked": True,
         "is_premarket_end": False,
-        "is_recurring_update": True,
+        "is_recurring_update": False,
         "price_is_true_level": True,
         "display_offsets_applied_to_chart_only": True,
         "symbol": symbol,

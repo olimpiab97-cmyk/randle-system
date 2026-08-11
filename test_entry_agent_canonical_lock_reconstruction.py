@@ -90,19 +90,25 @@ def canonical_payload(symbol: str, *, stacked_yh: bool = True) -> dict[str, obje
     return {
         "source": server.CANONICAL_LIQUIDITY_SOURCE,
         "version": server.CANONICAL_LIQUIDITY_VERSION,
-        "context_mode": "locked_levels_recurring_status",
+        "context_mode": "locked_levels_session_snapshot",
         "session_locked": True,
         "locked": True,
-        "is_recurring_update": True,
+        "price_is_true_level": True,
+        "display_offsets_applied_to_chart_only": True,
+        "is_recurring_update": False,
         "symbol": symbol,
         "timestamp": timestamp.isoformat().replace("+00:00", "Z"),
         "session_date": session_date,
         "time_zone": "America/Los_Angeles",
+        "timeframe": "1",
         "session_lock_price": 52437,
         "stack_threshold": 62,
         "daily_atr14": 611.0949591232,
         "levels": levels,
-        "liquidity_map": {"stacks": copy.deepcopy(stacks)},
+        "liquidity_map": {
+            "levels": [{"name": name, **copy.deepcopy(details)} for name, details in levels.items()],
+            "stacks": copy.deepcopy(stacks),
+        },
         "stacks": copy.deepcopy(stacks),
         "midpoints": {},
         "exhaustion_boundaries": {},
@@ -157,6 +163,7 @@ class CanonicalLockLifecycleTests(unittest.TestCase):
         changed_payload["stack_threshold"] = 99
         changed_payload["daily_atr14"] = 999.0
         changed_payload["levels"]["PMH"]["price"] = 52000
+        next(row for row in changed_payload["liquidity_map"]["levels"] if row["name"] == "PMH")["price"] = 52000
         recurring = self.build(changed_payload)
 
         self.assertFalse(server.should_replace_stale_locked_liquidity_context(first, recurring))

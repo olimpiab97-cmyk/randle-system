@@ -1302,7 +1302,8 @@ function Invoke-BoundedPublicHealthJson {
         [int]$TimeoutSeconds = 5,
         [ValidateSet("GET", "POST")]
         [string]$Method = "GET",
-        [object]$Body = $null
+        [object]$Body = $null,
+        [string]$QueryTokenEnvironment = ""
     )
 
     if (-not (Test-Path -LiteralPath $PublicHealthHelperPath -PathType Leaf)) {
@@ -1323,6 +1324,9 @@ function Invoke-BoundedPublicHealthJson {
             $payloadPath = Join-Path $env:TEMP ("randle_public_health_{0}.json" -f $token)
             [IO.File]::WriteAllText($payloadPath, ($Body | ConvertTo-Json -Depth 8 -Compress), (New-Object Text.UTF8Encoding($false)))
             $arguments += @("--json-file", $payloadPath)
+        }
+        if (-not [string]::IsNullOrWhiteSpace($QueryTokenEnvironment)) {
+            $arguments += @("--query-token-env", $QueryTokenEnvironment)
         }
         $process = Start-Process -FilePath $python `
             -ArgumentList $arguments `
@@ -1397,7 +1401,10 @@ function Test-NgrokContract {
                 sent_at = [DateTime]::UtcNow.ToString("o")
                 purpose = "startup_readiness"
             }
-            $publicRelayResponse = Invoke-BoundedPublicHealthJson "$publicBase/webhook/tv-context" 4 "POST" $relayPayload
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable("TV_WEBHOOK_INGRESS_TOKEN", "Process"))) {
+                throw "TV_WEBHOOK_INGRESS_TOKEN is required for authenticated public relay readiness"
+            }
+            $publicRelayResponse = Invoke-BoundedPublicHealthJson "$publicBase/webhook/tv-context" 4 "POST" $relayPayload "TV_WEBHOOK_INGRESS_TOKEN"
             $localReceipt = Invoke-LocalJson $TradingViewRelayReceiptUrl 2
             $entryRelayResponse = $publicRelayResponse.entry_agent_response
             $selfProbeOk = $localUpstreamHealth.ok -eq $true -and
@@ -1893,7 +1900,7 @@ function Ensure-Ngrok {
 
             $ngrokWorkingDirectory = [IO.Path]::GetDirectoryName($ngrokExecutable)
             $nativeLogPath = Join-Path $script:startupLogDirectory ("Ngrok_{0}.native.log" -f $LaunchId)
-            $ngrokArguments = @("http", "7001", ("--log={0}" -f $nativeLogPath), "--log-level=info")
+            $ngrokArguments = @("http", "7001", "--inspect=false", ("--log={0}" -f $nativeLogPath), "--log-level=info")
             Write-StartupLine ("COMPONENT=Ngrok ACTION=START_RESOLVED EXECUTABLE={0} WORKING_DIRECTORY={1} ARGUMENTS={2} LOG_PATH={3}" -f $ngrokExecutable, $ngrokWorkingDirectory, ($ngrokArguments -join " "), $nativeLogPath)
             $ngrokWorkingDirectoryInvalid = [string]::IsNullOrWhiteSpace([string]$ngrokWorkingDirectory) -or
                 -not [IO.Path]::IsPathRooted([string]$ngrokWorkingDirectory) -or

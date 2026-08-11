@@ -1,0 +1,688 @@
+{
+    "schema_version":  "operational_a_r2_vectors_v1",
+    "vector_count":  18,
+    "vectors":  [
+                    {
+                        "id":  "OA-TV-001",
+                        "case":  "all fixed highs above",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  null,
+                                       "YL":  null
+                                   },
+                        "expected":  "PMH,LH,ONH high; fixed lows low",
+                        "receiver":  "preserve eight names, null roamers; normalized active numeric rows only",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-002",
+                        "case":  "all fixed lows below",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  null,
+                                       "YL":  null
+                                   },
+                        "expected":  "PML,LL,ONL low; fixed highs high",
+                        "receiver":  "same numeric values and side",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-003",
+                        "case":  "YH above",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  104,
+                                       "YL":  93
+                                   },
+                        "expected":  "YH high",
+                        "receiver":  "YH upper",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "YH",
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-004",
+                        "case":  "YH below",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  96,
+                                       "YL":  93
+                                   },
+                        "expected":  "YH low",
+                        "receiver":  "YH lower",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "YH",
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-005",
+                        "case":  "YL above",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  104
+                                   },
+                        "expected":  "YL high",
+                        "receiver":  "YL upper",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "YL",
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-006",
+                        "case":  "YL below",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  96
+                                   },
+                        "expected":  "YL low",
+                        "receiver":  "YL lower",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "YL",
+                                                                                   "ONL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-007",
+                        "case":  "YH and YL both above",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  105,
+                                       "YL":  103
+                                   },
+                        "expected":  "both high ordered YL,YH among numeric neighbors",
+                        "receiver":  "both upper",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "YL",
+                                                                                    "YH",
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-008",
+                        "case":  "YH and YL both below",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  97,
+                                       "YL":  95
+                                   },
+                        "expected":  "both low ordered YH,YL among numeric neighbors",
+                        "receiver":  "both lower",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "YH",
+                                                                                   "YL",
+                                                                                   "ONL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-009",
+                        "case":  "YH equal to reference",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  100,
+                                       "YL":  93
+                                   },
+                        "expected":  "neutral/omitted exactly once, never duplicated",
+                        "receiver":  "side null and nonactionable",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-010",
+                        "case":  "YL equal to reference",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  100
+                                   },
+                        "expected":  "neutral/omitted exactly once, never duplicated",
+                        "receiver":  "side null and nonactionable",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-011",
+                        "case":  "duplicate-price independent levels",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  110,
+                                       "LL":  90,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  110,
+                                       "YL":  90
+                                   },
+                        "expected":  "identities preserved, stable tie order, no zero-length target interval",
+                        "receiver":  "six named rows preserved unless explicitly one valid stack",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH",
+                                                                                    "YH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "LL",
+                                                                                   "PML",
+                                                                                   "YL"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-012",
+                        "case":  "single null/unavailable",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  null,
+                                       "YL":  93
+                                   },
+                        "expected":  "YH payload price null; no ladder owner",
+                        "receiver":  "raw null retained, active normalized YH absent",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-013",
+                        "case":  "missing required row",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  93
+                                   },
+                        "mutation":  "delete levels.YH and liquidity_map YH row",
+                        "expected":  "reject incomplete v14",
+                        "receiver":  "400 with stable missing-row detail",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  7,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-014",
+                        "case":  "maximum eight-level population",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  93
+                                   },
+                        "expected":  "all 8 payload rows, no truncation; table header+8 levels+price+up to3 footer within 15 rows",
+                        "receiver":  "8 raw rows and every active numeric row normalized",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-015",
+                        "case":  "reordered liquidity_map rows",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  93
+                                   },
+                        "mutation":  "reverse liquidity_map.levels",
+                        "expected":  "reject noncanonical producer order or normalize with explicit identity proof; values unchanged",
+                        "receiver":  "no silent divergence from top-level levels",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-016",
+                        "case":  "stale payload",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  93
+                                   },
+                        "mutation":  "timestamp/session_date prior session",
+                        "expected":  "archive as stale and do not replace current lock",
+                        "receiver":  "stable stale disposition",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-017",
+                        "case":  "repeated identical payload",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  93
+                                   },
+                        "mutation":  "same sender-bound message identity twice",
+                        "expected":  "one accepted/one idempotent duplicate disposition",
+                        "receiver":  "no second state mutation",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    },
+                    {
+                        "id":  "OA-TV-018",
+                        "case":  "malformed payload",
+                        "reference_price":  100,
+                        "levels":  {
+                                       "PMH":  110,
+                                       "PML":  90,
+                                       "LH":  108,
+                                       "LL":  92,
+                                       "ONH":  106,
+                                       "ONL":  94,
+                                       "YH":  107,
+                                       "YL":  93
+                                   },
+                        "mutation":  "wrong type, unknown level, malformed stack, invalid timezone/version",
+                        "expected":  "fail closed before persistence with exact path",
+                        "receiver":  "400 and append rejected receipt",
+                        "intended_tv_ladder":  {
+                                                   "high_nearest_to_farthest":  [
+                                                                                    "ONH",
+                                                                                    "YH",
+                                                                                    "LH",
+                                                                                    "PMH"
+                                                                                ],
+                                                   "low_nearest_to_farthest":  [
+                                                                                   "ONL",
+                                                                                   "YL",
+                                                                                   "LL",
+                                                                                   "PML"
+                                                                               ]
+                                               },
+                        "expected_payload_level_count":  8,
+                        "expected_normalized_state":  {
+                                                          "same_names_and_values":  true,
+                                                          "session_lock_price":  100,
+                                                          "side_from_reference":  true,
+                                                          "sorted_numeric_contract":  true
+                                                      }
+                    }
+                ]
+}

@@ -1,0 +1,84 @@
+{
+  "schema_version": "operational_a_r4_cadence_adjudication_v1",
+  "starting_pine": {
+    "sha256": "f55ea1bf669afb7dff78082d25d59db18ab2ee4c798c36552331788e3908d316",
+    "current_context_mode": "locked_levels_recurring_status",
+    "first_send": "first confirmed one-minute bar that freezes at 06:15 America/Los_Angeles, or first confirmed post-06:15 bar after late start",
+    "recurrence": "every confirmed one-minute bar while time_tradingday equals the frozen sessionTradingDay_lock",
+    "normal_session_theoretical_max_per_symbol": 465,
+    "count_basis": "one-minute YM/NQ bars opening 06:15 through 13:59 America/Los_Angeles; no bars occur during the normal 14:00-15:00 maintenance closure"
+  },
+  "frozen_after_lock": [
+    "PMH", "PML", "LH", "LL", "ONH", "ONL", "YH", "YL",
+    "all level statuses", "all stack groups", "high/low/TOUCH ownership",
+    "midpoints", "exhaustion boundaries", "stack_threshold", "session_lock_price"
+  ],
+  "mutable_after_lock": [
+    {
+      "field": "timestamp",
+      "operational_consumer": "identity/order/audit only"
+    },
+    {
+      "field": "is_premarket_end",
+      "operational_consumer": "diagnostic lock hint only"
+    },
+    {
+      "field": "is_recurring_update",
+      "operational_consumer": "none"
+    },
+    {
+      "field": "atr_1m_14",
+      "operational_consumer": "none for live Entry Agent ATR; canonical Rithmic feed owns live ATR"
+    },
+    {
+      "field": "daily_atr14",
+      "operational_consumer": "required only at first lock; receiver preserves the first value"
+    },
+    {
+      "field": "pm_atr_pct",
+      "operational_consumer": "diagnostic only"
+    },
+    {
+      "field": "daily_range_pct",
+      "operational_consumer": "diagnostic only"
+    }
+  ],
+  "status_adjudication": {
+    "statuses_frozen_at_0615": true,
+    "payload_status_can_change_after_lock": false,
+    "entry_agent_expects_post_lock_status_change": false,
+    "old_context_mode_name_accurate": false
+  },
+  "recurring_unique_operational_content_at_0616": [],
+  "recurring_unique_operational_content_later": [],
+  "conclusion": "RECURRING FULL-LADDER DELIVERY PROVIDES NO NEW OPERATIONAL AUTHORITY",
+  "cost_comparison_per_symbol": {
+    "one_minute_recurring_max_requests": 465,
+    "lock_snapshot_requests": 1,
+    "avoidable_requests": 464,
+    "spool_and_ledger_amplification": "up to 465 records versus 1, plus corresponding identity/order/log/network failure surface"
+  },
+  "selected_cadence": "LOCK_SNAPSHOT_ONLY",
+  "selected_context_mode": "locked_levels_session_snapshot",
+  "selected_trigger": "canonicalPayloadReady and not sessionTableSent",
+  "late_start": "one catch-up snapshot from a fresh script instance after 06:15",
+  "reload": "one idempotent catch-up from the reloaded script instance; receiver preserves the first frozen lock",
+  "retry": {
+    "after_trade_manager_acceptance": "atomic spool plus bounded relay retry and restart recovery",
+    "before_trade_manager_acceptance": "Pine cannot observe HTTP acknowledgement; if public ingress misses the lock event, governed reload/rebind catch-up is required",
+    "claim_not_made": "automatic sender retry while Trade Manager is unavailable"
+  },
+  "decision_evidence": [
+    "Pine *_Status_eff values resolve to *_Status_lock after sessionLocked",
+    "Pine frozen arrays preserve stacks, ladders, midpoints, and exhaustion values",
+    "EntryAgent.merge_session_liquidity_context overwrites later same-session structure from locked_liquidity_context",
+    "EntryAgent.effective_session_tv_context returns the persisted frozen 06:15 context",
+    "EntryAgent.atr_from_snapshot accepts only canonical Rithmic ATR",
+    "Trade Manager Level Map relay does not update its separate TradingView ATR cache"
+  ],
+  "python_compatibility_change": {
+    "required": true,
+    "paths": ["Engines/trade_manager.py", "EntryAgent/tv_context_server.py"],
+    "scope": "exact context_mode envelope constant only; no receiver/relay state semantics changed"
+  }
+}

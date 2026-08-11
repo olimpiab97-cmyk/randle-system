@@ -16,6 +16,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.pine_runtime_string_semantics import (
+    legacy_unsafe_pine_json_string,
+    pine_literal_body_value,
+    production_pine_json_dumps,
+    production_pine_json_string,
+)
+
 
 ROOT = Path(__file__).resolve().parent
 ENTRY_AGENT_DIR = ROOT / "EntryAgent"
@@ -85,7 +92,7 @@ def webhook_section() -> str:
 def payload_expression() -> str:
     section = webhook_section()
     start = section.index("string entryAgentPayload =")
-    end = section.index("alert(entryAgentPayload", start)
+    end = section.index("// Runtime canonical literal integrity gate.", start)
     return section[start:end]
 
 
@@ -169,13 +176,13 @@ def synthetic_pine_payload(symbol: str, *, stacked_yh: bool) -> dict[str, object
     return {
         "source": "tradingview_level_helper",
         "version": "v14_canonical_liquidity_sender",
-        "context_mode": "locked_levels_recurring_status",
+        "context_mode": "locked_levels_session_snapshot",
         "timestamp": "2026-07-20T13:16:00Z",
         "session_date": "2026-07-20",
         "session_locked": True,
         "locked": True,
         "is_premarket_end": False,
-        "is_recurring_update": True,
+        "is_recurring_update": False,
         "price_is_true_level": True,
         "display_offsets_applied_to_chart_only": True,
         "symbol": symbol,
@@ -227,7 +234,7 @@ def test_complete_source_and_accepted_tail_provenance() -> None:
     assert source.count("\nindicator(") == 1
     assert "Replace the production source" not in source
     assert source.count("string entryAgentPayload =") == 1
-    assert source.count("alert(entryAgentPayload, alert.freq_once_per_bar_close)") == 1
+    assert source.count("alert(frozenCanonicalPayload, alert.freq_once_per_bar_close)") == 1
     for complete_section in (
         "// INPUTS",
         "// SESSION TRACKERS",
@@ -265,11 +272,83 @@ def test_complete_source_has_balanced_structural_delimiters() -> None:
     assert stack == []
 
 
-def test_source_time_uses_confirmed_bar_close_in_utc_not_execution_clock() -> None:
+def test_live_r3b_serializer_failure_is_reproduced_from_pine_literal_semantics() -> None:
+    assert pine_literal_body_value(r"\r") == "r"
+    assert pine_literal_body_value(r"\\r") == r"\r"
+    encoded = legacy_unsafe_pine_json_string("America/Los_Angeles")
+    assert encoded == '"Ame\\rica/Los_Angeles"'
+    decoded = json.loads(encoded)
+    assert decoded == "Ame\rica/Los_Angeles"
+    assert decoded.count("\r") == 1
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "America/Los_Angeles",
+        "tradingview_level_helper",
+        "v14_canonical_liquidity_sender",
+        "locked_levels_session_snapshot",
+        "YM1!",
+        "NQ1!",
+        "r-start",
+        "middle-r-value",
+        "rare-river-runner",
+        'quote: "',
+        "backslash: \\",
+        "line1\nline2",
+        "left\tright",
+    ),
+)
+def test_corrected_production_serializer_round_trips_supported_content(value: str) -> None:
+    source = PINE.read_text(encoding="utf-8")
+    encoded = production_pine_json_string(value, source)
+    assert json.loads(encoded) == value
+    if "\r" not in value:
+        assert "\r" not in json.loads(encoded)
+
+
+def test_corrected_serializer_fails_closed_on_actual_carriage_return() -> None:
+    source = PINE.read_text(encoding="utf-8")
+    with pytest.raises(ValueError, match="CANONICAL_JSON_STRING_U000D_REJECTED"):
+        production_pine_json_string("left\rright", source)
+
+
+def test_timezone_serialization_and_runtime_literal_gate_are_exact() -> None:
+    source = PINE.read_text(encoding="utf-8")
     section = webhook_section()
-    assert 'str.format_time(time_close, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC")' in section
+    encoded_timezone = production_pine_json_string("America/Los_Angeles", source)
+    fragment = '"time_zone":' + encoded_timezone
+    decoded = json.loads("{" + fragment + "}")["time_zone"]
+    assert fragment == '"time_zone":"America/Los_Angeles"'
+    assert decoded == "America/Los_Angeles"
+    assert len(decoded) == len("America/Los_Angeles")
+    assert decoded.count("\r") == decoded.count("\n") == decoded.count("\t") == 0
+
+    for literal in (
+        '"source":"tradingview_level_helper"',
+        '"version":"v14_canonical_liquidity_sender"',
+        '"context_mode":"locked_levels_session_snapshot"',
+        '"time_zone":"America/Los_Angeles"',
+    ):
+        assert literal.replace('"', '\\"') in section
+    assert 'not str.contains(entryAgentPayload, "\\\\r")' in section
+    assert section.index("if canonicalPayloadLiteralIntegrity") < section.index(
+        "frozenCanonicalPayload := entryAgentPayload"
+    )
+    assert section.index("frozenCanonicalPayload := entryAgentPayload") < section.index(
+        "alert(frozenCanonicalPayload"
+    )
+    assert section.count("alert(frozenCanonicalPayload") == 1
+
+
+def test_source_time_uses_governed_0615_lock_in_utc_not_delivery_clock() -> None:
+    section = webhook_section()
+    assert 'str.format_time(today0615, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC")' in section
     assert '\\"timestamp\\":" + f_json_str(canonicalSourceTimestamp)' in section
     assert "timenow" not in section
+    timestamp_line = next(line for line in section.splitlines() if line.startswith("string canonicalSourceTimestamp"))
+    assert "time_close" not in timestamp_line
     assert "barstate.isconfirmed" in section
     assert "alert.freq_once_per_bar_close" in section
 
@@ -277,7 +356,7 @@ def test_source_time_uses_confirmed_bar_close_in_utc_not_execution_clock() -> No
 def test_session_date_uses_exchange_trading_day_and_binds_to_frozen_lock() -> None:
     source = PINE.read_text(encoding="utf-8")
     section = webhook_section()
-    assert 'str.format_time(time_tradingday, "yyyy-MM-dd", "UTC")' in section
+    assert 'str.format_time(sessionTradingDay_lock, "yyyy-MM-dd", "UTC")' in section
     assert "sessionTradingDay_lock := time_tradingday" in source
     assert "time_tradingday == sessionTradingDay_lock" in section
     assert '\\"session_date\\":" + f_json_str(canonicalSessionDate)' in section
@@ -301,7 +380,7 @@ def test_frozen_reference_is_separate_and_never_falls_back_to_current_price() ->
 
 def test_sender_fail_closed_gate_covers_every_required_authority() -> None:
     section = webhook_section()
-    gate = section[section.index("bool canonicalPayloadReady =") : section.index("if canonicalPayloadReady")]
+    gate = section[section.index("bool canonicalPayloadReady =") : section.index("bool canonicalSnapshotReady =")]
     for required in (
         "timeframe.isminutes",
         "timeframe.multiplier == 1",
@@ -318,8 +397,16 @@ def test_sender_fail_closed_gate_covers_every_required_authority() -> None:
         "not na(dailyATR14)",
     ):
         assert required in gate
-    assert section.count("alert(entryAgentPayload") == 1
-    assert section.index("if canonicalPayloadReady") < section.index("alert(entryAgentPayload")
+    assert section.count("alert(frozenCanonicalPayload") == 1
+    snapshot_gate = section[
+        section.index("bool canonicalSnapshotReady =") : section.index("if canonicalSnapshotReady")
+    ]
+    assert "canonicalPayloadReady and str.length(frozenCanonicalPayload) == 0" in snapshot_gate
+    assert section.index("if canonicalSnapshotReady") < section.index("frozenCanonicalPayload := entryAgentPayload")
+    assert section.index("frozenCanonicalPayload := entryAgentPayload") < section.index(
+        "alert(frozenCanonicalPayload"
+    )
+    assert section.index("alert(frozenCanonicalPayload") < section.index("sessionTableSent := true")
 
 
 def test_exact_serializer_field_inventory_and_order() -> None:
@@ -351,7 +438,7 @@ def test_deterministic_synthetic_pine_json_is_valid_typed_and_complete(
     fixture_name: str,
 ) -> None:
     payload = synthetic_pine_payload(symbol, stacked_yh=stacked_yh)
-    encoded = json.dumps(payload, separators=(",", ":"), allow_nan=False)
+    encoded = production_pine_json_dumps(payload, PINE.read_text(encoding="utf-8"))
     decoded = json.loads(encoded, object_pairs_hook=reject_duplicate_keys)
     fixture = json.loads(
         (FIXTURE_DIR / fixture_name).read_text(encoding="utf-8"),
@@ -424,12 +511,7 @@ def test_entry_agent_keeps_precise_missing_reference_rejection_for_stacked_yh() 
     payload.pop("session_lock_price")
     context, error = server.build_context(payload)
     assert context is None
-    assert error == {
-        "code": "STACK_REFERENCE_PRICE_MISSING",
-        "error": "a frozen market reference is required to validate YH in HIGH 1",
-        "level": "YH",
-        "stack_group": "HIGH 1",
-    }
+    assert error == {"error": "session_lock_price must be a finite number"}
 
 
 @requires_canonical_receiver

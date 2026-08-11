@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,7 +52,7 @@ DISPLAY_PRIORITY = {"YH": 0, "ONH": 1, "LH": 2, "PMH": 3, "PML": 4, "LL": 5, "ON
 GOVERNED_PINE = ROOT / "TradingView" / "indicators" / "Randle_AI_Level_Map_Helper.pine"
 EVIDENCE_DIR = ROOT / "Architecture" / "Impact_Assessments" / "Evidence" / "2026-07-16_TradingView_Liquidity_Ladder"
 HISTORICAL_CATEGORICAL_PINE = EVIDENCE_DIR / "Randle_AI_Level_Map_Helper_7-16_Erroneous_Categorical_Exclusion_0543DD45.pine"
-GOVERNED_FULL_SPAN_PINE_SHA256 = "1C795076B9463B3F567366851EDA4914D2248F1B4B5A7B1155C8E26CEF961D70"
+GOVERNED_FULL_SPAN_PINE_SHA256 = "C7D35CA9239641EE3AAB5F771FB4969998CB7C7018057A98CDE49A64E435C565"
 HISTORICAL_CATEGORICAL_PINE_SHA256 = "0543DD45B92AC50B30A099AE13D97CDAA4406B1DFBDDEACA4EC14456B874F497"
 REPLACEMENT_SECTION_SHA256 = "36D16D4F50742DA3FDA4A8580D3E2EA099DD2344306D58DAEFE6DC4E21F179BA"
 CORRECTED_SCREENSHOT_SHA256 = "EDEC2CE7703C32552AF5CAC94497662FC5CB5A4F893DC8AA265CF89E9DC3DF4B"
@@ -73,6 +74,10 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def sha256_normalized_lf(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest().upper()
+
+
 def active_level(price: float, stack_group: str = "NONE", status: str = "ACTIVE") -> dict[str, object]:
     return {"price": price, "status": status, "stack_group": stack_group}
 
@@ -83,8 +88,8 @@ def calculate_full_span_stacks(
     current_price: float,
     threshold: float,
 ) -> tuple[dict[str, str], list[dict[str, object]]]:
-    """Model Pine's deterministic innermost-to-outermost full-span grouping."""
-    labels = {name: "NONE" for name in LEVEL_ORDER if name in levels}
+    """Model Pine's deterministic full-span groups with boundary bridging."""
+    memberships: dict[str, list[str]] = {name: [] for name in LEVEL_ORDER if name in levels}
     candidates = []
     for name in LEVEL_ORDER:
         details = levels.get(name)
@@ -126,8 +131,13 @@ def calculate_full_span_stacks(
             if not pending or max(prices) - min(prices) <= threshold:
                 pending.append(candidate)
             else:
+                bridge_price = float(pending[-1]["price"])
                 finalize()
-                pending = [candidate]
+                bridge_members = [item for item in pending if float(item["price"]) == bridge_price]
+                if abs(float(candidate["price"]) - bridge_price) <= threshold:
+                    pending = bridge_members + [candidate]
+                else:
+                    pending = [candidate]
         finalize()
 
     for side in ("high", "low"):
@@ -140,7 +150,8 @@ def calculate_full_span_stacks(
             label = f"{side.upper()} {ordinal}"
             component["label"] = label
             for name in component["members"]:
-                labels[str(name)] = label
+                memberships[str(name)].append(label)
+    labels = {name: " + ".join(groups) if groups else "NONE" for name, groups in memberships.items()}
     return labels, components
 
 
@@ -176,22 +187,34 @@ def target_anchors(
         if str(details.get("status") or "").upper() not in {"ACTIVE", "REACTIVATED"}:
             continue
         price = float(details["price"])
-        label = labels.get(name, "NONE")
-        anchor = price
-        if label != "NONE":
-            if label in seen_groups:
-                continue
-            seen_groups.add(label)
-            anchor = float(component_by_label[label]["outermost_liquidity_level"])
-        if anchor > current_price:
-            high.add(anchor)
-        elif anchor < current_price:
-            low.add(anchor)
+        row_labels = [] if labels.get(name, "NONE") == "NONE" else labels[name].split(" + ")
+        anchors = [price]
+        if row_labels:
+            anchors = []
+            for label in row_labels:
+                if label not in seen_groups:
+                    seen_groups.add(label)
+                    anchors.append(float(component_by_label[label]["outermost_liquidity_level"]))
+        for anchor in anchors:
+            if anchor > current_price:
+                high.add(anchor)
+            elif anchor < current_price:
+                low.add(anchor)
     return sorted(high), sorted(low, reverse=True)
 
 
 def project_levels(levels: dict[str, dict[str, object]], labels: dict[str, str]) -> dict[str, dict[str, object]]:
-    return {name: {**copy.deepcopy(details), "stack_group": labels.get(name, "NONE")} for name, details in levels.items()}
+    projected = {}
+    for name, details in levels.items():
+        display = labels.get(name, "NONE")
+        groups = [] if display == "NONE" else display.split(" + ")
+        projected[name] = {
+            **copy.deepcopy(details),
+            "stack_group": groups[0] if groups else "NONE",
+            "stack_groups": groups,
+            "stack_display": display,
+        }
+    return projected
 
 
 def receiver_payload(
@@ -221,8 +244,8 @@ def receiver_payload(
 
 @requires_historical_evidence
 def test_evidence_history_is_preserved_and_current_source_has_new_identity() -> None:
-    assert sha256(HISTORICAL_CATEGORICAL_PINE) == HISTORICAL_CATEGORICAL_PINE_SHA256
-    assert sha256(EVIDENCE_DIR / "REPLACE_STACK_GROUP_SECTION.pine") == REPLACEMENT_SECTION_SHA256
+    assert sha256_normalized_lf(HISTORICAL_CATEGORICAL_PINE) == HISTORICAL_CATEGORICAL_PINE_SHA256
+    assert sha256_normalized_lf(EVIDENCE_DIR / "REPLACE_STACK_GROUP_SECTION.pine") == REPLACEMENT_SECTION_SHA256
     assert sha256(EVIDENCE_DIR / "YM1!_2026-07-16_21-01-55.png") == CORRECTED_SCREENSHOT_SHA256
     assert sha256(GOVERNED_PINE) == GOVERNED_FULL_SPAN_PINE_SHA256
     assert sha256(GOVERNED_PINE) != HISTORICAL_CATEGORICAL_PINE_SHA256
@@ -272,11 +295,12 @@ def test_yh_joins_when_complete_high_span_is_within_threshold() -> None:
     assert components[0]["span"] == 5
 
 
-def test_yh_remains_independent_when_complete_high_span_exceeds_threshold() -> None:
+def test_yh_forms_bridge_stack_when_complete_high_span_exceeds_threshold() -> None:
     levels = {"PMH": active_level(100), "LH": active_level(103), "ONH": active_level(104), "YH": active_level(106)}
     labels, _ = calculate_full_span_stacks(levels, current_price=90, threshold=5)
-    assert labels["PMH"] == labels["LH"] == labels["ONH"] == "HIGH 1"
-    assert labels["YH"] == "NONE"
+    assert labels["PMH"] == labels["LH"] == "HIGH 1"
+    assert labels["ONH"] == "HIGH 1 + HIGH 2"
+    assert labels["YH"] == "HIGH 2"
 
 
 def test_yl_joins_and_splits_by_complete_low_span() -> None:
@@ -287,21 +311,24 @@ def test_yl_joins_and_splits_by_complete_low_span() -> None:
     split = copy.deepcopy(joining)
     split["YL"]["price"] = 74
     labels, _ = calculate_full_span_stacks(split, current_price=90, threshold=5)
-    assert labels["PML"] == labels["LL"] == labels["ONL"] == "LOW 1"
-    assert labels["YL"] == "NONE"
+    assert labels["PML"] == labels["LL"] == "LOW 1"
+    assert labels["ONL"] == "LOW 1 + LOW 2"
+    assert labels["YL"] == "LOW 2"
 
 
-def test_pairwise_adjacency_cannot_create_transitive_over_span_stack() -> None:
+def test_pairwise_adjacency_creates_distinct_bridge_stack_not_transitive_wide_stack() -> None:
     high = {"PMH": active_level(100), "ONH": active_level(104), "YH": active_level(108)}
     labels, components = calculate_full_span_stacks(high, current_price=90, threshold=5)
-    assert labels["PMH"] == labels["ONH"] == "HIGH 1"
-    assert labels["YH"] == "NONE"
+    assert labels["PMH"] == "HIGH 1"
+    assert labels["ONH"] == "HIGH 1 + HIGH 2"
+    assert labels["YH"] == "HIGH 2"
     assert max(component["span"] for component in components) <= 5
 
     low = {"PML": active_level(100), "ONL": active_level(96), "YL": active_level(92)}
     labels, components = calculate_full_span_stacks(low, current_price=110, threshold=5)
-    assert labels["PML"] == labels["ONL"] == "LOW 1"
-    assert labels["YL"] == "NONE"
+    assert labels["PML"] == "LOW 1"
+    assert labels["ONL"] == "LOW 1 + LOW 2"
+    assert labels["YL"] == "LOW 2"
     assert max(component["span"] for component in components) <= 5
 
 
@@ -332,8 +359,9 @@ def test_multiple_independent_stacks_keep_nearest_outward_numbering() -> None:
 def test_next_member_is_checked_against_complete_candidate_span() -> None:
     levels = {"PMH": active_level(100), "LH": active_level(105), "YH": active_level(110)}
     labels, _ = calculate_full_span_stacks(levels, current_price=90, threshold=6)
-    assert labels["PMH"] == labels["LH"] == "HIGH 1"
-    assert labels["YH"] == "NONE"
+    assert labels["PMH"] == "HIGH 1"
+    assert labels["LH"] == "HIGH 1 + HIGH 2"
+    assert labels["YH"] == "HIGH 2"
 
 
 def test_ym_20260716_result_and_target_anchors_are_correct_for_full_span_reason() -> None:
@@ -349,11 +377,11 @@ def test_ym_20260716_result_and_target_anchors_are_correct_for_full_span_reason(
     }
     labels, components = calculate_full_span_stacks(levels, current_price=52950, threshold=60)
     assert labels == {
-        "YH": "NONE",
+        "YH": "HIGH 2",
         "YL": "NONE",
-        "ONH": "HIGH 1",
+        "ONH": "HIGH 1 + HIGH 2",
         "ONL": "LOW 1",
-        "LH": "HIGH 1",
+        "LH": "HIGH 1 + HIGH 2",
         "LL": "LOW 1",
         "PMH": "HIGH 1",
         "PML": "LOW 1",
@@ -382,7 +410,8 @@ def test_nq_equivalent_high_and_low_prior_rth_membership() -> None:
 
     levels["YH"]["price"] = 29463.00
     labels, _ = calculate_full_span_stacks(levels, current_price=29400, threshold=4)
-    assert labels["YH"] == "NONE"
+    assert labels["LH"] == "HIGH 1 + HIGH 2"
+    assert labels["YH"] == "HIGH 2"
 
 
 def test_existing_valid_stacks_without_prior_rth_are_unchanged() -> None:
@@ -439,12 +468,13 @@ def test_table_and_webhook_rows_use_the_same_full_span_assignments() -> None:
     labels, _ = calculate_full_span_stacks(levels, current_price=90, threshold=5)
     table_rows = {name: labels[name] for name in levels}
     webhook_rows = {
-        name: details["stack_group"]
+        name: details["stack_display"]
         for name, details in project_levels(levels, labels).items()
     }
     assert table_rows == webhook_rows
     assert table_rows["YH"] == "HIGH 1"
-    assert table_rows["YL"] == "NONE"
+    assert table_rows["ONL"] == "LOW 1 + LOW 2"
+    assert table_rows["YL"] == "LOW 2"
 
 
 @requires_canonical_stack_runtime
@@ -568,7 +598,11 @@ def test_exact_invalid_route_is_archived_without_mutating_authority(tmp_path: Pa
     try:
         levels = {"PMH": active_level(100, "HIGH 1"), "ONH": active_level(104, "HIGH 1"), "YH": active_level(108, "HIGH 1")}
         payload = receiver_payload(levels, reference=90, threshold=5)
-        response = tv_context_server.app.test_client().post("/webhook/tv-context", json=payload)
+        response = tv_context_server.app.test_client().post(
+            "/webhook/tv-context",
+            json=payload,
+            headers={"X-Randle-Relay-Token": os.environ["TV_CONTEXT_INTERNAL_RELAY_TOKEN"]},
+        )
         assert response.status_code == 400
         receipt = json.loads(tv_context_server.TV_CONTEXT_EVENTS_PATH.read_text(encoding="utf-8"))
         assert receipt["schema_version"] == "tv_context_receipt_v2"
