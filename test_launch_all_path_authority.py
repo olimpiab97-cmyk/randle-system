@@ -89,11 +89,12 @@ class LaunchAllPathAuthorityTests(unittest.TestCase):
         self.assertIn('[int]$response.StatusCode -eq 503', probe)
         self.assertIn('$status.service_status -eq "REHYDRATING"', probe)
         self.assertIn("expected_fail_closed_rehydration", probe)
-        self.assertIn("entry_agent_fail_closed_rehydrating", probe)
+        self.assertIn("entry_agent_service_responsive_fail_closed_rehydrating", probe)
+        self.assertIn('$baseEvidence["TradingReady"] = $false', probe)
         self.assertIn("$status.rehydration_failures", probe)
         self.assertRegex(
             probe,
-            r"return New-ProbeResult \$false \(\"entry_agent_fail_closed_rehydrating",
+            r"return New-ProbeResult \$serviceResponsive \(\"entry_agent_service_responsive_fail_closed_rehydrating",
         )
 
 

@@ -14,8 +14,15 @@ $script:repositoryRoot = [IO.Path]::GetFullPath($PSScriptRoot)
 if (-not (Test-Path -LiteralPath $script:repositoryRoot -PathType Container)) {
     throw "repository_root_invalid:$script:repositoryRoot"
 }
-$runtimeDataRootCandidate = if ($env:RANDLE_DATA_ROOT) { $env:RANDLE_DATA_ROOT } else { Join-Path $script:repositoryRoot "Data" }
+if (-not $env:RANDLE_DATA_ROOT) {
+    throw "RANDLE_DATA_ROOT is required for governed production launch authority."
+}
+$runtimeDataRootCandidate = $env:RANDLE_DATA_ROOT
 $script:runtimeDataRoot = [IO.Path]::GetFullPath($runtimeDataRootCandidate)
+$env:TV_CONTEXT_ACCEPTANCE_LEDGER_PATH = Join-Path $script:runtimeDataRoot "entry_agent\tv_context_acceptance_ledger.json"
+$env:TV_CONTEXT_SPOOL_DIR = Join-Path $script:runtimeDataRoot "tv_context_spool"
+$env:ENTRY_AGENT_TV_CONTEXT_URL = "http://127.0.0.1:7002/webhook/tv-context"
+if (-not $env:RANDLE_TRADE_MANAGER_MODE) { $env:RANDLE_TRADE_MANAGER_MODE = "qa_stability" }
 $StartupStartedAt = [DateTime]::UtcNow
 $LaunchId = Get-Date -Format "yyyyMMdd_HHmmss"
 $script:startupLogDirectory = Join-Path $script:runtimeDataRoot "startup"
@@ -25,9 +32,8 @@ $EvidencePath = Join-Path $script:startupLogDirectory "launch_$LaunchId.evidence
 $ExecutorHealthUrl = "http://127.0.0.1:6001/health"
 $ExecutorPipelineUrl = "http://127.0.0.1:6001/debug/tick_pipeline"
 $ExecutorPricesUrl = "http://127.0.0.1:6001/debug/live_prices"
-$TradeManagerHealthUrl = "http://127.0.0.1:7001/health"
-$TradeManagerPipelineUrl = "http://127.0.0.1:7001/debug/tick_pipeline"
-$TradeManagerCanonicalAtrStatusUrl = "http://127.0.0.1:7001/debug/canonical/atr_status"
+$TradeManagerVersionUrl = "http://127.0.0.1:7001/debug/version"
+$TradeManagerSafetyUrl = "http://127.0.0.1:7001/trades"
 $EntryAgentStatusUrl = "http://127.0.0.1:7002/entry/status?symbols=NQ,YM"
 $TradingViewRelayHealthUrl = "http://127.0.0.1:7002/debug/tv-context"
 $TradingViewRelayReceiptUrl = "http://127.0.0.1:7002/debug/tv-context-receipt"
@@ -43,6 +49,34 @@ $TradeManagerJournalMaintenancePath = Join-Path $script:repositoryRoot "compact_
 $script:executorTickJournalDirectory = Join-Path $env:LOCALAPPDATA "RandleRuntimeData\executor_tick_authority"
 $script:tradeManagerTickJournalDirectory = Join-Path $env:LOCALAPPDATA "RandleRuntimeData\trade_manager_tick_authority"
 $TradeManagerPersistencePath = Join-Path $script:runtimeDataRoot "persistence_state.json"
+$ExecutorPersistencePath = Join-Path $script:repositoryRoot "Data\executor_state.json"
+$ServiceWrapperPath = Join-Path $script:repositoryRoot "command_center_service_launcher.py"
+$ServiceManifestPath = Join-Path $script:repositoryRoot "Architecture\Command_Center\command_center_governed_service_manifest.json"
+$PythonResolverPath = Join-Path $script:repositoryRoot "resolve_python_runtime.ps1"
+if (-not (Test-Path -LiteralPath $ServiceManifestPath -PathType Leaf)) {
+    throw "governed_service_manifest_missing:$ServiceManifestPath"
+}
+if (-not (Test-Path -LiteralPath $PythonResolverPath -PathType Leaf)) {
+    throw "python_runtime_resolver_missing:$PythonResolverPath"
+}
+$ServiceManifest = Get-Content -LiteralPath $ServiceManifestPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+$ngrokManifestService = @($ServiceManifest.services | Where-Object { $_.name -eq "ngrok" })
+if ($ngrokManifestService.Count -ne 1) {
+    throw "ngrok_manifest_authority_unresolved"
+}
+$script:ngrokPublicHost = [string]$ngrokManifestService[0].readiness.public_host
+if ([string]::IsNullOrWhiteSpace($script:ngrokPublicHost)) {
+    throw "ngrok_public_host_authority_unresolved"
+}
+$script:ngrokPublicUrl = "https://$($script:ngrokPublicHost)"
+. $PythonResolverPath
+$script:processEnvironmentAuthority = Repair-RandleProcessEnvironmentKeyCasing
+try {
+    [string]$script:pythonExecutable = Resolve-RandlePythonExecutable -RepositoryRoot $script:repositoryRoot -ManifestPath $ServiceManifestPath
+}
+catch {
+    throw "python_runtime_authority_unresolved:$($_.Exception.Message)"
+}
 $RithmicRecentBarsPath = Join-Path $script:runtimeDataRoot "rithmic_recent_bars.json"
 $ExecutorJournalMaintenanceTimeoutSeconds = 300
 $TradeManagerJournalMaintenanceTimeoutSeconds = 300
@@ -59,11 +93,14 @@ $MarketReadinessObservationSeconds = $FirstCompleteCandleMaximumSeconds +
 $MarketReadinessStallSeconds = $FirstCompleteCandleMaximumSeconds + $MarketReadinessSchedulingAllowanceSeconds
 
 $ExecutorMarker = '\bexecutor\.py\b'
-$TradeManagerMarker = '\bEngines[\\/]trade_manager\.py\b'
-$EntryAgentMarker = '\bEntryAgent[\\/]tv_context_server\.py\b'
+$TradeManagerMarker = '\bcommand_center_service_launcher\.py\b.*--service\s+trade_manager\b|\bproduction_manager_launcher\.py\b|\bEngines[\\/]trade_manager\.py\b'
+$EntryAgentMarker = '\bcommand_center_service_launcher\.py\b.*--service\s+entry_agent\b|\bproduction_entry_launcher\.py\b|\bEntryAgent[\\/]tv_context_server\.py\b'
 $ListenerMarker = '\brithmic_live_listener\.py\b'
 
 $ComponentTimeouts = [ordered]@{
+    ProductionWriteAuthority = 5
+    PreExecutorStartSafetyGate = 10
+    StartupExposureGate = 10
     Executor = $ServiceTimeoutSeconds
     TradeManager = $ServiceTimeoutSeconds
     EntryAgent = $ServiceTimeoutSeconds
@@ -263,8 +300,9 @@ function Invoke-LocalJsonResponse {
         $content = [string]$webResponse.Content
     }
     catch {
-        $requestError = $_.Exception.Message
-        $errorResponse = $_.Exception.Response
+        $caughtError = $_
+        $requestError = [string]$caughtError.Exception.Message
+        $errorResponse = $caughtError.Exception.Response
         if ($null -ne $errorResponse) {
             try { $statusCode = [int]$errorResponse.StatusCode } catch { $statusCode = $null }
             try {
@@ -278,8 +316,11 @@ function Invoke-LocalJsonResponse {
                 $content = ""
             }
         }
-        if ([string]::IsNullOrWhiteSpace($content) -and -not [string]::IsNullOrWhiteSpace([string]$_.ErrorDetails.Message)) {
-            $content = [string]$_.ErrorDetails.Message
+        $errorDetails = $caughtError.ErrorDetails
+        if ([string]::IsNullOrWhiteSpace($content) -and
+            $null -ne $errorDetails -and
+            -not [string]::IsNullOrWhiteSpace([string]$errorDetails.Message)) {
+            $content = [string]$errorDetails.Message
         }
     }
 
@@ -317,6 +358,284 @@ function Get-ManagedProcesses {
     catch {
         return
     }
+}
+
+function Test-ProductionWriteAuthority {
+    $roots = @(
+        $script:runtimeDataRoot,
+        (Join-Path $script:runtimeDataRoot "tv_context_spool"),
+        (Join-Path $script:runtimeDataRoot "entry_agent")
+    )
+    $evidence = @()
+    foreach ($authorityRoot in $roots) {
+        $probe = Join-Path $authorityRoot (".launch-write-authority-{0}.tmp" -f [Guid]::NewGuid().ToString("N"))
+        try {
+            New-Item -ItemType Directory -Path $authorityRoot -Force -ErrorAction Stop | Out-Null
+            [IO.File]::WriteAllText($probe, "governed-production-write-authority`n", [Text.UTF8Encoding]::new($false))
+            if ([IO.File]::ReadAllText($probe, [Text.Encoding]::UTF8) -ne "governed-production-write-authority`n") {
+                throw "write_probe_readback_mismatch"
+            }
+            $bytes = [Text.Encoding]::UTF8.GetBytes([IO.Path]::GetFullPath($authorityRoot))
+            $hasher = [Security.Cryptography.SHA256]::Create()
+            try { $pathHash = ([BitConverter]::ToString($hasher.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant() } finally { $hasher.Dispose() }
+            $evidence += [PSCustomObject]@{ PathHash = $pathHash; Ok = $true }
+        }
+        catch {
+            return New-ProbeResult $false ("production_write_authority_failed:{0}" -f $_.Exception.GetType().Name) $evidence
+        }
+        finally {
+            Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return New-ProbeResult $true "production_write_authority_pass" $evidence
+}
+
+function Test-PreExecutorStartSafetyGate {
+    $terminalOrders = @("filled", "cancelled", "canceled", "closed", "rejected", "error", "expired")
+    $terminalTrades = @("closed", "archived", "rejected", "error", "cancelled", "canceled")
+    $executorProcesses = @(Get-ManagedProcesses "python" $ExecutorMarker)
+    if ($executorProcesses.Count -gt 1) {
+        return New-ProbeResult $false ("executor_duplicate_before_start:{0}" -f $executorProcesses.Count)
+    }
+
+    $executorAuthority = "source_defined_empty_executor_state"
+    $orderRows = @()
+    $positionProperties = @()
+    if ($executorProcesses.Count -eq 1) {
+        $expectedExecutorPath = [IO.Path]::GetFullPath((Join-Path $script:repositoryRoot "executor.py"))
+        $observedExecutorPath = Get-CommandPythonScriptPath $executorProcesses[0].CommandLine
+        if (-not $observedExecutorPath -or [IO.Path]::GetFullPath($observedExecutorPath) -ne $expectedExecutorPath) {
+            return New-ProbeResult $false "executor_identity_untrusted_before_start"
+        }
+        try {
+            $ordersPayload = Invoke-LocalJson "http://127.0.0.1:6001/orders" 4
+            $positionsPayload = Invoke-LocalJson "http://127.0.0.1:6001/positions" 4
+        }
+        catch {
+            return New-ProbeResult $false ("running_executor_state_unavailable:{0}" -f $_.Exception.Message)
+        }
+        if ($ordersPayload.ok -ne $true -or $positionsPayload.ok -ne $true -or $null -eq $ordersPayload.orders -or $null -eq $positionsPayload.positions) {
+            return New-ProbeResult $false "running_executor_state_contract_failed"
+        }
+        $orderRows = @($ordersPayload.orders)
+        $positionProperties = @($positionsPayload.positions.PSObject.Properties)
+        $executorAuthority = "live_executor"
+    }
+    elseif (Test-Path -LiteralPath $ExecutorPersistencePath -PathType Leaf) {
+        try { $executorPersisted = Get-Content -LiteralPath $ExecutorPersistencePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop } catch {
+            return New-ProbeResult $false ("persisted_executor_state_invalid:{0}" -f $_.Exception.Message)
+        }
+        if ($null -eq $executorPersisted.orders -or $null -eq $executorPersisted.positions) {
+            return New-ProbeResult $false "persisted_executor_state_contract_failed"
+        }
+        $orderRows = @($executorPersisted.orders.PSObject.Properties.Value)
+        $positionProperties = @($executorPersisted.positions.PSObject.Properties)
+        $executorAuthority = "persisted_executor_state"
+    }
+    $activeOrders = @($orderRows | Where-Object { $terminalOrders -notcontains ([string]$_.status).ToLowerInvariant() })
+    $nonzeroPositions = @($positionProperties | Where-Object {
+        $value = $_.Value
+        $qty = if ($value -is [System.Collections.IDictionary] -or $value.PSObject.Properties["qty"]) { $value.qty } else { $value }
+        [math]::Abs([double]($qty -as [double])) -gt 0
+    })
+
+    $tradeCandidates = @(Get-ManagedProcesses "python" $TradeManagerMarker)
+    $tradeProcesses = @(Get-GovernedWrappedServiceProcesses "trade_manager")
+    if ($tradeCandidates.Count -ne $tradeProcesses.Count -or $tradeProcesses.Count -gt 1) {
+        return New-ProbeResult $false "trade_manager_identity_untrusted_before_start"
+    }
+    $pendingTrades = @()
+    $orphan = $false
+    $tradeAuthority = "persisted_start_gate_only"
+    if ($tradeProcesses.Count -eq 1) {
+        try { $tradePayload = Invoke-LocalJson "http://127.0.0.1:7001/trades" 4 } catch {
+            return New-ProbeResult $false ("running_trade_manager_state_unavailable:{0}" -f $_.Exception.Message)
+        }
+        if ($tradePayload.ok -ne $true -or $null -eq $tradePayload.trades) {
+            return New-ProbeResult $false "running_trade_manager_state_contract_failed"
+        }
+        $pendingTrades = @($tradePayload.trades.PSObject.Properties.Value | Where-Object { $terminalTrades -notcontains ([string]$_.status).ToLowerInvariant() })
+        $orphan = $tradePayload.orphan_exposure.has_orphans -eq $true -or $tradePayload.orphan_exposure.has_manager_state_issue -eq $true
+        $tradeAuthority = "live_trade_manager"
+    }
+    else {
+        if (-not (Test-Path -LiteralPath $TradeManagerPersistencePath -PathType Leaf)) {
+            return New-ProbeResult $false "persisted_trade_state_unavailable"
+        }
+        try { $tradePersisted = Get-Content -LiteralPath $TradeManagerPersistencePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop } catch {
+            return New-ProbeResult $false ("persisted_trade_state_invalid:{0}" -f $_.Exception.Message)
+        }
+        if ($null -eq $tradePersisted.trades) { return New-ProbeResult $false "persisted_trade_state_contract_failed" }
+        $pendingTrades = @($tradePersisted.trades.PSObject.Properties.Value | Where-Object { $terminalTrades -notcontains ([string]$_.status).ToLowerInvariant() })
+        $topLevelOrphan = $tradePersisted.PSObject.Properties["orphan_exposure"]
+        $systemState = $tradePersisted.PSObject.Properties["system"]
+        $systemOrphan = if ($null -ne $systemState -and $null -ne $systemState.Value) {
+            $systemState.Value.PSObject.Properties["orphan_exposure"]
+        }
+        else {
+            $null
+        }
+        $orphanState = if ($null -ne $topLevelOrphan) {
+            $topLevelOrphan.Value
+        }
+        elseif ($null -ne $systemOrphan) {
+            $systemOrphan.Value
+        }
+        else {
+            [PSCustomObject]@{ has_orphans = $false; has_manager_state_issue = $false }
+        }
+        $orphan = $orphanState.has_orphans -eq $true -or $orphanState.has_manager_state_issue -eq $true
+    }
+    $ok = $activeOrders.Count -eq 0 -and $nonzeroPositions.Count -eq 0 -and $pendingTrades.Count -eq 0 -and -not $orphan
+    return New-ProbeResult $ok $(if ($ok) { "pre_executor_start_exposure_zero" } else { "pre_executor_start_exposure_active_fail_closed" }) ([PSCustomObject]@{
+        ActiveOrders = $activeOrders.Count
+        NonzeroPositions = $nonzeroPositions.Count
+        PendingExecutableActions = $pendingTrades.Count
+        OrphanExposure = $orphan
+        ExecutorAuthority = $executorAuthority
+        TradeAuthority = $tradeAuthority
+    })
+}
+
+function Test-StartupExposureGate {
+    try {
+        $ordersPayload = Invoke-LocalJson "http://127.0.0.1:6001/orders" 4
+        $positionsPayload = Invoke-LocalJson "http://127.0.0.1:6001/positions" 4
+    }
+    catch {
+        return New-ProbeResult $false ("executor_live_exposure_unavailable:{0}" -f $_.Exception.Message)
+    }
+    if ($ordersPayload.ok -ne $true -or $positionsPayload.ok -ne $true) {
+        return New-ProbeResult $false "executor_live_exposure_contract_failed"
+    }
+    $terminalOrders = @("filled", "cancelled", "canceled", "closed", "rejected", "error", "expired")
+    $activeOrders = @($ordersPayload.orders | Where-Object { $terminalOrders -notcontains ([string]$_.status).ToLowerInvariant() })
+    $nonzeroPositions = @($positionsPayload.positions.PSObject.Properties | Where-Object {
+        $value = $_.Value
+        $qty = if ($value -is [System.Collections.IDictionary] -or $value.PSObject.Properties["qty"]) { $value.qty } else { $value }
+        [math]::Abs([double]($qty -as [double])) -gt 0
+    })
+
+    $terminalTrades = @("closed", "archived", "rejected", "error", "cancelled", "canceled")
+    $tradeProcesses = @(Get-GovernedWrappedServiceProcesses "trade_manager")
+    $pendingTrades = @()
+    $orphan = $false
+    $tradeAuthority = "persisted_start_gate_only"
+    if ($tradeProcesses.Count -eq 1) {
+        try { $tradePayload = Invoke-LocalJson "http://127.0.0.1:7001/trades" 4 } catch {
+            return New-ProbeResult $false ("running_trade_manager_state_unavailable:{0}" -f $_.Exception.Message)
+        }
+        if ($tradePayload.ok -ne $true -or $null -eq $tradePayload.trades) {
+            return New-ProbeResult $false "running_trade_manager_state_contract_failed"
+        }
+        $pendingTrades = @($tradePayload.trades.PSObject.Properties.Value | Where-Object { $terminalTrades -notcontains ([string]$_.status).ToLowerInvariant() })
+        $orphan = $tradePayload.orphan_exposure.has_orphans -eq $true -or $tradePayload.orphan_exposure.has_manager_state_issue -eq $true
+        $tradeAuthority = "live_trade_manager"
+    }
+    else {
+        if (-not (Test-Path -LiteralPath $TradeManagerPersistencePath -PathType Leaf)) {
+            return New-ProbeResult $false "persisted_trade_state_unavailable"
+        }
+        try { $persisted = Get-Content -LiteralPath $TradeManagerPersistencePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop } catch {
+            return New-ProbeResult $false ("persisted_trade_state_invalid:{0}" -f $_.Exception.Message)
+        }
+        $pendingTrades = @($persisted.trades.PSObject.Properties.Value | Where-Object { $terminalTrades -notcontains ([string]$_.status).ToLowerInvariant() })
+        $topLevelOrphan = $persisted.PSObject.Properties["orphan_exposure"]
+        $systemState = $persisted.PSObject.Properties["system"]
+        $systemOrphan = if ($null -ne $systemState -and $null -ne $systemState.Value) {
+            $systemState.Value.PSObject.Properties["orphan_exposure"]
+        }
+        else {
+            $null
+        }
+        $orphanState = if ($null -ne $topLevelOrphan) {
+            $topLevelOrphan.Value
+        }
+        elseif ($null -ne $systemOrphan) {
+            $systemOrphan.Value
+        }
+        else {
+            [PSCustomObject]@{ has_orphans = $false; has_manager_state_issue = $false }
+        }
+        $orphan = $orphanState.has_orphans -eq $true -or $orphanState.has_manager_state_issue -eq $true
+    }
+    $ok = $activeOrders.Count -eq 0 -and $nonzeroPositions.Count -eq 0 -and $pendingTrades.Count -eq 0 -and -not $orphan
+    return New-ProbeResult $ok $(if ($ok) { "startup_exposure_zero_before_execution_dependencies" } else { "startup_exposure_active_fail_closed" }) ([PSCustomObject]@{
+        ActiveOrders = $activeOrders.Count
+        NonzeroPositions = $nonzeroPositions.Count
+        PendingExecutableActions = $pendingTrades.Count
+        OrphanExposure = $orphan
+        TradeAuthority = $tradeAuthority
+    })
+}
+
+function Get-CommandPythonScriptPath {
+    param([string]$CommandLine)
+    $match = [regex]::Match(
+        [string]$CommandLine,
+        '(?:"(?<path>[^"]+\.py)"|(?<path>[A-Za-z]:[^\s"]+\.py)|(?<path>(?:\.[\\/])?[A-Za-z0-9_.-]+(?:[\\/][^\s"]+)*\.py))',
+        [Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+    if (-not $match.Success) { return $null }
+    try {
+        $observedPath = $match.Groups["path"].Value
+        if (-not [IO.Path]::IsPathRooted($observedPath)) {
+            $observedPath = Join-Path $script:repositoryRoot $observedPath
+        }
+        return [IO.Path]::GetFullPath($observedPath)
+    }
+    catch { return $null }
+}
+
+function Test-FileSha256 {
+    param([string]$Path, [string]$Expected)
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant() -eq $Expected.ToLowerInvariant()
+}
+
+function Get-GovernedWrappedServiceProcesses {
+    param([ValidateSet("entry_agent", "trade_manager")][string]$Service)
+
+    $marker = if ($Service -eq "entry_agent") { $EntryAgentMarker } else { $TradeManagerMarker }
+    $legacyName = if ($Service -eq "entry_agent") { "production_entry_launcher.py" } else { "production_manager_launcher.py" }
+    $legacySha = if ($Service -eq "entry_agent") {
+        "45202326d96023689a53db6b915d9d6557b98ed95e2d5b022a1b9545ef80ce1e"
+    } else {
+        "005ff8b995b623777b8390c5d9cf66813bcf5326f28ed106a3eaee9a5d874d28"
+    }
+    $serviceSource = if ($Service -eq "entry_agent") {
+        Join-Path $script:repositoryRoot "EntryAgent\tv_context_server.py"
+    } else {
+        Join-Path $script:repositoryRoot "Engines\trade_manager.py"
+    }
+    $legacySourceSha = if ($Service -eq "entry_agent") {
+        "d4e1361629892febabf61403a2d1ff9652b090e86fe82760723b749d0da1b710"
+    } else {
+        "d29c15455f0b3cfd027ca2587da17d89b097cdf5b61bbb00511587ff00887315"
+    }
+    $manifestService = @($ServiceManifest.services | Where-Object { $_.name -eq $Service })
+    $canonicalIdentity = @($manifestService.execution_identities | Where-Object { $_.name -eq "canonical_wrapper" })
+    if ($manifestService.Count -ne 1 -or $canonicalIdentity.Count -ne 1) { return @() }
+    $canonicalSha = [string]$canonicalIdentity[0].wrapper_sha256
+
+    $candidates = @(Get-ManagedProcesses "python" $marker)
+    $trusted = @()
+    foreach ($process in $candidates) {
+        $scriptPath = Get-CommandPythonScriptPath $process.CommandLine
+        $canonical = $scriptPath -and
+            ([IO.Path]::GetFullPath($scriptPath) -eq [IO.Path]::GetFullPath($ServiceWrapperPath)) -and
+            ([string]$process.CommandLine -match ("--service\s+{0}\b" -f [regex]::Escape($Service))) -and
+            (Test-FileSha256 $scriptPath $canonicalSha)
+        $legacy = $scriptPath -and
+            ([IO.Path]::GetFileName($scriptPath) -ieq $legacyName) -and
+            (Test-FileSha256 $scriptPath $legacySha) -and
+            (Test-FileSha256 $serviceSource $legacySourceSha)
+        if ($canonical -or $legacy) { $trusted += $process }
+    }
+    # Any direct, altered-wrapper, or mixed sibling candidate makes the whole
+    # identity set ambiguous; callers then fail closed on the occupied port.
+    if ($trusted.Count -ne $candidates.Count) { return @() }
+    return @($trusted)
 }
 
 function Get-PortOwners {
@@ -423,71 +742,63 @@ function Test-ExecutorContract {
 }
 
 function Test-TradeManagerContract {
-    $processes = @(Get-ManagedProcesses "python" $TradeManagerMarker)
+    $processes = @(Get-GovernedWrappedServiceProcesses "trade_manager")
     if ($processes.Count -ne 1) {
         return New-ProbeResult $false ("trade_manager_process_count:{0}" -f $processes.Count) $processes
     }
 
     $tradeManagerProcess = $processes[0]
     $tradeManagerPortOwners = @(Get-PortOwners 7001)
-    try {
-        $health = Invoke-LocalJson $TradeManagerHealthUrl
-    }
+    try { $version = Invoke-LocalJson $TradeManagerVersionUrl 3 }
     catch {
-        return New-ProbeResult $false ("trade_manager_health_endpoint_error:{0}" -f $_.Exception.Message) ([PSCustomObject]@{
-            FailedEndpoint = $TradeManagerHealthUrl
+        return New-ProbeResult $false ("trade_manager_version_endpoint_error:{0}" -f $_.Exception.Message) ([PSCustomObject]@{
+            FailedEndpoint = $TradeManagerVersionUrl
             PortOwners = $tradeManagerPortOwners
             Process = $tradeManagerProcess
         })
     }
-    try {
-        $pipeline = Invoke-LocalJson $TradeManagerPipelineUrl
-    }
+    try { $safety = Invoke-LocalJson $TradeManagerSafetyUrl 4 }
     catch {
-        return New-ProbeResult $false ("trade_manager_tick_pipeline_endpoint_error:{0}" -f $_.Exception.Message) ([PSCustomObject]@{
-            FailedEndpoint = $TradeManagerPipelineUrl
-            Health = $health
-            PortOwners = $tradeManagerPortOwners
-            Process = $tradeManagerProcess
-        })
-    }
-    try {
-        $atr = Invoke-LocalJson $TradeManagerCanonicalAtrStatusUrl
-    }
-    catch {
-        return New-ProbeResult $false ("trade_manager_canonical_atr_endpoint_error:{0}" -f $_.Exception.Message) ([PSCustomObject]@{
-            FailedEndpoint = $TradeManagerCanonicalAtrStatusUrl
-            Health = $health
-            Pipeline = $pipeline
+        return New-ProbeResult $false ("trade_manager_safety_endpoint_error:{0}" -f $_.Exception.Message) ([PSCustomObject]@{
+            FailedEndpoint = $TradeManagerSafetyUrl
+            Version = $version
             PortOwners = $tradeManagerPortOwners
             Process = $tradeManagerProcess
         })
     }
 
-    $processId = [int]$health.pid
-    $pidMatches = @($processes.ProcessId) -contains $processId
-    $portMatches = @($tradeManagerPortOwners.OwningProcess) -contains $processId
-    $ok = $health.ok -eq $true -and
-        $pipeline.ok -eq $true -and
-        $null -ne $atr -and
-        $health.authority_mutex -eq $TradeManagerAuthorityMutexName -and
-        $health.tick_pipeline_version -eq "trade_manager_symbol_fifo_wal_v3" -and
-        (Test-MutexOwned $TradeManagerAuthorityMutexName) -and
-        $pidMatches -and
-        $portMatches
-    $reason = if ($ok) { "authority_health_required_endpoints_and_port_owner_confirmed" } else { "trade_manager_contract_mismatch" }
+    $processId = [int]$tradeManagerProcess.ProcessId
+    $portMatches = $tradeManagerPortOwners.Count -eq 1 -and [int]$tradeManagerPortOwners[0].OwningProcess -eq $processId
+    $expectedSourcePath = [IO.Path]::GetFullPath((Join-Path $script:repositoryRoot "Engines\trade_manager.py"))
+    $reportedSourcePath = try { [IO.Path]::GetFullPath([string]$version.file_path) } catch { "" }
+    $sourceMatches = -not [string]::IsNullOrWhiteSpace($reportedSourcePath) -and
+        [string]::Equals($reportedSourcePath, $expectedSourcePath, [StringComparison]::OrdinalIgnoreCase)
+    $orphan = $safety.orphan_exposure
+    $safetySchema = $safety.ok -eq $true -and
+        $null -ne $safety.trades -and
+        $null -ne $orphan -and
+        ($orphan.PSObject.Properties.Name -contains "has_orphans") -and
+        ($orphan.PSObject.Properties.Name -contains "has_manager_state_issue")
+    $ok = $version.ok -eq $true -and $sourceMatches -and $safetySchema -and $portMatches
+    $reason = if ($ok) { "source_version_safety_schema_and_unique_port_owner_confirmed" } else { "trade_manager_contract_mismatch" }
     return New-ProbeResult $ok $reason ([PSCustomObject]@{
         Pid = $processId
-        Health = $health
-        Pipeline = $pipeline
-        AtrEndpointResponded = $null -ne $atr
+        Version = $version
+        Safety = [PSCustomObject]@{
+            TradeCount = @($safety.trades.PSObject.Properties).Count
+            HasOrphans = $orphan.has_orphans
+            HasManagerStateIssue = $orphan.has_manager_state_issue
+        }
+        ExpectedSourcePath = $expectedSourcePath
+        ReportedSourcePath = $reportedSourcePath
+        SourceMatches = $sourceMatches
         PortOwners = $tradeManagerPortOwners
         Process = $tradeManagerProcess
     })
 }
 
 function Test-EntryAgentContract {
-    $processes = @(Get-ManagedProcesses "python" $EntryAgentMarker)
+    $processes = @(Get-GovernedWrappedServiceProcesses "entry_agent")
     if ($processes.Count -ne 1) {
         return New-ProbeResult $false ("entry_agent_process_count:{0}" -f $processes.Count) $processes
     }
@@ -548,7 +859,7 @@ function Test-EntryAgentContract {
 }
 
 function Test-TradingViewRelayContract {
-    $processes = @(Get-ManagedProcesses "python" $EntryAgentMarker)
+    $processes = @(Get-GovernedWrappedServiceProcesses "entry_agent")
     if ($processes.Count -ne 1) {
         return New-ProbeResult $false ("tradingview_relay_process_count:{0}" -f $processes.Count) $processes
     }
@@ -796,7 +1107,6 @@ function Test-ListenerBridgeContract {
         }
 
         $executorPipeline = Invoke-LocalJson $ExecutorPipelineUrl
-        $tradeManagerPipeline = Invoke-LocalJson $TradeManagerPipelineUrl
         $livePrices = Invoke-LocalJson $ExecutorPricesUrl
         $nqContract = [string]$nq.resolved_contract
         $ymContract = [string]$ym.resolved_contract
@@ -807,8 +1117,8 @@ function Test-ListenerBridgeContract {
             YmSuccesses = [int64]$ym.price_delivery.successes
             NqExecutorCompleted = [int64]$executorPipeline.symbols.NQ.completed
             YmExecutorCompleted = [int64]$executorPipeline.symbols.YM.completed
-            NqTradeManagerCompleted = [int64]$tradeManagerPipeline.symbols.NQ.completed
-            YmTradeManagerCompleted = [int64]$tradeManagerPipeline.symbols.YM.completed
+            NqTradeManagerCompleted = [int64]$executorPipeline.symbols.NQ.counts.completed_by_trade_manager
+            YmTradeManagerCompleted = [int64]$executorPipeline.symbols.YM.counts.completed_by_trade_manager
         }
 
         $healthCurrent = $updatedAge -ge -5 -and $updatedAge -le 15
@@ -889,31 +1199,14 @@ function Test-ListenerBridgeContract {
 
 function Get-CanonicalAtrWarmupEvidence {
     try {
-        $payload = Invoke-LocalJson $TradeManagerCanonicalAtrStatusUrl 4
-        if ($payload.ok -ne $true -or $null -eq $payload.symbols) {
+        $response = Invoke-LocalJsonResponse $EntryAgentStatusUrl 5
+        $payload = $response.Payload
+        if ([int]$response.StatusCode -notin @(200, 503) -or $null -eq $payload -or $null -eq $payload.symbols) {
             return [PSCustomObject]@{
                 Valid = $false
                 Ready = $false
-                Reason = "canonical_atr_payload_invalid"
+                Reason = "entry_canonical_atr_projection_unavailable"
                 Symbols = [ordered]@{}
-            }
-        }
-
-        $records = @()
-        if ($payload.symbols -is [System.Collections.IDictionary] -or $payload.symbols.PSObject.Properties.Name -contains "NQ") {
-            foreach ($symbolRoot in @("NQ", "YM")) {
-                $record = $payload.symbols.$symbolRoot
-                if ($null -ne $record) {
-                    $records += [PSCustomObject]@{ Symbol = $symbolRoot; Record = $record }
-                }
-            }
-        }
-        else {
-            foreach ($record in @($payload.symbols)) {
-                $symbolRoot = [string]$record.symbol
-                if ($symbolRoot -in @("NQ", "YM")) {
-                    $records += [PSCustomObject]@{ Symbol = $symbolRoot; Record = $record }
-                }
             }
         }
 
@@ -922,19 +1215,21 @@ function Get-CanonicalAtrWarmupEvidence {
         $warmingReasons = @()
         $observations = [ordered]@{}
         foreach ($symbolRoot in @("NQ", "YM")) {
-            $wrapped = @($records | Where-Object { $_.Symbol -eq $symbolRoot } | Select-Object -First 1)
-            if ($wrapped.Count -ne 1) {
-                $validationFailures += ("{0}:canonical_atr_record_missing" -f $symbolRoot)
+            $entryRows = @($payload.symbols | Where-Object { $_.symbol -eq $symbolRoot } | Select-Object -First 1)
+            if ($entryRows.Count -ne 1) {
+                $validationFailures += ("{0}:entry_canonical_atr_projection_missing" -f $symbolRoot)
                 continue
             }
 
-            $record = $wrapped[0].Record
-            $canonical = if ($record.canonical_atr) { $record.canonical_atr } else { $record.canonical_record }
-            $included = [int]$record.included_bar_count
-            $required = [int]$record.required_bar_count
-            $lastBar = [string]$record.last_included_bar
+            $record = $entryRows[0]
+            $canonical = $record.canonical_atr
+            $included = [int]$record.atr_included_bar_count
+            $required = [int]$record.atr_required_bar_count
+            $lastBar = [string]$record.atr_last_included_bar
             $authorityEpoch = if ($canonical) { [string]$canonical.atr_authority_epoch_id } else { "" }
-            $source = if ($canonical -and $canonical.atr_source) { [string]$canonical.atr_source } else { [string]$payload.authority }
+            $source = [string]$record.atr_source
+            $sessionDate = if ($canonical -and $canonical.session_date) { [string]$canonical.session_date } elseif ($record.market_context) { [string]$record.market_context.session_date } else { "" }
+            $contract = [string]$record.atr_contract_symbol
             $barAgeSeconds = $null
             if (-not [string]::IsNullOrWhiteSpace($lastBar)) {
                 try {
@@ -947,29 +1242,32 @@ function Get-CanonicalAtrWarmupEvidence {
 
             if ($required -ne $CanonicalAtrRequiredTrueRangeCount) { $validationFailures += ("{0}:required_count_mismatch:{1}" -f $symbolRoot, $required) }
             if ($included -lt 0) { $validationFailures += ("{0}:included_count_negative" -f $symbolRoot) }
-            if ([string]$payload.authority -ne "rithmic_exchange_time_rma14" -or $source -ne "rithmic_exchange_time_rma14") { $validationFailures += ("{0}:canonical_authority_invalid" -f $symbolRoot) }
+            if ($source -ne "rithmic_exchange_time_rma14") { $validationFailures += ("{0}:canonical_authority_invalid" -f $symbolRoot) }
             if ($included -gt 0) {
-                if ([string]$record.session_date -ne $expectedSession) { $validationFailures += ("{0}:session_not_current" -f $symbolRoot) }
-                if ([string]::IsNullOrWhiteSpace([string]$record.contract_symbol)) { $validationFailures += ("{0}:contract_missing" -f $symbolRoot) }
+                if ($sessionDate -ne $expectedSession) { $validationFailures += ("{0}:session_not_current" -f $symbolRoot) }
+                if ([string]::IsNullOrWhiteSpace($contract)) { $validationFailures += ("{0}:contract_missing" -f $symbolRoot) }
                 if ([string]::IsNullOrWhiteSpace($lastBar) -or $null -eq $barAgeSeconds -or $barAgeSeconds -gt 180) { $validationFailures += ("{0}:last_completed_candle_not_current" -f $symbolRoot) }
-                if ([string]::IsNullOrWhiteSpace($authorityEpoch)) { $validationFailures += ("{0}:authority_epoch_missing" -f $symbolRoot) }
             }
 
-            $ready = $record.ready -eq $true -and $null -ne $record.atr_value
+            $ready = $record.canonical_atr_ready -eq $true -and
+                $null -ne $record.atr_1m_14 -and
+                -not [string]::IsNullOrWhiteSpace([string]$record.atr_record_id)
+            if ($ready -and [string]::IsNullOrWhiteSpace($authorityEpoch)) { $validationFailures += ("{0}:authority_epoch_missing" -f $symbolRoot) }
             if (-not $ready) {
-                $warmingReasons += ("{0}:atr_warming:{1}/{2}:{3}" -f $symbolRoot, $included, $required, [string]$record.readiness_reason)
+                $warmingReasons += ("{0}:atr_warming:{1}/{2}:{3}" -f $symbolRoot, $included, $required, [string]$record.atr_readiness_reason)
             }
             $observations[$symbolRoot] = [PSCustomObject]@{
                 Symbol = $symbolRoot
-                Contract = $record.contract_symbol
-                SessionDate = $record.session_date
+                Contract = $contract
+                SessionDate = $sessionDate
                 AtrIncludedCount = $included
                 AtrRequiredCount = $required
                 LastCompletedCandleTime = $lastBar
                 AuthorityEpoch = $authorityEpoch
                 Ready = $ready
-                AtrValue = $record.atr_value
-                ReadinessReason = $record.readiness_reason
+                AtrValue = $record.atr_1m_14
+                RecordId = $record.atr_record_id
+                ReadinessReason = $record.atr_readiness_reason
                 Source = $source
                 BarAgeSeconds = $barAgeSeconds
             }
@@ -989,7 +1287,7 @@ function Get-CanonicalAtrWarmupEvidence {
         return [PSCustomObject]@{
             Valid = $false
             Ready = $false
-            Reason = ("canonical_atr_endpoint_error:{0}" -f $_.Exception.Message)
+            Reason = ("entry_canonical_atr_projection_error:{0}" -f $_.Exception.Message)
             Symbols = [ordered]@{}
         }
     }
@@ -1183,95 +1481,10 @@ function Test-CommandCenterContract {
 }
 
 function Test-CanonicalAtrContract {
-    try {
-        $payload = Invoke-LocalJson $TradeManagerCanonicalAtrStatusUrl 4
-        $entryPayload = Invoke-LocalJson $EntryAgentStatusUrl 4
-        if ($payload.ok -ne $true -or $null -eq $payload.symbols) {
-            return New-ProbeResult $false "canonical_atr_payload_invalid" $payload
-        }
-
-        $records = @()
-        if ($payload.symbols -is [System.Collections.IDictionary] -or $payload.symbols.PSObject.Properties.Name -contains "NQ") {
-            foreach ($symbolRoot in @("NQ", "YM")) {
-                $record = $payload.symbols.$symbolRoot
-                if ($null -ne $record) {
-                    $records += [PSCustomObject]@{ Symbol = $symbolRoot; Record = $record }
-                }
-            }
-        }
-        else {
-            foreach ($record in @($payload.symbols)) {
-                $symbolRoot = [string]($record.symbol)
-                if ($symbolRoot -in @("NQ", "YM")) {
-                    $records += [PSCustomObject]@{ Symbol = $symbolRoot; Record = $record }
-                }
-            }
-        }
-
-        $expectedSession = Get-MarketSessionDate
-        $failures = @()
-        $observations = [ordered]@{}
-        foreach ($symbolRoot in @("NQ", "YM")) {
-            $wrapped = @($records | Where-Object { $_.Symbol -eq $symbolRoot } | Select-Object -First 1)
-            if ($wrapped.Count -ne 1) {
-                $failures += "${root}:canonical_record_missing"
-                continue
-            }
-            $record = $wrapped[0].Record
-            $canonical = if ($record.canonical_atr) { $record.canonical_atr } else { $record.canonical_record }
-            $entry = @($entryPayload.symbols | Where-Object { $_.symbol -eq $symbolRoot } | Select-Object -First 1)
-            $value = if ($record.PSObject.Properties.Name -contains "atr_value") { $record.atr_value } elseif ($record.PSObject.Properties.Name -contains "atr_1m_14") { $record.atr_1m_14 } else { $canonical.atr_value }
-            $source = [string]$canonical.atr_source
-            $lastBar = [string]$record.last_included_bar
-            $included = [int]$record.included_bar_count
-            $required = [int]$record.required_bar_count
-            $barAgeSeconds = $null
-            try { $barAgeSeconds = [math]::Round(([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse($lastBar)).TotalSeconds, 3) } catch { $barAgeSeconds = $null }
-
-            if ($record.ready -ne $true -or $null -eq $value) { $failures += ("{0}:warming:{1}/{2}:{3}" -f $symbolRoot, $included, $required, [string]$record.readiness_reason) }
-            if ([string]$record.session_date -ne $expectedSession) { $failures += "${root}:session_not_current" }
-            if ([string]::IsNullOrWhiteSpace([string]$record.contract_symbol)) { $failures += "${root}:contract_missing" }
-            if ([string]::IsNullOrWhiteSpace($lastBar) -or $null -eq $barAgeSeconds -or $barAgeSeconds -gt 180) { $failures += "${root}:finalized_bar_not_current" }
-            if ($source -match "tradingview" -or ($record.ready -eq $true -and $source -ne "rithmic_exchange_time_rma14")) { $failures += "${root}:canonical_authority_invalid" }
-            if ($entry.Count -ne 1) {
-                $failures += "${root}:entry_projection_missing"
-            }
-            else {
-                $entryRecord = $entry[0]
-                if ($entryRecord.canonical_atr_ready -ne $record.ready) { $failures += "${root}:entry_readiness_mismatch" }
-                if ([string]$entryRecord.atr_contract_symbol -ne [string]$record.contract_symbol) { $failures += "${root}:entry_contract_mismatch" }
-                if ([string]$entryRecord.atr_observation_last_included_bar -ne $lastBar) { $failures += "${root}:entry_bar_mismatch" }
-                if ($record.ready -eq $true -and [math]::Abs(([double]$entryRecord.atr_1m_14) - ([double]$value)) -gt 0.000000001) { $failures += "${root}:entry_value_mismatch" }
-                if ([string]$entryRecord.atr_source -match "tradingview") { $failures += "${root}:entry_tradingview_atr_detected" }
-            }
-            $observations[$symbolRoot] = [PSCustomObject]@{
-                Contract = $record.contract_symbol
-                Session = $record.session_date
-                Ready = $record.ready
-                Value = $value
-                Included = $included
-                Required = $required
-                LastIncludedBar = $lastBar
-                BarAgeSeconds = $barAgeSeconds
-                RecordId = $canonical.atr_record_id
-                AuthorityEpoch = $canonical.atr_authority_epoch_id
-                Source = $source
-            }
-        }
-
-        $ok = $failures.Count -eq 0
-        $reason = if ($ok) { "current_rithmic_rma_ready_and_projected" } else { $failures -join ";" }
-        return New-ProbeResult $ok $reason ([PSCustomObject]@{
-            Source = $payload.source
-            Policy = $payload.policy
-            ExpectedSession = $expectedSession
-            Symbols = $observations
-            Failures = $failures
-        })
-    }
-    catch {
-        return New-ProbeResult $false ("canonical_atr_endpoint_error:{0}" -f $_.Exception.Message)
-    }
+    $projection = Get-CanonicalAtrWarmupEvidence
+    $ok = $projection.Valid -eq $true -and $projection.Ready -eq $true
+    $reason = if ($ok) { "current_rithmic_rma_ready_in_entry_projection" } else { [string]$projection.Reason }
+    return New-ProbeResult $ok $reason $projection
 }
 
 function Get-NgrokProcesses {
@@ -1312,7 +1525,7 @@ function Invoke-BoundedPublicHealthJson {
     if (-not (Test-Path -LiteralPath $script:repositoryRoot -PathType Container)) {
         throw "public_health_working_directory_invalid:$script:repositoryRoot"
     }
-    $python = (Get-Command python.exe -ErrorAction Stop).Source
+    [string]$python = $script:pythonExecutable
     $token = [Guid]::NewGuid().ToString("N")
     $stdoutPath = Join-Path $env:TEMP ("randle_public_health_{0}.out" -f $token)
     $stderrPath = Join-Path $env:TEMP ("randle_public_health_{0}.err" -f $token)
@@ -1389,100 +1602,31 @@ function Test-NgrokContract {
         }
 
         $publicBase = ([string]$https[0].public_url).TrimEnd('/')
-        $localUpstreamHealth = Invoke-LocalJson $TradeManagerHealthUrl 2
-        $publicVerificationError = $script:PublicSelfProbeDisabledReason
-        if ([string]::IsNullOrWhiteSpace([string]$publicVerificationError)) {
-          try {
-            $publicUpstreamHealth = Invoke-BoundedPublicHealthJson "$publicBase/health" 4
-            $receiptId = "startup-$LaunchId-$([Guid]::NewGuid().ToString('N'))"
-            $relayPayload = [ordered]@{
-                source = "startup_liquidity_relay_probe"
-                receipt_id = $receiptId
-                sent_at = [DateTime]::UtcNow.ToString("o")
-                purpose = "startup_readiness"
-            }
-            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable("TV_WEBHOOK_INGRESS_TOKEN", "Process"))) {
-                throw "TV_WEBHOOK_INGRESS_TOKEN is required for authenticated public relay readiness"
-            }
-            $publicRelayResponse = Invoke-BoundedPublicHealthJson "$publicBase/webhook/tv-context" 4 "POST" $relayPayload "TV_WEBHOOK_INGRESS_TOKEN"
-            $localReceipt = Invoke-LocalJson $TradingViewRelayReceiptUrl 2
-            $entryRelayResponse = $publicRelayResponse.entry_agent_response
-            $selfProbeOk = $localUpstreamHealth.ok -eq $true -and
-                [int]$localUpstreamHealth.pid -gt 0 -and
-                $publicUpstreamHealth.ok -eq $true -and
-                [int]$publicUpstreamHealth.pid -eq [int]$localUpstreamHealth.pid -and
-                $publicRelayResponse.ok -eq $true -and
-                [int]$publicRelayResponse.entry_agent_status_code -eq 200 -and
-                $entryRelayResponse.ok -eq $true -and
-                $entryRelayResponse.liquidity_state_changed -eq $false -and
-                [string]$entryRelayResponse.receipt_id -eq $receiptId -and
-                [string]$localReceipt.receipt.receipt_id -eq $receiptId
-            if ($selfProbeOk) {
-                return New-ProbeResult $true "single_https_tunnel_public_health_and_liquidity_relay_round_trip_confirmed" ([PSCustomObject]@{
-                    Process = $processes[0]
-                    PublicBaseUrl = $publicBase
-                    PublicWebhookUrl = "$publicBase/webhook/tv-context"
-                    Tunnel = $https[0]
-                    LocalUpstreamHealth = $localUpstreamHealth
-                    PublicUpstreamHealth = $publicUpstreamHealth
-                    RelayReceiptId = $receiptId
-                    PublicRelayResponse = $publicRelayResponse
-                    LocalRelayReceipt = $localReceipt
-                    VerificationMode = "verified_tls_self_probe"
-                })
-            }
-            $publicVerificationError = "public_self_probe_contract_mismatch"
-          }
-          catch {
-            $publicVerificationError = $_.Exception.Message
-          }
-          $script:PublicSelfProbeDisabledReason = $publicVerificationError
-        }
-
-        $proxyStatus = Invoke-LocalJson "http://127.0.0.1:7001/debug/tv-context-proxy" 3
-        $proxyState = $proxyStatus.state
-        $proxyForwardedAt = $null
-        try { $proxyForwardedAt = [DateTimeOffset]::Parse([string]$proxyState.last_forwarded_at) } catch { $proxyForwardedAt = $null }
-        $publicHost = ([Uri]$publicBase).Host
-        $freshTradingViewProxy = $proxyForwardedAt -and
-            $proxyForwardedAt.UtcDateTime -ge $script:NgrokReadinessStartedAt -and
-            $proxyState.last_ok -eq $true -and
-            [int]$proxyState.last_status_code -eq 200 -and
-            [string]$proxyState.last_user_agent -match "TradingView Webhook" -and
-            [string]$proxyState.last_host -eq $publicHost
-        $relayHealth = Invoke-LocalJson $TradingViewRelayHealthUrl 3
-        $contextReceipts = [ordered]@{}
-        $contextFailures = @()
-        foreach ($symbolRoot in @("NQ", "YM")) {
-            $context = $relayHealth.symbols.$symbolRoot
-            $receivedAt = [string]$context.last_tv_context_received_at
-            $baseline = [string]$script:TradingViewContextBaseline[$symbolRoot]
-            $contextReceipts[$symbolRoot] = [PSCustomObject]@{
-                Session = $context.session_date
-                ReceivedAt = $receivedAt
-                Baseline = $baseline
-                Source = $context.source
-            }
-            if ([string]::IsNullOrWhiteSpace($receivedAt) -or (-not [string]::IsNullOrWhiteSpace($baseline) -and $receivedAt -le $baseline)) {
-                $contextFailures += "${symbolRoot}:fresh_context_receipt_missing"
-            }
-        }
-        $externalRoundTripOk = $localUpstreamHealth.ok -eq $true -and
-            $freshTradingViewProxy -and
-            $contextFailures.Count -eq 0
-        $externalReason = if ($externalRoundTripOk) { "single_https_tunnel_fresh_external_tradingview_round_trip_confirmed" } else { "waiting_for_fresh_external_tradingview_round_trip:$($contextFailures -join ',')" }
-        return New-ProbeResult $externalRoundTripOk $externalReason ([PSCustomObject]@{
+        $publicUri = [Uri]$publicBase
+        $commandLine = [string]$processes[0].CommandLine
+        $localVersion = Invoke-LocalJson $TradeManagerVersionUrl 3
+        $localSafety = Invoke-LocalJson $TradeManagerSafetyUrl 4
+        $orphan = $localSafety.orphan_exposure
+        $safetySchema = $localSafety.ok -eq $true -and
+            $null -ne $localSafety.trades -and
+            $null -ne $orphan -and
+            ($orphan.PSObject.Properties.Name -contains "has_orphans") -and
+            ($orphan.PSObject.Properties.Name -contains "has_manager_state_issue")
+        $publicHostMatches = [string]::Equals($publicUri.Host, $script:ngrokPublicHost, [StringComparison]::OrdinalIgnoreCase)
+        $inspectionDisabled = $commandLine -match '(?i)--inspect=false'
+        $ok = $publicHostMatches -and $inspectionDisabled -and $localVersion.ok -eq $true -and $safetySchema
+        $reason = if ($ok) { "single_reserved_https_tunnel_local_trade_authority_and_inspection_disabled_confirmed" } else { "ngrok_governed_tunnel_contract_mismatch" }
+        return New-ProbeResult $ok $reason ([PSCustomObject]@{
             Process = $processes[0]
             PublicBaseUrl = $publicBase
             PublicWebhookUrl = "$publicBase/webhook/tv-context"
             Tunnel = $https[0]
-            LocalUpstreamHealth = $localUpstreamHealth
-            PublicSelfProbeError = $publicVerificationError
-            FreshTradingViewProxy = $freshTradingViewProxy
-            ProxyState = $proxyState
-            ContextReceipts = $contextReceipts
-            ContextFailures = $contextFailures
-            VerificationMode = "trade_manager_proxy_plus_fresh_entry_receipts"
+            ExpectedPublicHost = $script:ngrokPublicHost
+            PublicHostMatches = $publicHostMatches
+            InspectionDisabled = $inspectionDisabled
+            LocalTradeVersion = $localVersion
+            LocalTradeSafetySchema = $safetySchema
+            VerificationMode = "local_ngrok_api_reserved_route_plus_trade_authority"
         })
     }
     catch {
@@ -1497,7 +1641,7 @@ function Invoke-ExecutorJournalMaintenance {
     if (-not (Test-Path -LiteralPath $script:repositoryRoot -PathType Container)) {
         throw "executor_journal_maintenance_working_directory_invalid:$script:repositoryRoot"
     }
-    $python = (Get-Command python.exe -ErrorAction Stop).Source
+    [string]$python = $script:pythonExecutable
     $stdoutPath = Join-Path $script:startupLogDirectory ("ExecutorJournalMaintenance_{0}.stdout.log" -f $LaunchId)
     $stderrPath = Join-Path $script:startupLogDirectory ("ExecutorJournalMaintenance_{0}.stderr.log" -f $LaunchId)
     Write-StartupLine "COMPONENT=Executor ACTION=JOURNAL_MAINTENANCE TIMEOUT_SECONDS=$ExecutorJournalMaintenanceTimeoutSeconds"
@@ -1538,7 +1682,7 @@ function Invoke-TradeManagerJournalMaintenance {
         throw "executor_tick_journal_directory_missing:$script:executorTickJournalDirectory"
     }
 
-    $python = (Get-Command python.exe -ErrorAction Stop).Source
+    [string]$python = $script:pythonExecutable
     $stdoutPath = Join-Path $script:startupLogDirectory ("TradeManagerJournalMaintenance_{0}.stdout.log" -f $LaunchId)
     $stderrPath = Join-Path $script:startupLogDirectory ("TradeManagerJournalMaintenance_{0}.stderr.log" -f $LaunchId)
     Write-StartupLine "COMPONENT=TradeManager ACTION=JOURNAL_MAINTENANCE TIMEOUT_SECONDS=$TradeManagerJournalMaintenanceTimeoutSeconds"
@@ -1607,7 +1751,7 @@ function Ensure-Executor {
         }
         try {
             Invoke-ExecutorJournalMaintenance
-            $python = (Get-Command python.exe -ErrorAction Stop).Source
+            [string]$python = $script:pythonExecutable
             Start-ManagedProcess "Executor" $python @("executor.py") | Out-Null
         }
         catch {
@@ -1636,7 +1780,7 @@ function Ensure-TradeManager {
         return
     }
 
-    $processes = @(Get-ManagedProcesses "python" $TradeManagerMarker)
+    $processes = @(Get-GovernedWrappedServiceProcesses "trade_manager")
     if ($processes.Count -gt 1) {
         Set-ComponentResult "TradeManager" "FAILED" ("duplicate_instances:{0}" -f $processes.Count) $processes
         return
@@ -1658,8 +1802,8 @@ function Ensure-TradeManager {
             return
         }
         try {
-            $python = (Get-Command python.exe -ErrorAction Stop).Source
-            Start-ManagedProcess "TradeManager" $python @("Engines\trade_manager.py") | Out-Null
+            [string]$python = $script:pythonExecutable
+            Start-ManagedProcess "TradeManager" $python @($ServiceWrapperPath, "--service", "trade_manager") | Out-Null
         }
         catch {
             Set-ComponentResult "TradeManager" "FAILED" ("process_start_failed:{0}" -f $_.Exception.Message)
@@ -1683,7 +1827,7 @@ function Ensure-EntryAgentAndRelay {
     Write-StartupLine "COMPONENT=EntryAgent ACTION=START_OR_PRESERVE TIMEOUT_SECONDS=$ServiceTimeoutSeconds"
     $probe = Test-EntryAgentContract
     if (-not $probe.Ok) {
-        $processes = @(Get-ManagedProcesses "python" $EntryAgentMarker)
+        $processes = @(Get-GovernedWrappedServiceProcesses "entry_agent")
         if ($processes.Count -gt 1) {
             Set-ComponentResult "EntryAgent" "FAILED" ("duplicate_instances:{0}" -f $processes.Count) $processes
         }
@@ -1693,8 +1837,8 @@ function Ensure-EntryAgentAndRelay {
             }
             else {
                 try {
-                    $python = (Get-Command python.exe -ErrorAction Stop).Source
-                    Start-ManagedProcess "EntryAgent" $python @("EntryAgent\tv_context_server.py") | Out-Null
+                    [string]$python = $script:pythonExecutable
+                    Start-ManagedProcess "EntryAgent" $python @($ServiceWrapperPath, "--service", "entry_agent") | Out-Null
                     $probe = Wait-ForContract "EntryAgent" $ServiceTimeoutSeconds { Test-EntryAgentContract }
                     if ($probe.Ok) {
                         Set-ComponentResult "EntryAgent" "READY" $probe.Reason $probe.Evidence
@@ -1756,7 +1900,7 @@ function Ensure-ListenerBridge {
             return
         }
         try {
-            $python = (Get-Command python.exe -ErrorAction Stop).Source
+            [string]$python = $script:pythonExecutable
             $started = Start-ManagedProcess "RithmicListener" $python @("rithmic_live_listener.py")
             $script:ListenerProcess = [PSCustomObject]@{
                 ProcessId = $started.Id
@@ -1900,7 +2044,7 @@ function Ensure-Ngrok {
 
             $ngrokWorkingDirectory = [IO.Path]::GetDirectoryName($ngrokExecutable)
             $nativeLogPath = Join-Path $script:startupLogDirectory ("Ngrok_{0}.native.log" -f $LaunchId)
-            $ngrokArguments = @("http", "7001", "--inspect=false", ("--log={0}" -f $nativeLogPath), "--log-level=info")
+            $ngrokArguments = @("http", "7001", "--url", $script:ngrokPublicUrl, "--inspect=false", ("--log={0}" -f $nativeLogPath), "--log-level=info")
             Write-StartupLine ("COMPONENT=Ngrok ACTION=START_RESOLVED EXECUTABLE={0} WORKING_DIRECTORY={1} ARGUMENTS={2} LOG_PATH={3}" -f $ngrokExecutable, $ngrokWorkingDirectory, ($ngrokArguments -join " "), $nativeLogPath)
             $ngrokWorkingDirectoryInvalid = [string]::IsNullOrWhiteSpace([string]$ngrokWorkingDirectory) -or
                 -not [IO.Path]::IsPathRooted([string]$ngrokWorkingDirectory) -or
@@ -1963,21 +2107,42 @@ function Ensure-Ngrok {
 function Get-FinalDiagnostics {
     # Component probes already captured process and port ownership. Reusing that
     # proof avoids a second series of WMI scans after readiness has terminated.
-    $ngrokProcess = if ($Results["Ngrok"].Status -eq "READY") {
-        $Results["Ngrok"].Evidence.Process
+    function Get-EvidenceProperty {
+        param([object]$Evidence, [string]$Name)
+        if ($null -eq $Evidence) { return $null }
+        $property = $Evidence.PSObject.Properties[$Name]
+        if ($null -eq $property) { return $null }
+        return $property.Value
     }
-    elseif ($Results["Ngrok"].Evidence -and $Results["Ngrok"].Evidence.LastProbe) {
-        $Results["Ngrok"].Evidence.LastProbe.Evidence
+
+    $componentEvidence = @{}
+    foreach ($componentName in @("Executor", "TradeManager", "EntryAgent", "RithmicListenerBridge", "Ngrok")) {
+        $componentResult = $Results[$componentName]
+        $componentEvidence[$componentName] = if ($null -ne $componentResult -and
+            $null -ne $componentResult.PSObject.Properties["Evidence"]) {
+            $componentResult.Evidence
+        }
+        else {
+            $null
+        }
+    }
+    $ngrokResult = $Results["Ngrok"]
+    $ngrokEvidence = $componentEvidence["Ngrok"]
+    $ngrokProcess = if ($null -ne $ngrokResult -and $ngrokResult.Status -eq "READY") {
+        Get-EvidenceProperty $ngrokEvidence "Process"
+    }
+    elseif ($null -ne (Get-EvidenceProperty $ngrokEvidence "LastProbe")) {
+        Get-EvidenceProperty (Get-EvidenceProperty $ngrokEvidence "LastProbe") "Evidence"
     }
     else {
         $null
     }
 
     $processDefinitions = @(
-        [PSCustomObject]@{ Component = "Executor"; Process = $Results["Executor"].Evidence.Process },
-        [PSCustomObject]@{ Component = "TradeManager"; Process = $Results["TradeManager"].Evidence.Process },
-        [PSCustomObject]@{ Component = "EntryAgentAndTradingViewRelay"; Process = $Results["EntryAgent"].Evidence.Process },
-        [PSCustomObject]@{ Component = "RithmicListenerBridge"; Process = $Results["RithmicListenerBridge"].Evidence.Process },
+        [PSCustomObject]@{ Component = "Executor"; Process = Get-EvidenceProperty $componentEvidence["Executor"] "Process" },
+        [PSCustomObject]@{ Component = "TradeManager"; Process = Get-EvidenceProperty $componentEvidence["TradeManager"] "Process" },
+        [PSCustomObject]@{ Component = "EntryAgentAndTradingViewRelay"; Process = Get-EvidenceProperty $componentEvidence["EntryAgent"] "Process" },
+        [PSCustomObject]@{ Component = "RithmicListenerBridge"; Process = Get-EvidenceProperty $componentEvidence["RithmicListenerBridge"] "Process" },
         [PSCustomObject]@{ Component = "Ngrok"; Process = $ngrokProcess }
     )
     $inventory = @()
@@ -1998,9 +2163,9 @@ function Get-FinalDiagnostics {
     }
 
     $ports = @(
-        @($Results["Executor"].Evidence.PortOwners) +
-        @($Results["TradeManager"].Evidence.PortOwners) +
-        @($Results["EntryAgent"].Evidence.PortOwners)
+        @(Get-EvidenceProperty $componentEvidence["Executor"] "PortOwners") +
+        @(Get-EvidenceProperty $componentEvidence["TradeManager"] "PortOwners") +
+        @(Get-EvidenceProperty $componentEvidence["EntryAgent"] "PortOwners")
     )
 
     return [PSCustomObject]@{
@@ -2015,10 +2180,19 @@ Write-StartupLine "STARTUP_BEGIN launch_id=$LaunchId repository_root=$script:rep
 Write-StartupLine ("STARTUP_POLICY bounded=true preserve_healthy=true duplicate_policy=reject tradingview_authority=liquidity_only service_timeout_seconds={0} market_readiness_maximum_seconds={1} market_formula=({2}x{3})+({4}x{3})+({5}x{3})" -f $ServiceTimeoutSeconds, $MarketReadinessObservationSeconds, $FirstCompleteCandleIntervalCount, $CanonicalMinuteSeconds, $CanonicalAtrRequiredTrueRangeCount, $MarketReadinessSchedulingAllowanceIntervals)
 
 try {
+    $writeAuthority = Test-ProductionWriteAuthority
+    Set-ComponentResult "ProductionWriteAuthority" $(if ($writeAuthority.Ok) { "READY" } else { "FAILED" }) $writeAuthority.Reason $writeAuthority.Evidence
+    if (-not $writeAuthority.Ok) { throw "production_write_authority_gate_failed" }
+    $preExecutorSafety = Test-PreExecutorStartSafetyGate
+    Set-ComponentResult "PreExecutorStartSafetyGate" $(if ($preExecutorSafety.Ok) { "READY" } else { "FAILED" }) $preExecutorSafety.Reason $preExecutorSafety.Evidence
+    if (-not $preExecutorSafety.Ok) { throw "pre_executor_start_safety_gate_failed" }
     Ensure-Executor
+    $startupExposure = Test-StartupExposureGate
+    Set-ComponentResult "StartupExposureGate" $(if ($startupExposure.Ok) { "READY" } else { "FAILED" }) $startupExposure.Reason $startupExposure.Evidence
+    if (-not $startupExposure.Ok) { throw "startup_exposure_gate_failed" }
+    Ensure-EntryAgentAndRelay
     Ensure-TradeManager
     Ensure-ListenerBridge
-    Ensure-EntryAgentAndRelay
     Ensure-Ngrok
     Verify-MarketDataReadiness
     Verify-EntryCurrentSession
@@ -2031,7 +2205,10 @@ catch {
 }
 
 $requiredComponents = @(
+    "ProductionWriteAuthority",
+    "PreExecutorStartSafetyGate",
     "Executor",
+    "StartupExposureGate",
     "TradeManager",
     "EntryAgent",
     "TradingViewRelay",

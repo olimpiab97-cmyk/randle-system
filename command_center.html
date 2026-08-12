@@ -1516,6 +1516,55 @@
     .status-blue { color: #7dd3fc; }
     .status-red { color: #ff8f8f; }
     .status-amber { color: #f6c86b; }
+    .system-control-card {
+      margin-bottom: 16px;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 18px;
+      background: linear-gradient(180deg, #111a28 0%, #0c1420 100%);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+    }
+    .system-control-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+    }
+    .system-overall-state {
+      font-size: 25px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+    .system-control-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .system-control-button {
+      min-height: 54px;
+      font-size: 16px;
+      border-width: 2px;
+    }
+    .system-control-button.start { border-color: #16a34a; background: #0d2015; }
+    .system-control-button.shutdown { border-color: #dc2626; background: #281010; }
+    .system-control-button.armed { border-color: #f59e0b; background: #2b1b08; color: #fff0c7; }
+    .system-control-button:disabled { cursor: not-allowed; opacity: 0.55; }
+    .system-service-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .system-service-row {
+      padding: 10px;
+      border: 1px solid #263244;
+      border-radius: 8px;
+      background: #0c1320;
+    }
+    .system-service-name { font-size: 11px; color: #8ea0b8; }
+    .system-service-state { margin-top: 5px; font-weight: 700; font-size: 13px; }
+    .system-control-message { min-height: 22px; margin-top: 12px; font-weight: 700; }
     .muted { color: #94a3b8; }
     .section-title {
       display: flex;
@@ -1587,6 +1636,23 @@
 </head>
 <body>
   <div class="build-banner" id="buildBanner">COMMAND CENTER POLLING BUILD ACTIVE</div>
+
+  <section class="system-control-card" aria-labelledby="systemControlTitle">
+    <div class="system-control-header">
+      <div>
+        <div class="small muted" id="systemControlTitle">Governed Service Control</div>
+        <div class="system-overall-state" id="systemOverallState">SYSTEM STATUS LOADING...</div>
+      </div>
+      <div class="badge" id="tvLadderServiceState">TV LADDER — CHECKING</div>
+    </div>
+    <div class="system-service-grid" id="systemServiceGrid"></div>
+    <div class="system-control-actions">
+      <button type="button" class="system-control-button start" id="startSystemButton">START SYSTEM</button>
+      <button type="button" class="system-control-button shutdown" id="shutdownSystemButton">SHUTDOWN SYSTEM</button>
+    </div>
+    <div class="system-control-message" id="systemControlMessage" aria-live="assertive">Open this page through the local Command Center host to use service controls.</div>
+    <div class="small muted" id="systemControlAudit">No control request active.</div>
+  </section>
 
   <section class="dashboard-hero">
     <div class="hero-panel">
@@ -1966,6 +2032,10 @@
     const ENTRY_AGENT_BASE = "http://127.0.0.1:7002";
     const POLL_INTERVAL_MS = 1000;
     const EMPTY_FIELD = "\u2014";
+    const COMMAND_CENTER_CSRF = "__COMMAND_CENTER_CSRF_TOKEN__";
+    const COMMAND_CENTER_CONTROL_AVAILABLE = ["127.0.0.1", "localhost"].includes(window.location.hostname) && window.location.port === "7100";
+    const CONTROL_CONFIRMATION_MS = 5000;
+    const SHUTDOWN_BLOCKED_MESSAGE = "SHUTDOWN BLOCKED — ACTIVE TRADING STATE";
 
     const $ = (id) => document.getElementById(id);
     let tradesPollHandle = null;
@@ -1993,6 +2063,142 @@
     let latestEntryAgentPayload = null;
     const liquidityLockOverrideResultBySymbol = {};
     let previousTvAtrStatusBySymbol = {};
+    let systemControlArm = null;
+    let systemControlExpiryHandle = null;
+    let systemControlPollHandle = null;
+    let systemControlRequestPending = false;
+
+    async function systemControlFetch(path, body = null) {
+      if (!COMMAND_CENTER_CONTROL_AVAILABLE) {
+        throw new Error("local_command_center_host_required");
+      }
+      const options = { method: body === null ? "GET" : "POST", credentials: "same-origin", cache: "no-store" };
+      if (body !== null) {
+        options.headers = { "Content-Type": "application/json", "X-Command-Center-CSRF": COMMAND_CENTER_CSRF };
+        options.body = JSON.stringify(body);
+      }
+      const response = await fetch(path, options);
+      const payload = await response.json();
+      if (!response.ok || payload.ok !== true) {
+        throw new Error(payload.error || `control_http_${response.status}`);
+      }
+      return payload;
+    }
+
+    function controlStateClass(service) {
+      if (service.identity === "TRUSTED" && service.readiness === "READY") return "status-green";
+      if (service.identity === "TRUSTED" && service.readiness === "STOPPED") return "muted";
+      if (!service.identity && service.classification === "RUNNING_READY") return "status-green";
+      if (!service.identity && service.classification === "STOPPED") return "muted";
+      return "status-red";
+    }
+
+    function controlStateLabel(service) {
+      if (service.identity && service.readiness) {
+        return `${service.identity} · ${service.readiness.replaceAll("_", " ")}`;
+      }
+      return ({
+        RUNNING_READY: "READY",
+        RUNNING_NOT_READY: "NOT READY",
+        STOPPED: "OFFLINE",
+        DUPLICATE: "DUPLICATE",
+        FOREIGN_PROCESS: "FOREIGN PROCESS",
+        UNKNOWN: "UNKNOWN",
+      })[service.classification] || "UNKNOWN";
+    }
+
+    function renderSystemControl(payload) {
+      const state = String(payload.state || "ERROR");
+      const primaryMessage = payload.message || (state === "SHUTDOWN_BLOCKED" ? SHUTDOWN_BLOCKED_MESSAGE : state);
+      $("systemOverallState").textContent = primaryMessage;
+      $("systemOverallState").className = `system-overall-state ${state === "READY" ? "status-green" : (state === "OFFLINE" ? "muted" : (state === "STARTING" || state === "SHUTTING_DOWN" ? "status-amber" : "status-red"))}`;
+      $("systemControlMessage").textContent = primaryMessage;
+      const ladder = payload.ladder || {};
+      $("tvLadderServiceState").textContent = ladder.label || "TV LADDER — UNKNOWN";
+      $("tvLadderServiceState").className = `badge ${ladder.state === "READY" ? "status-green" : (ladder.state === "WAITING" ? "status-amber" : "status-red")}`;
+      $("systemServiceGrid").innerHTML = (payload.services || []).map((service) => `
+        <div class="system-service-row">
+          <div class="system-service-name">${escapeHtml(service.display_name || service.name)}</div>
+          <div class="system-service-state ${controlStateClass(service)}">${escapeHtml(controlStateLabel(service))}</div>
+          <div class="small muted">${escapeHtml(service.reason || "")}</div>
+        </div>
+      `).join("");
+      const busy = state === "STARTING" || state === "SHUTTING_DOWN";
+      $("startSystemButton").disabled = busy;
+      $("shutdownSystemButton").disabled = busy;
+      if (!systemControlArm) {
+        $("startSystemButton").textContent = state === "STARTING" ? "STARTING..." : "START SYSTEM";
+        $("shutdownSystemButton").textContent = state === "SHUTTING_DOWN" ? "SHUTTING DOWN..." : "SHUTDOWN SYSTEM";
+        $("startSystemButton").classList.remove("armed");
+        $("shutdownSystemButton").classList.remove("armed");
+      }
+      const operation = payload.operation || {};
+      $("systemControlAudit").textContent = operation.operation_id ? `Control request ${operation.operation_id} — ${operation.status}` : "No control request active.";
+    }
+
+    async function refreshSystemControl() {
+      if (!COMMAND_CENTER_CONTROL_AVAILABLE) {
+        $("startSystemButton").disabled = true;
+        $("shutdownSystemButton").disabled = true;
+        $("systemOverallState").textContent = "SYSTEM CONTROL HOST OFFLINE";
+        return;
+      }
+      try {
+        renderSystemControl(await systemControlFetch("/api/system-control/status"));
+      } catch (error) {
+        $("systemOverallState").textContent = "SYSTEM CONTROL UNAVAILABLE";
+        $("systemControlMessage").textContent = `SYSTEM NOT READY — ${error.message}`;
+        $("startSystemButton").disabled = true;
+        $("shutdownSystemButton").disabled = true;
+      }
+    }
+
+    function clearSystemControlArm() {
+      systemControlArm = null;
+      if (systemControlExpiryHandle !== null) clearTimeout(systemControlExpiryHandle);
+      systemControlExpiryHandle = null;
+      $("startSystemButton").classList.remove("armed");
+      $("shutdownSystemButton").classList.remove("armed");
+      refreshSystemControl();
+    }
+
+    async function handleSystemControl(action) {
+      if (systemControlRequestPending) return;
+      systemControlRequestPending = true;
+      const normalized = String(action).toUpperCase();
+      try {
+        if (!systemControlArm || systemControlArm.action !== normalized) {
+          const armed = await systemControlFetch("/api/system-control/arm", { action: normalized });
+          const expiresInSeconds = Number(armed.expires_in_seconds ?? armed.confirmation_window_seconds);
+          if (!Number.isFinite(expiresInSeconds) || expiresInSeconds <= 0) {
+            throw new Error("confirmation_window_authority_invalid");
+          }
+          systemControlArm = {
+            action: normalized,
+            requestId: armed.request_id,
+            expiresAt: performance.now() + (expiresInSeconds * 1000),
+          };
+          const button = normalized === "START" ? $("startSystemButton") : $("shutdownSystemButton");
+          button.textContent = normalized === "START" ? "PUSH AGAIN TO CONFIRM START" : "PUSH AGAIN TO CONFIRM SHUTDOWN";
+          button.classList.add("armed");
+          $("systemControlMessage").textContent = button.textContent;
+          // The backend arm response is authoritative.  The frontend does not
+          // begin an optimistic countdown while Phase-A preflight is pending.
+          systemControlExpiryHandle = setTimeout(clearSystemControlArm, (expiresInSeconds * 1000) + 100);
+          return;
+        }
+        const requestId = systemControlArm.requestId;
+        clearSystemControlArm();
+        const confirmed = await systemControlFetch("/api/system-control/confirm", { request_id: requestId, action: normalized });
+        $("systemControlMessage").textContent = confirmed.message || (normalized === "START" ? "STARTING..." : "SHUTTING DOWN...");
+        await refreshSystemControl();
+      } catch (error) {
+        clearSystemControlArm();
+        $("systemControlMessage").textContent = `SYSTEM CONTROL ERROR — ${error.message}`;
+      } finally {
+        systemControlRequestPending = false;
+      }
+    }
     let latestTvAtrStatusBySymbol = {};
     let latestRiskPayload = null;
     let latestTradeManagerModeConfig = null;
@@ -6235,6 +6441,8 @@
     $("demoLiveResetBtn").onclick = resetSelectedDemoScenario;
     $("manualExitTradeSelect").onchange = () => updateManualExitPanel(true);
     $("manualExitSubmitBtn").onclick = submitManualExitLimit;
+    $("startSystemButton").onclick = () => handleSystemControl("START");
+    $("shutdownSystemButton").onclick = () => handleSystemControl("SHUTDOWN");
     $("demoLivePriceInput").addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         setDemoLivePriceFromInput();
@@ -6256,6 +6464,8 @@
         logTradesDebug(`instrument load failure fallback=NQ,YM error=${error}`);
       })
       .finally(async () => {
+        await refreshSystemControl();
+        systemControlPollHandle = setInterval(refreshSystemControl, POLL_INTERVAL_MS);
         await forceRefreshAll("startup");
         startPolling();
       });

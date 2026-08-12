@@ -82,6 +82,8 @@ class LaunchAllContractTests(unittest.TestCase):
         self.assertNotIn("$livePrices.last_prices.NQ", probe)
         self.assertNotIn("$livePrices.last_prices.YM", probe)
         self.assertIn("$publicationCurrent", probe)
+        self.assertIn("counts.completed_by_trade_manager", probe)
+        self.assertNotIn("$TradeManagerPipelineUrl", probe)
         self.assertIn("last_successful_executor_price_post_timestamp_utc", probe)
         self.assertNotIn("nq_ym_publication_counts_not_increasing", probe)
 
@@ -96,10 +98,12 @@ class LaunchAllContractTests(unittest.TestCase):
             "function Get-NgrokFailureEvidence {", 1
         )[0]
 
-        self.assertIn("$TradeManagerHealthUrl", probe)
-        self.assertIn("single_https_tunnel_public_health_and_liquidity_relay_round_trip_confirmed", probe)
+        self.assertIn("$TradeManagerVersionUrl", probe)
+        self.assertIn("$TradeManagerSafetyUrl", probe)
+        self.assertIn("single_reserved_https_tunnel_local_trade_authority_and_inspection_disabled_confirmed", probe)
         self.assertIn("$processes = @(", probe)
-        self.assertIn("Invoke-BoundedPublicHealthJson", probe)
+        self.assertNotIn("Invoke-BoundedPublicHealthJson", probe)
+        self.assertNotIn('"POST"', probe)
         self.assertNotIn("Invoke-RestMethod", probe)
 
     def test_executor_maintenance_precedes_executor_start(self):
@@ -136,16 +140,19 @@ class LaunchAllContractTests(unittest.TestCase):
         self.assertIn("trade_manager_journal_maintenance_timeout", maintenance)
         self.assertIn("$result.ok -ne $true", maintenance)
 
-    def test_trade_manager_probe_reports_the_exact_failed_endpoint(self):
+    def test_trade_manager_probe_uses_exact_production_read_only_endpoints(self):
         script = pathlib.Path(__file__).with_name("launch_all.ps1").read_text(encoding="utf-8")
         probe = script.split("function Test-TradeManagerContract {", 1)[1].split(
             "function Test-EntryAgentContract {", 1
         )[0]
 
-        self.assertIn("trade_manager_health_endpoint_error", probe)
-        self.assertIn("trade_manager_tick_pipeline_endpoint_error", probe)
-        self.assertIn("trade_manager_canonical_atr_endpoint_error", probe)
-        self.assertIn("FailedEndpoint = $TradeManagerHealthUrl", probe)
+        self.assertIn("trade_manager_version_endpoint_error", probe)
+        self.assertIn("trade_manager_safety_endpoint_error", probe)
+        self.assertIn("FailedEndpoint = $TradeManagerVersionUrl", probe)
+        self.assertIn("FailedEndpoint = $TradeManagerSafetyUrl", probe)
+        self.assertNotIn("$TradeManagerHealthUrl", probe)
+        self.assertNotIn("$TradeManagerPipelineUrl", probe)
+        self.assertNotIn("$TradeManagerCanonicalAtrStatusUrl", probe)
         self.assertIn("Process = $tradeManagerProcess", probe)
         self.assertNotIn("trade_manager_endpoint_error", probe)
 
@@ -155,9 +162,16 @@ class LaunchAllContractTests(unittest.TestCase):
             "$requiredComponents", 1
         )[0]
 
+        # Entry Agent must be ready before Trade Manager can attempt durable
+        # context relay; the listener then starts only after its Executor and
+        # Trade Manager dependencies are ready.
         self.assertLess(
-            orchestration.index("Ensure-ListenerBridge"),
             orchestration.index("Ensure-EntryAgentAndRelay"),
+            orchestration.index("Ensure-TradeManager"),
+        )
+        self.assertLess(
+            orchestration.index("Ensure-TradeManager"),
+            orchestration.index("Ensure-ListenerBridge"),
         )
         self.assertLess(
             orchestration.index("Ensure-Ngrok"),

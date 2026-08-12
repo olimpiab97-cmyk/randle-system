@@ -1,0 +1,182 @@
+{
+  "schema_version": "command_center_governed_service_manifest_v2",
+  "authority": "command_center_r2_completion_correction_authority_v4",
+  "control_version": "command_center_service_controls_r5",
+  "control_generation": {
+    "source_sha256": {
+      "command_center_service_control.py": "f25e7fbb09d28aa8ef099a2156a89165d3c56559235ccdcc3e3ac57d5cce2942",
+      "command_center_host.py": "22ce082e4dd46301f7f1c575c89ae3faf84bdb8dce2a88a1ccbd01e47db64e08",
+      "open_command_center.cmd": "af9bc36396e1564944e7ed4e280c5f863ae47ff4433b61a07d22dd8e65294c34",
+      "open_command_center.ps1": "73adec12430eb233a9cb2bff247ab39de1521b38babc926ce915614f7546d155"
+    }
+  },
+  "runtime_deployment": {
+    "required_paths": [
+      "command_center.html",
+      "command_center_host.py",
+      "command_center_service_control.py",
+      "command_center_service_launcher.py",
+      "resolve_python_runtime.ps1",
+      "launch_all.ps1",
+      "open_command_center.cmd",
+      "open_command_center.ps1",
+      "Architecture/Command_Center/command_center_governed_service_manifest.json"
+    ],
+    "rollback_required_paths": [
+      "command_center.html",
+      "command_center_host.py",
+      "command_center_service_control.py",
+      "command_center_service_launcher.py",
+      "resolve_python_runtime.ps1",
+      "launch_all.ps1",
+      "open_command_center.cmd",
+      "open_command_center.ps1",
+      "Architecture/Command_Center/command_center_governed_service_manifest.json"
+    ]
+  },
+  "canonical_launcher": "launch_all.ps1",
+  "canonical_service_wrapper": "command_center_service_launcher.py",
+  "python_runtime": {
+    "resolver": "resolve_python_runtime.ps1",
+    "configuration_variable": "RANDLE_PYTHON_EXE",
+    "windows_launcher": "py.exe",
+    "major": 3,
+    "minor": 12,
+    "architecture_bits": 64,
+    "required_modules": [
+      "command_center_service_control",
+      "flask",
+      "flask_cors",
+      "requests",
+      "werkzeug"
+    ],
+    "arbitrary_path_order_selection": false,
+    "ambiguous_valid_candidates": "fail_closed"
+  },
+  "safety_read": {
+    "authority": "trusted_live_loopback_service_state",
+    "trade_manager_endpoint": "http://127.0.0.1:7001/trades",
+    "attempt_timeout_seconds": 4.0,
+    "max_attempts": 2,
+    "total_budget_seconds": 8.0,
+    "retry_on": [
+      "transport_timeout"
+    ],
+    "connection_failure": "fail_closed",
+    "http_failure": "fail_closed",
+    "malformed_response": "fail_closed",
+    "over_budget_response": "fail_closed"
+  },
+  "start_safety": {
+    "policy": "executor_first_then_live_exposure_gate_before_execution_capable_dependencies",
+    "executor_may_start_without_live_exposure_api": true,
+    "require_zero_persisted_executor_exposure_when_stopped": true,
+    "require_executor_orders_positions_before_trade_manager_start": true,
+    "require_zero_persisted_pending_state_when_trade_manager_stopped": true,
+    "public_ingress_last": true,
+    "new_executable_action_before_readiness": false
+  },
+  "shutdown_safety": {
+    "require_live_executor_orders": true,
+    "require_live_executor_positions": true,
+    "require_live_trade_manager_pending_and_orphan_state": true,
+    "persisted_state_is_not_authoritative_substitute": true,
+    "unavailable_message": "SHUTDOWN BLOCKED — TRADING STATE UNAVAILABLE"
+  },
+  "command_center_host": {
+    "launch_path": "command_center_host.py",
+    "listen_host": "127.0.0.1",
+    "port": 7100,
+    "shutdown_member": false,
+    "survivability_contract": "remains_running_while_governed_trading_services_are_offline"
+  },
+  "services": [
+    {
+      "name": "executor",
+      "display_name": "EXECUTOR",
+      "process_name": "python",
+      "command_marker": "\\bexecutor\\.py\\b",
+      "launch_path": "executor.py",
+      "execution_identities": [
+        {"name":"canonical_direct","type":"GOVERNED_DIRECT","source_path":"executor.py","command_marker":"\\bexecutor\\.py\\b","authority":"GOVERNED_PRODUCTION"}
+      ],
+      "port": 6001,
+      "readiness": {"kind":"http_json","url":"http://127.0.0.1:6001/health","expected":{"ok":true,"service":"executor"}},
+      "write_authority_required": true,
+      "dependencies": [],
+      "start_order": 1,
+      "shutdown_order": 5,
+      "shutdown_mechanism": "authenticated root PID tree after live zero-exposure gate"
+    },
+    {
+      "name": "entry_agent",
+      "display_name": "ENTRY AGENT",
+      "process_name": "python",
+        "command_marker": "\\bcommand_center_service_launcher\\.py\\b.*--service\\s+entry_agent\\b|\\bproduction_entry_launcher\\.py\\b|\\bEntryAgent[\\\\/]tv_context_server\\.py\\b",
+      "launch_path": "EntryAgent/tv_context_server.py",
+      "execution_identities": [
+        {"name":"canonical_wrapper","type":"GOVERNED_WRAPPED","wrapper_path":"command_center_service_launcher.py","wrapper_sha256":"a59ff45eb8375e85045651baf234a73ff1cfaf530193770eff66e83e5024b437","command_marker":"\\bcommand_center_service_launcher\\.py\\b.*--service\\s+entry_agent\\b","service_source_path":"EntryAgent/tv_context_server.py","process_model":"in_process_runpy","authority":"GOVERNED_PRODUCTION"},
+        {"name":"r5c_cutover_wrapper","type":"GOVERNED_WRAPPED","wrapper_filename":"production_entry_launcher.py","wrapper_sha256":"45202326d96023689a53db6b915d9d6557b98ed95e2d5b022a1b9545ef80ce1e","command_marker":"\\bproduction_entry_launcher\\.py\\b","service_source_path":"EntryAgent/tv_context_server.py","service_source_sha256":"d4e1361629892febabf61403a2d1ff9652b090e86fe82760723b749d0da1b710","process_model":"in_process_runpy","authority":"TEMPORARY_CUTOVER","preserve_existing":true,"canonical_start":false}
+      ],
+      "port": 7002,
+      "readiness": {"kind":"http_json","url":"http://127.0.0.1:7002/entry/status?symbols=NQ,YM","timeout_seconds":5,"expected":{"mode":"read_only"}},
+      "write_authority_required": true,
+      "dependencies": [],
+      "start_order": 2,
+      "shutdown_order": 4,
+      "shutdown_mechanism": "authenticated wrapper root PID tree after Trade Manager"
+    },
+    {
+      "name": "trade_manager",
+      "display_name": "TRADE MANAGER",
+      "process_name": "python",
+        "command_marker": "\\bcommand_center_service_launcher\\.py\\b.*--service\\s+trade_manager\\b|\\bproduction_manager_launcher\\.py\\b|\\bEngines[\\\\/]trade_manager\\.py\\b",
+      "launch_path": "Engines/trade_manager.py",
+      "execution_identities": [
+        {"name":"canonical_wrapper","type":"GOVERNED_WRAPPED","wrapper_path":"command_center_service_launcher.py","wrapper_sha256":"a59ff45eb8375e85045651baf234a73ff1cfaf530193770eff66e83e5024b437","command_marker":"\\bcommand_center_service_launcher\\.py\\b.*--service\\s+trade_manager\\b","service_source_path":"Engines/trade_manager.py","process_model":"in_process_runpy","authority":"GOVERNED_PRODUCTION"},
+        {"name":"r5c_cutover_wrapper","type":"GOVERNED_WRAPPED","wrapper_filename":"production_manager_launcher.py","wrapper_sha256":"005ff8b995b623777b8390c5d9cf66813bcf5326f28ed106a3eaee9a5d874d28","command_marker":"\\bproduction_manager_launcher\\.py\\b","service_source_path":"Engines/trade_manager.py","service_source_sha256":"d29c15455f0b3cfd027ca2587da17d89b097cdf5b61bbb00511587ff00887315","process_model":"in_process_runpy","authority":"TEMPORARY_CUTOVER","preserve_existing":true,"canonical_start":false}
+      ],
+      "port": 7001,
+      "readiness": {"kind":"http_json","url":"http://127.0.0.1:7001/debug/version","expected":{"ok":true},"source_path_field":"file_path"},
+      "write_authority_required": true,
+      "dependencies": ["executor","entry_agent"],
+      "start_order": 3,
+      "shutdown_order": 3,
+      "shutdown_mechanism": "authenticated wrapper root PID tree after public ingress and market data"
+    },
+    {
+      "name": "rithmic_listener",
+      "display_name": "RITHMIC",
+      "process_name": "python",
+      "command_marker": "\\brithmic_live_listener\\.py\\b",
+      "launch_path": "rithmic_live_listener.py",
+      "execution_identities": [
+        {"name":"canonical_direct","type":"GOVERNED_DIRECT","source_path":"rithmic_live_listener.py","command_marker":"\\brithmic_live_listener\\.py\\b","authority":"GOVERNED_PRODUCTION"}
+      ],
+      "port": null,
+      "readiness": {"kind":"feed_health_file","relative_path":"rithmic_feed_health.json","max_age_seconds":15},
+      "write_authority_required": true,
+      "dependencies": ["executor","trade_manager"],
+      "start_order": 4,
+      "shutdown_order": 2,
+      "shutdown_mechanism": "authenticated direct root PID tree before execution receivers"
+    },
+    {
+      "name": "ngrok",
+      "display_name": "NGROK",
+      "process_name": "ngrok",
+      "command_marker": "\\bngrok(?:\\.exe)?\\b.*\\bhttp\\b.*\\b7001\\b.*--inspect=false",
+      "launch_path": null,
+      "execution_identities": [
+        {"name":"canonical_ngrok","type":"GOVERNED_DIRECT","command_marker":"\\bngrok(?:\\.exe)?\\b.*\\bhttp\\b.*\\b7001\\b.*--inspect=false","authority":"GOVERNED_PRODUCTION"}
+      ],
+      "port": 4040,
+      "readiness": {"kind":"ngrok_tunnel","public_host":"crewneck-corinna-oncologic.ngrok-free.dev","forward_to":"localhost:7001","inspection":false},
+      "write_authority_required": false,
+      "dependencies": ["trade_manager","entry_agent"],
+      "start_order": 5,
+      "shutdown_order": 1,
+      "shutdown_mechanism": "authenticated ngrok root PID tree first"
+    }
+  ]
+}

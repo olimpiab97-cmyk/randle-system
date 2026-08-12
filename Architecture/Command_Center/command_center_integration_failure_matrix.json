@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "authority": "COMMAND_CENTER_R1E_PRODUCTION_SHAPED_INTEGRATION",
+  "known_live_failures": [
+    {
+      "id": "F001",
+      "failure_mode": "Live-accepted transitional Entry Agent and Trade Manager wrappers were classified as FOREIGN because only direct child command lines were recognized.",
+      "source_fix_unit": "COMMAND_CENTER_R1A",
+      "permanent_regression": "Governed transitional and canonical wrapper identities are authenticated by wrapper bytes, child bytes, ancestry model, port ownership, and readiness independently.",
+      "full_cycle_integration_point": "Initial production-like partial topology and first confirmed START preserve trusted transitional wrappers; confirmed shutdown clears them; restart establishes two canonical wrappers."
+    },
+    {
+      "id": "F002",
+      "failure_mode": "Multiple python.exe applications produced a System.Object[] that could not be passed to Start-Process -FilePath.",
+      "source_fix_unit": "COMMAND_CENTER_R1B",
+      "permanent_regression": "Python 3.12 AMD64 resolution rejects WindowsApps aliases, requires one validated scalar path, and fails closed on two equally authoritative candidates.",
+      "full_cycle_integration_point": "Every real open_command_center.cmd invocation runs with both a governed Python and a visible WindowsApps alias before the full control cycle."
+    },
+    {
+      "id": "F003",
+      "failure_mode": "Healthy Trade Manager /trades responses at approximately 2020-2140 ms exceeded the former 2000 ms safety timeout.",
+      "source_fix_unit": "COMMAND_CENTER_R1C",
+      "permanent_regression": "The authoritative /trades read uses a 4000 ms attempt timeout, one timeout-only retry, and an 8000 ms shared fail-closed budget.",
+      "full_cycle_integration_point": "Runs 1-3 use process-backed /trades responses delayed 2140 ms, 2036 ms, and 2020 ms during real confirmed control operations."
+    },
+    {
+      "id": "F004",
+      "failure_mode": "The Python backend reported control generation r1c while the PowerShell launcher still expected r1a.",
+      "source_fix_unit": "COMMAND_CENTER_R1D",
+      "permanent_regression": "PowerShell and Python derive the control version from one tracked manifest and authenticate the same generation hashes and deployment/rollback set.",
+      "full_cycle_integration_point": "Every initial and repeated operator open performs the shared-authority handshake; the upgrade cycle changes only that authority and rejects the stale host."
+    },
+    {
+      "id": "F005",
+      "failure_mode": "ControlManager.arm() started the five-second confirmation deadline before synchronously collecting the production pre-state snapshot; Entry and Trade readiness latency consumed the entire operator-visible window.",
+      "production_evidence": "COMMAND_CENTER_R2_FINAL_EVIDENCE_20260812_071332_START_CONFIRMATION_PRESTATE_LATENCY_SAFE_STOP_V1.zip; immediate confirmation returned confirmation_missing_or_expired and no operation UUID was created.",
+      "source_fix_unit": "COMMAND_CENTER_R1F",
+      "correction": "Phase-A read-only preflight and durable audit complete before the monotonic Phase-B arm clock begins; Phase-C confirmation remains session/action/version bound and reruns all action safety gates.",
+      "permanent_regression": "Latency matrix 0-7500 ms, immediate/4.5/>5 second confirmation boundaries, one-arm-one-confirmation, post-confirm START gates, and fresh post-confirm SHUTDOWN safety reads.",
+      "full_cycle_integration_point": "The production-like transitional topology uses a 2140 ms pre-arm delay and a separate 2140 ms confirmed Trade Manager safety read during the full OPEN->START->READY->SHUTDOWN->OFFLINE->START->READY lifecycle."
+    }
+  ],
+  "combined_closure_requirement": "F001+F002+F003+F004+F005 must pass together in one complete OPEN->START->READY->SHUTDOWN->OFFLINE->START->READY lifecycle."
+}

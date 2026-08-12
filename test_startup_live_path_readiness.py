@@ -101,14 +101,14 @@ class LauncherReadinessContractTests(unittest.TestCase):
         self.assertIn("MarketDataReadiness", script)
         self.assertIn("COMPLETED_CANDLE_WARMING", script)
         self.assertIn("ATR_WARMING", script)
-        self.assertIn("current_rithmic_rma_ready_and_projected", script)
+        self.assertIn("current_rithmic_rma_ready_in_entry_projection", script)
         self.assertIn("MaximumObservationSeconds", script)
         self.assertIn("ProgressAdvanced", script)
-        self.assertIn("startup_liquidity_relay_probe", script)
-        self.assertIn("PublicRelayResponse", script)
-        self.assertIn("entryRecord.atr_1m_14", script)
-        self.assertIn("trade_manager_proxy_plus_fresh_entry_receipts", script)
-        self.assertIn("proxyState.last_user_agent", script)
+        self.assertNotIn("startup_liquidity_relay_probe", script)
+        self.assertNotIn("PublicRelayResponse", script)
+        self.assertIn("$record.atr_1m_14", script)
+        self.assertIn("local_ngrok_api_reserved_route_plus_trade_authority", script)
+        self.assertIn("$script:ngrokPublicHost", script)
         self.assertNotIn("requests/http?limit=30", script)
         self.assertIn("ngrok_start_returned_no_pid", script)
         self.assertNotIn('Start-ManagedProcess "Ngrok"', script)
@@ -117,7 +117,16 @@ class LauncherReadinessContractTests(unittest.TestCase):
         self.assertIn('"--query-token-env", $QueryTokenEnvironment', script)
         self.assertNotIn("authenticatedProbeUrl", script)
         self.assertIn("-WorkingDirectory $script:repositoryRoot", script)
-        self.assertIn("Ensure-ListenerBridge\n    Ensure-EntryAgentAndRelay\n    Ensure-Ngrok", script)
+        self.assertIn(
+            "Ensure-Executor\n    $startupExposure = Test-StartupExposureGate",
+            script,
+        )
+        self.assertIn(
+            'if (-not $startupExposure.Ok) { throw "startup_exposure_gate_failed" }\n'
+            "    Ensure-EntryAgentAndRelay\n    Ensure-TradeManager\n"
+            "    Ensure-ListenerBridge\n    Ensure-Ngrok",
+            script,
+        )
         self.assertIn("current_canonical_completed_candles_confirmed", script)
         self.assertIn('STARTUP_RESULT=$finalStatus trading_readiness=', script)
         self.assertIn('if ($finalStatus -eq "WARMING")', script)
