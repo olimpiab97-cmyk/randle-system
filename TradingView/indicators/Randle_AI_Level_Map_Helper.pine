@@ -61,6 +61,8 @@ sessionEnd(bool sessionState) =>
 // Fixed session timestamps for the chart day.
 int today0615 = timestamp(tzInput, year, month, dayofmonth, 6, 15)
 int today1400 = timestamp(tzInput, year, month, dayofmonth, 14, 0)
+// OPERATIONAL_A_CADENCE=FROZEN_SNAPSHOT_5_MINUTE_RECOVERY
+int recoveryCadenceMinutes = 5
 
 bool before0615 = time < today0615
 bool atOrAfter0615 = time >= today0615
@@ -295,6 +297,9 @@ string ylStatus  = ylInactive ? "INACTIVE" : ylReactivated ? "REACTIVATED" : "AC
 var bool sessionLocked = false
 var bool sessionTableFrozen = false
 var bool sessionTableSent = false
+var string frozenCanonicalPayload = ""
+var string frozenCanonicalSourceTimestamp = ""
+var int lastRecoveryDeliveryBarTime = na
 
 // Frozen level values
 var float LH_lock  = na
@@ -324,6 +329,9 @@ if newDay
     sessionLocked := false
     sessionTableFrozen := false
     sessionTableSent := false
+    frozenCanonicalPayload := ""
+    frozenCanonicalSourceTimestamp := ""
+    lastRecoveryDeliveryBarTime := na
 
     LH_lock  := na
     LL_lock  := na
@@ -408,12 +416,14 @@ groupLabel(float price) =>
         "TOUCH"
 
 var int[] stackLevelGroups = array.new_int()
+var int[] stackLevelBridgeGroups = array.new_int()
 var int[] stackCounts = array.new_int()
 var float[] stackOuterPrices = array.new_float()
 var float[] stackInnerPrices = array.new_float()
 var string[] stackSides = array.new_string()
 
 var int[] frozenStackLevelGroups = array.new_int()
+var int[] frozenStackLevelBridgeGroups = array.new_int()
 var int[] frozenStackCounts = array.new_int()
 var float[] frozenStackOuterPrices = array.new_float()
 var float[] frozenStackInnerPrices = array.new_float()
@@ -451,6 +461,7 @@ sideAtIndex(int idx) =>
 
 clearLiveStacks() =>
     array.clear(stackLevelGroups)
+    array.clear(stackLevelBridgeGroups)
     array.clear(stackCounts)
     array.clear(stackOuterPrices)
     array.clear(stackInnerPrices)
@@ -458,6 +469,7 @@ clearLiveStacks() =>
 
 clearFrozenStacks() =>
     array.clear(frozenStackLevelGroups)
+    array.clear(frozenStackLevelBridgeGroups)
     array.clear(frozenStackCounts)
     array.clear(frozenStackOuterPrices)
     array.clear(frozenStackInnerPrices)
@@ -470,6 +482,7 @@ restoreFrozenStacks() =>
     if frozenGroupCount > 0
         for i = 0 to frozenGroupCount - 1
             array.push(stackLevelGroups, array.get(frozenStackLevelGroups, i))
+            array.push(stackLevelBridgeGroups, array.get(frozenStackLevelBridgeGroups, i))
 
     int frozenCountCount = array.size(frozenStackCounts)
     if frozenCountCount > 0
@@ -511,7 +524,16 @@ commitFullSpanCandidate(int[] candidateIdx, float[] candidatePrices, string side
 
         int groupId = array.size(stackCounts)
         for i = 0 to count - 1
-            array.set(stackLevelGroups, array.get(candidateIdx, i), groupId)
+            int levelIdx = array.get(candidateIdx, i)
+            int primaryGroupId = array.get(stackLevelGroups, levelIdx)
+            int bridgeGroupId = array.get(stackLevelBridgeGroups, levelIdx)
+
+            if primaryGroupId == 0
+                array.set(stackLevelGroups, levelIdx, groupId)
+            else if primaryGroupId != groupId and bridgeGroupId == 0
+                array.set(stackLevelBridgeGroups, levelIdx, groupId)
+            else if primaryGroupId != groupId and bridgeGroupId != groupId
+                runtime.error("STACK_MEMBERSHIP_OVERFLOW")
 
 buildFullSpanSide(int[] sideIdx, float[] sidePrices, string side) =>
     int sideCount = array.size(sidePrices)
@@ -534,13 +556,31 @@ buildFullSpanSide(int[] sideIdx, float[] sidePrices, string side) =>
                 candidateLowest := proposedLowest
                 candidateHighest := proposedHighest
             else
+                int priorCount = array.size(candidateIdx)
+                float bridgePrice = array.get(candidatePrices, priorCount - 1)
                 commitFullSpanCandidate(candidateIdx, candidatePrices, side)
                 array.clear(candidateIdx)
                 array.clear(candidatePrices)
-                array.push(candidateIdx, nextIdx)
-                array.push(candidatePrices, nextPrice)
-                candidateLowest := nextPrice
-                candidateHighest := nextPrice
+
+                bool bridgeSpanValid = not na(stackThreshold) and math.abs(nextPrice - bridgePrice) <= stackThreshold
+                if bridgeSpanValid
+                    // Every active level at the preceding outer boundary carries
+                    // into the next stack, preserving reciprocal bridge ownership.
+                    for bridgeIndex = 0 to priorCount - 1
+                        float priorPrice = array.get(sidePrices, i - priorCount + bridgeIndex)
+                        if priorPrice == bridgePrice
+                            array.push(candidateIdx, array.get(sideIdx, i - priorCount + bridgeIndex))
+                            array.push(candidatePrices, priorPrice)
+
+                    array.push(candidateIdx, nextIdx)
+                    array.push(candidatePrices, nextPrice)
+                    candidateLowest := math.min(bridgePrice, nextPrice)
+                    candidateHighest := math.max(bridgePrice, nextPrice)
+                else
+                    array.push(candidateIdx, nextIdx)
+                    array.push(candidatePrices, nextPrice)
+                    candidateLowest := nextPrice
+                    candidateHighest := nextPrice
 
         commitFullSpanCandidate(candidateIdx, candidatePrices, side)
 
@@ -549,6 +589,7 @@ buildLiveStacks() =>
 
     for i = 0 to 7
         array.push(stackLevelGroups, 0)
+        array.push(stackLevelBridgeGroups, 0)
 
     int[] highIdx = array.new_int()
     float[] highPrices = array.new_float()
@@ -585,6 +626,7 @@ freezeStacks() =>
     if groupCount > 0
         for i = 0 to groupCount - 1
             array.push(frozenStackLevelGroups, array.get(stackLevelGroups, i))
+            array.push(frozenStackLevelBridgeGroups, array.get(stackLevelBridgeGroups, i))
 
     int stackCount = array.size(stackCounts)
     if stackCount > 0
@@ -611,6 +653,15 @@ int lhGroup  = array.size(stackLevelGroups) > 4 ? array.get(stackLevelGroups, 4)
 int llGroup  = array.size(stackLevelGroups) > 5 ? array.get(stackLevelGroups, 5) : 0
 int pmhGroup = array.size(stackLevelGroups) > 6 ? array.get(stackLevelGroups, 6) : 0
 int pmlGroup = array.size(stackLevelGroups) > 7 ? array.get(stackLevelGroups, 7) : 0
+
+int yhBridgeGroup  = array.size(stackLevelBridgeGroups) > 0 ? array.get(stackLevelBridgeGroups, 0) : 0
+int ylBridgeGroup  = array.size(stackLevelBridgeGroups) > 1 ? array.get(stackLevelBridgeGroups, 1) : 0
+int onhBridgeGroup = array.size(stackLevelBridgeGroups) > 2 ? array.get(stackLevelBridgeGroups, 2) : 0
+int onlBridgeGroup = array.size(stackLevelBridgeGroups) > 3 ? array.get(stackLevelBridgeGroups, 3) : 0
+int lhBridgeGroup  = array.size(stackLevelBridgeGroups) > 4 ? array.get(stackLevelBridgeGroups, 4) : 0
+int llBridgeGroup  = array.size(stackLevelBridgeGroups) > 5 ? array.get(stackLevelBridgeGroups, 5) : 0
+int pmhBridgeGroup = array.size(stackLevelBridgeGroups) > 6 ? array.get(stackLevelBridgeGroups, 6) : 0
+int pmlBridgeGroup = array.size(stackLevelBridgeGroups) > 7 ? array.get(stackLevelBridgeGroups, 7) : 0
 
 priceStackCount(int groupId) =>
     groupId == 0 ? 0 : array.get(stackCounts, groupId - 1)
@@ -653,14 +704,24 @@ stackLabelForLevel(int idx) =>
     int groupId = array.size(stackLevelGroups) > idx ? array.get(stackLevelGroups, idx) : 0
     cleanStackLabel(groupId)
 
-string yhStackGroup_raw  = stackLabelForLevel(0)
-string ylStackGroup_raw  = stackLabelForLevel(1)
-string onhStackGroup_raw = stackLabelForLevel(2)
-string onlStackGroup_raw = stackLabelForLevel(3)
-string lhStackGroup_raw  = stackLabelForLevel(4)
-string llStackGroup_raw  = stackLabelForLevel(5)
-string pmhStackGroup_raw = stackLabelForLevel(6)
-string pmlStackGroup_raw = stackLabelForLevel(7)
+stackDisplayForLevel(int idx) =>
+    int primaryGroupId = array.size(stackLevelGroups) > idx ? array.get(stackLevelGroups, idx) : 0
+    int bridgeGroupId = array.size(stackLevelBridgeGroups) > idx ? array.get(stackLevelBridgeGroups, idx) : 0
+    string primaryLabel = cleanStackLabel(primaryGroupId)
+    string bridgeLabel = cleanStackLabel(bridgeGroupId)
+
+    primaryLabel == "NONE" ? bridgeLabel :
+     bridgeLabel == "NONE" ? primaryLabel :
+     primaryLabel + " + " + bridgeLabel
+
+string yhStackGroup_raw  = stackDisplayForLevel(0)
+string ylStackGroup_raw  = stackDisplayForLevel(1)
+string onhStackGroup_raw = stackDisplayForLevel(2)
+string onlStackGroup_raw = stackDisplayForLevel(3)
+string lhStackGroup_raw  = stackDisplayForLevel(4)
+string llStackGroup_raw  = stackDisplayForLevel(5)
+string pmhStackGroup_raw = stackDisplayForLevel(6)
+string pmlStackGroup_raw = stackDisplayForLevel(7)
 
 var string yhStackGroup_lock  = "NONE"
 var string ylStackGroup_lock  = "NONE"
@@ -702,6 +763,53 @@ stackSideOuterHigh(int groupId) =>
 
 stackSideOuterLow(int groupId) =>
     priceStackAnchor(groupId)
+
+// Canonical stack labels may overlap through a dual-member level.  Resolve
+// that graph before choosing an endpoint; display labels and JSON order are
+// never boundary authority.
+stackComponentMask(int primaryGroupId, int bridgeGroupId) =>
+    int stackTotal = array.size(stackCounts)
+    bool[] component = array.new_bool(stackTotal, false)
+    if primaryGroupId > 0 and primaryGroupId <= stackTotal
+        array.set(component, primaryGroupId - 1, true)
+    if bridgeGroupId > 0 and bridgeGroupId <= stackTotal
+        array.set(component, bridgeGroupId - 1, true)
+
+    if stackTotal > 0
+        for passIndex = 0 to stackTotal - 1
+            for levelIdx = 0 to 7
+                int levelPrimary = array.size(stackLevelGroups) > levelIdx ? array.get(stackLevelGroups, levelIdx) : 0
+                int levelBridge = array.size(stackLevelBridgeGroups) > levelIdx ? array.get(stackLevelBridgeGroups, levelIdx) : 0
+                bool primaryIncluded = levelPrimary > 0 and levelPrimary <= stackTotal and array.get(component, levelPrimary - 1)
+                bool bridgeIncluded = levelBridge > 0 and levelBridge <= stackTotal and array.get(component, levelBridge - 1)
+                if primaryIncluded or bridgeIncluded
+                    if levelPrimary > 0 and levelPrimary <= stackTotal
+                        array.set(component, levelPrimary - 1, true)
+                    if levelBridge > 0 and levelBridge <= stackTotal
+                        array.set(component, levelBridge - 1, true)
+    component
+
+stackComponentKey(int primaryGroupId, int bridgeGroupId) =>
+    bool[] component = stackComponentMask(primaryGroupId, bridgeGroupId)
+    int ownerId = 0
+    int stackTotal = array.size(component)
+    if stackTotal > 0
+        for i = 0 to stackTotal - 1
+            if array.get(component, i) and ownerId == 0
+                ownerId := i + 1
+    ownerId == 0 ? "NONE" : "STACK_COMPONENT_" + str.tostring(ownerId)
+
+stackComponentExtreme(int primaryGroupId, int bridgeGroupId, string side, float fallbackPrice) =>
+    bool[] component = stackComponentMask(primaryGroupId, bridgeGroupId)
+    float extreme = na
+    int stackTotal = array.size(component)
+    if stackTotal > 0
+        for i = 0 to stackTotal - 1
+            if array.get(component, i)
+                float candidate = priceStackAnchor(i + 1)
+                if not na(candidate)
+                    extreme := na(extreme) ? candidate : side == "HIGH" ? math.max(extreme, candidate) : math.min(extreme, candidate)
+    na(extreme) ? fallbackPrice : extreme
 
 //---------------------------------------------------------
 // DYNAMIC LADDER ARRAYS
@@ -750,15 +858,17 @@ clearLiveLadder()
 // HIGH LADDER BUILDER
 //---------------------------------------------------------
 
-addHighLevel(string name, float price, string status, string stackLabel, int groupId) =>
-    if not na(price) and status != "INACTIVE" and price > close
+addHighLevel(string name, float price, string status, string stackLabel, int groupId, int bridgeGroupId, bool fixedSide) =>
+    if not na(price) and status != "INACTIVE" and (fixedSide or price > close)
 
-        bool isStack = isStackedGroup(stackLabel)
+        bool isStack = groupId > 0 or bridgeGroupId > 0
 
         float anchor =
              isStack
-             ? stackSideOuterHigh(groupId)
+             ? stackComponentExtreme(groupId, bridgeGroupId, "HIGH", price)
              : price
+
+        string ownerKey = isStack ? stackComponentKey(groupId, bridgeGroupId) : "LEVEL_" + name
 
         bool alreadyExists = false
 
@@ -766,29 +876,31 @@ addHighLevel(string name, float price, string status, string stackLabel, int gro
 
         if highStackCount > 0
             for i = 0 to highStackCount - 1
-                if array.get(highStackLabels, i) == stackLabel and stackLabel != "NONE"
+                if array.get(highStackLabels, i) == ownerKey
                     alreadyExists := true
 
         if not alreadyExists
             array.push(highNames, name)
             array.push(highAnchorPrices, anchor)
             array.push(highTargetPrices, na)
-            array.push(highStackLabels, stackLabel)
+            array.push(highStackLabels, ownerKey)
             array.push(highIsStack, isStack)
 
 //---------------------------------------------------------
 // LOW LADDER BUILDER
 //---------------------------------------------------------
 
-addLowLevel(string name, float price, string status, string stackLabel, int groupId) =>
-    if not na(price) and status != "INACTIVE" and price < close
+addLowLevel(string name, float price, string status, string stackLabel, int groupId, int bridgeGroupId, bool fixedSide) =>
+    if not na(price) and status != "INACTIVE" and (fixedSide or price < close)
 
-        bool isStack = isStackedGroup(stackLabel)
+        bool isStack = groupId > 0 or bridgeGroupId > 0
 
         float anchor =
              isStack
-             ? stackSideOuterLow(groupId)
+             ? stackComponentExtreme(groupId, bridgeGroupId, "LOW", price)
              : price
+
+        string ownerKey = isStack ? stackComponentKey(groupId, bridgeGroupId) : "LEVEL_" + name
 
         bool alreadyExists = false
 
@@ -796,14 +908,14 @@ addLowLevel(string name, float price, string status, string stackLabel, int grou
 
         if lowStackCount > 0
             for i = 0 to lowStackCount - 1
-                if array.get(lowStackLabels, i) == stackLabel and stackLabel != "NONE"
+                if array.get(lowStackLabels, i) == ownerKey
                     alreadyExists := true
 
         if not alreadyExists
             array.push(lowNames, name)
             array.push(lowAnchorPrices, anchor)
             array.push(lowTargetPrices, na)
-            array.push(lowStackLabels, stackLabel)
+            array.push(lowStackLabels, ownerKey)
             array.push(lowIsStack, isStack)
 //---------------------------------------------------------
 // SORT HIGH LADDER (NEAREST ABOVE → OUTWARD)
@@ -855,15 +967,25 @@ sortHighLadder() =>
 // POPULATE HIGH / LOW LADDER
 //---------------------------------------------------------
 
-addHighLevel("PMH", PMH_eff, pmhStatus_eff, pmhStackGroup, pmhGroup)
-addHighLevel("LH",  LH_eff,  lhStatus_eff,  lhStackGroup,  lhGroup)
-addHighLevel("ONH", ONH_eff, onhStatus_eff, onhStackGroup, onhGroup)
-addHighLevel("YH",  YH_eff,  yhStatus_eff,  yhStackGroup,  yhGroup)
+// Fixed-side high levels
+addHighLevel("PMH", PMH_eff, pmhStatus_eff, pmhStackGroup, pmhGroup, pmhBridgeGroup, true)
+addHighLevel("LH",  LH_eff,  lhStatus_eff,  lhStackGroup,  lhGroup,  lhBridgeGroup,  true)
+addHighLevel("ONH", ONH_eff, onhStatus_eff, onhStackGroup, onhGroup, onhBridgeGroup, true)
 
-addLowLevel("PML", PML_eff, pmlStatus_eff, pmlStackGroup, pmlGroup)
-addLowLevel("LL",  LL_eff,  llStatus_eff,  llStackGroup,  llGroup)
-addLowLevel("ONL", ONL_eff, onlStatus_eff, onlStackGroup, onlGroup)
-addLowLevel("YL",  YL_eff,  ylStatus_eff,  ylStackGroup,  ylGroup)
+// Fixed-side low levels
+addLowLevel("PML", PML_eff, pmlStatus_eff, pmlStackGroup, pmlGroup, pmlBridgeGroup, true)
+addLowLevel("LL",  LL_eff,  llStatus_eff,  llStackGroup,  llGroup,  llBridgeGroup,  true)
+addLowLevel("ONL", ONL_eff, onlStatus_eff, onlStackGroup, onlGroup, onlBridgeGroup, true)
+
+// YH / YL are roamers.
+// Admit them to whichever side of current price they actually occupy.
+// addHighLevel() only accepts price > close.
+// addLowLevel() only accepts price < close.
+addHighLevel("YH", YH_eff, yhStatus_eff, yhStackGroup, yhGroup, yhBridgeGroup, false)
+addLowLevel ("YH", YH_eff, yhStatus_eff, yhStackGroup, yhGroup, yhBridgeGroup, false)
+
+addHighLevel("YL", YL_eff, ylStatus_eff, ylStackGroup, ylGroup, ylBridgeGroup, false)
+addLowLevel ("YL", YL_eff, ylStatus_eff, ylStackGroup, ylGroup, ylBridgeGroup, false)
 
 //---------------------------------------------------------
 // SORT LOW LADDER (NEAREST BELOW → OUTWARD)
@@ -967,21 +1089,21 @@ if sessionTableFrozen
 // They do NOT disappear later because a level becomes inactive,
 // price crosses a level, or the ladder rebuilds.
 
-notStacked(float a, float b) =>
-    not na(a) and not na(b) and not na(stackThreshold) and math.abs(a - b) > stackThreshold
+distinctEffectiveBoundaries(float a, float b) =>
+    not na(a) and not na(b) and math.abs(a - b) > tol
 
 midpoint(float a, float b) =>
-    (a + b) / 2.0
+    roundToMintick((a + b) / 2.0)
 
 exhaust25(float fromLevel, float toLevel) =>
-    fromLevel + ((toLevel - fromLevel) * 0.75)
+    roundToMintick(fromLevel + ((toLevel - fromLevel) * 0.75))
 
 ladderGapMid(float[] prices, int idx) =>
     int n = array.size(prices)
     if n > idx + 1
         float fromPrice = array.get(prices, idx)
         float toPrice   = array.get(prices, idx + 1)
-        notStacked(fromPrice, toPrice) ? midpoint(fromPrice, toPrice) : na
+        distinctEffectiveBoundaries(fromPrice, toPrice) ? midpoint(fromPrice, toPrice) : na
     else
         na
 
@@ -990,7 +1112,7 @@ ladderGap25(float[] prices, int idx) =>
     if n > idx + 1
         float fromPrice = array.get(prices, idx)
         float toPrice   = array.get(prices, idx + 1)
-        notStacked(fromPrice, toPrice) ? exhaust25(fromPrice, toPrice) : na
+        distinctEffectiveBoundaries(fromPrice, toPrice) ? exhaust25(fromPrice, toPrice) : na
     else
         na
 
@@ -1017,7 +1139,7 @@ if sessionEnd(inPremarket)
             float fromPrice = array.get(highAnchorPrices, i)
             float toPrice   = array.get(highAnchorPrices, i + 1)
 
-            bool validGap = notStacked(fromPrice, toPrice)
+            bool validGap = distinctEffectiveBoundaries(fromPrice, toPrice)
 
             array.push(frozenHighMid50, validGap ? midpoint(fromPrice, toPrice) : na)
             array.push(frozenHighEx25,  validGap ? exhaust25(fromPrice, toPrice) : na)
@@ -1029,7 +1151,7 @@ if sessionEnd(inPremarket)
             float fromPrice = array.get(lowAnchorPrices, i)
             float toPrice   = array.get(lowAnchorPrices, i + 1)
 
-            bool validGap = notStacked(fromPrice, toPrice)
+            bool validGap = distinctEffectiveBoundaries(fromPrice, toPrice)
 
             array.push(frozenLowMid50, validGap ? midpoint(fromPrice, toPrice) : na)
             array.push(frozenLowEx25,  validGap ? exhaust25(fromPrice, toPrice) : na)
@@ -1324,12 +1446,6 @@ levelImportance(string name) =>
         "PML" => 4
         => 99
 
-isHighLevel(string name) =>
-    name == "YH" or name == "ONH" or name == "LH" or name == "PMH"
-
-isLowLevel(string name) =>
-    name == "YL" or name == "ONL" or name == "LL" or name == "PML"
-
 rowBg(string name) =>
     switch name
         "YH"  => color.new(color.green, 60)
@@ -1407,6 +1523,9 @@ swapRows(int i, int j) =>
     array.set(stacksArr, j, g1)
     array.set(impArr, j, im1)
 
+tableSide(float price) =>
+    na(price) ? "NONE" : sameLevel(price, close) ? "TOUCH" : price > close ? "ABOVE" : "BELOW"
+
 // YH/YL are roamers.
 // Table side is determined by price relative to current close, not level name.
 sortAbovePrice() =>
@@ -1414,8 +1533,8 @@ sortAbovePrice() =>
     if n > 1
         for i = 0 to n - 2
             for j = i + 1 to n - 1
-                bool iAbove = array.get(pricesArr, i) >= close
-                bool jAbove = array.get(pricesArr, j) >= close
+                bool iAbove = tableSide(array.get(pricesArr, i)) == "ABOVE"
+                bool jAbove = tableSide(array.get(pricesArr, j)) == "ABOVE"
 
                 if iAbove and jAbove
                     float pi = array.get(displayArr, i)
@@ -1436,8 +1555,8 @@ sortBelowPrice() =>
     if n > 1
         for i = 0 to n - 2
             for j = i + 1 to n - 1
-                bool iBelow = array.get(pricesArr, i) <= close
-                bool jBelow = array.get(pricesArr, j) <= close
+                bool iBelow = tableSide(array.get(pricesArr, i)) == "BELOW"
+                bool jBelow = tableSide(array.get(pricesArr, j)) == "BELOW"
 
                 if iBelow and jBelow
                     float pi = array.get(pricesArr, i)
@@ -1491,12 +1610,21 @@ if barstate.islast and showTable
         string nm = array.get(namesArr, i)
         float pr = array.get(pricesArr, i)
 
-        if pr >= close
+        if tableSide(pr) == "ABOVE"
             addLevelRow(row, nm, pr, array.get(displayArr, i), array.get(statesArr, i), array.get(statusesArr, i), array.get(stacksArr, i))
             row += 1
 
     addPriceRow(row)
     row += 1
+
+    // TOUCH rows are rendered exactly once, immediately below PRICE, in
+    // deterministic canonical importance order. They never enter a target ladder.
+    for priority = 1 to 4
+        for i = 0 to array.size(namesArr) - 1
+            float pr = array.get(pricesArr, i)
+            if tableSide(pr) == "TOUCH" and array.get(impArr, i) == priority
+                addLevelRow(row, array.get(namesArr, i), pr, array.get(displayArr, i), array.get(statesArr, i), array.get(statusesArr, i), "TOUCH")
+                row += 1
 
     sortBelowPrice()
 
@@ -1506,7 +1634,7 @@ if barstate.islast and showTable
         string nm = array.get(namesArr, i)
         float pr = array.get(pricesArr, i)
 
-        if pr <= close
+        if tableSide(pr) == "BELOW"
             addLevelRow(row, nm, pr, array.get(displayArr, i), array.get(statesArr, i), array.get(statusesArr, i), array.get(stacksArr, i))
             row += 1
 
@@ -1547,10 +1675,12 @@ f_json_num(float x) =>
     na(x) ? "null" : str.tostring(x)
 
 f_json_str(string x) =>
+    if str.match(x, "\\x0D") != ""
+        runtime.error("CANONICAL_JSON_STRING_U000D_REJECTED")
+
     string escaped = str.replace_all(x, "\\", "\\\\")
     escaped := str.replace_all(escaped, "\"", "\\\"")
     escaped := str.replace_all(escaped, "\n", "\\n")
-    escaped := str.replace_all(escaped, "\r", "\\r")
     escaped := str.replace_all(escaped, "\t", "\\t")
     "\"" + escaped + "\""
 
@@ -1621,7 +1751,7 @@ payloadDisplayHasStackLabel(string displayLabel, string stackLabel) =>
     bool found = false
 
     if displayLabel != "NONE"
-        string[] labels = str.split(displayLabel, " / ")
+        string[] labels = str.split(displayLabel, " + ")
         int labelCount = array.size(labels)
 
         if labelCount > 0
@@ -1637,8 +1767,8 @@ payloadSingleStackGroupJson(int levelIdx) =>
     if displayLabel == "NONE"
         f_json_str("NONE")
     else
-        string[] labels = str.split(displayLabel, " / ")
-        array.size(labels) == 1 ? f_json_str(array.get(labels, 0)) : "null"
+        string[] labels = str.split(displayLabel, " + ")
+        array.size(labels) >= 1 ? f_json_str(array.get(labels, 0)) : f_json_str("NONE")
 
 payloadStackGroupsJsonForLevel(int levelIdx) =>
     string displayLabel = payloadTableStackLabelAtIndex(levelIdx)
@@ -1646,7 +1776,7 @@ payloadStackGroupsJsonForLevel(int levelIdx) =>
     bool first = true
 
     if displayLabel != "NONE"
-        string[] labels = str.split(displayLabel, " / ")
+        string[] labels = str.split(displayLabel, " + ")
         int labelCount = array.size(labels)
 
         if labelCount > 0
@@ -1720,7 +1850,8 @@ payloadExplicitStacksArrayJson() =>
     string result = "["
     bool firstStack = true
 
-    for stackNumber = 1 to 4
+    // Eight source levels can form at most seven boundary-overlap groups.
+    for stackNumber = 1 to 7
         string stackLabel = "HIGH " + str.tostring(stackNumber)
         string stackObject = payloadExplicitStackObjectJson(stackLabel, "HIGH")
 
@@ -1731,7 +1862,7 @@ payloadExplicitStacksArrayJson() =>
             result += stackObject
             firstStack := false
 
-    for stackNumber = 1 to 4
+    for stackNumber = 1 to 7
         string stackLabel = "LOW " + str.tostring(stackNumber)
         string stackObject = payloadExplicitStackObjectJson(stackLabel, "LOW")
 
@@ -1780,8 +1911,10 @@ payloadLiquidityMapLevelsArrayJson() =>
      + payloadLiquidityMapLevelJson(1)
      + "]"
 
-bool isPremarketEnd = sessionEnd(inPremarket)
-bool isRecurringUpdate = timeframe.isminutes and timeframe.multiplier == 1 and barstate.isconfirmed and not isPremarketEnd
+// Trigger flags describe the frozen snapshot, never an individual transport
+// attempt. They therefore remain byte-identical on every recovery replay.
+bool frozenSnapshotIsPremarketEnd = true
+bool isRecurringUpdate = false
 
 buildMidpointsJson(string[] names, float[] prices) =>
     string out = ""
@@ -1848,8 +1981,10 @@ string exhaustionJson =
      + lowExhaustionJson
      + "}"
 
-string canonicalSourceTimestamp = not na(time_close) ? str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") : ""
-string canonicalSessionDate = not na(time_tradingday) ? str.format_time(time_tradingday, "yyyy-MM-dd", "UTC") : ""
+// Snapshot identity belongs to the governed 06:15 lock, not the bar that
+// happens to transport a recovery copy later in the session.
+string canonicalSourceTimestamp = not na(today0615) ? str.format_time(today0615, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") : ""
+string canonicalSessionDate = not na(sessionTradingDay_lock) ? str.format_time(sessionTradingDay_lock, "yyyy-MM-dd", "UTC") : ""
 
 bool canonicalPayloadReady =
      timeframe.isminutes and
@@ -1866,7 +2001,11 @@ bool canonicalPayloadReady =
      not na(atr1m14) and
      not na(dailyATR14)
 
-if canonicalPayloadReady
+// Freeze the complete canonical JSON once. Later delivery attempts reuse this
+// exact string rather than rebuilding from mutable telemetry or bar time.
+bool canonicalSnapshotReady = canonicalPayloadReady and str.length(frozenCanonicalPayload) == 0
+
+if canonicalSnapshotReady
     string explicitStacksJson = payloadExplicitStacksArrayJson()
     string liquidityMapLevelsJson = payloadLiquidityMapLevelsArrayJson()
 
@@ -1886,12 +2025,12 @@ if canonicalPayloadReady
          "{"
          + "\"source\":\"tradingview_level_helper\","
          + "\"version\":\"v14_canonical_liquidity_sender\","
-         + "\"context_mode\":\"locked_levels_recurring_status\","
+         + "\"context_mode\":\"locked_levels_session_snapshot\","
          + "\"timestamp\":" + f_json_str(canonicalSourceTimestamp) + ","
          + "\"session_date\":" + f_json_str(canonicalSessionDate) + ","
          + "\"session_locked\":" + f_json_bool(sessionLocked) + ","
          + "\"locked\":" + f_json_bool(sessionLocked) + ","
-         + "\"is_premarket_end\":" + f_json_bool(isPremarketEnd) + ","
+         + "\"is_premarket_end\":" + f_json_bool(frozenSnapshotIsPremarketEnd) + ","
          + "\"is_recurring_update\":" + f_json_bool(isRecurringUpdate) + ","
          + "\"price_is_true_level\":true,"
          + "\"display_offsets_applied_to_chart_only\":" + f_json_bool(stackOffset) + ","
@@ -1912,4 +2051,54 @@ if canonicalPayloadReady
          + exhaustionJson
          + "}"
 
-    alert(entryAgentPayload, alert.freq_once_per_bar_close)
+    // Runtime canonical literal integrity gate. A malformed sender identity must
+    // fail closed before alert(), never reach the authenticated receiver.
+    string canonicalSourceLiteral = "\"source\":\"tradingview_level_helper\""
+    string canonicalVersionLiteral = "\"version\":\"v14_canonical_liquidity_sender\""
+    string canonicalContextModeLiteral = "\"context_mode\":\"locked_levels_session_snapshot\""
+    string canonicalTimeZoneLiteral = "\"time_zone\":\"America/Los_Angeles\""
+    bool canonicalPayloadLiteralIntegrity =
+         str.contains(entryAgentPayload, canonicalSourceLiteral)
+         and str.contains(entryAgentPayload, canonicalVersionLiteral)
+         and str.contains(entryAgentPayload, canonicalContextModeLiteral)
+         and str.contains(entryAgentPayload, canonicalTimeZoneLiteral)
+         and not str.contains(entryAgentPayload, "\\r")
+
+    if canonicalPayloadLiteralIntegrity
+        frozenCanonicalPayload := entryAgentPayload
+        frozenCanonicalSourceTimestamp := canonicalSourceTimestamp
+    else
+        log.error("CANONICAL_PAYLOAD_LITERAL_INTEGRITY_FAILED")
+        runtime.error("CANONICAL_PAYLOAD_LITERAL_INTEGRITY_FAILED")
+
+// Alert attempts are transport policy only. A late-created alert gets one
+// immediate confirmed realtime catch-up; an already-running alert then emits
+// on fixed wall-clock five-minute boundaries through the 14:00 endpoint.
+bool frozenSessionDeliveryReady =
+     timeframe.isminutes and
+     timeframe.multiplier == 1 and
+     barstate.isconfirmed and
+     barstate.isrealtime and
+     tzInput == canonicalTimeZone and
+     sessionLocked and
+     not na(sessionTradingDay_lock) and
+     time_tradingday == sessionTradingDay_lock and
+     time <= today1400 and
+     str.length(frozenCanonicalPayload) > 0 and
+     str.length(frozenCanonicalSourceTimestamp) > 0
+
+bool initialSnapshotDelivery = frozenSessionDeliveryReady and not sessionTableSent
+bool recoveryMinuteAligned = minute(time, tzInput) % recoveryCadenceMinutes == 0
+bool alignedRecoveryDelivery =
+     frozenSessionDeliveryReady and
+     sessionTableSent and
+     time > today0615 and
+     recoveryMinuteAligned and
+     (na(lastRecoveryDeliveryBarTime) or lastRecoveryDeliveryBarTime != time)
+
+bool canonicalDeliveryReady = initialSnapshotDelivery or alignedRecoveryDelivery
+
+if canonicalDeliveryReady
+    alert(frozenCanonicalPayload, alert.freq_once_per_bar_close)
+    sessionTableSent := true
+    lastRecoveryDeliveryBarTime := time
